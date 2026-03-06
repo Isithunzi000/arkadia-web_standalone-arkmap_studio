@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>.arkmap Format Specification v1</title>
+<style>
+  :root {
+    --bg: #0d0f12; --panel: #141720; --border: #252b3a;
+    --accent: #4a9eff; --accent2: #ff9f4a; --ok: #4aff8a; --err: #ff4a4a;
+    --text: #e8eef8; --dim: #8898b8; --fg: #ccd8ea;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.7 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    max-width: 1000px; margin: 0 auto; padding: 32px 24px 80px;
+  }
+  h1 { font-size: 24px; color: var(--accent); letter-spacing: 2px;
+    margin-bottom: 4px; font-weight: 500; }
+  .subtitle { color: var(--dim); font-size: 12px; margin-bottom: 32px; }
+  h2 { font-size: 18px; color: var(--accent); margin: 36px 0 14px;
+    padding-bottom: 4px; border-bottom: 1px solid var(--border); font-weight: 500; }
+  h3 { font-size: 15px; color: var(--accent2); margin: 24px 0 10px; font-weight: 500; }
+  h4 { font-size: 13px; color: var(--fg); margin: 16px 0 6px; font-weight: 600; }
+  p { margin-bottom: 10px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { background: #1a1e2a; padding: 2px 5px; border-radius: 2px; font-size: 13px;
+    font-family: 'Courier New', 'Fira Code', monospace; color: #e8c880; }
+  pre { background: #0a0c10; border: 1px solid var(--border); border-radius: 4px;
+    padding: 16px 18px; margin: 12px 0 16px; overflow-x: auto; font-size: 12px;
+    font-family: 'Courier New', 'Fira Code', monospace; color: #c8d8e8; line-height: 1.6; }
+  pre .k { color: #cc7832; } /* key */
+  pre .s { color: #6a8759; } /* string */
+  pre .n { color: #6897bb; } /* number */
+  pre .c { color: #606366; } /* comment */
+  pre .t { color: #cc7832; } /* type hint */
+  pre .b { color: #cc7832; } /* boolean */
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 18px; }
+  th, td { padding: 7px 10px; border: 1px solid var(--border); text-align: left; font-size: 12px; }
+  th { background: #1a1e2a; color: var(--accent); font-weight: 500; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.5px; }
+  td { color: var(--fg); }
+  td code { font-size: 11px; }
+  tr:hover td { background: #161a24; }
+  ul, ol { margin: 6px 0 14px 24px; }
+  li { margin-bottom: 5px; font-size: 13px; }
+  .note { background: #0d1a28; border-left: 3px solid var(--accent); padding: 10px 14px;
+    margin: 14px 0; border-radius: 0 4px 4px 0; font-size: 12px; }
+  .warn { background: #1a1500; border-left: 3px solid #e8a020; padding: 10px 14px;
+    margin: 14px 0; border-radius: 0 4px 4px 0; font-size: 12px; color: #e8c880; }
+  .critical { background: #1a0808; border-left: 3px solid var(--err); padding: 10px 14px;
+    margin: 14px 0; border-radius: 0 4px 4px 0; font-size: 12px; color: #e8a0a0; }
+  .req { color: var(--err); font-weight: 600; font-size: 10px; }
+  .opt { color: var(--dim); font-weight: 400; font-size: 10px; }
+  .toc { background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 18px 22px; margin: 20px 0 28px; }
+  .toc-title { font-size: 13px; color: var(--accent); margin-bottom: 10px; letter-spacing: 1px;
+    text-transform: uppercase; }
+  .toc ol { margin: 0; padding-left: 20px; }
+  .toc li { margin-bottom: 3px; font-size: 12px; }
+  .toc a { color: var(--fg); }
+  .toc a:hover { color: var(--accent); }
+  #top-btn { position: fixed; bottom: 20px; right: 20px; background: var(--panel);
+    border: 1px solid var(--border); color: var(--accent); width: 36px; height: 36px;
+    border-radius: 50%; cursor: pointer; font-size: 16px; display: flex;
+    align-items: center; justify-content: center; z-index: 999; }
+  #top-btn:hover { border-color: var(--accent); background: #1a2035; }
+  .schema-path { color: #e8c880; font-family: monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<button id="top-btn" onclick="window.scrollTo({top:0})" title="Top">↑</button>
+
+<h1>.arkmap Format Specification</h1>
+<div class="subtitle">
+  Version 1 · ArkMap Studio · Isithunzi &amp; Claude AI · 2026<br>
+  File extension: <code>.arkmap</code> · MIME type: <code>application/json</code> · Encoding: UTF-8
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="toc">
+<div class="toc-title">Table of Contents</div>
+<ol>
+  <li><a href="#overview">Overview</a></li>
+  <li><a href="#top-level">Top-Level Structure</a></li>
+  <li><a href="#meta">meta Object</a></li>
+  <li><a href="#colors">colors Object</a></li>
+  <li><a href="#areas">areas Array</a></li>
+  <li><a href="#room">Room Object</a></li>
+  <li><a href="#exits">Exits &amp; Directions</a></li>
+  <li><a href="#doors">Doors</a></li>
+  <li><a href="#special-exits">Special Exits</a></li>
+  <li><a href="#custom-lines">Custom Lines &amp; Suppressors</a></li>
+  <li><a href="#labels">Labels</a></li>
+  <li><a href="#font">Font Object</a></li>
+  <li><a href="#color-type">Color Type (RGB / RGBA)</a></li>
+  <li><a href="#user-data">user_data</a></li>
+  <li><a href="#checksums">Checksums (CRC-32)</a></li>
+  <li><a href="#serialization">Deterministic Serialization</a></li>
+  <li><a href="#validation">Validation Rules</a></li>
+  <li><a href="#dat-roundtrip">Mudlet .dat Round-Trip</a></li>
+  <li><a href="#arkmap-only">Extensions (.arkmap-only fields)</a></li>
+  <li><a href="#example">Complete Example</a></li>
+  <li><a href="#changelog">Format Changelog</a></li>
+</ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="overview">1. Overview</h2>
+
+<p>The <code>.arkmap</code> format is a JSON-based file format for storing MUD map data. It is designed as the canonical format for <strong>ArkMap Studio</strong>, a web-based map viewer and editor for the <a href="http://arkadia.rpg.pl/">Arkadia MUD</a> game world.</p>
+
+<p>Key design goals:</p>
+<ul>
+  <li><strong>Lossless round-trip</strong> with Mudlet's binary <code>.dat</code> format (version 20) — converting .dat → .arkmap → .dat produces a byte-identical result</li>
+  <li><strong>Human-readable</strong> — JSON with deterministic key ordering and compact inline arrays</li>
+  <li><strong>Git-friendly</strong> — sorted keys and stable serialization produce clean, meaningful diffs</li>
+  <li><strong>Extensible</strong> — .arkmap-only fields (notes, tags) extend the Mudlet data model without breaking compatibility</li>
+  <li><strong>Self-validating</strong> — hierarchical CRC-32 checksums for corruption detection</li>
+</ul>
+
+<div class="note"><strong>Ground truth:</strong> The .arkmap format is derived from Mudlet's internal data model (TRoom, TArea, TMap classes in C++). When in doubt, Mudlet source code is the authoritative reference for field semantics.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="top-level">2. Top-Level Structure</h2>
+
+<pre>{
+  <span class="k">"format"</span>:  <span class="s">"arkmap"</span>,      <span class="c">// REQUIRED — magic string, must be exactly "arkmap"</span>
+  <span class="k">"version"</span>: <span class="n">1</span>,              <span class="c">// REQUIRED — integer, format version (currently 1)</span>
+  <span class="k">"meta"</span>:    { ... },         <span class="c">// REQUIRED — metadata object (see §3)</span>
+  <span class="k">"colors"</span>:  { ... },         <span class="c">// REQUIRED — color palette object (see §4)</span>
+  <span class="k">"areas"</span>:   [ ... ]          <span class="c">// REQUIRED — array of Area objects (see §5)</span>
+}</pre>
+
+<table>
+<tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>format</code></td><td>string</td><td class="req">YES</td><td>Must be <code>"arkmap"</code>. Used to identify file type.</td></tr>
+<tr><td><code>version</code></td><td>integer</td><td class="req">YES</td><td>Format version. Currently <code>1</code>. Increment on breaking changes.</td></tr>
+<tr><td><code>meta</code></td><td>object</td><td class="req">YES</td><td>Map-level metadata. See <a href="#meta">§3</a>.</td></tr>
+<tr><td><code>colors</code></td><td>object</td><td class="req">YES</td><td>Environment color definitions. See <a href="#colors">§4</a>.</td></tr>
+<tr><td><code>areas</code></td><td>array</td><td class="req">YES</td><td>Array of Area objects. See <a href="#areas">§5</a>.</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="meta">3. meta Object</h2>
+
+<pre>{
+  <span class="k">"map_name"</span>:                 <span class="s">"Arkadia"</span>,
+  <span class="k">"symbol_font"</span>:              { <span class="c">/* Font object */</span> },
+  <span class="k">"symbol_font_fudge_factor"</span>: <span class="n">1.0</span>,
+  <span class="k">"use_only_map_font"</span>:        <span class="b">false</span>,
+  <span class="k">"user_data"</span>:                { <span class="c">/* optional string→string map */</span> },
+  <span class="k">"checksums"</span>:               { <span class="c">/* optional, added by ArkMap Studio on save */</span> }
+}</pre>
+
+<table>
+<tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>map_name</code></td><td>string</td><td class="req">YES</td><td>Display name of the map (e.g. "Arkadia")</td></tr>
+<tr><td><code>symbol_font</code></td><td><a href="#font">Font</a></td><td class="req">YES</td><td>Font used for rendering room symbols on the map</td></tr>
+<tr><td><code>symbol_font_fudge_factor</code></td><td>number</td><td class="req">YES</td><td>Mudlet's font size scaling factor (typically 1.0)</td></tr>
+<tr><td><code>use_only_map_font</code></td><td>boolean</td><td class="req">YES</td><td>If true, only use symbol_font; false = allow fallback</td></tr>
+<tr><td><code>user_data</code></td><td><a href="#user-data">UserData</a></td><td class="opt">optional</td><td>Map-level key-value metadata. May contain <code>version</code>, <code>revision</code>, <code>map_sync_version</code> etc.</td></tr>
+<tr><td><code>checksums</code></td><td>object</td><td class="opt">optional</td><td>Hierarchical CRC-32 checksums. See <a href="#checksums">§15</a>.</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="colors">4. colors Object</h2>
+
+<pre>{
+  <span class="k">"env_colors"</span>:        { <span class="s">"258"</span>: <span class="n">34</span>, <span class="s">"272"</span>: <span class="n">248</span> },
+  <span class="k">"custom_env_colors"</span>: { <span class="s">"258"</span>: [<span class="n">0</span>, <span class="n">128</span>, <span class="n">0</span>], <span class="s">"301"</span>: [<span class="n">255</span>, <span class="n">114</span>, <span class="n">14</span>] }
+}</pre>
+
+<table>
+<tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>env_colors</code></td><td>object</td><td class="opt">optional</td><td>Map of envId (string key) → ANSI palette index (integer 0–255). Lower priority than custom_env_colors.</td></tr>
+<tr><td><code>custom_env_colors</code></td><td>object</td><td class="opt">optional</td><td>Map of envId (string key) → <a href="#color-type">Color</a> array. These override env_colors and the ANSI palette.</td></tr>
+</table>
+
+<h4>Color resolution order</h4>
+<ol>
+  <li><code>custom_env_colors[envId]</code> — direct RGB, highest priority</li>
+  <li><code>env_colors[envId]</code> → ANSI 256-color palette lookup</li>
+  <li>Hardcoded Arkadia environment table (ARKADIA_ENVS) as fallback</li>
+</ol>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="areas">5. areas Array</h2>
+
+<p>An ordered array of Area objects. Must be sorted by <code>id</code> ascending for deterministic serialization.</p>
+
+<pre>{
+  <span class="k">"id"</span>:             <span class="n">7</span>,
+  <span class="k">"name"</span>:           <span class="s">"Miasto"</span>,
+  <span class="k">"rooms"</span>:          [ <span class="c">/* Room objects */</span> ],
+  <span class="k">"labels"</span>:         [ <span class="c">/* Label objects — optional */</span> ],
+  <span class="k">"grid_mode"</span>:      <span class="b">false</span>,           <span class="c">// optional, default false</span>
+  <span class="k">"is_zone"</span>:        <span class="b">false</span>,           <span class="c">// optional, default false</span>
+  <span class="k">"zone_area_ref"</span>:  <span class="n">0</span>,               <span class="c">// optional, default 0</span>
+  <span class="k">"pos"</span>:            [<span class="n">0</span>, <span class="n">0</span>, <span class="n">0</span>],       <span class="c">// optional, area position on overview</span>
+  <span class="k">"user_data"</span>:      { ... }           <span class="c">// optional</span>
+}</pre>
+
+<table>
+<tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>id</code></td><td>integer</td><td class="req">YES</td><td>Unique area ID. Can be negative (Mudlet's Default Area is -1).</td></tr>
+<tr><td><code>name</code></td><td>string</td><td class="req">YES</td><td>Display name of the area.</td></tr>
+<tr><td><code>rooms</code></td><td>array</td><td class="req">YES</td><td>Array of Room objects. Sorted by <code>id</code> ascending.</td></tr>
+<tr><td><code>labels</code></td><td>array</td><td class="opt">optional</td><td>Array of <a href="#labels">Label</a> objects. Sorted by <code>id</code> ascending.</td></tr>
+<tr><td><code>grid_mode</code></td><td>boolean</td><td class="opt">optional</td><td>Mudlet grid mode flag. Default: false. Omit if false.</td></tr>
+<tr><td><code>is_zone</code></td><td>boolean</td><td class="opt">optional</td><td>Zone flag. Default: false. Omit if false.</td></tr>
+<tr><td><code>zone_area_ref</code></td><td>integer</td><td class="opt">optional</td><td>Reference to parent zone area. Omit if 0.</td></tr>
+<tr><td><code>pos</code></td><td>[number, number, number]</td><td class="opt">optional</td><td>Area position on Mudlet's overview map [x, y, z]. Omit if [0,0,0].</td></tr>
+<tr><td><code>user_data</code></td><td><a href="#user-data">UserData</a></td><td class="opt">optional</td><td>Area-level metadata.</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="room">6. Room Object</h2>
+
+<pre>{
+  <span class="k">"id"</span>:                   <span class="n">12847</span>,
+  <span class="k">"x"</span>:                    <span class="n">15</span>,
+  <span class="k">"y"</span>:                    <span class="n">-3</span>,
+  <span class="k">"z"</span>:                    <span class="n">0</span>,
+  <span class="k">"env"</span>:                  <span class="n">272</span>,
+  <span class="k">"name"</span>:                 <span class="s">"Skrzyżowanie dróg"</span>,
+  <span class="k">"weight"</span>:               <span class="n">1</span>,
+  <span class="k">"symbol"</span>:               <span class="s">"K"</span>,
+  <span class="k">"locked"</span>:               <span class="b">false</span>,
+  <span class="k">"hash"</span>:                 <span class="s">"abc123def456"</span>,
+  <span class="k">"exits"</span>:                { <span class="s">"n"</span>: <span class="n">12840</span>, <span class="s">"e"</span>: <span class="n">12848</span> },
+  <span class="k">"stubs"</span>:                [<span class="s">"sw"</span>],
+  <span class="k">"doors"</span>:                { <span class="s">"n"</span>: <span class="s">"closed"</span> },
+  <span class="k">"exit_weights"</span>:         { <span class="s">"e"</span>: <span class="n">3</span> },
+  <span class="k">"exit_locks"</span>:           [<span class="s">"n"</span>],
+  <span class="k">"special_exits"</span>:        { <span class="s">"wejdz do jaskini"</span>: <span class="n">15001</span> },
+  <span class="k">"special_exit_locks"</span>:   [<span class="s">"wejdz do jaskini"</span>],
+  <span class="k">"custom_lines"</span>:         { <span class="c">/* see §10 */</span> },
+  <span class="k">"user_data"</span>:            { <span class="s">"zone"</span>: <span class="s">"handlowa"</span> },
+  <span class="k">"notes"</span>:                <span class="s">"Tu jest kowal"</span>,
+  <span class="k">"tags"</span>:                 [<span class="s">"shop"</span>, <span class="s">"blacksmith"</span>]
+}</pre>
+
+<table>
+<tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>id</code></td><td>integer</td><td class="req">YES</td><td>Globally unique room ID (across all areas).</td></tr>
+<tr><td><code>x</code></td><td>integer</td><td class="req">YES</td><td>X coordinate (east is positive).</td></tr>
+<tr><td><code>y</code></td><td>integer</td><td class="req">YES</td><td>Y coordinate (north/up is positive — <strong>note:</strong> Mudlet negates Y for display).</td></tr>
+<tr><td><code>z</code></td><td>integer</td><td class="req">YES</td><td>Z coordinate (level/floor).</td></tr>
+<tr><td><code>env</code></td><td>integer</td><td class="req">YES</td><td>Environment ID. Determines room color via the color resolution chain (§4).</td></tr>
+<tr><td><code>name</code></td><td>string</td><td class="opt">optional</td><td>Room name. Omit if empty string.</td></tr>
+<tr><td><code>weight</code></td><td>integer ≥ 1</td><td class="opt">optional</td><td>Pathfinding cost. Default: 1. Omit if 1.</td></tr>
+<tr><td><code>symbol</code></td><td>string (max 2 chars)</td><td class="opt">optional</td><td>Room symbol displayed on map (e.g. "P", "K", "[]"). Omit if empty.</td></tr>
+<tr><td><code>locked</code></td><td>boolean</td><td class="opt">optional</td><td>Room locked flag (Mudlet isLocked). Omit if false.</td></tr>
+<tr><td><code>hash</code></td><td>string</td><td class="opt">optional</td><td>Mudlet room database hash (mpRoomDbHashToRoomId). Omit if not present.</td></tr>
+<tr><td><code>exits</code></td><td>object</td><td class="opt">optional</td><td>Standard exits. See <a href="#exits">§7</a>.</td></tr>
+<tr><td><code>stubs</code></td><td>array of strings</td><td class="opt">optional</td><td>Stub directions — exits without a known target. Sorted alphabetically.</td></tr>
+<tr><td><code>doors</code></td><td>object</td><td class="opt">optional</td><td>Door data. See <a href="#doors">§8</a>.</td></tr>
+<tr><td><code>exit_weights</code></td><td>object</td><td class="opt">optional</td><td>Per-exit pathfinding weights. See <a href="#exits">§7</a>.</td></tr>
+<tr><td><code>exit_locks</code></td><td>array of strings</td><td class="opt">optional</td><td>Locked exit directions. Sorted alphabetically.</td></tr>
+<tr><td><code>special_exits</code></td><td>object</td><td class="opt">optional</td><td>Special exits. See <a href="#special-exits">§9</a>.</td></tr>
+<tr><td><code>special_exit_locks</code></td><td>array of strings</td><td class="opt">optional</td><td>Locked special exit commands. Sorted alphabetically.</td></tr>
+<tr><td><code>custom_lines</code></td><td>object</td><td class="opt">optional</td><td>Custom drawn lines. See <a href="#custom-lines">§10</a>.</td></tr>
+<tr><td><code>user_data</code></td><td><a href="#user-data">UserData</a></td><td class="opt">optional</td><td>Room-level key-value metadata.</td></tr>
+<tr><td><code>notes</code></td><td>string</td><td class="opt">optional</td><td><span style="color:#5570a0">.arkmap-only</span> — Free-form notes. Not preserved in .dat export.</td></tr>
+<tr><td><code>tags</code></td><td>array of strings</td><td class="opt">optional</td><td><span style="color:#5570a0">.arkmap-only</span> — Tags/labels. Not preserved in .dat export.</td></tr>
+</table>
+
+<div class="note"><strong>Omission convention:</strong> Optional fields should be <strong>omitted</strong> (not set to null or default) when they carry no information. This keeps files compact and diffs clean. For example, omit <code>"weight"</code> entirely when the value is 1, rather than writing <code>"weight": 1</code>.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="exits">7. Exits &amp; Directions</h2>
+
+<h3>Valid direction strings</h3>
+<p>Exits use <strong>short direction strings</strong> as keys. The complete set of 12 valid directions:</p>
+
+<table>
+<tr><th>Short</th><th>Long (Mudlet)</th><th>Index</th><th>Map vector [dx, dy]</th></tr>
+<tr><td><code>n</code></td><td>north</td><td>1</td><td>[0, -1]</td></tr>
+<tr><td><code>ne</code></td><td>northeast</td><td>2</td><td>[1, -1]</td></tr>
+<tr><td><code>nw</code></td><td>northwest</td><td>3</td><td>[-1, -1]</td></tr>
+<tr><td><code>e</code></td><td>east</td><td>4</td><td>[1, 0]</td></tr>
+<tr><td><code>w</code></td><td>west</td><td>5</td><td>[-1, 0]</td></tr>
+<tr><td><code>s</code></td><td>south</td><td>6</td><td>[0, 1]</td></tr>
+<tr><td><code>se</code></td><td>southeast</td><td>7</td><td>[1, 1]</td></tr>
+<tr><td><code>sw</code></td><td>southwest</td><td>8</td><td>[-1, 1]</td></tr>
+<tr><td><code>up</code></td><td>up</td><td>9</td><td>[0, 0]</td></tr>
+<tr><td><code>down</code></td><td>down</td><td>10</td><td>[0, 0]</td></tr>
+<tr><td><code>in</code></td><td>in</td><td>11</td><td>[0, 0]</td></tr>
+<tr><td><code>out</code></td><td>out</td><td>12</td><td>[0, 0]</td></tr>
+</table>
+
+<h3>exits object</h3>
+<p>Maps direction → target room ID. Keys are short direction strings; values are integers (room IDs). Only existing exits are listed.</p>
+<pre>{ <span class="s">"n"</span>: <span class="n">12840</span>, <span class="s">"e"</span>: <span class="n">12848</span>, <span class="s">"up"</span>: <span class="n">12900</span> }</pre>
+
+<h3>exit_weights object</h3>
+<p>Per-exit pathfinding cost overrides. Keys must be valid direction strings that exist in <code>exits</code> or <code>special_exits</code>. Values are integers ≥ 1. Only non-default weights (≠ 1) should be included.</p>
+<pre>{ <span class="s">"e"</span>: <span class="n">3</span> }</pre>
+
+<h3>stubs array</h3>
+<p>Directions where an exit is "hinted" but the target room is unknown. Sorted alphabetically. May coexist with entries in <code>exits</code> (Mudlet allows this).</p>
+<pre>[<span class="s">"sw"</span>, <span class="s">"w"</span>]</pre>
+
+<h3>exit_locks array</h3>
+<p>Directions where the exit is programmatically locked (distinct from doors). Sorted alphabetically.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="doors">8. Doors</h2>
+
+<p>Maps direction string → door type string.</p>
+<pre>{ <span class="s">"n"</span>: <span class="s">"closed"</span>, <span class="s">"e"</span>: <span class="s">"locked"</span> }</pre>
+
+<table>
+<tr><th>Value</th><th>Mudlet int</th><th>Description</th></tr>
+<tr><td><code>"open"</code></td><td>1</td><td>Door exists but is open</td></tr>
+<tr><td><code>"closed"</code></td><td>2</td><td>Door is closed (can be opened)</td></tr>
+<tr><td><code>"locked"</code></td><td>3</td><td>Door is locked (requires key)</td></tr>
+</table>
+
+<div class="note">Door keys can reference directions not present in <code>exits</code> or <code>stubs</code>. Mudlet allows doors to exist independently of exits.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="special-exits">9. Special Exits</h2>
+
+<p>Maps command string → target room ID. The command is a text string used in the MUD client (e.g. <code>"wejdz do jaskini"</code>).</p>
+
+<pre>{
+  <span class="k">"special_exits"</span>: { <span class="s">"wejdz do jaskini"</span>: <span class="n">15001</span>, <span class="s">"przejdz most"</span>: <span class="n">15042</span> },
+  <span class="k">"special_exit_locks"</span>: [<span class="s">"wejdz do jaskini"</span>]
+}</pre>
+
+<p><code>special_exit_locks</code> is an array of command strings that are locked. Each value must exist as a key in <code>special_exits</code>.</p>
+
+<div class="note"><strong>Mudlet encoding:</strong> In the .dat binary, special exits are stored as <code>"0command"</code> (unlocked) or <code>"1command"</code> (locked) strings mapped by target room ID. The .arkmap format decomposes this into separate <code>special_exits</code> and <code>special_exit_locks</code> fields for clarity.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="custom-lines">10. Custom Lines &amp; Suppressors</h2>
+
+<p>Custom lines are hand-drawn polylines on the map that replace the default straight-line exit connections. They are keyed by direction (for standard exits) or command string (for special exits).</p>
+
+<pre><span class="k">"custom_lines"</span>: {
+  <span class="s">"e"</span>: {
+    <span class="k">"points"</span>: [[<span class="n">15.5</span>, <span class="n">-3.0</span>], [<span class="n">16.0</span>, <span class="n">-2.5</span>], [<span class="n">16.5</span>, <span class="n">-3.0</span>]],
+    <span class="k">"color"</span>:  [<span class="n">255</span>, <span class="n">0</span>, <span class="n">0</span>],
+    <span class="k">"style"</span>:  <span class="s">"dash"</span>,
+    <span class="k">"arrow"</span>:  <span class="b">true</span>
+  },
+  <span class="s">"w"</span>: {
+    <span class="k">"points"</span>: [],
+    <span class="k">"color"</span>:  [<span class="n">255</span>, <span class="n">0</span>, <span class="n">0</span>]
+  }
+}</pre>
+
+<table>
+<tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>points</code></td><td>array of [number, number]</td><td class="req">YES</td><td>Waypoints of the polyline. Coordinates are in map units (same as room x/y). Precision: 4 decimal places max.</td></tr>
+<tr><td><code>color</code></td><td><a href="#color-type">Color</a></td><td class="opt">optional</td><td>Line color. Default: [255, 0, 0] (red).</td></tr>
+<tr><td><code>style</code></td><td>string</td><td class="opt">optional</td><td>Line style. Default: "solid". Omit if "solid".</td></tr>
+<tr><td><code>arrow</code></td><td>boolean</td><td class="opt">optional</td><td>Show arrowhead at end. Omit if false.</td></tr>
+</table>
+
+<h4>Valid line styles</h4>
+<table>
+<tr><th>Value</th><th>Mudlet int</th><th>Description</th></tr>
+<tr><td><code>"solid"</code></td><td>1</td><td>Continuous line (default)</td></tr>
+<tr><td><code>"dash"</code></td><td>2</td><td>Dashed line</td></tr>
+<tr><td><code>"dot"</code></td><td>3</td><td>Dotted line</td></tr>
+<tr><td><code>"dash_dot"</code></td><td>4</td><td>Alternating dash-dot</td></tr>
+<tr><td><code>"dash_dot_dot"</code></td><td>5</td><td>Alternating dash-dot-dot</td></tr>
+</table>
+
+<h3>Exit Suppressors</h3>
+
+<div class="critical"><strong>Critical concept:</strong> A custom line with an <strong>empty points array</strong> (<code>"points": []</code>) is an <strong>exit suppressor</strong>. This is an intentional Mudlet design feature, not data corruption. Suppressors must be preserved through all conversions.</div>
+
+<p>An exit suppressor hides the default exit line that Mudlet would normally draw from this room in the given direction. They are needed when the opposite room has a custom line pointing here — without the suppressor, both lines would be drawn.</p>
+
+<p><strong>Example:</strong> Room A (id=100) has custom line <code>e → Room B (id=101)</code>. Room B should have a suppressor: <code>"w": { "points": [], "color": [255,0,0] }</code> to hide the default westward line.</p>
+
+<h4>Validation rule</h4>
+<p>Custom line keys must reference existing exits or special exits. The key must appear in either <code>exits</code> or <code>special_exits</code> of the same room.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="labels">11. Labels</h2>
+
+<p>Labels are text annotations or image overlays on the map, associated with an area.</p>
+
+<pre>{
+  <span class="k">"id"</span>:          <span class="n">3</span>,
+  <span class="k">"x"</span>:           <span class="n">12.5</span>,
+  <span class="k">"y"</span>:           <span class="n">-4.2</span>,
+  <span class="k">"z"</span>:           <span class="n">0</span>,
+  <span class="k">"width"</span>:       <span class="n">8.0</span>,
+  <span class="k">"height"</span>:      <span class="n">1.5</span>,
+  <span class="k">"text"</span>:        <span class="s">"Wyspa Miłości"</span>,
+  <span class="k">"fg_color"</span>:    [<span class="n">200</span>, <span class="n">200</span>, <span class="n">100</span>],
+  <span class="k">"bg_color"</span>:    [<span class="n">0</span>, <span class="n">0</span>, <span class="n">0</span>, <span class="n">50</span>],
+  <span class="k">"no_scaling"</span>:  <span class="b">false</span>,
+  <span class="k">"show_on_top"</span>: <span class="b">true</span>,
+  <span class="k">"pixmap"</span>:      <span class="b">null</span>
+}</pre>
+
+<table>
+<tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>id</code></td><td>integer</td><td class="req">YES</td><td>Label ID, unique within the area.</td></tr>
+<tr><td><code>x</code></td><td>number</td><td class="req">YES</td><td>X position in map coordinates.</td></tr>
+<tr><td><code>y</code></td><td>number</td><td class="req">YES</td><td>Y position in map coordinates.</td></tr>
+<tr><td><code>z</code></td><td>integer</td><td class="req">YES</td><td>Z level.</td></tr>
+<tr><td><code>width</code></td><td>number</td><td class="req">YES</td><td>Width in map units.</td></tr>
+<tr><td><code>height</code></td><td>number</td><td class="req">YES</td><td>Height in map units.</td></tr>
+<tr><td><code>text</code></td><td>string</td><td class="req">YES</td><td>Label text. May be empty for image-only labels.</td></tr>
+<tr><td><code>fg_color</code></td><td><a href="#color-type">Color</a></td><td class="req">YES</td><td>Foreground (text) color.</td></tr>
+<tr><td><code>bg_color</code></td><td><a href="#color-type">Color</a></td><td class="req">YES</td><td>Background color. Alpha channel supported for transparency.</td></tr>
+<tr><td><code>no_scaling</code></td><td>boolean</td><td class="opt">optional</td><td>If true, label size is fixed regardless of zoom. Omit if false.</td></tr>
+<tr><td><code>show_on_top</code></td><td>boolean</td><td class="opt">optional</td><td>If true, label renders above rooms. Omit if false.</td></tr>
+<tr><td><code>pixmap</code></td><td>string | null</td><td class="opt">optional</td><td>Base64-encoded image data (Mudlet QPixMap). Null or omit for text labels.</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="font">12. Font Object</h2>
+
+<p>Represents a Qt QFont, serialized as JSON. Used for <code>meta.symbol_font</code> and label fonts.</p>
+
+<pre>{
+  <span class="k">"family"</span>:        <span class="s">"Bitstream Vera Sans Mono"</span>,
+  <span class="k">"point_size"</span>:    <span class="n">-1</span>,
+  <span class="k">"pixel_size"</span>:    <span class="n">10</span>,
+  <span class="k">"style_hint"</span>:    <span class="n">7</span>,
+  <span class="k">"weight"</span>:        <span class="n">50</span>,
+  <span class="k">"style_setting"</span>: <span class="b">false</span>,
+  <span class="k">"underline"</span>:     <span class="b">false</span>,
+  <span class="k">"strike_out"</span>:    <span class="b">false</span>,
+  <span class="k">"fixed_pitch"</span>:   <span class="b">true</span>
+}</pre>
+
+<table>
+<tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>family</code></td><td>string</td><td class="req">YES</td><td>Font family name.</td></tr>
+<tr><td><code>point_size</code></td><td>number</td><td class="req">YES</td><td>Point size (-1 if pixel_size is used).</td></tr>
+<tr><td><code>pixel_size</code></td><td>number</td><td class="req">YES</td><td>Pixel size (-1 if point_size is used).</td></tr>
+<tr><td><code>style_hint</code></td><td>integer</td><td class="req">YES</td><td>Qt QFont::StyleHint enum value.</td></tr>
+<tr><td><code>weight</code></td><td>integer</td><td class="req">YES</td><td>Font weight (50 = normal, 75 = bold).</td></tr>
+<tr><td><code>style_setting</code></td><td>boolean</td><td class="req">YES</td><td>Style setting flag.</td></tr>
+<tr><td><code>underline</code></td><td>boolean</td><td class="req">YES</td><td>Underline flag.</td></tr>
+<tr><td><code>strike_out</code></td><td>boolean</td><td class="req">YES</td><td>Strikeout flag.</td></tr>
+<tr><td><code>fixed_pitch</code></td><td>boolean</td><td class="req">YES</td><td>Fixed pitch flag.</td></tr>
+</table>
+
+<h4>Optional font fields (omit when at defaults)</h4>
+<table>
+<tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr>
+<tr><td><code>style</code></td><td>string</td><td><code>""</code></td><td>Font style string.</td></tr>
+<tr><td><code>style_strategy</code></td><td>integer</td><td><code>0</code></td><td>Qt style strategy.</td></tr>
+<tr><td><code>stretch</code></td><td>integer</td><td><code>100</code></td><td>Font stretch (100 = normal).</td></tr>
+<tr><td><code>letter_spacing</code></td><td>number</td><td><code>0</code></td><td>Letter spacing.</td></tr>
+<tr><td><code>word_spacing</code></td><td>number</td><td><code>0</code></td><td>Word spacing.</td></tr>
+<tr><td><code>hinting_preference</code></td><td>integer</td><td><code>0</code></td><td>Qt hinting preference.</td></tr>
+<tr><td><code>capital</code></td><td>integer</td><td><code>0</code></td><td>Capitalization mode.</td></tr>
+<tr><td><code>kerning</code></td><td>boolean</td><td><code>true</code></td><td>Kerning enabled. Only include if false.</td></tr>
+<tr><td><code>overline</code></td><td>boolean</td><td><code>false</code></td><td>Overline flag.</td></tr>
+<tr><td><code>style_oblique</code></td><td>boolean</td><td><code>false</code></td><td>Oblique style flag.</td></tr>
+<tr><td><code>ignore_pitch</code></td><td>boolean</td><td><code>false</code></td><td>Ignore pitch flag.</td></tr>
+<tr><td><code>letter_spacing_is_absolute</code></td><td>boolean</td><td><code>false</code></td><td>If true, letter_spacing is in pixels (not percentage).</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="color-type">13. Color Type (RGB / RGBA)</h2>
+
+<p>Colors are represented as JSON arrays:</p>
+<ul>
+  <li><strong>RGB:</strong> <code>[r, g, b]</code> — 3 integers, each 0–255</li>
+  <li><strong>RGBA:</strong> <code>[r, g, b, a]</code> — 4 integers, each 0–255 (alpha: 0 = transparent, 255 = opaque)</li>
+</ul>
+
+<p>Use RGB (3 elements) when alpha is 255 (fully opaque). Use RGBA (4 elements) only when alpha &lt; 255. This keeps files compact.</p>
+
+<pre>[<span class="n">0</span>, <span class="n">128</span>, <span class="n">0</span>]          <span class="c">// RGB green, alpha implied 255</span>
+[<span class="n">255</span>, <span class="n">0</span>, <span class="n">0</span>, <span class="n">128</span>]     <span class="c">// RGBA semi-transparent red</span></pre>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="user-data">14. user_data</h2>
+
+<p>A <code>user_data</code> field is a flat JSON object mapping <strong>string keys</strong> to <strong>string values</strong>. No nested objects, no arrays, no numeric values.</p>
+
+<pre>{ <span class="s">"version"</span>: <span class="s">"3.15.0"</span>, <span class="s">"revision"</span>: <span class="s">"abc123def456"</span> }</pre>
+
+<p>Available at three levels: <code>meta.user_data</code> (map-level), <code>area.user_data</code> (area-level), and <code>room.user_data</code> (room-level).</p>
+
+<div class="note">user_data is preserved through .dat round-trips — Mudlet stores it as QMap&lt;QString, QString&gt;.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="checksums">15. Checksums (CRC-32)</h2>
+
+<p>ArkMap Studio computes hierarchical CRC-32 (IEEE 802.3) checksums on save and stores them in <code>meta.checksums</code>. They are optional — a file without checksums is valid.</p>
+
+<pre><span class="k">"checksums"</span>: {
+  <span class="k">"file"</span>:  <span class="s">"a1b2c3d4"</span>,
+  <span class="k">"areas"</span>: { <span class="s">"7"</span>: <span class="s">"e5f6a7b8"</span>, <span class="s">"12"</span>: <span class="s">"c9d0e1f2"</span> },
+  <span class="k">"rooms"</span>: { <span class="s">"12847"</span>: <span class="s">"1a2b3c4d"</span>, <span class="s">"12848"</span>: <span class="s">"5e6f7a8b"</span> }
+}</pre>
+
+<h3>Computation algorithm</h3>
+<ol>
+  <li><strong>Room CRC</strong> = CRC-32 of <code>stableStringify(room)</code> — the deterministic JSON serialization of the room object</li>
+  <li><strong>Area CRC</strong> = CRC-32 of concatenated room CRCs (rooms sorted by ID, CRC hex strings joined)</li>
+  <li><strong>File CRC</strong> = CRC-32 of concatenated area CRCs (areas sorted by ID, CRC hex strings joined)</li>
+</ol>
+
+<p>All CRC values are stored as 8-character lowercase hexadecimal strings.</p>
+
+<h3>Verification</h3>
+<p>On load, recompute from bottom up and compare. Mismatches indicate the file was modified externally (hand-edited JSON, merge conflict resolution, etc.). Mismatches are warnings, not fatal errors.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="serialization">16. Deterministic Serialization</h2>
+
+<p>For git-friendly output, .arkmap files use <strong>stable JSON serialization</strong>:</p>
+
+<ul>
+  <li><strong>Object keys are sorted alphabetically</strong> at every nesting level</li>
+  <li><strong>Indentation:</strong> 2 spaces per level</li>
+  <li><strong>Inline arrays of primitives</strong> (≤ 8 elements): written on a single line with <code>, </code> separator — e.g. <code>[255, 0, 0]</code>, <code>[32.7281, -7.9983]</code></li>
+  <li><strong>Arrays of objects</strong>: each element on its own line, standard JSON indentation</li>
+  <li><strong>undefined values</strong> are omitted (keys not present)</li>
+  <li><strong>Array sorting:</strong>
+    <ul>
+      <li><code>areas</code> sorted by <code>id</code> ascending</li>
+      <li><code>rooms</code> within each area sorted by <code>id</code> ascending</li>
+      <li><code>labels</code> within each area sorted by <code>id</code> ascending</li>
+      <li><code>stubs</code>, <code>exit_locks</code>, <code>special_exit_locks</code> sorted alphabetically</li>
+    </ul>
+  </li>
+</ul>
+
+<div class="note">This serialization ensures that two independently generated .arkmap files representing the same data produce <strong>byte-identical output</strong>, which is critical for git-based workflows and checksum verification.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="validation">17. Validation Rules</h2>
+
+<p>A conforming implementation should validate the following rules:</p>
+
+<ol>
+  <li><code>format</code> must be <code>"arkmap"</code></li>
+  <li><code>version</code> must be <code>1</code></li>
+  <li><code>meta</code>, <code>colors</code>, <code>areas</code> must be present</li>
+  <li>All area IDs must be unique</li>
+  <li>All room IDs must be globally unique (across all areas)</li>
+  <li>Exit target room IDs must reference existing rooms</li>
+  <li>Special exit target room IDs must reference existing rooms</li>
+  <li>Exit weight keys must reference existing exits or special exits</li>
+  <li>Special exit lock commands must reference existing special exits</li>
+  <li>Door values must be one of: <code>"open"</code>, <code>"closed"</code>, <code>"locked"</code></li>
+  <li>Custom line keys must reference existing exits or special exits</li>
+  <li>Custom line style must be one of: <code>"solid"</code>, <code>"dash"</code>, <code>"dot"</code>, <code>"dash_dot"</code>, <code>"dash_dot_dot"</code></li>
+  <li>Color arrays must have 3 or 4 integer elements, each 0–255</li>
+  <li>Room weight must be integer ≥ 1</li>
+  <li>Room coordinates (x, y, z) must be integers</li>
+  <li>user_data keys and values must be strings</li>
+</ol>
+
+<div class="warn"><strong>Permissive loading:</strong> Implementations should validate but still allow loading files with non-fatal warnings. Only missing <code>format</code> or wrong <code>version</code> are fatal errors.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="dat-roundtrip">18. Mudlet .dat Round-Trip</h2>
+
+<p>The .arkmap format is designed for lossless conversion to/from Mudlet's binary <code>map.dat</code> format (version 20, QDataStream).</p>
+
+<h3>Direction mapping (.arkmap → .dat)</h3>
+<p>.arkmap uses short strings; .dat uses 1-based indices (see §7 table). Convert using the direction table.</p>
+
+<h3>Door mapping</h3>
+<p>.arkmap uses strings; .dat uses integers: open=1, closed=2, locked=3.</p>
+
+<h3>Custom line style mapping</h3>
+<p>.arkmap uses strings; .dat uses integers: solid=1, dash=2, dot=3, dash_dot=4, dash_dot_dot=5.</p>
+
+<h3>Special exits encoding</h3>
+<p>.dat stores special exits as <code>QMap&lt;int targetRoomId, QList&lt;QString&gt;&gt;</code> where each string is prefixed with <code>"0"</code> (unlocked) or <code>"1"</code> (locked). .arkmap decomposes this into <code>special_exits</code> + <code>special_exit_locks</code>.</p>
+
+<h3>Y-axis convention</h3>
+<p><strong>Important:</strong> Mudlet negates Y for per-area bounds: <code>min_y = -max(room.y)</code>, <code>max_y = -min(room.y)</code>. The .arkmap format stores Y as-is (positive = north). Implementations must negate Y when computing area bounds for .dat export.</p>
+
+<h3>Color conversion</h3>
+<p>Mudlet uses QColor (spec, r, g, b, alpha, pad). .arkmap uses [r, g, b] or [r, g, b, a]. When alpha is 255, omit it. When converting to QColor, set spec=1 (RGB), pad=0.</p>
+
+<h3>Font conversion</h3>
+<p>QFont bit flags are decomposed into boolean fields in .arkmap. See §12 for the mapping.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="arkmap-only">19. Extensions (.arkmap-only fields)</h2>
+
+<p>These fields are exclusive to the .arkmap format and are <strong>not preserved</strong> when exporting to Mudlet .dat:</p>
+
+<table>
+<tr><th>Field</th><th>Location</th><th>Description</th></tr>
+<tr><td><code>notes</code></td><td>Room object</td><td>Free-form text notes for a room.</td></tr>
+<tr><td><code>tags</code></td><td>Room object</td><td>Array of string tags for filtering/categorization.</td></tr>
+<tr><td><code>checksums</code></td><td>meta object</td><td>CRC-32 integrity checksums (auto-generated by ArkMap Studio on save).</td></tr>
+</table>
+
+<p>Implementations that only handle .dat conversion can safely ignore these fields. When reading a .arkmap file for .dat export, these fields should be silently dropped.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="example">20. Complete Example</h2>
+
+<p>A minimal but valid .arkmap file with one area containing two rooms:</p>
+
+<pre>{
+  <span class="k">"areas"</span>: [
+    {
+      <span class="k">"id"</span>: <span class="n">1</span>,
+      <span class="k">"name"</span>: <span class="s">"Test Area"</span>,
+      <span class="k">"rooms"</span>: [
+        {
+          <span class="k">"env"</span>: <span class="n">272</span>,
+          <span class="k">"exits"</span>: {
+            <span class="k">"e"</span>: <span class="n">2</span>
+          },
+          <span class="k">"id"</span>: <span class="n">1</span>,
+          <span class="k">"name"</span>: <span class="s">"Start Room"</span>,
+          <span class="k">"x"</span>: <span class="n">0</span>,
+          <span class="k">"y"</span>: <span class="n">0</span>,
+          <span class="k">"z"</span>: <span class="n">0</span>
+        },
+        {
+          <span class="k">"env"</span>: <span class="n">258</span>,
+          <span class="k">"exits"</span>: {
+            <span class="k">"w"</span>: <span class="n">1</span>
+          },
+          <span class="k">"id"</span>: <span class="n">2</span>,
+          <span class="k">"name"</span>: <span class="s">"Forest"</span>,
+          <span class="k">"symbol"</span>: <span class="s">"T"</span>,
+          <span class="k">"x"</span>: <span class="n">1</span>,
+          <span class="k">"y"</span>: <span class="n">0</span>,
+          <span class="k">"z"</span>: <span class="n">0</span>
+        }
+      ]
+    }
+  ],
+  <span class="k">"colors"</span>: {
+    <span class="k">"custom_env_colors"</span>: {
+      <span class="k">"258"</span>: [<span class="n">0</span>, <span class="n">128</span>, <span class="n">0</span>],
+      <span class="k">"272"</span>: [<span class="n">128</span>, <span class="n">128</span>, <span class="n">128</span>]
+    }
+  },
+  <span class="k">"format"</span>: <span class="s">"arkmap"</span>,
+  <span class="k">"meta"</span>: {
+    <span class="k">"map_name"</span>: <span class="s">"Test Map"</span>,
+    <span class="k">"symbol_font"</span>: {
+      <span class="k">"family"</span>: <span class="s">"Bitstream Vera Sans Mono"</span>,
+      <span class="k">"fixed_pitch"</span>: <span class="b">true</span>,
+      <span class="k">"pixel_size"</span>: <span class="n">10</span>,
+      <span class="k">"point_size"</span>: <span class="n">-1</span>,
+      <span class="k">"strike_out"</span>: <span class="b">false</span>,
+      <span class="k">"style_hint"</span>: <span class="n">7</span>,
+      <span class="k">"style_setting"</span>: <span class="b">false</span>,
+      <span class="k">"underline"</span>: <span class="b">false</span>,
+      <span class="k">"weight"</span>: <span class="n">50</span>
+    },
+    <span class="k">"symbol_font_fudge_factor"</span>: <span class="n">1.0</span>,
+    <span class="k">"use_only_map_font"</span>: <span class="b">false</span>
+  },
+  <span class="k">"version"</span>: <span class="n">1</span>
+}</pre>
+
+<div class="note">Note that top-level keys are sorted alphabetically (<code>areas</code>, <code>colors</code>, <code>format</code>, <code>meta</code>, <code>version</code>). Within each room, keys are also sorted. This is the deterministic serialization format.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="changelog">21. Format Changelog</h2>
+
+<table>
+<tr><th>Version</th><th>Date</th><th>Changes</th></tr>
+<tr><td><code>1</code></td><td>2026</td><td>Initial release. Full Mudlet .dat v20 compatibility. Extensions: notes, tags, checksums.</td></tr>
+</table>
+
+<hr>
+
+<p style="text-align:center;color:var(--dim);font-size:11px;margin-top:40px">
+  .arkmap Format Specification v1 · ArkMap Studio · Isithunzi &amp; Claude AI · MIT License · 2026
+</p>
+
+</body>
+</html>
