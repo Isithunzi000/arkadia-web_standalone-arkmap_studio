@@ -188,7 +188,7 @@
   <li>Hardcoded Arkadia environment table (<code>ARKADIA_ENVS</code>, 51 entries covering all known Arkadia envIds) — overrides implicit ANSI for Arkadia-specific envIds (200+)</li>
   <li>Implicit ANSI mapping: envId 1–255 → ANSI palette (lowest priority). Mudlet offset applies: envId 8 → ANSI index 0, envId 16 → ANSI index 8, all others → ANSI index = envId.</li>
 </ol>
-<p>If none of the four layers provides a color for a given envId, the room renders with a default neutral color (<code>#3a4258</code>).</p>
+<p>If none of the four layers provides a color for a given envId, the room renders with the Mudlet default color (<code>rgb(114,1,0)</code>).</p>
 
 <h4>ANSI 256-color palette</h4>
 <p>The <code>env_colors</code> mapping and the implicit ANSI layer resolve indices to RGB using the standard <strong>xterm-256</strong> palette:</p>
