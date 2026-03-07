@@ -6394,38 +6394,51 @@ function drawRooms(rooms, rs) {
       ctx.restore();
     }
 
-    // ── Up/Down exit indicators ──
+    // ── Up/Down exit indicators (Delwing-style inner triangles) ──
     {
       const exits = r.exits || {};
       const hasUp   = !!exits.up;
       const hasDown = !!exits.down;
 
-      if (hasUp || hasDown) {
-        // Check if target exists (regardless of Z)
+      if ((hasUp || hasDown) && state.zoom > 0.25) {
         const upTarget   = hasUp   ? state.roomById[exits.up]   : null;
         const downTarget = hasDown ? state.roomById[exits.down] : null;
+        // Triangle size: ~60% of room
+        const triH = rs * 0.5;
+        const triW = rs * 0.45;
+        // Color: contrast-dependent like Delwing (light room → dark triangle, dark room → light)
+        const triColor = contrastColor(color) === '#fff'
+          ? 'rgba(220,220,220,0.75)' : 'rgba(40,40,40,0.65)';
+        const triStroke = contrastColor(color) === '#fff'
+          ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.8)';
 
-        if ((upTarget || downTarget) && state.zoom > 0.25) {
-          const notchW = Math.max(2, rs * 0.3);
-          const notchH = Math.max(1.5, rs * 0.18);
-          if (upTarget) {
-            ctx.fillStyle = upTarget.z !== r.z ? 'rgba(100,200,255,0.85)' : 'rgba(100,200,255,0.5)';
-            ctx.beginPath();
-            ctx.moveTo(cx - notchW/2, cy - half);
-            ctx.lineTo(cx + notchW/2, cy - half);
-            ctx.lineTo(cx,            cy - half - notchH * 1.8);
-            ctx.closePath();
-            ctx.fill();
-          }
-          if (downTarget) {
-            ctx.fillStyle = downTarget.z !== r.z ? 'rgba(100,200,255,0.85)' : 'rgba(100,200,255,0.5)';
-            ctx.beginPath();
-            ctx.moveTo(cx - notchW/2, cy + half);
-            ctx.lineTo(cx + notchW/2, cy + half);
-            ctx.lineTo(cx,            cy + half + notchH * 1.8);
-            ctx.closePath();
-            ctx.fill();
-          }
+        if (downTarget) {
+          // ▽ pointing down, centered in lower half of room
+          const ty = cy + rs * 0.05;
+          ctx.fillStyle   = triColor;
+          ctx.strokeStyle = triStroke;
+          ctx.lineWidth   = Math.max(0.5, state.zoom * 0.6);
+          ctx.beginPath();
+          ctx.moveTo(cx - triW/2, ty - triH/3);
+          ctx.lineTo(cx + triW/2, ty - triH/3);
+          ctx.lineTo(cx,          ty + triH * 2/3);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+        if (upTarget) {
+          // △ pointing up, centered in upper half of room
+          const ty = cy - rs * 0.05;
+          ctx.fillStyle   = triColor;
+          ctx.strokeStyle = triStroke;
+          ctx.lineWidth   = Math.max(0.5, state.zoom * 0.6);
+          ctx.beginPath();
+          ctx.moveTo(cx - triW/2, ty + triH/3);
+          ctx.lineTo(cx + triW/2, ty + triH/3);
+          ctx.lineTo(cx,          ty - triH * 2/3);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
         }
       }
     }
@@ -6504,6 +6517,23 @@ function drawExits(rooms, rs) {
           ctx.lineWidth   = Math.max(0.5, state.zoom * 0.8);
         }
         ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(tx, ty); ctx.stroke();
+
+        // One-way exit → arrowhead at target end (Delwing behavior)
+        const OPP = {n:'s',ne:'sw',e:'w',se:'nw',s:'n',sw:'ne',w:'e',nw:'se'};
+        const oppDir = OPP[dir];
+        const isOneWay = oppDir && (!target.exits || target.exits[oppDir] !== r.id);
+        if (isOneWay && state.zoom > 0.3) {
+          const angle = Math.atan2(ty - ey, tx - ex);
+          const aLen = Math.max(5, state.zoom * 7);
+          const aW = Math.PI / 5;
+          ctx.fillStyle = ctx.strokeStyle;
+          ctx.beginPath();
+          ctx.moveTo(tx, ty);
+          ctx.lineTo(tx - aLen * Math.cos(angle - aW), ty - aLen * Math.sin(angle - aW));
+          ctx.lineTo(tx - aLen * Math.cos(angle + aW), ty - aLen * Math.sin(angle + aW));
+          ctx.closePath();
+          ctx.fill();
+        }
 
         // Drzwi — symbol na środku linii, widoczny przy każdym zoomie
         if (doorState) {
@@ -6786,8 +6816,8 @@ function drawCustomLines(rooms) {
       }
       ctx.stroke();
       ctx.setLineDash([]);
-      // CL arrow — rysuj tylko w edit mode gdy cl.arrow === true (Pass 63)
-      if (state.editMode && cl.arrow) {
+      // CL arrow — rysuj grot na końcu custom line gdy cl.arrow === true
+      if (cl.arrow) {
         drawCLArrow(color, [[r.x, r.y], ...cl.points]);
       }
     }
