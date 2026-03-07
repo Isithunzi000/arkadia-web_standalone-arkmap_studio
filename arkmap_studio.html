@@ -6725,21 +6725,21 @@ function drawCustomLines(rooms) {
   for (const r of rooms) {
     if (!r.custom_lines) continue;
     for (const [, cl] of Object.entries(r.custom_lines)) {
-      if (!cl.points || cl.points.length < 2) continue;
+      if (!cl.points || cl.points.length === 0) continue; // [] = exit suppressor
       const color = cl.color ? `rgb(${cl.color[0]},${cl.color[1]},${cl.color[2]})` : '#aaaaff';
       ctx.strokeStyle = color;
       ctx.lineWidth   = Math.max(1, state.zoom * 1.2);
       setLineDash(cl.style);
       ctx.beginPath();
-      ctx.moveTo(wx(cl.points[0][0]), wy(cl.points[0][1]));
-      for (let i = 1; i < cl.points.length; i++) {
+      ctx.moveTo(wx(r.x), wy(r.y));                      // start from room center
+      for (let i = 0; i < cl.points.length; i++) {
         ctx.lineTo(wx(cl.points[i][0]), wy(cl.points[i][1]));
       }
       ctx.stroke();
       ctx.setLineDash([]);
       // CL arrow — rysuj tylko w edit mode gdy cl.arrow === true (Pass 63)
       if (state.editMode && cl.arrow) {
-        drawCLArrow(color, cl.points);
+        drawCLArrow(color, [[r.x, r.y], ...cl.points]);
       }
     }
   }
@@ -7560,13 +7560,11 @@ function drawCLInProgress() {
   ctx.lineWidth   = 1.5;
   ctx.setLineDash([]);
 
-  // Segmenty między punktami
-  if (pts.length > 1) {
-    ctx.beginPath();
-    ctx.moveTo(wx(pts[0][0]), wy(pts[0][1]));
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(wx(pts[i][0]), wy(pts[i][1]));
-    ctx.stroke();
-  }
+  // Segmenty: pokój → punkt1 → punkt2 → ...
+  ctx.beginPath();
+  ctx.moveTo(wx(state.clRoom.x), wy(state.clRoom.y));
+  for (let i = 0; i < pts.length; i++) ctx.lineTo(wx(pts[i][0]), wy(pts[i][1]));
+  ctx.stroke();
 
   // Punkty jako kółka (białe z kolorowym border)
   for (const [px, py] of pts) {
@@ -7640,8 +7638,8 @@ function drawDragGhost() {
 // Guard: minimum 2 punkty (Pass 68). Reset: _lastClickTime = 0 po commit.
 function commitCLDrawing() {
   if (!state.clRoom) return;  // DS 2.5: guard defensywny
-  if (state.clPoints.length < 2) {
-    toast('⚠ CL musi mieć co najmniej 2 punkty');
+  if (state.clPoints.length < 1) {
+    toast('⚠ CL musi mieć co najmniej 1 punkt');
     return;
   }
   const room    = state.clRoom;
