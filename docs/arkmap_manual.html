@@ -75,7 +75,7 @@
 <button id="top-btn" onclick="window.scrollTo({top:0})" title="Do góry">↑</button>
 
 <h1>ARKMAP <span>STUDIO</span></h1>
-<div class="subtitle">Dokumentacja użytkownika · wersja edytora 1.4.25 · Isithunzi &amp; Claude AI · 2026</div>
+<div class="subtitle">Dokumentacja użytkownika · wersja edytora 1.4.27 · Isithunzi &amp; Claude AI · 2026</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <div class="toc">
@@ -253,6 +253,7 @@
 
 <table>
 <tr><th>Opcja</th><th>Domyślnie</th><th>Opis</th></tr>
+<tr><td>Skala interfejsu</td><td>100%</td><td>Suwak 80–150% — skaluje rozmiar tekstu i paneli. Przydatne na małych ekranach / laptopach z wysokim DPI. Zoom stosowany po puszczeniu suwaka.</td></tr>
 <tr><td>Papier milimetrowy</td><td>ON</td><td>Wyświetla subtelną siatkę w tle canvasa — pomaga wizualnie ocenić odległości</td></tr>
 <tr><td>Minimapa</td><td>ON</td><td>Włącza/wyłącza miniaturowy podgląd obszaru w prawym dolnym rogu</td></tr>
 <tr><td>Pokaż suppressory</td><td>ON</td><td>Wyświetla symbol ⊘ przy krawędziach pokojów, które mają exit suppressory (zaawansowane)</td></tr>
@@ -350,19 +351,21 @@
 <p>Legenda znajduje się w dolnej części panelu <strong>Skróty klawiaturowe</strong> — otwórz go klikając przycisk <strong>?</strong> w toolbarze po prawej stronie ekranu. Zawiera trzy sekcje:</p>
 
 <h4>Środowiska</h4>
-<p>Lista wszystkich kolorów środowisk używanych w Arkadii (las, trakt, miasto, wieś itd.) z kolorowym próbnikiem i numerem envId.</p>
+<p>Lista wszystkich kolorów środowisk używanych w Arkadii (las, trakt, miasto, wieś itd.) z kolorowym próbnikiem i numerem envId. Kolory odświeżają się automatycznie po załadowaniu mapy z nadpisanymi kolorami (<code>custom_env_colors</code>).</p>
 
 <h4>Symbole</h4>
-<p>Lista symboli pokojów (P = Poczta, K = Kowal, S = Sklep, T = Karczma itd.).</p>
+<p>Lista symboli pokojów (P = Poczta, K = Kowal, S = Sklep, T = Karczma itd.). Przy symbolach z przypisanym domyślnym środowiskiem wyświetlany jest kolorowy próbnik.</p>
 
 <h4>Połączenia</h4>
 <p>Wizualna legenda typów połączeń między pokojami:</p>
 <ul>
-  <li>Linia ciągła — normalne wyjście</li>
+  <li>Linia ciągła — normalne wyjście (dwukierunkowe)</li>
+  <li>Linia ciągła ze strzałką (grotem) — wyjście jednokierunkowe (cel nie ma wyjścia z powrotem)</li>
+  <li>Trójkąt ▽ / △ wewnątrz pokoju — wyjście down / up</li>
   <li>Linia z ◇ — drzwi otwarte</li>
   <li>Linia z ◆ — drzwi zamknięte</li>
   <li>Linia z ⊠ (pomarańczowa) — drzwi na klucz</li>
-  <li>Linia przerywana pomarańczowa — wyjście do innego obszaru</li>
+  <li>Strzałka pomarańczowa — wyjście do innego obszaru (działa niezależnie od poziomu Z)</li>
   <li>Linia przerywana żółta — wyjście specjalne (komenda)</li>
   <li>Linia wielokolorowa — custom line (rysowana ręcznie)</li>
 </ul>
@@ -528,20 +531,22 @@
 <h3>Custom Lines</h3>
 <p>Custom lines to ręcznie rysowane linie na mapie zastępujące domyślne proste połączenia między pokojami. Służą do wizualnego przedstawienia krętych dróg, rzek, tuneli itp.</p>
 
+<p>Linia custom rysowana jest jako polilinia zaczynająca się od <strong>środka pokoju</strong>, a następnie prowadząca przez kolejne punkty (waypoints). Jeden waypoint tworzy pojedynczy odcinek od pokoju do punktu — tablica <code>points</code> przechowuje tylko waypoints, nie pozycję pokoju.</p>
+
 <p>Każda custom line składa się z:</p>
 <ul>
   <li><strong>Kierunek</strong> — powiązana z wyjściem (n, e, s itd.) lub wyjściem specjalnym</li>
-  <li><strong>Punkty</strong> — tablica współrzędnych [x, y] definiujących przebieg linii</li>
-  <li><strong>Kolor</strong> — RGB</li>
+  <li><strong>Punkty</strong> — tablica współrzędnych [x, y] definiujących przebieg linii (minimum 1 punkt; pusty = suppressor)</li>
+  <li><strong>Kolor</strong> — RGB (domyślnie: czerwony [255, 0, 0])</li>
   <li><strong>Styl</strong> — solid, dash, dot, dash_dot, dash_dot_dot</li>
-  <li><strong>Strzałka</strong> — czy zakończona strzałką</li>
+  <li><strong>Strzałka</strong> — grot na końcu linii, widoczny zarówno w trybie podglądu jak i edycji</li>
 </ul>
 
 <h3>Rysowanie custom line</h3>
 <ol>
   <li>W trybie edycji otwórz zakładkę CL w panelu pokoju</li>
   <li>Kliknij „Rysuj" przy wybranym wyjściu (lub użyj „+ Dodaj custom line…" aby wybrać kierunek)</li>
-  <li>Kliknij na mapie aby dodawać kolejne punkty linii</li>
+  <li>Kliknij na mapie aby dodawać kolejne punkty linii (minimum 1 punkt)</li>
   <li>Zakończ rysowanie: <kbd>Enter</kbd> lub prawy klik</li>
   <li><kbd>Esc</kbd> anuluje rysowanie</li>
 </ol>

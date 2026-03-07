@@ -102,6 +102,7 @@
   <li><a href="#checksums">Checksums (CRC-32)</a></li>
   <li><a href="#serialization">Deterministic Serialization</a></li>
   <li><a href="#validation">Validation Rules</a></li>
+  <li><a href="#rendering">Rendering Behavior</a></li>
   <li><a href="#dat-roundtrip">Mudlet .dat Round-Trip</a></li>
   <li><a href="#arkmap-only">Extensions (.arkmap-only fields)</a></li>
   <li><a href="#example">Complete Example</a></li>
@@ -374,8 +375,11 @@
 <tr><td><code>points</code></td><td>array of [number, number]</td><td class="req">YES</td><td>Waypoints of the polyline. Each element must be a 2-element array <code>[x, y]</code>. Coordinates are in map units (same as room x/y). Precision: 4 decimal places max. Empty array (<code>[]</code>) = exit suppressor.</td></tr>
 <tr><td><code>color</code></td><td><a href="#color-type">Color</a></td><td class="opt">optional</td><td>Line color. Default: [255, 0, 0] (red).</td></tr>
 <tr><td><code>style</code></td><td>string</td><td class="opt">optional</td><td>Line style. Default: "solid". Omit if "solid".</td></tr>
-<tr><td><code>arrow</code></td><td>boolean</td><td class="opt">optional</td><td>Show arrowhead at end. Omit if false.</td></tr>
+<tr><td><code>arrow</code></td><td>boolean</td><td class="opt">optional</td><td>Show arrowhead at the end of the polyline. Rendered in both view and edit mode. Omit if false.</td></tr>
 </table>
+
+<h4>Rendering</h4>
+<p>Custom lines are rendered as polylines starting from the <strong>room center</strong> (room.x, room.y), then through each waypoint in order. A custom line with 1 waypoint draws a single segment from room center to that point. The <code>points</code> array contains <strong>only waypoints</strong> — the room center is implicit and not stored in points.</p>
 
 <h4>Valid line styles</h4>
 <table>
@@ -587,7 +591,26 @@
 <div class="warn"><strong>Permissive loading:</strong> Implementations should validate but still allow loading files with non-fatal warnings. Only missing <code>format</code> or wrong <code>version</code> are fatal errors.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="dat-roundtrip">18. Mudlet .dat Round-Trip</h2>
+<h2 id="rendering">18. Rendering Behavior</h2>
+
+<p>This section documents rendering conventions that implementations should follow for visual compatibility with Mudlet and Delwing.</p>
+
+<h4>Exit rendering</h4>
+<ul>
+  <li><strong>Standard exits</strong> (n, ne, e, se, s, sw, w, nw): Rendered as lines between room edges. Both rooms must be on the same area and same Z level.</li>
+  <li><strong>One-way exits</strong>: When room A has an exit to room B, but B does not have the reciprocal exit back to A, the line is drawn with an <strong>arrowhead</strong> at the target end.</li>
+  <li><strong>Up/down/in/out</strong>: Never rendered as connecting lines. Instead, rendered as <strong>triangles inside the room</strong>: ▽ for down, △ for up. Triangle color is contrast-dependent on the room's background. For cross-Z targets, a ↑/↓ text symbol is also drawn.</li>
+  <li><strong>Cross-area exits</strong>: Rendered as directional arrows at the room edge with area name labels, <strong>regardless of whether source and target Z levels differ</strong>.</li>
+</ul>
+
+<h4>Custom line rendering</h4>
+<p>Custom lines are drawn as polylines starting from the <strong>room center</strong>, then through each waypoint in order. Arrowheads (when <code>arrow: true</code>) are rendered in both view and edit modes. Custom lines with an empty points array (suppressors) are not drawn but may be indicated with a ⊘ symbol at the room edge.</p>
+
+<h4>Color fallback</h4>
+<p>Rooms with envIds not resolved by any color layer render with the Mudlet default color <code>rgb(114, 1, 0)</code> (dark brownish-red). This applies to all visual contexts: canvas, minimap, room panel swatch, env color dialog, and palette chips. The legend and palette chips refresh dynamically after map load to reflect any <code>custom_env_colors</code> overrides.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="dat-roundtrip">19. Mudlet .dat Round-Trip</h2>
 
 <p>The .arkmap format is designed for lossless conversion to/from Mudlet's binary <code>map.dat</code> format. ArkMap Studio reads versions 17–22 and always writes version 20 (the Arkadia MUD standard). Round-trip conversion .dat → .arkmap → .dat produces <strong>byte-identical</strong> output for version 20 input files (verified with SHA-256). Files in other versions (17–19, 21–22) are read correctly but re-written as version 20, so the output will differ structurally.</p>
 
@@ -613,7 +636,7 @@
 <p>QFont bit flags are decomposed into boolean fields in .arkmap. See §12 for the mapping.</p>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="arkmap-only">19. Extensions (.arkmap-only fields)</h2>
+<h2 id="arkmap-only">20. Extensions (.arkmap-only fields)</h2>
 
 <p>These fields are exclusive to the .arkmap format and are <strong>not preserved</strong> when exporting to Mudlet .dat:</p>
 
@@ -627,7 +650,7 @@
 <p>Implementations that only handle .dat conversion can safely ignore these fields. When reading a .arkmap file for .dat export, these fields should be silently dropped.</p>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="example">20. Complete Example</h2>
+<h2 id="example">21. Complete Example</h2>
 
 <p>A minimal but valid .arkmap file with one area containing two rooms:</p>
 
@@ -692,7 +715,7 @@
 <div class="note">Note that top-level keys are sorted alphabetically (<code>areas</code>, <code>colors</code>, <code>format</code>, <code>meta</code>, <code>version</code>). Within each room, keys are also sorted. This is the deterministic serialization format.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="changelog">21. Format Changelog</h2>
+<h2 id="changelog">22. Format Changelog</h2>
 
 <table>
 <tr><th>Version</th><th>Date</th><th>Changes</th></tr>
