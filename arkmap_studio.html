@@ -6494,7 +6494,10 @@ function drawExits(rooms, rs) {
 
       const [ex, ey] = edgePt(cx, cy, half, vec);
 
-      if (sameArea && sameZ) {
+      if (!sameArea || !target) {
+        // Cross-area or unknown target — strzałka (regardless of Z)
+        crossExits.push({ r, cx, cy, half, vec, dir, targetId, target });
+      } else if (sameArea && sameZ) {
         // Skip default line if custom line or suppressor exists for this direction
         if (r.custom_lines?.[dir]) continue;
         // Skip committed line if pending has different target (live preview takes over)
@@ -6551,11 +6554,8 @@ function drawExits(rooms, rs) {
           else if (doorState === 'locked') { ctx.fillStyle = '#ff7733'; ctx.fillText('⊠', mx, my); }
           else                             { ctx.fillStyle = '#ccddee'; ctx.fillText('◆', mx, my); }
         }
-      } else if (!sameZ && target) {
-        // Inny poziom Z — handled by drawCrossArrows
-      } else if (!sameArea || !target) {
-        // Cross-area — zbierz do osobnej warstwy
-        crossExits.push({ r, cx, cy, half, vec, dir, targetId, target });
+      } else if (!sameZ) {
+        // Same area, different Z — handled by drawCrossArrows (inner triangles)
       }
     }
   }
@@ -11348,8 +11348,8 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.4.25';
-const BUILD_DATE  = '04-03-2026';
+const APP_VERSION = 'v1.4.26';
+const BUILD_DATE  = '07-03-2026';
 
 // Populacja wersji z jednego źródła (single source of truth)
 { const _vt = APP_VERSION + ' · ' + BUILD_DATE;
