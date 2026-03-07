@@ -19,7 +19,9 @@
     --sel:     #4a9eff22;
     --font:    'Courier New', monospace;
     --sidebar: 240px;
+    --ui-scale: 1;
   }
+  html { zoom: var(--ui-scale); }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 100%; height: 100%; background: var(--bg); color: var(--text);
     font: 12px/1.4 var(--font); overflow: hidden; }
@@ -2025,6 +2027,17 @@
     <!-- SETTINGS PANEL -->
     <div id="settings-panel">
       <div class="sp-title">Ustawienia</div>
+      <div class="sp-row">
+        <div>
+          Skala interfejsu<br>
+          <span>rozmiar tekstu i paneli</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="range" id="ui-scale-slider" min="80" max="150" value="100" step="5"
+            style="width:80px;accent-color:var(--accent)">
+          <span id="ui-scale-val" style="font-size:10px;color:var(--dim);min-width:30px;text-align:right">100%</span>
+        </div>
+      </div>
       <div class="sp-row">
         <div>
           Papier milimetrowy<br>
@@ -10292,6 +10305,14 @@ document.addEventListener('click', (e) => {
       if (ts) ts.checked = false;
     }
     if (saved.lockDuration) state.lockDuration = saved.lockDuration;
+    if (saved.uiScale && saved.uiScale !== 100) {
+      const pct = Math.max(80, Math.min(150, saved.uiScale));
+      document.documentElement.style.setProperty('--ui-scale', pct / 100);
+      const sl = document.getElementById('ui-scale-slider');
+      const vl = document.getElementById('ui-scale-val');
+      if (sl) sl.value = pct;
+      if (vl) vl.textContent = pct + '%';
+    }
     if (saved.showPixmaps === true) {
       state.showPixmaps = true;
       const tp = document.getElementById('toggle-pixmaps');
@@ -10341,6 +10362,7 @@ function saveSettings() {
       showSuppressors: !!state.showSuppressors,
       showPixmaps:     !!state.showPixmaps,
       lockDuration:    state.lockDuration || 30,
+      uiScale:         parseInt(_uiScaleSlider.value) || 100,
     }));
   } catch(e) {}
 }
@@ -10368,6 +10390,22 @@ document.getElementById('toggle-pixmaps').addEventListener('change', function() 
   state.showPixmaps = this.checked;
   saveSettings();
   draw();
+});
+
+// ── UI Scale slider ──
+const _uiScaleSlider = document.getElementById('ui-scale-slider');
+const _uiScaleVal    = document.getElementById('ui-scale-val');
+function applyUiScale(pct) {
+  const scale = pct / 100;
+  document.documentElement.style.setProperty('--ui-scale', scale);
+  _uiScaleVal.textContent = pct + '%';
+  _uiScaleSlider.value = pct;
+  // Canvas needs resize after zoom change
+  setTimeout(() => { resize(); }, 50);
+}
+_uiScaleSlider.addEventListener('input', function() {
+  applyUiScale(parseInt(this.value));
+  saveSettings();
 });
 
 // ── resetAllDefaults() — reset ALL settings, positions, localStorage ──────────
@@ -11350,7 +11388,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.4.26';
+const APP_VERSION = 'v1.4.27';
 const BUILD_DATE  = '07-03-2026';
 
 // Populacja wersji z jednego źródła (single source of truth)
