@@ -5778,7 +5778,7 @@ function applyMap(map) {
     ].filter(Boolean).join('\n');
   }
 
-  // Legenda jest budowana raz przy starcie (initLegend), nie wymaga odbudowy przy każdym załadowaniu mapy
+  // Legenda i palety odświeżają kolory automatycznie przez refreshEnvColors() po buildColorCache
 
   if (state.areas.size > 0) {
     // Prefer first non-empty area over Default Area (-1)
@@ -5833,6 +5833,8 @@ function buildColorCache(colors) {
   for (const [k, v] of Object.entries(colors.custom_env_colors || {})) {
     state.colorCache[parseInt(k)] = `rgb(${v[0]},${v[1]},${v[2]})`;
   }
+  // Sync legend + palette swatches with updated colorCache
+  if (typeof refreshEnvColors === 'function') refreshEnvColors();
 }
 
 // Mudlet default room color for unknown/unmapped envIds (matches Delwing fallback)
@@ -5884,7 +5886,7 @@ function contrastColor(cssColor) {
     const el = document.createElement('div');
     el.className = 'leg-env';
     el.title = `env ${id}`;
-    el.innerHTML = `<span class="leg-swatch" style="background:rgb(${r},${g},${b})"></span>`
+    el.innerHTML = `<span class="leg-swatch" data-env="${id}" style="background:rgb(${r},${g},${b})"></span>`
                  + `<span class="leg-env-id">${id}</span>`
                  + `<span class="leg-env-name">${info.name}</span>`;
     envEl.appendChild(el);
@@ -5892,13 +5894,41 @@ function contrastColor(cssColor) {
 
   // Wypełnij symbole
   for (const [sym, name] of Object.entries(ARKADIA_SYMBOLS)) {
+    const defEnv = SYMBOL_DEFAULT_ENV[sym];
     const el = document.createElement('div');
     el.className = 'leg-sym';
-    el.innerHTML = `<span class="leg-sym-key">${escHtml(sym)}</span>`
+    const swatchHtml = defEnv !== undefined
+      ? `<span class="leg-swatch leg-sym-swatch" data-env="${defEnv}" style="background:${envColorCss(defEnv)}"></span>`
+      : `<span class="leg-swatch" style="background:transparent;border-color:transparent"></span>`;
+    el.innerHTML = swatchHtml
+                 + `<span class="leg-sym-key">${escHtml(sym)}</span>`
                  + `<span class="leg-sym-name">${name}</span>`;
     symEl.appendChild(el);
   }
 })();
+
+// Odśwież kolory w legendzie i paletkach po buildColorCache / edycji koloru env
+function refreshEnvColors() {
+  // Legend env swatches + symbol swatches
+  document.querySelectorAll('.leg-swatch[data-env]').forEach(el => {
+    el.style.background = envColorCss(parseInt(el.dataset.env));
+  });
+  // Palette env chips (rp-env-palette + dtp-env-palette)
+  document.querySelectorAll('.pal-chip[data-env], .env-chip[data-env]').forEach(el => {
+    const envId = parseInt(el.dataset.env);
+    if (el.dataset.sym !== undefined) {
+      // Symbol chip — update left border color
+      el.style.borderLeftColor = envColorCss(envId);
+    } else {
+      // Env chip — update background
+      el.style.background = envColorCss(envId);
+    }
+  });
+  // DTP sym-chips with default env
+  document.querySelectorAll('.sym-chip[data-env]').forEach(el => {
+    el.style.borderLeftColor = envColorCss(parseInt(el.dataset.env));
+  });
+}
 
 // ─── AREA LIST ────────────────────────────────────────────────────────────────
 const areaListEl = document.getElementById('area-list');
@@ -13121,15 +13151,21 @@ function initRpPalette() {
       envPal.appendChild(chip);
     }
     for (const [sym, name] of Object.entries(ARKADIA_SYMBOLS || {})) {
+      const defEnv = SYMBOL_DEFAULT_ENV[sym];
       const chip = document.createElement('button');
       chip.className = forRoom ? 'pal-chip' : 'sym-chip';
       chip.dataset.sym = sym;
-      chip.title = name;
+      if (defEnv !== undefined) chip.dataset.env = String(defEnv);
+      chip.title = name + (defEnv !== undefined ? ` (env ${defEnv})` : '');
       chip.style.padding = '3px 6px';
       chip.style.fontSize = '10px';
       chip.style.cursor = 'pointer';
       chip.style.border = '1px solid var(--border)';
       chip.style.borderRadius = '2px';
+      if (defEnv !== undefined) {
+        chip.style.borderLeftWidth = '3px';
+        chip.style.borderLeftColor = envColorCss(defEnv);
+      }
       chip.innerHTML = `<span class="sym-glyph">${escHtml(sym)}</span>`;
       // Click → apply symbol + default env to selected room
       chip.addEventListener('click', () => {
