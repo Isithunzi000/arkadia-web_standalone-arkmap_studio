@@ -6352,20 +6352,15 @@ function drawRooms(rooms, rs) {
       const hasDown = !!exits.down;
 
       if (hasUp || hasDown) {
-        // Check if target is on different Z (truly vertical)
+        // Check if target exists (regardless of Z)
         const upTarget   = hasUp   ? state.roomById[exits.up]   : null;
         const downTarget = hasDown ? state.roomById[exits.down] : null;
-        const upDiffZ    = upTarget   && upTarget.z   !== r.z;
-        const downDiffZ  = downTarget && downTarget.z !== r.z;
 
-        if ((upDiffZ || downDiffZ) && state.zoom > 0.25) {
-          // 3D "stack" shadow — drawn BEFORE the room square (behind it)
-          // We'll draw it below in a separate pass (drawRoomStacks handles this)
-          // For now: draw small notch on edge indicating vertical connection
+        if ((upTarget || downTarget) && state.zoom > 0.25) {
           const notchW = Math.max(2, rs * 0.3);
           const notchH = Math.max(1.5, rs * 0.18);
-          if (upDiffZ) {
-            ctx.fillStyle = 'rgba(100,200,255,0.85)';
+          if (upTarget) {
+            ctx.fillStyle = upTarget.z !== r.z ? 'rgba(100,200,255,0.85)' : 'rgba(100,200,255,0.5)';
             ctx.beginPath();
             ctx.moveTo(cx - notchW/2, cy - half);
             ctx.lineTo(cx + notchW/2, cy - half);
@@ -6373,8 +6368,8 @@ function drawRooms(rooms, rs) {
             ctx.closePath();
             ctx.fill();
           }
-          if (downDiffZ) {
-            ctx.fillStyle = 'rgba(100,200,255,0.85)';
+          if (downTarget) {
+            ctx.fillStyle = downTarget.z !== r.z ? 'rgba(100,200,255,0.85)' : 'rgba(100,200,255,0.5)';
             ctx.beginPath();
             ctx.moveTo(cx - notchW/2, cy + half);
             ctx.lineTo(cx + notchW/2, cy + half);
@@ -6383,9 +6378,6 @@ function drawRooms(rooms, rs) {
             ctx.fill();
           }
         }
-
-        // For up/down exits to SAME z (just a direction in the game):
-        // draw like cross-exit arrow — handled in drawExits via DIR_VEC override
       }
     }
 
@@ -6434,12 +6426,9 @@ function drawExits(rooms, rs) {
       const sameArea = roomSet.has(targetId);
       const sameZ   = target && target.z === state.z;
 
-      // up/down/in/out have vec=[0,0]
-      // If different Z: handled by notches+drawCrossArrows — skip line drawing
-      // If same Z: fall through to cross-area arrow rendering below
-      if (!vec[0] && !vec[1]) {
-        if (!sameZ) continue;
-      }
+      // up/down/in/out have vec=[0,0] — always rendered as notches inside the room,
+      // never as connecting lines between rooms (matches Mudlet/Delwing behavior)
+      if (!vec[0] && !vec[1]) continue;
 
       const [ex, ey] = edgePt(cx, cy, half, vec);
 
