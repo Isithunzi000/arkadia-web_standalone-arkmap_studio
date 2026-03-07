@@ -6485,7 +6485,9 @@ function drawExits(rooms, rs) {
       if (!vec) continue;
 
       const target  = state.roomById[targetId];
-      const sameArea = roomSet.has(targetId);
+      const onScreen = roomSet.has(targetId);        // target visible on current Z
+      const trueArea = target ? state.roomArea[targetId] : null;
+      const sameArea = trueArea === state.areaId;    // actual area check
       const sameZ   = target && target.z === state.z;
 
       // up/down/in/out have vec=[0,0] — always rendered as notches inside the room,
@@ -6497,7 +6499,9 @@ function drawExits(rooms, rs) {
       if (!sameArea || !target) {
         // Cross-area or unknown target — strzałka (regardless of Z)
         crossExits.push({ r, cx, cy, half, vec, dir, targetId, target });
-      } else if (sameArea && sameZ) {
+      } else if (sameArea && !sameZ) {
+        // Same area, different Z — handled by drawCrossArrows (inner triangles)
+      } else if (onScreen) {
         // Skip default line if custom line or suppressor exists for this direction
         if (r.custom_lines?.[dir]) continue;
         // Skip committed line if pending has different target (live preview takes over)
@@ -6554,8 +6558,6 @@ function drawExits(rooms, rs) {
           else if (doorState === 'locked') { ctx.fillStyle = '#ff7733'; ctx.fillText('⊠', mx, my); }
           else                             { ctx.fillStyle = '#ccddee'; ctx.fillText('◆', mx, my); }
         }
-      } else if (!sameZ) {
-        // Same area, different Z — handled by drawCrossArrows (inner triangles)
       }
     }
   }
