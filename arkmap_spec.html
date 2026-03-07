@@ -184,18 +184,20 @@
 <h4>Color resolution order</h4>
 <ol>
   <li><code>custom_env_colors[envId]</code> — direct RGB, highest priority</li>
-  <li><code>env_colors[envId]</code> → ANSI 256-color palette lookup</li>
-  <li>Hardcoded Arkadia environment table (<code>ARKADIA_ENVS</code>, 51 entries covering all known Arkadia envIds) as fallback</li>
+  <li><code>env_colors[envId]</code> → ANSI 256-color palette lookup (explicit override)</li>
+  <li>Hardcoded Arkadia environment table (<code>ARKADIA_ENVS</code>, 51 entries covering all known Arkadia envIds) — overrides implicit ANSI for Arkadia-specific envIds (200+)</li>
+  <li>Implicit ANSI mapping: envId 1–255 → ANSI palette (lowest priority). Mudlet offset applies: envId 8 → ANSI index 0, envId 16 → ANSI index 8, all others → ANSI index = envId.</li>
 </ol>
-<p>If none of the three layers provides a color for a given envId, the room renders with a default neutral color (<code>#3a4258</code>).</p>
+<p>If none of the four layers provides a color for a given envId, the room renders with a default neutral color (<code>#3a4258</code>).</p>
 
 <h4>ANSI 256-color palette</h4>
-<p>The <code>env_colors</code> mapping resolves ANSI indices to RGB using the standard <strong>xterm-256</strong> palette:</p>
+<p>The <code>env_colors</code> mapping and the implicit ANSI layer resolve indices to RGB using the standard <strong>xterm-256</strong> palette:</p>
 <ul>
   <li><strong>0–15</strong> — system colors (fixed, matching ANSI SGR 30–37 / 90–97)</li>
   <li><strong>16–231</strong> — 6×6×6 color cube. For index <em>i</em>: <code>n = i − 16</code>, channel levels = <code>[0, 95, 135, 175, 215, 255]</code>, RGB = <code>[levels[⌊n/36⌋ mod 6], levels[⌊n/6⌋ mod 6], levels[n mod 6]]</code></li>
   <li><strong>232–255</strong> — grayscale ramp: <code>v = 8 + (i − 232) × 10</code>, RGB = <code>[v, v, v]</code></li>
 </ul>
+<div class="note"><strong>Mudlet offset:</strong> Mudlet shifts ANSI indices for the first system colors: envId 8 maps to ANSI index 0 (black), envId 16 maps to ANSI index 8 (bright black). All other envIds 1–255 map directly to their ANSI index. This matches Mudlet's internal <code>color_table</code> assignment in <code>map-exporter.lua</code>.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="areas">5. areas Array</h2>
