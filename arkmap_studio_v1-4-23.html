@@ -6637,17 +6637,21 @@ function drawCrossAreaLabels(rs) {
 }
 
 function drawSpecialExitLines(rooms, rs) {
-  // Rysuj linie dla wyjść specjalnych — tylko te same obszar + Z
+  // Rysuj linie dla wyjść specjalnych — TYLKO podświetlone w trybie edycji.
+  // Domyślne linie SE nie są rysowane (Mudlet ich nie rysuje).
+  // SE z custom lines rysowane są przez drawCustomLines().
+  if (!state.editMode) return;
   if (state.zoom < 0.4) return;
 
   for (const r of rooms) {
     if (!r.special_exits) continue;
     const cx = wx(r.x), cy = wy(r.y);
     for (const [cmd, targetId] of Object.entries(r.special_exits)) {
-      // Skip default line if custom line or suppressor exists for this command
       if (r.custom_lines?.[cmd]) continue;
-      // Skip committed line if pending exists and differs or deletes this exit (live preview / deletion)
-      if (state.editMode && r.id === state.selected && state.pendingSpecialExits != null) {
+      // Only draw if this SE is actively highlighted in the editor
+      const isHighlight = state.selected === r.id && state._activeSpecialExit === cmd;
+      if (!isHighlight) continue;
+      if (state.pendingSpecialExits != null) {
         if (!(cmd in state.pendingSpecialExits) || state.pendingSpecialExits[cmd] !== targetId) continue;
       }
       const target = state.roomById[targetId];
@@ -6655,22 +6659,15 @@ function drawSpecialExitLines(rooms, rs) {
       if (target.z !== state.z) continue;
       if (state.roomArea[targetId] !== state.areaId) continue;
       const tx = wx(target.x), ty = wy(target.y);
-      const isHighlight = state.editMode && state.selected === r.id && state._activeSpecialExit === cmd;
-      if (isHighlight) {
-        // Glow
-        ctx.setLineDash([]);
-        ctx.strokeStyle = 'rgba(255,220,80,0.2)';
-        ctx.lineWidth = Math.max(4, state.zoom * 5);
-        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(tx, ty); ctx.stroke();
-        // Bright line
-        ctx.strokeStyle = 'rgba(255,220,80,0.9)';
-        ctx.lineWidth = Math.max(1.5, state.zoom * 1.8);
-        ctx.setLineDash([Math.max(2, rs * 0.25), Math.max(2, rs * 0.3)]);
-      } else {
-        ctx.strokeStyle = 'rgba(255, 220, 80, 0.55)';
-        ctx.lineWidth = Math.max(0.8, state.zoom * 0.7);
-        ctx.setLineDash([Math.max(2, rs * 0.25), Math.max(2, rs * 0.3)]);
-      }
+      // Glow
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(255,220,80,0.2)';
+      ctx.lineWidth = Math.max(4, state.zoom * 5);
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(tx, ty); ctx.stroke();
+      // Bright line
+      ctx.strokeStyle = 'rgba(255,220,80,0.9)';
+      ctx.lineWidth = Math.max(1.5, state.zoom * 1.8);
+      ctx.setLineDash([Math.max(2, rs * 0.25), Math.max(2, rs * 0.3)]);
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(tx, ty);
