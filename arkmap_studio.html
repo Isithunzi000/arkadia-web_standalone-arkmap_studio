@@ -10404,6 +10404,9 @@ function applyUiScale(pct) {
   setTimeout(() => { resize(); }, 50);
 }
 _uiScaleSlider.addEventListener('input', function() {
+  _uiScaleVal.textContent = this.value + '%';
+});
+_uiScaleSlider.addEventListener('change', function() {
   applyUiScale(parseInt(this.value));
   saveSettings();
 });
