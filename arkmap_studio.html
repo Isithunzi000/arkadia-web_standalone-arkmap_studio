@@ -5804,12 +5804,21 @@ function buildAnsiPal() {
 }
 function ansiPaletteRgb(envId) {
   if (envId < 1 || envId > 255) return null;
-  return ANSI_PAL[envId] ?? null;
+  // Mudlet offset: envId 8 → ANSI 0 (black), envId 16 → ANSI 8 (bright black)
+  const ansiIdx = envId === 8 ? 0 : envId === 16 ? 8 : envId;
+  return ANSI_PAL[ansiIdx] ?? null;
 }
 
 function buildColorCache(colors) {
   state.colorCache = {};
-  // ARKADIA_ENVS: hardcoded Arkadia environment table (lowest priority fallback)
+  // Implicit ANSI: envId 1-255 maps to ANSI palette directly (Mudlet default behavior)
+  // Mudlet offset: envId 8 → ANSI 0, envId 16 → ANSI 8, rest → envId = ANSI index
+  for (let eid = 1; eid <= 255; eid++) {
+    const ansiIdx = eid === 8 ? 0 : eid === 16 ? 8 : eid;
+    const rgb = ANSI_PAL[ansiIdx];
+    if (rgb) state.colorCache[eid] = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+  }
+  // ARKADIA_ENVS: hardcoded Arkadia environment table (overrides implicit ANSI for Arkadia envIds)
   if (typeof ARKADIA_ENVS !== 'undefined') {
     for (const [k, info] of Object.entries(ARKADIA_ENVS)) {
       if (info.rgb) state.colorCache[parseInt(k)] = `rgb(${info.rgb[0]},${info.rgb[1]},${info.rgb[2]})`;
@@ -11275,7 +11284,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.4.24';
+const APP_VERSION = 'v1.4.25';
 const BUILD_DATE  = '04-03-2026';
 
 // Populacja wersji z jednego źródła (single source of truth)
