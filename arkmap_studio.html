@@ -5835,8 +5835,27 @@ function buildColorCache(colors) {
   }
 }
 
+// Mudlet default room color for unknown/unmapped envIds (matches Delwing fallback)
+const DEFAULT_ROOM_RGB = [114, 1, 0];
+const DEFAULT_ROOM_CSS = `rgb(${DEFAULT_ROOM_RGB})`;
+
 function roomColor(r) {
-  return state.colorCache[r.env] || 'rgb(114,1,0)';
+  return state.colorCache[r.env] || DEFAULT_ROOM_CSS;
+}
+
+// Resolve envId → CSS color for UI (panel swatches, dialogs, minimap)
+function envColorCss(envId) {
+  return state.colorCache[envId] || DEFAULT_ROOM_CSS;
+}
+
+// Resolve envId → [r,g,b] array for UI (env color dialog, palette logic)
+function envColorRgb(envId) {
+  const css = state.colorCache[envId];
+  if (css) {
+    const m = css.match(/rgb\((\d+),(\d+),(\d+)\)/);
+    if (m) return [+m[1], +m[2], +m[3]];
+  }
+  return [...DEFAULT_ROOM_RGB];
 }
 
 // Zwraca kolor tekstu (#000 lub #fff) dający max kontrast na tle roomColor
@@ -6125,7 +6144,7 @@ function updateMinimap() {
   for (const r of rooms) {
     const cx = (r.x - minX) * scale + offX;
     const cy = (maxY - r.y) * scale + offY; // Y flipped: north=up
-    const color = state.colorCache[r.env] || '#3a4a6a';
+    const color = state.colorCache[r.env] || DEFAULT_ROOM_CSS;
     minimapCtx.fillStyle = color;
     minimapCtx.fillRect(cx - rs/2, cy - rs/2, rs, rs);
   }
@@ -7881,10 +7900,8 @@ function showRoomInfo(r) {
   rpTitle.textContent = '#' + r.id + (r.name ? ' — ' + r.name : '');
 
   const envInfo  = ARKADIA_ENV[r.env];
-  const envColor = state.colorCache[r.env];
-  const swatchHtml = envColor
-    ? `<span class="env-swatch-lg" style="background:${envColor}"></span>`
-    : '';
+  const envColor = envColorCss(r.env);
+  const swatchHtml = `<span class="env-swatch-lg" style="background:${envColor}"></span>`;
   const envLabel = envInfo ? `${swatchHtml}${r.env} — ${envInfo.name}` : `${swatchHtml}${r.env}`;
 
   const sym = r.symbol || '';
@@ -13070,7 +13087,7 @@ function initRpPalette() {
     if (envPal.children.length > 0) continue; // już wypełnione
 
     for (const [id, info] of Object.entries(ARKADIA_ENV || {})) {
-      const [r,g,b] = info.rgb || [100,100,100];
+      const [r,g,b] = info.rgb || DEFAULT_ROOM_RGB;
       const chip = document.createElement('button');
       chip.className = forRoom ? 'pal-chip' : 'env-chip';
       chip.dataset.env = id;
@@ -15026,7 +15043,7 @@ function openEnvColorDialog(envId) {
   _decEnvId = envId;
   const envInfo  = (typeof ARKADIA_ENVS !== 'undefined' ? ARKADIA_ENVS : {})[envId] || {};
   const envName  = envInfo.name || `env ${envId}`;
-  const defRgb   = envInfo.rgb  || [128, 128, 128];
+  const defRgb   = envColorRgb(envId);
   const custom   = state.map.colors?.custom_env_colors?.[envId];
   const rgb      = custom ? custom.slice(0, 3) : [...defRgb];
 
