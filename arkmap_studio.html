@@ -6576,6 +6576,24 @@ function drawExits(rooms, rs) {
   }
 
   // ── Cross-area exits: zbierz dane, rysuj strzałki (bez etykiet) ──
+  // Also collect cross-area SPECIAL exits
+  for (const r of rooms) {
+    if (!r.special_exits) continue;
+    const cx = wx(r.x), cy = wy(r.y);
+    const half = rs / 2;
+    for (const [cmd, targetId] of Object.entries(r.special_exits)) {
+      if (r.custom_lines?.[cmd]) continue; // custom line handles rendering
+      const target = state.roomById[targetId];
+      if (!target) continue;
+      const trueArea = state.roomArea[targetId];
+      if (trueArea === state.areaId) continue; // same area — not cross-area
+      // Compute direction vector from room to target
+      const dx = target.x - r.x, dy = target.y - r.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const vec = [dx / len, dy / len];
+      crossExits.push({ r, cx, cy, half, vec, dir: cmd, targetId, target });
+    }
+  }
   _lastCrossExits = crossExits;
   drawCrossAreaArrows(crossExits, rs);
   drawSpecialExitLines(rooms, rs);
@@ -7802,7 +7820,11 @@ function handleDblClick(sx, sy) {
     }
     if (!nearRoom) return;
     const roomSet = new Set(state.roomsZ.map(r => r.id));
-    const crossExits = Object.entries(nearRoom.exits || {}).filter(([, id]) => !roomSet.has(id) && state.roomById[id]);
+    // Collect cross-area exits from BOTH normal exits AND special exits
+    const crossExits = [
+      ...Object.entries(nearRoom.exits || {}).filter(([, id]) => !roomSet.has(id) && state.roomById[id]),
+      ...Object.entries(nearRoom.special_exits || {}).filter(([, id]) => !roomSet.has(id) && state.roomById[id]),
+    ];
     if (crossExits.length === 1) {
       jumpAreaId = state.roomArea[crossExits[0][1]];
       jumpRoomId = crossExits[0][1];
@@ -11391,7 +11413,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.4.27';
+const APP_VERSION = 'v1.4.28';
 const BUILD_DATE  = '07-03-2026';
 
 // Populacja wersji z jednego źródła (single source of truth)
