@@ -7797,14 +7797,21 @@ function handleDblClick(sx, sy) {
   // Resolve target: find cross-area exit to jump to
   let jumpAreaId = null, jumpRoomId = null;
 
-  // Szukaj cross-exit której strzałka jest blisko kliknięcia
+  // Szukaj cross-exit której strzałka jest blisko kliknięcia (screen coords)
+  const rs = CELL * state.zoom;
+  const tickLen = Math.max(4, rs * 0.9);
   let best = null, bestD = Infinity;
   for (const exit of _lastCrossExits) {
     const { cx, cy, half, vec, dir, targetId, target } = exit;
     if (!target) continue;
-    const mid = [exit.r.x + vec[0] * 0.9, exit.r.y + vec[1] * 0.9];
-    const d = Math.hypot(mx - mid[0], my - mid[1]);
-    if (d < 1.5 && d < bestD) { bestD = d; best = exit; }
+    // Compute arrow midpoint in screen coords — same formula as drawCrossAreaArrows
+    const [ex, ey] = edgePt(cx, cy, half, vec);
+    const ax = ex + vec[0] * tickLen;
+    const ay = ey + vec[1] * tickLen;
+    const midX = (ex + ax) / 2, midY = (ey + ay) / 2;
+    const d = Math.hypot(sx - midX, sy - midY);
+    const hitRadius = Math.max(15, tickLen * 1.5);
+    if (d < hitRadius && d < bestD) { bestD = d; best = exit; }
   }
 
   if (best) {
