@@ -6582,12 +6582,11 @@ function drawExits(rooms, rs) {
     const cx = wx(r.x), cy = wy(r.y);
     const half = rs / 2;
     for (const [cmd, targetId] of Object.entries(r.special_exits)) {
-      if (r.custom_lines?.[cmd]) continue; // custom line handles rendering
       const target = state.roomById[targetId];
       if (!target) continue;
       const trueArea = state.roomArea[targetId];
       if (trueArea === state.areaId) continue; // same area — not cross-area
-      // Compute direction vector from room to target
+      // Compute direction vector from room to target (may be cross-area coords, approximate)
       const dx = target.x - r.x, dy = target.y - r.y;
       const len = Math.hypot(dx, dy) || 1;
       const vec = [dx / len, dy / len];
