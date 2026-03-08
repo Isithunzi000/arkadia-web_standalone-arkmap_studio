@@ -6150,6 +6150,7 @@ function draw() {
   if (state.editDraggingRoom) drawDragGhost();                   // warstwa 8b drag
   if (state.canvasMode === 'cl-drawing') drawCLInProgress();    // warstwa 10
   updateStatus();
+  if (typeof syncZoomSlider === 'function') syncZoomSlider();
 }
 
 // ─── MINIMAP ──────────────────────────────────────────────────────────────────
@@ -11419,7 +11420,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.4.28';
+const APP_VERSION = 'v1.4.29';
 const BUILD_DATE  = '07-03-2026';
 
 // Populacja wersji z jednego źródła (single source of truth)
