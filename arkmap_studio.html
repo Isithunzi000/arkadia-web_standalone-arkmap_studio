@@ -3457,7 +3457,7 @@
         <div class="supp-item">⚠ <span>Room 12847</span> (dir=n → room 12840): brak suppressora w room 12840 dir=s</div>
         <div class="supp-item">⚠ <span>Room 15201</span> (dir=ne → room 15220): brak suppressora w room 15220 dir=sw</div>
       </div>
-      <div class="dlg-info">Auto-naprawa doda suppressor (0-pt custom line) w brakujących kierunkach. Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
+      <div class="dlg-info">Auto-naprawa: redundantne proste linie zostaną usunięte, a dla realnych krzywych dodany suppressor (0-pt custom line). Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
     </div>
     <div class="dlg-ftr">
       <button class="dlg-cancel" onclick="closeDialog('dlg-suppressors')">Anuluj eksport</button>
@@ -3484,7 +3484,7 @@
         <div class="supp-item">⚠ <span>Room 12847</span> (dir=n → room 12840): brak suppressora w room 12840 dir=s</div>
         <div class="supp-item">⚠ <span>Room 15201</span> (dir=ne → room 15220): brak suppressora w room 15220 dir=sw</div>
       </div>
-      <div class="dlg-info">Auto-naprawa doda suppressor (0-pt custom line) w brakujących kierunkach. Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
+      <div class="dlg-info">Auto-naprawa: redundantne proste linie zostaną usunięte, a dla realnych krzywych dodany suppressor (0-pt custom line). Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
     </div>
     <div class="dlg-ftr">
       <button class="dlg-cancel" onclick="closeDialog('dlg-suppressors-manual')">Zamknij</button>
@@ -11900,7 +11900,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.6';
+const APP_VERSION = 'v1.5.7';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -12382,9 +12382,14 @@ function _dispatchUndo(entry) {
       break;
     }
     case 'AUTO_FIX_SUPPRESSORS': {
-      for (const { roomId, dir } of (entry.added || [])) {
+      for (const { roomId, dir } of (entry.added || [])) {     // cofnij dodane suppressory
         const r = rm(roomId); if (!r) continue;
         if (r.custom_lines) delete r.custom_lines[dir];
+      }
+      for (const { roomId, dir, snapshot } of (entry.removed || [])) {  // przywróć usunięte CL
+        const r = rm(roomId); if (!r) continue;
+        r.custom_lines = r.custom_lines || {};
+        r.custom_lines[dir] = JSON.parse(JSON.stringify(snapshot));
       }
       break;
     }
@@ -12667,10 +12672,14 @@ function _dispatchRedo(entry) {
       break;
     }
     case 'AUTO_FIX_SUPPRESSORS': {
-      for (const { roomId, dir, snapshot } of (entry.added || [])) {
+      for (const { roomId, dir, snapshot } of (entry.added || [])) {    // ponów dodanie suppressorów
         const r = rm(roomId); if (!r) continue;
         r.custom_lines = r.custom_lines || {};
         r.custom_lines[dir] = JSON.parse(JSON.stringify(snapshot));
+      }
+      for (const { roomId, dir } of (entry.removed || [])) {            // ponów usunięcie redundantnych CL
+        const r = rm(roomId); if (!r) continue;
+        if (r.custom_lines) delete r.custom_lines[dir];
       }
       break;
     }
@@ -15939,13 +15948,16 @@ function checkSuppressors() {
   const missing = [];
   for (const A of Object.values(state.roomById)) {
     for (const [dir, cl] of Object.entries(A.custom_lines || {})) {
+      if (!Array.isArray(cl.points)) continue;   // null-safety — pomiń zepsute wpisy (nie-tablica)
       if (cl.points.length === 0) continue;      // A jest suppresorem — skip
+      if (dir === 'up' || dir === 'down' || dir === 'in' || dir === 'out') continue; // inner-exit → trójkąt, nie linia; suppressor nigdy niepotrzebny
       const targetId = A.exits?.[dir];            // tylko exits[], nie special_exits
       if (targetId === undefined) continue;        // orphan CL — skip
       if (targetId === -1) continue;               // stub — skip
       const B = state.roomById[targetId];
       if (!B) continue;                            // target nie istnieje — skip
       if (state.roomArea[A.id] !== state.roomArea[B.id]) continue; // cross-area — skip
+      if (A.z !== B.z) continue;                   // cross-Z → drugi pokój nierenderowany na tym poziomie, brak podwójnej linii
       const opp = OPPOSITE[dir];
       if (!opp) continue;                          // nieznany kierunek — skip
       // Suppressor potrzebny TYLKO gdy B ma wyjście powrotne do A w kierunku opp
@@ -15963,24 +15975,51 @@ function checkSuppressors() {
 // ── autoFixSuppressors(missing) — auto-naprawa suppressorów z undo (Pass 68, S8) ─
 function autoFixSuppressors(missing) {
   if (!missing.length) return;
-  const added = []; // {roomId, dir, snapshot} per spec
-  for (const { roomA, dir, roomB, oppDir, sourceCL } of missing) {
+  const added = [];    // {roomId, dir, snapshot} — dodane suppressory (undo = usuń)
+  const removed = [];  // {roomId, dir, snapshot} — usunięte redundantne CL (undo = przywróć)
+  for (const { roomA, dir, roomB, oppDir } of missing) {
+    const A = state.roomById[roomA];
     const B = state.roomById[roomB];
-    if (!B) continue;
-    // Guard: nigdy nie nadpisuj istniejącej CL z punktami (defense in depth)
-    if (B.custom_lines?.[oppDir]?.points?.length > 0) continue;
-    const newCL = { points: [], color: sourceCL.color ?? [255, 0, 0] };
-    B.custom_lines = B.custom_lines || {};
-    B.custom_lines[oppDir] = JSON.parse(JSON.stringify(newCL));
-    added.push({ roomId: roomB, dir: oppDir, snapshot: JSON.parse(JSON.stringify(newCL)) });
+    if (!A || !B) continue;
+    const cl = A.custom_lines?.[dir];
+    // Re-weryfikacja stanu w momencie apply (odporność na nieświeżą listę)
+    if (!cl || !Array.isArray(cl.points) || cl.points.length === 0) continue;
+    // Klasyfikacja geometryczna na KWADRATACH (bez sqrt — pełny determinizm)
+    const ax = A.x, ay = A.y, bx = B.x, by = B.y;
+    const abx = bx - ax, aby = by - ay, ab2 = abx * abx + aby * aby;
+    let maxOff2 = 0, maxLen2 = 0;
+    for (const p of cl.points) {
+      const px = p[0], py = p[1];
+      const cross = (px - ax) * aby - (py - ay) * abx;
+      const off2 = ab2 ? (cross * cross / ab2) : ((px - ax) ** 2 + (py - ay) ** 2);
+      if (off2 > maxOff2) maxOff2 = off2;
+      const len2 = (px - ax) ** 2 + (py - ay) ** 2;
+      if (len2 > maxLen2) maxLen2 = len2;
+    }
+    const colinear = maxOff2 < 0.01;   // odchył < 0.1 jednostki → wizualnie identyczna z domyślną
+    const nub      = maxLen2 < 1.0;    // zasięg < 1.0 jednostki (odstęp pokoi = 2) → nie reprezentuje drogi
+    if (colinear || nub) {
+      // Redundantny stub/nub → USUŃ custom line (czysta domyślna linia, suppressor zbędny)
+      const snap = JSON.parse(JSON.stringify(cl));
+      delete A.custom_lines[dir];
+      removed.push({ roomId: roomA, dir, snapshot: snap });
+    } else {
+      // Realny reshape → SUPPRESSOR po stronie B (zachowaj krzywą A)
+      if (B.custom_lines?.[oppDir]?.points?.length > 0) continue; // nie nadpisuj CL z punktami
+      const newCL = { points: [], color: cl.color ?? [255, 0, 0] };
+      B.custom_lines = B.custom_lines || {};
+      B.custom_lines[oppDir] = JSON.parse(JSON.stringify(newCL));
+      added.push({ roomId: roomB, dir: oppDir, snapshot: JSON.parse(JSON.stringify(newCL)) });
+    }
   }
-  const n = added.length;
-  state.undoStack.push({ type: 'AUTO_FIX_SUPPRESSORS', added, label: `Auto-naprawa suppressorów (${n} szt.)` });
+  const nDel = removed.length, nAdd = added.length, n = nDel + nAdd;
+  if (!n) { toast('Brak zmian.'); return; }
+  state.undoStack.push({ type: 'AUTO_FIX_SUPPRESSORS', added, removed, label: `Naprawa suppressorów (${nDel} usun., ${nAdd} dod.)` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
   draw();
-  toast(`✓ Dodano ${n} suppressor${n===1?'':'ów'}. Mapa spójna.`);
+  toast(`✓ Naprawiono ${n}: usunięto ${nDel} redundantnych, dodano ${nAdd} suppressor${nAdd===1?'':'ów'}.`);
 }
 
 // ── openCheckSuppressors() — otwórz ⚑ Sprawdź spójność ─────────────────────
