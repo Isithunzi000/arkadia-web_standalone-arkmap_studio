@@ -2032,7 +2032,7 @@
                 <span style="color:var(--dim)">Wyjście góra / dół / do / z (trójkąt, kolor symbolu)</span>
               </div>
               <div style="display:flex;align-items:center;gap:8px;font-size:12px">
-                <svg width="56" height="20"><rect x="20" y="6" width="13" height="13" fill="none" stroke="rgb(120,140,160)" stroke-width="1.4"/><rect x="26" y="1" width="13" height="13" fill="none" stroke="rgba(100,190,255,0.85)" stroke-width="1.4"/></svg>
+                <svg width="56" height="20"><rect x="20" y="6" width="13" height="13" fill="none" stroke="rgb(120,140,160)" stroke-width="1.4"/><rect x="26" y="1" width="13" height="13" fill="none" stroke="rgba(130,205,255,0.85)" stroke-width="1.4"/></svg>
                 <span style="color:var(--dim)">Pokój piętro wyżej / niżej (duszek)</span>
               </div>
               <div style="display:flex;align-items:center;gap:8px;font-size:12px">
@@ -5880,7 +5880,7 @@ const state = {
   showMinimap: true,
   showSuppressors: false,
   showPixmaps: true,
-  view: { lightLines: false, hiddenRooms: 'faded', editorMarkers: true, areaExitLabels: true, mudletLabels: true }, // toggle „Widok" (ZAD 5/7/8)
+  view: { hiddenRooms: 'faded', editorMarkers: true, areaExitLabels: true, mudletLabels: true }, // toggle widoku (ZAD 5/7)
   areaSort: 'name-asc',
   map:      null,   // parsed .arkmap object
   filename: null,   // loaded file name
@@ -6682,9 +6682,9 @@ function drawRooms(rooms, rs) {
       const hasBelow = !!dnT;
       if (!hasAbove && !hasBelow) continue;
       const cx = wx(r.x), cy = wy(r.y);
-      const shadowAlpha = Math.min(0.5, state.zoom * 0.35);
-      ctx.strokeStyle = `rgba(100,190,255,${shadowAlpha})`;
-      ctx.lineWidth = Math.max(0.5, state.zoom * 0.6);
+      const shadowAlpha = Math.min(0.7, state.zoom * 0.5);
+      ctx.strokeStyle = `rgba(130,205,255,${shadowAlpha})`;
+      ctx.lineWidth = Math.max(0.5, state.zoom * 0.7);
       if (hasAbove) {
         // Ghost square offset up-right
         ctx.strokeRect(cx - half + off, cy - half - off, rs, rs);
@@ -6729,9 +6729,9 @@ function drawRooms(rooms, rs) {
     const _dashed = _hidden && _hMode === 'dashed';      // ZAD7 dashed
     ctx.fillStyle   = color;
     if (isSelected)   { ctx.strokeStyle = '#4a9eff'; ctx.lineWidth = 2; }
-    else if (_bc)     { ctx.strokeStyle = _bc; ctx.lineWidth = Math.max(_dashed ? 1.3 : 0.5, state.zoom * 0.8 * (_bt || 1)); }  // lineWidth × thickness
+    else if (_bc)     { ctx.strokeStyle = _bc; ctx.lineWidth = Math.max(_dashed ? 1.3 : 0.4, state.zoom * 0.4875 * (_bt || 1)); }  // lineWidth × thickness
     else if (_dashed) { ctx.strokeStyle = 'rgb(225,225,225)'; ctx.lineWidth = Math.max(1.4, state.zoom * 1.4); }  // ukryty: jasny, dobrze widoczny obrys
-    else              { ctx.strokeStyle = '#1e2433'; ctx.lineWidth = 0.8; }
+    else              { ctx.strokeStyle = 'rgb(225,225,225)'; ctx.lineWidth = Math.max(0.4, state.zoom * 0.4875); }  // domyślny obrys: jasny, grubość = Delwing lineWidth (0.4875 = ROOM_SIZE*CELL*0.025/0.6)
     if (_dashed) {                                        // ZAD7 dashed: wyraźne kreski
       ctx.setLineDash([Math.max(4, rs * 0.34), Math.max(3, rs * 0.24)]);
     }
@@ -6827,7 +6827,7 @@ function edgePt(cx, cy, half, vec) {
 function drawExits(rooms, rs) {
   const roomSet = new Set(state.roomsZ.map(r => r.id));
   const _hMode = state.view?.hiddenRooms || 'faded';   // ZAD7: hide = pomiń wyjścia stykające ukryte
-  ctx.lineWidth = Math.max(0.5, state.zoom * 0.8);
+  ctx.lineWidth = Math.max(0.4, state.zoom * 0.4875);
   ctx.setLineDash([]);
 
   // Zbierz cross-area exits żeby je narysować czytelnie (punkt + etykieta)
@@ -6888,11 +6888,11 @@ function drawExits(rooms, rs) {
         } else if (isOneWay) {
           // Delwing one-way: linia PRZERYWANA + czerwony grot na ŚRODKU (ONE_WAY_FILL)
           ctx.strokeStyle = 'rgb(225,225,225)';
-          ctx.lineWidth   = Math.max(0.5, state.zoom * 0.8);
+          ctx.lineWidth   = Math.max(0.4, state.zoom * 0.4875);
           ctx.setLineDash([Math.max(2, state.zoom * 1.8), Math.max(1, state.zoom * 0.9)]);
         } else {
           ctx.strokeStyle = 'rgb(225,225,225)';
-          ctx.lineWidth   = Math.max(0.5, state.zoom * 0.8);
+          ctx.lineWidth   = Math.max(0.4, state.zoom * 0.4875);
           ctx.setLineDash([]);
         }
         ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(tx, ty); ctx.stroke();
@@ -6916,7 +6916,7 @@ function drawExits(rooms, rs) {
           ctx.closePath();
           ctx.fillStyle   = 'rgb(155,10,10)';
           ctx.fill();
-          ctx.lineWidth   = Math.max(0.5, state.zoom * 0.8 * 1.4);
+          ctx.lineWidth   = Math.max(0.4, state.zoom * 0.4875);
           ctx.strokeStyle = 'rgb(225,225,225)';
           ctx.stroke();
         }
@@ -10843,7 +10843,6 @@ function _syncPixmapDisabled() {
   try {
     const sv = JSON.parse(localStorage.getItem('arkmap-view') || '{}');
     if (typeof sv.editorMarkers  === 'boolean') state.view.editorMarkers  = sv.editorMarkers;
-    if (typeof sv.lightLines     === 'boolean') state.view.lightLines     = sv.lightLines;
     if (typeof sv.hiddenRooms    === 'string')  state.view.hiddenRooms    = sv.hiddenRooms;
     if (typeof sv.areaExitLabels === 'boolean') state.view.areaExitLabels = sv.areaExitLabels;
     if (typeof sv.mudletLabels   === 'boolean') state.view.mudletLabels   = sv.mudletLabels;
@@ -10924,7 +10923,7 @@ function resetAllDefaults() {
   const tSupp = document.getElementById('toggle-suppressors');if (tSupp) tSupp.checked = false;
   const tPix  = document.getElementById('toggle-pixmaps');    if (tPix)  tPix.checked = true;
   // Reset widoku (state.view) do domyślnych: znaczniki / wyjścia / etykiety = ON
-  state.view.lightLines = false; state.view.hiddenRooms = 'faded';
+  state.view.hiddenRooms = 'faded';
   state.view.editorMarkers = true; state.view.areaExitLabels = true; state.view.mudletLabels = true;
   const tEM  = document.getElementById('toggle-editor-markers');   if (tEM)  tEM.checked  = true;
   const tAEL = document.getElementById('toggle-area-exit-labels'); if (tAEL) tAEL.checked = true;
@@ -11896,7 +11895,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.1';
+const APP_VERSION = 'v1.5.5';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
