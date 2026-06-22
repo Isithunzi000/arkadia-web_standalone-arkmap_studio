@@ -74,7 +74,7 @@
   .leg-sym-key { color:var(--accent); min-width:24px; font-weight:bold; }
   .leg-sym-name { color:var(--dim); }
 
- border-radius: 3px; padding: 14px 10px;
+  #drop-zone { border: 1px dashed var(--border); border-radius: 3px; padding: 14px 10px;
     text-align: center; cursor: pointer; transition: border-color 0.15s; }
   #drop-zone:hover, #drop-zone.over { border-color: var(--accent); background: var(--sel); }
   #drop-zone p { color: var(--fg); font-size: 12px; }
@@ -9498,7 +9498,7 @@ function wpDoSearch(idx, query) {
     dd.innerHTML = '<div class="wp-dd-empty">Brak wyników</div>';
   } else {
     dd.innerHTML = hits.map((h, hi) => {
-      const hl = escHtml(h.name).replace(new RegExp(`(${escHtml(q)})`, 'gi'), '<em>$1</em>');
+      const hl = q ? escHtml(h.name).replace(new RegExp(`(${escapeRegExp(escHtml(q))})`, 'gi'), '<em>$1</em>') : escHtml(h.name);
       return `<div class="wp-dd-item" data-roomid="${h.roomId}" data-hi="${hi}">
         <div class="wp-dd-label">${hl}</div>
         <div class="wp-dd-sub">${escHtml(h.areaName)} #${h.roomId}</div>
@@ -10631,6 +10631,11 @@ function plPl(n, one, few, many) {
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Neutralizuje metaznaki regexa — bezpieczne budowanie RegExp z dowolnego stringa użytkownika
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ─── SORT AREAS DROPDOWN ─────────────────────────────────────────────────────
@@ -11895,7 +11900,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.5';
+const APP_VERSION = 'v1.5.6';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
