@@ -11900,7 +11900,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.7';
+const APP_VERSION = 'v1.5.8';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -15963,6 +15963,18 @@ function checkSuppressors() {
       // Suppressor potrzebny TYLKO gdy B ma wyjście powrotne do A w kierunku opp
       // (bo tylko wtedy Mudlet rysuje domyślną linię z B, którą trzeba stłumić)
       if (B.exits?.[opp] !== A.id) continue;       // B nie ma reciprocal exit — skip
+      // Multi-edge / dedup — parytet z rendererem Delwinga (exitsRendered po PARZE pokoi).
+      // Domyślna linia połączenia A↔B rysuje się dokładnie raz. Suppressor na opp czyści
+      // dubel TYLKO gdy parę łączą wyłącznie {dir, opp}. Jeśli istnieje INNE wyjście A↔B
+      // bez custom_line, domyślna linia i tak się narysuje (dedup) → suppressor nie wystarcza.
+      // Warunek deterministyczny, niezależny od kolejności iteracji pokoi w rendererze.
+      let otherDefaultEdge = false;
+      for (const [d2, t2] of Object.entries(A.exits || {}))
+        if (d2 !== dir && t2 === B.id && !(A.custom_lines && d2 in A.custom_lines)) { otherDefaultEdge = true; break; }
+      if (!otherDefaultEdge)
+        for (const [d2, t2] of Object.entries(B.exits || {}))
+          if (d2 !== opp && t2 === A.id && !(B.custom_lines && d2 in B.custom_lines)) { otherDefaultEdge = true; break; }
+      if (otherDefaultEdge) continue;              // multi-edge: suppressor nie domyka dubla — nie flaguj
       const bcl = B.custom_lines?.[opp];
       if (!bcl) {                                  // brak jakiejkolwiek CL w kierunku opp → suppressor potrzebny
         missing.push({ roomA: A.id, dir, roomB: B.id, oppDir: opp, sourceCL: cl });
