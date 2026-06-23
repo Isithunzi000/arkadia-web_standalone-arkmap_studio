@@ -94,7 +94,7 @@
   <li><a href="#exits">Exits &amp; Directions</a></li>
   <li><a href="#doors">Doors</a></li>
   <li><a href="#special-exits">Special Exits</a></li>
-  <li><a href="#custom-lines">Custom Lines &amp; Suppressors</a></li>
+  <li><a href="#custom-lines">Custom Lines</a></li>
   <li><a href="#labels">Labels</a></li>
   <li><a href="#font">Font Object</a></li>
   <li><a href="#color-type">Color Type (RGB / RGBA)</a></li>
@@ -355,7 +355,7 @@
 <div class="warn"><strong>Namespace collision:</strong> Special exit commands share the <code>doors</code>, <code>exit_weights</code>, and <code>custom_lines</code> key namespace with standard exits. Avoid using standard direction names (n, ne, e, se, s, sw, w, nw, up, down, in, out) as special exit commands when a normal exit exists in the same direction — this will cause metadata conflicts.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="custom-lines">10. Custom Lines &amp; Suppressors</h2>
+<h2 id="custom-lines">10. Custom Lines</h2>
 
 <p>Custom lines are hand-drawn polylines on the map that replace the default straight-line exit connections. They are keyed by direction (for standard exits) or command string (for special exits).</p>
 
@@ -374,7 +374,7 @@
 
 <table>
 <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-<tr><td><code>points</code></td><td>array of [number, number]</td><td class="req">YES</td><td>Waypoints of the polyline. Each element must be a 2-element array <code>[x, y]</code>. Coordinates are in map units (same as room x/y). Precision: 4 decimal places max. Empty array (<code>[]</code>) = exit suppressor.</td></tr>
+<tr><td><code>points</code></td><td>array of [number, number]</td><td class="req">YES</td><td>Waypoints of the polyline. Each element must be a 2-element array <code>[x, y]</code>. Coordinates are in map units (same as room x/y). Precision: 4 decimal places max. Empty array (<code>[]</code>) = empty custom line (hides the default exit line).</td></tr>
 <tr><td><code>color</code></td><td><a href="#color-type">Color</a></td><td class="opt">optional</td><td>Line color. Default: [255, 0, 0] (red).</td></tr>
 <tr><td><code>style</code></td><td>string</td><td class="opt">optional</td><td>Line style. Default: "solid". Omit if "solid".</td></tr>
 <tr><td><code>arrow</code></td><td>boolean</td><td class="opt">optional</td><td>Show arrowhead at the end of the polyline. Rendered in both view and edit mode. Omit if false.</td></tr>
@@ -393,13 +393,13 @@
 <tr><td><code>"dash_dot_dot"</code></td><td>5</td><td>Alternating dash-dot-dot</td></tr>
 </table>
 
-<h3>Exit Suppressors</h3>
+<h3>Empty Custom Lines</h3>
 
-<div class="critical"><strong>Critical concept:</strong> A custom line with an <strong>empty points array</strong> (<code>"points": []</code>) is an <strong>exit suppressor</strong>. This is an intentional Mudlet design feature, not data corruption. Suppressors must be preserved through all conversions.</div>
+<div class="critical"><strong>Critical concept:</strong> A custom line with an <strong>empty points array</strong> (<code>"points": []</code>) is an <strong>empty custom line</strong> — it hides the default exit line. This is an intentional Mudlet design feature, not data corruption. Empty custom lines must be preserved through all conversions.</div>
 
-<p>An exit suppressor hides the default exit line that Mudlet would normally draw from this room in the given direction. They are needed when the opposite room has a custom line pointing here — without the suppressor, both lines would be drawn.</p>
+<p>An empty custom line hides the default exit line that Mudlet would normally draw from this room in the given direction. It is needed when the opposite room has a custom line pointing here — without it, both lines would be drawn (a double line).</p>
 
-<p><strong>Example:</strong> Room A (id=100) has custom line <code>e → Room B (id=101)</code>. Room B should have a suppressor: <code>"w": { "points": [], "color": [255,0,0] }</code> to hide the default westward line.</p>
+<p><strong>Example:</strong> Room A (id=100) has custom line <code>e → Room B (id=101)</code>. Room B should have an empty custom line: <code>"w": { "points": [], "color": [255,0,0] }</code> to hide the default westward line.</p>
 
 <h4>Validation rule</h4>
 <p>Custom line keys must reference existing exits or special exits. The key must appear in either <code>exits</code> or <code>special_exits</code> of the same room.</p>
@@ -633,7 +633,7 @@
   <li>Door values must be one of: <code>"open"</code>, <code>"closed"</code>, <code>"locked"</code></li>
   <li>Custom line keys must reference existing exits or special exits</li>
   <li>Custom line style must be one of: <code>"solid"</code>, <code>"dash"</code>, <code>"dot"</code>, <code>"dash_dot"</code>, <code>"dash_dot_dot"</code></li>
-  <li>Custom line points must be arrays of <code>[number, number]</code> pairs (empty array = exit suppressor)</li>
+  <li>Custom line points must be arrays of <code>[number, number]</code> pairs (empty array = empty custom line)</li>
   <li>Color arrays must have 3 or 4 integer elements, each 0–255</li>
   <li>Room weight must be integer ≥ 1</li>
   <li>Room coordinates (x, y, z) must be integers</li>
@@ -661,7 +661,7 @@
 </ul>
 
 <h4>Custom line rendering</h4>
-<p>Custom lines are drawn as polylines starting from the <strong>room center</strong>, then through each waypoint in order. Arrowheads (when <code>arrow: true</code>) are rendered in both view and edit modes. Custom lines with an empty points array (suppressors) are not drawn but may be indicated with a ⊘ symbol at the room edge.</p>
+<p>Custom lines are drawn as polylines starting from the <strong>room center</strong>, then through each waypoint in order. Arrowheads (when <code>arrow: true</code>) are rendered in both view and edit modes. Custom lines with an empty points array (empty custom lines) are not drawn but may be indicated with a ⊘ symbol at the room edge.</p>
 
 <h4>Color fallback</h4>
 <p>Rooms with envIds not resolved by any color layer render with the Mudlet default color <code>rgb(114, 1, 0)</code> (dark brownish-red). This applies to all visual contexts: canvas, minimap, room panel swatch, env color dialog, and palette chips. The legend and palette chips refresh dynamically after map load to reflect any <code>custom_env_colors</code> overrides.</p>
@@ -780,6 +780,7 @@
 <tr><td><code>1</code></td><td>2026</td><td>Initial release. Full Mudlet .dat v20 compatibility. Extensions: notes, tags, checksums.</td></tr>
 <tr><td><code>1</code></td><td>2026</td><td>Additive, non-breaking: documented reserved <code>user_data</code> keys (Arkadia mechanics, room UI, Mudlet system — §14); added optional <code>meta.accepted_dir_issues</code> (.arkmap-only, direction-validator acceptances).</td></tr>
 <tr><td><code>1</code></td><td>2026</td><td>Documentation only (no format change): documented source pass-through keys <code>internal_id</code> and <code>description</code> (§14.1); clarified checksum scope — room/area graph only, not whole-document (§15).</td></tr>
+<tr><td><code>1</code></td><td>2026</td><td>Documentation only (no format change): terminology update — "exit suppressor" renamed to "empty custom line"; validator label updated to "double line".</td></tr>
 </table>
 
 <hr>
