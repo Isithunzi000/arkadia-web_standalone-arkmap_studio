@@ -2053,7 +2053,7 @@
               </div>
               <div style="display:flex;align-items:center;gap:8px;font-size:12px">
                 <svg width="56" height="20"><text x="22" y="16" font-size="17" fill="#ffcc44" font-family="sans-serif">⊘</text></svg>
-                <span style="color:var(--dim)">Suppressor (tłumi linię wyjścia)</span>
+                <span style="color:var(--dim)">Pusta custom line (ukrywa domyślną linię)</span>
               </div>
               <div style="display:flex;align-items:center;gap:8px;font-size:12px">
                 <svg width="56" height="20"><rect x="20" y="3" width="16" height="14" fill="rgb(60,40,40)" stroke="#ffcc44" stroke-width="2.5"/></svg>
@@ -2172,7 +2172,7 @@
       </div>
       <div class="sp-row">
         <div>
-          Pokaż suppressory<br>
+          Pokaż puste custom lines<br>
           <span>symbol ⊘ przy krawędzi pokoju</span>
         </div>
         <label class="sp-toggle">
@@ -2283,7 +2283,7 @@
         <div class="etb-sep"></div>
         <button id="etb-pr" onclick="openDialog('dlg-compose-pr')">⬡ Wyślij Pull Request</button>
         <div class="etb-sep" id="etb-pr-sep" style="display:none"></div>
-        <button class="etb-check" onclick="openCheckSuppressors()">⚑ Walidacja suppressorów</button>
+        <button class="etb-check" onclick="openCheckSuppressors()">⚑ Walidacja podwójnych linii</button>
         <div class="etb-sep"></div>
         <button class="etb-check" onclick="openValidateDirections()">⚑ Walidacja kierunków</button>
       </div>
@@ -3341,9 +3341,9 @@
           <div class="pr-ch-row"><span class="pr-ch-edit">~</span> Edycja: <strong>Rynek</strong> (#12841)</div>
           <div class="pr-ch-row"><span class="pr-ch-edit">~</span> Edycja: <strong>Karczma</strong> (#12840)</div>
           <div class="pr-ch-row"><span class="pr-ch-del">−</span> Usunięto wyjście: #12847 W → #12846</div>
-          <div class="pr-ch-row"><span class="pr-ch-add">+</span> Suppressor: #12847 dir=e</div>
-          <div class="pr-ch-row"><span class="pr-ch-add">+</span> Suppressor: #12841 dir=s</div>
-          <div class="pr-ch-row"><span class="pr-ch-add">+</span> Suppressor: #12840 dir=n</div>
+          <div class="pr-ch-row"><span class="pr-ch-add">+</span> Pusta custom line: #12847 dir=e</div>
+          <div class="pr-ch-row"><span class="pr-ch-add">+</span> Pusta custom line: #12841 dir=s</div>
+          <div class="pr-ch-row"><span class="pr-ch-add">+</span> Pusta custom line: #12840 dir=n</div>
         </div>
       </div>
       <div class="dlg-info" style="margin-top:8px">Po wgraniu otworzy się przeglądarka. Szablon PR wymaga <strong>listy zmian</strong> — wpisz co zmieniłeś. GitHub Action automatycznie doda wizualny diff mapy jako komentarz do PR.</div>
@@ -3446,7 +3446,7 @@
     <div class="dlg-hdr">
       <div class="dlg-icon">⚑</div>
       <div class="dlg-hdr-text">
-        <div class="dlg-title warn">Brakujące suppressory</div>
+        <div class="dlg-title warn">Podwójne linie wyjścia</div>
         <div class="dlg-sub">Dotyczy tylko wyglądu — mapa działa poprawnie, brak wpływu na rozgrywkę</div>
       </div>
     </div>
@@ -3457,7 +3457,7 @@
         <div class="supp-item">⚠ <span>Room 12847</span> (dir=n → room 12840): brak suppressora w room 12840 dir=s</div>
         <div class="supp-item">⚠ <span>Room 15201</span> (dir=ne → room 15220): brak suppressora w room 15220 dir=sw</div>
       </div>
-      <div class="dlg-info">Auto-naprawa: redundantne proste linie zostaną usunięte, a dla realnych krzywych dodany suppressor (0-pt custom line). Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
+      <div class="dlg-info">Auto-naprawa: redundantne proste linie zostaną usunięte, a po stronie realnych krzywych dodana zostanie pusta custom line, która ukrywa duplikat. Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
     </div>
     <div class="dlg-ftr">
       <button class="dlg-cancel" onclick="closeDialog('dlg-suppressors')">Anuluj eksport</button>
@@ -3473,7 +3473,7 @@
     <div class="dlg-hdr">
       <div class="dlg-icon">⚑</div>
       <div class="dlg-hdr-text">
-        <div class="dlg-title warn">Brakujące suppressory</div>
+        <div class="dlg-title warn">Podwójne linie wyjścia</div>
         <div class="dlg-sub">Dotyczy tylko wyglądu — mapa działa poprawnie, brak wpływu na rozgrywkę</div>
       </div>
     </div>
@@ -3484,7 +3484,7 @@
         <div class="supp-item">⚠ <span>Room 12847</span> (dir=n → room 12840): brak suppressora w room 12840 dir=s</div>
         <div class="supp-item">⚠ <span>Room 15201</span> (dir=ne → room 15220): brak suppressora w room 15220 dir=sw</div>
       </div>
-      <div class="dlg-info">Auto-naprawa: redundantne proste linie zostaną usunięte, a dla realnych krzywych dodany suppressor (0-pt custom line). Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
+      <div class="dlg-info">Auto-naprawa: redundantne proste linie zostaną usunięte, a po stronie realnych krzywych dodana zostanie pusta custom line, która ukrywa duplikat. Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
     </div>
     <div class="dlg-ftr">
       <button class="dlg-cancel" onclick="closeDialog('dlg-suppressors-manual')">Zamknij</button>
@@ -3500,7 +3500,7 @@
       <div class="dlg-icon">✓</div>
       <div class="dlg-hdr-text">
         <div class="dlg-title ok">Mapa spójna</div>
-        <div class="dlg-sub">Nie znaleziono brakujących suppressorów</div>
+        <div class="dlg-sub">Nie wykryto podwójnych linii</div>
       </div>
     </div>
     <div class="dlg-body">
@@ -8818,7 +8818,7 @@ function _openSuppressorsDialog(missing, opts) {
   const body = dlg.querySelector('.dlg-body');
   if (body) {
     const p = body.querySelector('p');
-    if (p) p.innerHTML = `Znaleziono <strong>${missing.length} brakując${missing.length===1?'y':'ych'} suppressor${missing.length===1?'':'ów'}</strong>. Bez nich Mudlet rysuje podwójne linie (custom + domyślna).`;
+    if (p) p.innerHTML = `Znaleziono <strong>${missing.length} podwójn${missing.length===1?'ą linię':'ych linii'}</strong> — Mudlet rysuje custom line i domyślną nałożone na siebie.`;
     let list = body.querySelector('.supp-list');
     if (!list) {
       list = document.createElement('div');
@@ -8827,7 +8827,7 @@ function _openSuppressorsDialog(missing, opts) {
       if (info) body.insertBefore(list, info); else body.appendChild(list);
     }
     list.innerHTML = missing.slice(0, 20).map(m =>
-      `<div class="supp-item">⚠ <span>Pokój #${m.roomA}</span> (dir=${m.dir} → #${m.roomB}): brak suppressora w #${m.roomB} dir=${m.oppDir}</div>`
+      `<div class="supp-item">⚠ <span>Pokój #${m.roomA}</span> (dir=${m.dir} → #${m.roomB}): podwójna linia, domknięcie w #${m.roomB} dir=${m.oppDir}</div>`
     ).join('') + (missing.length > 20 ? `<div class="supp-item">… i ${missing.length-20} więcej</div>` : '');
   }
 
@@ -10902,7 +10902,7 @@ _uiScaleSlider.addEventListener('change', function() {
 
 // ── resetAllDefaults() — reset ALL settings, positions, localStorage ──────────
 function resetAllDefaults() {
-  if (!confirm('Przywrócić ustawienia domyślne?\n\nResetuje: pozycje i rozmiary okien, siatka, minimapa, suppressory, preferencje edytora.\n\nMapa i dane NIE zostaną usunięte.')) return;
+  if (!confirm('Przywrócić ustawienia domyślne?\n\nResetuje: pozycje i rozmiary okien, siatka, minimapa, puste custom lines, preferencje edytora.\n\nMapa i dane NIE zostaną usunięte.')) return;
   // v1.4.58: zapamiętaj, czy źródło akceptacji było 'plik' (do komunikatu po resecie — opcja C)
   const _wasFileAcceptSrc = (typeof _acceptStore === 'function' && _acceptStore() === 'file');
   // Clear ALL arkmap localStorage keys — ALE zachowaj zatwierdzenia walidatora (to dane, nie ustawienie)
@@ -11900,7 +11900,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.8';
+const APP_VERSION = 'v1.5.9';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -13944,7 +13944,7 @@ function updateCLTab(room) {
         <div class="cl-dot" style="background:#1a1208;border:1px solid #ffcc44"></div>
         <span class="cl-dir">${escHtml(dir)}</span>
         <span class="cl-info" style="color:#b8983c">ukrywa domyślną linię</span>
-        <button class="cl-del" title="Usuń suppressor">✕</button>
+        <button class="cl-del" title="Usuń pustą custom line">✕</button>
       </div>`;
     } else {
       const style = cl.style || 'solid';
@@ -13962,8 +13962,8 @@ function updateCLTab(room) {
     ? `<div style="font-size: 10px;color:var(--dim);margin-bottom:4px">Custom Lines</div><div class="cl-list">${clHtml}</div>`
     : `<div style="font-size: 10px;color:var(--dim);padding:4px 0">Brak custom lines</div>`;
   const suppSection = suppHtml
-    ? `<div style="font-size: 10px;color:#b8983c;margin:8px 0 4px">⊘ Suppressory</div><div class="cl-list">${suppHtml}</div>`
-    : `<div style="font-size: 10px;color:#b8983c;margin:8px 0 0;opacity:0.5">Brak suppressorów</div>`;
+    ? `<div style="font-size: 10px;color:#b8983c;margin:8px 0 4px">⊘ Puste custom lines</div><div class="cl-list">${suppHtml}</div>`
+    : `<div style="font-size: 10px;color:#b8983c;margin:8px 0 0;opacity:0.5">Brak pustych custom lines</div>`;
 
   // Odbuduj cały tab content
   container.innerHTML = `
@@ -13972,7 +13972,7 @@ function updateCLTab(room) {
   <div class="cl-editor" id="cl-editor" style="display:none"></div>
   <div style="height:1px;background:var(--border);margin:8px 0"></div>
   <button style="font-size: 11px;padding:5px 8px;width:100%;border-style:dashed;color:var(--dim)" title="Narysuj ręczną linię zastępującą domyślne połączenie" onclick="openClAddDirDialog(state.roomById[state.selected])">+ Dodaj custom line…</button>
-  <button style="font-size: 11px;padding:4px 8px;margin-top:4px;width:100%;border-style:dashed;color:#b8983c" title="Ukryj domyślną linię w danym kierunku (potrzebny gdy po drugiej stronie jest custom line)" onclick="openSuppressorAddDialog(state.roomById[state.selected])">⊘ Dodaj suppressor…</button>`;
+  <button style="font-size: 11px;padding:4px 8px;margin-top:4px;width:100%;border-style:dashed;color:#b8983c" title="Ukryj domyślną linię w danym kierunku (potrzebny gdy po drugiej stronie jest custom line)" onclick="openSuppressorAddDialog(state.roomById[state.selected])">⊘ Dodaj pustą custom line…</button>`;
 
   // Wire delete buttons
   container.querySelectorAll('.cl-del').forEach(btn => {
@@ -13988,7 +13988,7 @@ function updateCLTab(room) {
         delete r.custom_lines[dir];
         const type = isSupp ? 'DELETE_SUPPRESSOR' : 'DELETE_CL';
         const name = r.name || '#' + r.id;
-        state.undoStack.push({ type, roomId: r.id, dir, snapshot: snap, label: `Usunięcie ${isSupp?'suppressora':'CL'} dir=${dir} w pokoju "${name}" (#${r.id})` });
+        state.undoStack.push({ type, roomId: r.id, dir, snapshot: snap, label: `Usunięcie ${isSupp?'pustej custom line':'CL'} dir=${dir} w pokoju "${name}" (#${r.id})` });
         if (state.undoStack.length > 50) state.undoStack.shift();
         state.redoStack = [];
         updateUndoRedoUI();
@@ -15884,7 +15884,7 @@ function openSuppressorAddDialog(room) {
       const hasCL = d in cls;
       const lbl = escHtml(DIR_LABEL[d] || d.toUpperCase());
       if (hasCL) {
-        html += `<button style="padding:6px 4px;font-size: 11px;opacity:0.35;cursor:not-allowed" disabled title="już ma CL/suppressor">${lbl} ✓</button>`;
+        html += `<button style="padding:6px 4px;font-size: 11px;opacity:0.35;cursor:not-allowed" disabled title="już ma CL">${lbl} ✓</button>`;
       } else {
         html += `<button style="padding:6px 4px;font-size: 11px;border-color:#b8983c;color:#ccaa30" data-suppdir="${escHtml(d)}">${lbl}</button>`;
       }
@@ -15905,7 +15905,7 @@ function openSuppressorAddDialog(room) {
     }
     html += '</div>';
   }
-  html += `<div style="font-size: 10px;color:#8498ac;margin-top:4px">⊘ Suppressor ukrywa domyślną linię w danym kierunku.</div>`;
+  html += `<div style="font-size: 10px;color:#8498ac;margin-top:4px">⊘ Pusta custom line ukrywa domyślną linię w danym kierunku.</div>`;
   body.innerHTML = html;
   state.clRoom = room;
 
@@ -15932,7 +15932,7 @@ function commitSuppressor(dir) {
   const doFn   = () => { room.custom_lines[dir] = JSON.parse(JSON.stringify(newCL)); draw(); };
   const undoFn = () => { if (prevCL) room.custom_lines[dir] = JSON.parse(JSON.stringify(prevCL)); else delete room.custom_lines[dir]; draw(); };
   doFn();
-  state.undoStack.push({ type: 'ADD_SUPPRESSOR', roomId, dir, prevCL: prevCL || undefined, label: `Dodanie suppressora dir=${dir} w pokoju "${name}" (#${roomId})` });
+  state.undoStack.push({ type: 'ADD_SUPPRESSOR', roomId, dir, prevCL: prevCL || undefined, label: `Dodanie pustej custom line dir=${dir} w pokoju "${name}" (#${roomId})` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
@@ -15940,7 +15940,7 @@ function commitSuppressor(dir) {
   if (state.selected && state.roomById[state.selected]) updateCLTab(state.roomById[state.selected]);
   closeDialog('dlg-cl-add-dir');
   state.clRoom = null; state.clDir = null;
-  toast(`✓ Suppressor dodany: ${dir}`);
+  toast(`✓ Pusta custom line dodana: ${dir}`);
 }
 
 // ── checkSuppressors() — pełny algorytm (Pass 68, S8, checkpoint linia 1213) ─
@@ -16026,12 +16026,12 @@ function autoFixSuppressors(missing) {
   }
   const nDel = removed.length, nAdd = added.length, n = nDel + nAdd;
   if (!n) { toast('Brak zmian.'); return; }
-  state.undoStack.push({ type: 'AUTO_FIX_SUPPRESSORS', added, removed, label: `Naprawa suppressorów (${nDel} usun., ${nAdd} dod.)` });
+  state.undoStack.push({ type: 'AUTO_FIX_SUPPRESSORS', added, removed, label: `Naprawa podwójnych linii (${nDel} usun., ${nAdd} dod.)` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
   draw();
-  toast(`✓ Naprawiono ${n}: usunięto ${nDel} redundantnych, dodano ${nAdd} suppressor${nAdd===1?'':'ów'}.`);
+  toast(`✓ Naprawiono ${n}: usunięto ${nDel} redundantnych, dodano ${nAdd} pust${nAdd===1?'ą custom line':'ych custom lines'}.`);
 }
 
 // ── openCheckSuppressors() — otwórz ⚑ Sprawdź spójność ─────────────────────
@@ -16042,7 +16042,7 @@ function openCheckSuppressors() {
     const dlg = document.getElementById('dlg-suppressors-ok');
     if (dlg) {
       const p = dlg.querySelector('.dlg-body p');
-      if (p) p.innerHTML = `Sprawdzono <strong>${Object.keys(state.roomById).length} pokoi</strong>. Wszystkie custom lines mają odpowiednie suppressory po stronie docelowej.`;
+      if (p) p.innerHTML = `Sprawdzono <strong>${Object.keys(state.roomById).length} pokoi</strong>. Żadna custom line nie tworzy podwójnej linii po stronie docelowej.`;
     }
     openDialog('dlg-suppressors-ok');
     return;
@@ -16053,11 +16053,11 @@ function openCheckSuppressors() {
     const body = dlg.querySelector('.dlg-body');
     if (body) {
       const p = body.querySelector('p');
-      if (p) p.innerHTML = `Znaleziono <strong>${missing.length} brakując${missing.length===1?'y':'ych'} suppressor${missing.length===1?'':'ów'}</strong>. Bez nich Mudlet rysuje podwójne linie (custom + domyślna).`;
+      if (p) p.innerHTML = `Znaleziono <strong>${missing.length} podwójn${missing.length===1?'ą linię':'ych linii'}</strong> — Mudlet rysuje custom line i domyślną nałożone na siebie.`;
       let list = body.querySelector('.supp-list');
       if (!list) { list = document.createElement('div'); list.className = 'supp-list'; body.insertBefore(list, body.querySelector('.dlg-info')); }
       list.innerHTML = missing.slice(0, 20).map(m =>
-        `<div class="supp-item">⚠ <span>Pokój #${m.roomA}</span> (dir=${m.dir} → #${m.roomB}): brak suppressora w #${m.roomB} dir=${m.oppDir}</div>`
+        `<div class="supp-item">⚠ <span>Pokój #${m.roomA}</span> (dir=${m.dir} → #${m.roomB}): podwójna linia, domknięcie w #${m.roomB} dir=${m.oppDir}</div>`
       ).join('') + (missing.length > 20 ? `<div class="supp-item">… i ${missing.length-20} więcej</div>` : '');
     }
     // Wire "Napraw automatycznie" button
