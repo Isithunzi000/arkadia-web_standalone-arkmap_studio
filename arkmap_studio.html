@@ -8780,6 +8780,7 @@ function _performArkmapSave(onSaved) {
 
 function _performDatExport() {
   if (!state.map) return;
+  _prepareArkmapForSave();
   toast('Konwertuję do .dat…', false);
   try {
     const bytes = arkmapToDat(state.map);
@@ -11900,7 +11901,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.10';
+const APP_VERSION = 'v1.5.11';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
