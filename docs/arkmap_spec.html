@@ -611,7 +611,7 @@
   </li>
 </ul>
 
-<div class="note">This serialization ensures that two independently generated .arkmap files representing the same data produce <strong>byte-identical output</strong>, which is critical for git-based workflows and checksum verification.</div>
+<div class="note">This serialization ensures that two independently generated .arkmap files representing the same data produce <strong>byte-identical output</strong>, which is critical for git-based workflows and checksum verification. The same canonical array ordering (areas, rooms, and labels by <code>id</code>; stubs and exit locks alphabetically) is also applied when exporting to Mudlet <code>.dat</code>, so two <code>.dat</code> exports of the same logical map are byte-identical regardless of how the in-memory map was edited.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="validation">17. Validation Rules</h2>
