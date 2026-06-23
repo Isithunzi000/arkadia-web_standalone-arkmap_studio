@@ -97,7 +97,7 @@
   <li><a href="#edit-mode">Tryb edycji</a></li>
   <li><a href="#edit-room">Edycja pokoju</a></li>
   <li><a href="#edit-area">Edycja obszaru</a></li>
-  <li><a href="#custom-lines">Custom Lines i Suppressory</a></li>
+  <li><a href="#custom-lines">Custom Lines</a></li>
   <li><a href="#validate-dir">Walidacja kierunków</a></li>
   <li><a href="#context-menu">Menu kontekstowe (prawy klik)</a></li>
   <li><a href="#save">Zapisywanie mapy</a></li>
@@ -146,7 +146,7 @@
 <tr><td><strong>Toolbar (Poziomy)</strong></td><td>Prawa strona</td><td>Przełącznik poziomów Z, przycisk „?" (cheatsheet), narzędzia edycji</td></tr>
 <tr><td><strong>Panel pokoju</strong></td><td>Prawy górny róg (floating)</td><td>Szczegóły zaznaczonego pokoju — wyjścia, drzwi, środowisko</td></tr>
 <tr><td><strong>Minimapa</strong></td><td>Prawy dolny róg</td><td>Miniaturowy podgląd całego obszaru z ramką viewportu</td></tr>
-<tr><td><strong>Ustawienia ⚙</strong></td><td>Lewy górny róg canvasa</td><td>Panel ustawień (siatka, minimapa, suppressory, pixmapy, GitHub)</td></tr>
+<tr><td><strong>Ustawienia ⚙</strong></td><td>Lewy górny róg canvasa</td><td>Panel ustawień (siatka, minimapa, puste custom lines, pixmapy, GitHub)</td></tr>
 <tr><td><strong>Planer trasy</strong></td><td>Lewa krawędź canvasa (floating panel)</td><td>Planowanie tras z pathfindingiem (Dijkstra / A*)</td></tr>
 <tr><td><strong>Eksport widoku</strong></td><td>Lewa krawędź canvasa (przycisk pod ⚙ i planerem)</td><td>Eksport aktualnego widoku mapy do PNG lub SVG</td></tr>
 </table>
@@ -257,7 +257,7 @@
 <tr><td>Skala interfejsu</td><td>100%</td><td>Suwak 80–150% — skaluje rozmiar tekstu i paneli. Przydatne na małych ekranach / laptopach z wysokim DPI. Zoom stosowany po puszczeniu suwaka.</td></tr>
 <tr><td>Papier milimetrowy</td><td>ON</td><td>Wyświetla subtelną siatkę w tle canvasa — pomaga wizualnie ocenić odległości</td></tr>
 <tr><td>Minimapa</td><td>ON</td><td>Włącza/wyłącza miniaturowy podgląd obszaru w prawym dolnym rogu</td></tr>
-<tr><td>Pokaż suppressory</td><td>ON</td><td>Wyświetla symbol ⊘ przy krawędziach pokojów, które mają exit suppressory (zaawansowane)</td></tr>
+<tr><td>Pokaż puste custom lines</td><td>ON</td><td>Wyświetla symbol ⊘ przy krawędziach pokojów, które mają puste custom lines (zaawansowane)</td></tr>
 <tr><td>Znaczniki edytora</td><td>ON</td><td>Wyświetla ✦ przy pokojach z wyjściem specjalnym (widoczne od pewnego poziomu zoomu)</td></tr>
 <tr><td>Ukryte pokoje</td><td>Przygaszony</td><td>Tryb renderu pokojów oznaczonych jako ukryte. Dropdown: <strong>Przygaszony</strong>, <strong>Przerywany</strong>, <strong>Pokaż</strong> (jak zwykłe pokoje), <strong>Ukryj</strong> (całkowicie niewidoczne).</td></tr>
 <tr><td>Wyjścia z obszarów</td><td>ON</td><td>Etykiety obszaru docelowego przy wyjściach prowadzących do innego obszaru</td></tr>
@@ -374,7 +374,7 @@
   <li><strong>Linia ze strzałką w kolorze pokoju docelowego</strong> — wyjście do innego obszaru (działa niezależnie od poziomu Z)</li>
   <li><strong>Linia przerywana żółta</strong> — wyjście specjalne (komenda)</li>
   <li><strong>Linia wielokolorowa</strong> — custom line (rysowana ręcznie, kolor autorski)</li>
-  <li><strong>Symbol ⊘</strong> przy krawędzi pokoju — suppressor (tłumi domyślną linię wyjścia)</li>
+  <li><strong>Symbol ⊘</strong> przy krawędzi pokoju — pusta custom line (ukrywa domyślną linię wyjścia)</li>
   <li><strong>Własny obrys pokoju</strong> — kolorowa ramka o grubości 1–10 (opcja „Obrys" w panelu pokoju)</li>
   <li><strong>Pokój ukryty</strong> — render przerywany lub przygaszony (zależnie od trybu „Ukryte pokoje")</li>
 </ul>
@@ -398,7 +398,7 @@
   <li>Pasek statusu podświetla się na ciepły odcień</li>
   <li>W pasku statusu pojawia się pulsująca kropka „EDYCJA LOKALNA"</li>
   <li>Panel pokoju zmienia kolor akcentów na pomarańczowy</li>
-  <li>Pojawia się toolbar edycji (⊕ Dodaj pokój, 🎨 Narzędzia, ⚑ Walidacja suppressorów, ⚑ Walidacja kierunków)</li>
+  <li>Pojawia się toolbar edycji (⊕ Dodaj pokój, 🎨 Narzędzia, ⚑ Walidacja podwójnych linii, ⚑ Walidacja kierunków)</li>
 </ul>
 
 <h3>🎨 Narzędzia rysowania</h3>
@@ -419,7 +419,7 @@
 <div class="note">Każde pociągnięcie pędzla (klik = 1 pokój, drag = N pokoi) trafia do historii jako <strong>jedna</strong> operacja undo — jedno <kbd>Ctrl+Z</kbd> cofa cały ruch.</div>
 
 <h3>Undo / Redo</h3>
-<p>Każda zmiana jest zapisywana na stosie historii (limit: 50 operacji). Cofaj (<kbd>Ctrl+Z</kbd>) i ponawiaj (<kbd>Ctrl+Y</kbd>). W pasku statusu dostępne są cztery przyciski: ↩↩ (cofnij wszystko), ↩ (cofnij), ↪ (ponów), ↪↪ (ponów wszystko). System obsługuje ponad 20 rodzajów operacji — od edycji pokojów, wyjść i kolorów środowisk, przez etykiety i custom lines, po malowanie hurtem, usuwanie obszarów i automatyczną naprawę suppressorów.</p>
+<p>Każda zmiana jest zapisywana na stosie historii (limit: 50 operacji). Cofaj (<kbd>Ctrl+Z</kbd>) i ponawiaj (<kbd>Ctrl+Y</kbd>). W pasku statusu dostępne są cztery przyciski: ↩↩ (cofnij wszystko), ↩ (cofnij), ↪ (ponów), ↪↪ (ponów wszystko). System obsługuje ponad 20 rodzajów operacji — od edycji pokojów, wyjść i kolorów środowisk, przez etykiety i custom lines, po malowanie hurtem, usuwanie obszarów i automatyczną naprawę podwójnych linii.</p>
 
 <h3>Licznik zmian</h3>
 <p>W pasku statusu widoczny jest licznik zmian (np. „● 12"). Kliknij go aby otworzyć <strong>Historię zmian (sesja)</strong> — chronologiczną listę operacji w bieżącej sesji edycji.</p>
@@ -479,9 +479,9 @@
 <p>Lista custom lines (ręcznie rysowanych połączeń) przypisanych do pokoju. Każda linia ma kierunek, kolor, styl (solid/dash/dot/dash_dot/dash_dot_dot) i tablicę punktów. Na dole zakładki dostępne są dwa przyciski:</p>
 <ul>
   <li><strong>+ Dodaj custom line…</strong> — otwiera dialog wyboru kierunku wyjścia, dla którego chcesz narysować nową linię</li>
-  <li><strong>⊘ Dodaj suppressor…</strong> — otwiera dialog wyboru kierunku, w którym chcesz ukryć domyślną linię (potrzebny gdy po drugiej stronie jest custom line)</li>
+  <li><strong>⊘ Dodaj pustą custom line…</strong> — otwiera dialog wyboru kierunku, w którym chcesz ukryć domyślną linię (potrzebny gdy po drugiej stronie jest custom line)</li>
 </ul>
-<p>Więcej o rysowaniu i suppressorach w <a href="#custom-lines">Custom Lines i Suppressory</a>.</p>
+<p>Więcej o rysowaniu i pustych custom lines w <a href="#custom-lines">Custom Lines</a>.</p>
 
 <h3>Zakładka: Dane</h3>
 <ul>
@@ -558,7 +558,7 @@
 <p>Etykiety można dodawać z menu kontekstowego (prawym klikiem na pustym miejscu mapy → „Dodaj etykietę tutaj") lub z panelu obszaru (przycisk „⊕ Dodaj etykietę"). W drugim przypadku nowa etykieta pojawi się w centrum widocznego viewportu.</p>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="custom-lines">17. Custom Lines i Suppressory</h2>
+<h2 id="custom-lines">17. Custom Lines</h2>
 
 <h3>Custom Lines</h3>
 <p>Custom lines to ręcznie rysowane linie na mapie zastępujące domyślne proste połączenia między pokojami. Służą do wizualnego przedstawienia krętych dróg, rzek, tuneli itp.</p>
@@ -568,7 +568,7 @@
 <p>Każda custom line składa się z:</p>
 <ul>
   <li><strong>Kierunek</strong> — powiązana z wyjściem (n, e, s itd.) lub wyjściem specjalnym</li>
-  <li><strong>Punkty</strong> — tablica współrzędnych [x, y] definiujących przebieg linii (minimum 1 punkt; pusty = suppressor)</li>
+  <li><strong>Punkty</strong> — tablica współrzędnych [x, y] definiujących przebieg linii (minimum 1 punkt; pusty = pusta custom line)</li>
   <li><strong>Kolor</strong> — RGB (domyślnie: czerwony [255, 0, 0])</li>
   <li><strong>Styl</strong> — solid, dash, dot, dash_dot, dash_dot_dot</li>
   <li><strong>Strzałka</strong> — grot na końcu linii, widoczny zarówno w trybie podglądu jak i edycji</li>
@@ -583,20 +583,20 @@
   <li><kbd>Esc</kbd> anuluje rysowanie</li>
 </ol>
 
-<h3>Exit Suppressory</h3>
-<p>Suppressor to <strong>custom line z pustą tablicą punktów</strong> (<code>"points": []</code>). Jego jedynym zadaniem jest <strong>ukrycie domyślnej linii wyjścia</strong> po stronie docelowego pokoju. Jest to celowy mechanizm Mudleta — nie błąd danych.</p>
+<h3>Puste custom lines</h3>
+<p>Pusta custom line to <strong>custom line z pustą tablicą punktów</strong> (<code>"points": []</code>). Jej jedynym zadaniem jest <strong>ukrycie domyślnej linii wyjścia</strong> po stronie docelowego pokoju. Jest to celowy mechanizm Mudleta — nie błąd danych.</p>
 
-<div class="warn"><strong>Ważne:</strong> jeśli pokój A ma custom line do pokoju B w kierunku E, to pokój B powinien mieć suppressor w kierunku W. Bez tego Mudlet narysuje obie linie — custom i domyślną — co wygląda źle.</div>
+<div class="warn"><strong>Ważne:</strong> jeśli pokój A ma custom line do pokoju B w kierunku E, to pokój B powinien mieć pustą custom line w kierunku W. Bez tego Mudlet narysuje obie linie nałożone na siebie (podwójna linia) — co wygląda źle.</div>
 
 <h3>Sprawdzanie spójności</h3>
-<p>Przycisk <strong>⚑ Walidacja suppressorów</strong> w toolbarze edytora skanuje wszystkie pokoje i wykrywa brakujące suppressory. Wynik: dialog z listą problemów i przyciskiem „Napraw automatycznie".</p>
+<p>Przycisk <strong>⚑ Walidacja podwójnych linii</strong> w toolbarze edytora skanuje wszystkie pokoje i wykrywa podwójne linie. Wynik: dialog z listą problemów i przyciskiem „Napraw automatycznie".</p>
 
-<p>Sprawdzenie uruchamia się automatycznie przy <strong>każdym zapisie .arkmap</strong> oraz przy <strong>eksporcie do .dat</strong> (niezależnie od trybu edycji). Jeśli wykryto brakujące suppressory, pojawia się dialog z opcjami:</p>
+<p>Sprawdzenie uruchamia się automatycznie przy <strong>każdym zapisie .arkmap</strong> oraz przy <strong>eksporcie do .dat</strong> (niezależnie od trybu edycji). Jeśli wykryto podwójne linie, pojawia się dialog z opcjami:</p>
 <ul>
   <li>przy zapisie .arkmap: „Zapisz mimo to", „Napraw i zapisz", „Anuluj zapis";</li>
   <li>przy eksporcie .dat: „Eksportuj mimo to", „Napraw i eksportuj", „Anuluj eksport".</li>
 </ul>
-<div class="warn"><strong>Uwaga:</strong> przycisk „Napraw…" (a także „Napraw automatycznie" z walidatora) <strong>trwale dopisuje brakujące suppressory do wczytanej mapy w pamięci</strong> — nie tylko do zapisywanego/eksportowanego pliku. Zmianę można cofnąć (<kbd>Ctrl+Z</kbd>; w historii zmian jako „automatyczną naprawę suppressorów").</div>
+<div class="warn"><strong>Uwaga:</strong> przycisk „Napraw…" (a także „Napraw automatycznie" z walidatora) <strong>trwale modyfikuje wczytaną mapę w pamięci</strong> (usuwa redundantne custom lines / dodaje puste custom lines) — nie tylko do zapisywanego/eksportowanego pliku. Zmianę można cofnąć (<kbd>Ctrl+Z</kbd>; w historii zmian jako „naprawę podwójnych linii").</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="validate-dir">18. Walidacja kierunków <span class="badge badge-edit">EDYTOR</span></h2>
@@ -800,8 +800,8 @@
 <h4>Co jeśli checksum nie zgadza się przy wczytywaniu?</h4>
 <p>To ostrzeżenie, nie blokada. Oznacza, że plik został zmodyfikowany poza ArkMap Studio (np. ręcznie edytowany JSON). Możesz go wczytać klikając „Załaduj mimo to".</p>
 
-<h4>Co to jest suppressor?</h4>
-<p>Custom line z pustą tablicą punktów. Ukrywa domyślną linię wyjścia rysowaną przez Mudlet. Jest potrzebny gdy po drugiej stronie jest custom line — bez suppressora rysowane byłyby dwie linie.</p>
+<h4>Co to jest pusta custom line?</h4>
+<p>Custom line z pustą tablicą punktów. Ukrywa domyślną linię wyjścia rysowaną przez Mudlet. Jest potrzebna gdy po drugiej stronie jest custom line — bez niej rysowane byłyby dwie linie (podwójna linia).</p>
 
 <h4>Czy dane z zakładki Dane (notatki, tagi) zapiszą się do .dat?</h4>
 <p>Nie. Notatki i tagi to rozszerzenia formatu .arkmap. Przy eksporcie do .dat zostaną pominięte. user_data zapisuje się w obu formatach.</p>
