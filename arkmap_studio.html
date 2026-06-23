@@ -3457,7 +3457,7 @@
         <div class="supp-item">⚠ <span>Room 12847</span> (dir=n → room 12840): brak suppressora w room 12840 dir=s</div>
         <div class="supp-item">⚠ <span>Room 15201</span> (dir=ne → room 15220): brak suppressora w room 15220 dir=sw</div>
       </div>
-      <div class="dlg-info">Auto-naprawa: redundantne proste linie zostaną usunięte, a po stronie realnych krzywych dodana zostanie pusta custom line, która ukrywa duplikat. Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
+      <div class="dlg-info">Auto-naprawa: redundantne proste custom lines zostaną usunięte, a przy realnych krzywych po stronie docelowej dodana zostanie pusta custom line, która ukrywa zdublowaną domyślną linię. Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
     </div>
     <div class="dlg-ftr">
       <button class="dlg-cancel" onclick="closeDialog('dlg-suppressors')">Anuluj eksport</button>
@@ -3484,7 +3484,7 @@
         <div class="supp-item">⚠ <span>Room 12847</span> (dir=n → room 12840): brak suppressora w room 12840 dir=s</div>
         <div class="supp-item">⚠ <span>Room 15201</span> (dir=ne → room 15220): brak suppressora w room 15220 dir=sw</div>
       </div>
-      <div class="dlg-info">Auto-naprawa: redundantne proste linie zostaną usunięte, a po stronie realnych krzywych dodana zostanie pusta custom line, która ukrywa duplikat. Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
+      <div class="dlg-info">Auto-naprawa: redundantne proste custom lines zostaną usunięte, a przy realnych krzywych po stronie docelowej dodana zostanie pusta custom line, która ukrywa zdublowaną domyślną linię. Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
     </div>
     <div class="dlg-ftr">
       <button class="dlg-cancel" onclick="closeDialog('dlg-suppressors-manual')">Zamknij</button>
@@ -11900,7 +11900,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.9';
+const APP_VERSION = 'v1.5.10';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
