@@ -117,7 +117,7 @@
 
 <p>Key design goals:</p>
 <ul>
-  <li><strong>Lossless round-trip</strong> with Mudlet's binary <code>.dat</code> format (version 20) — converting .dat → .arkmap → .dat produces a byte-identical result</li>
+  <li><strong>Lossless round-trip</strong> with Mudlet's binary <code>.dat</code> format (version 20) — converting .dat → .arkmap → .dat produces a byte-identical result for files already in the canonical Qt layout (i.e. written by ArkMap Studio); files written by external tools are preserved semantically but normalized on import (see <a href="#dat-roundtrip">§19</a>)</li>
   <li><strong>Human-readable</strong> — JSON with deterministic key ordering and compact inline arrays</li>
   <li><strong>Git-friendly</strong> — sorted keys and stable serialization produce clean, meaningful diffs</li>
   <li><strong>Extensible</strong> — .arkmap-only fields (notes, tags) extend the Mudlet data model without breaking compatibility</li>
@@ -374,7 +374,7 @@
 
 <table>
 <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-<tr><td><code>points</code></td><td>array of [number, number]</td><td class="req">YES</td><td>Waypoints of the polyline. Each element must be a 2-element array <code>[x, y]</code>. Coordinates are in map units (same as room x/y). Precision: 4 decimal places max. Empty array (<code>[]</code>) = empty custom line (hides the default exit line).</td></tr>
+<tr><td><code>points</code></td><td>array of [number, number]</td><td class="req">YES</td><td>Waypoints of the polyline. Each element must be a 2-element array <code>[x, y]</code>. Coordinates are in map units (same as room x/y). On .dat import coordinates are rounded to 4 decimal places (see <a href="#dat-roundtrip">§19</a>) — a sub-pixel difference, invisible when rendered. Empty array (<code>[]</code>) = empty custom line (hides the default exit line).</td></tr>
 <tr><td><code>color</code></td><td><a href="#color-type">Color</a></td><td class="opt">optional</td><td>Line color. Default: [255, 0, 0] (red).</td></tr>
 <tr><td><code>style</code></td><td>string</td><td class="opt">optional</td><td>Line style. Default: "solid". Omit if "solid".</td></tr>
 <tr><td><code>arrow</code></td><td>boolean</td><td class="opt">optional</td><td>Show arrowhead at the end of the polyline. Rendered in both view and edit mode. Omit if false.</td></tr>
@@ -669,7 +669,25 @@
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="dat-roundtrip">19. Mudlet .dat Round-Trip</h2>
 
-<p>The .arkmap format is designed for lossless conversion to/from Mudlet's binary <code>map.dat</code> format. ArkMap Studio reads versions 17–22 and always writes version 20 (the Arkadia MUD standard). Round-trip conversion .dat → .arkmap → .dat produces <strong>byte-identical</strong> output for version 20 input files (verified with SHA-256). Files in other versions (17–19, 21–22) are read correctly but re-written as version 20, so the output will differ structurally.</p>
+<p>The .arkmap format is designed for lossless conversion to/from Mudlet's binary <code>map.dat</code> format. ArkMap Studio reads versions 17–22 and always writes version 20 (the Arkadia MUD standard). Round-trip conversion .dat → .arkmap → .dat produces <strong>byte-identical</strong> output for version 20 input files that are already in the canonical Qt layout — in practice, files previously written by ArkMap Studio (verified with SHA-256). Files written by external tools (e.g. Mudlet itself or Arkadia mapping scripts) are <strong>preserved semantically</strong> but not byte-identically: their content is normalized on import as listed below. Files in other versions (17–19, 21–22) are read correctly but re-written as version 20, so the output will differ structurally.</p>
+
+<h3>Normalizations on .dat import</h3>
+<p>ArkMap Studio always writes .dat files in the canonical layout (see <a href="#serialization">§16</a>). When importing a .dat file produced by external tools, the following normalizations are applied. They do not change the meaning of the map:</p>
+<ul>
+  <li><strong>Key ordering</strong> — QMap instances are re-serialized in canonical (sorted-key) Qt order, regardless of the source file's key order.</li>
+  <li><strong>Area bounds</strong> — per-area position/span values are recomputed from the area's rooms, even if the source file stores zeros (e.g. span = [0,0,0]).</li>
+  <li><strong>Custom line coordinates</strong> — rounded to 4 decimal places on import (sub-pixel difference; Mudlet rounds coordinates to whole pixels when rendering).</li>
+  <li><strong>Label colors</strong> — a label with an undefined QColor (spec=0, i.e. "default color") is normalized to black RGB. In Mudlet such a label renders in the default color; after a round-trip it may render black instead.</li>
+  <li><strong>Null vs empty strings</strong> — Qt distinguishes a null QString (0xFFFFFFFF length) from an empty QString (length 0); both are read as an empty string and written back as empty.</li>
+</ul>
+
+<h3>Known limitations</h3>
+<p>The following source data is currently <strong>lost</strong> on a .dat → .arkmap → .dat round-trip:</p>
+<ul>
+  <li><strong>mRoomIdHash</strong> — the contributor → starting room ID table used by Mudlet's multi-contributor map merging has no .arkmap representation and is dropped.</li>
+  <li><strong>Exit weights equal to 1</strong> — not imported (treated as "no weight"); in Mudlet "no weight" means weight 0, so such exits change weight 1 → 0 after a round-trip.</li>
+  <li><strong>Orphan custom line style/arrow entries</strong> — style/arrow values for directions that have no custom line points entry are dropped.</li>
+</ul>
 
 <h3>Direction mapping (.arkmap → .dat)</h3>
 <p>.arkmap uses short strings; .dat uses 1-based indices (see §7 table). Convert using the direction table.</p>
