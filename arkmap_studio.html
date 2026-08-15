@@ -7727,7 +7727,7 @@ cv.addEventListener('mouseup', e => {
     const area = state.areas.get(areaId);
     const lbl = area?.labels?.find(l => l.id === labelId);
     if (lbl && (state.labelResizeOrigW !== lbl.width || state.labelResizeOrigH !== lbl.height)) {
-      state.undoStack.push({
+      pushUndo({
         type: 'RESIZE_LABEL', areaId, labelId,
         fromW: state.labelResizeOrigW, fromH: state.labelResizeOrigH,
         fromX: state.labelResizeOrigX, fromY: state.labelResizeOrigY,
@@ -7753,7 +7753,7 @@ cv.addEventListener('mouseup', e => {
       const fromX = state.labelDragOrigX, fromY = state.labelDragOrigY;
       const toX = lbl.x, toY = lbl.y;
       const text = lbl.text || '#' + labelId;
-      state.undoStack.push({ type: 'MOVE_LABEL', areaId, labelId, fromX, fromY, toX, toY,
+      pushUndo({ type: 'MOVE_LABEL', areaId, labelId, fromX, fromY, toX, toY,
         label: `Przesunięcie etykiety "${text}" (#${labelId})` });
       if (state.undoStack.length > 50) state.undoStack.shift();
       state.redoStack = [];
@@ -7797,7 +7797,7 @@ document.addEventListener('mouseup', () => {
     const area = state.areas.get(areaId);
     const lbl = area?.labels?.find(l => l.id === labelId);
     if (lbl && (state.labelResizeOrigW !== lbl.width || state.labelResizeOrigH !== lbl.height)) {
-      state.undoStack.push({
+      pushUndo({
         type: 'RESIZE_LABEL', areaId, labelId,
         fromW: state.labelResizeOrigW, fromH: state.labelResizeOrigH,
         fromX: state.labelResizeOrigX, fromY: state.labelResizeOrigY,
@@ -7818,7 +7818,7 @@ document.addEventListener('mouseup', () => {
     const area = state.areas.get(areaId);
     const lbl  = area?.labels?.find(l => l.id === labelId);
     if (lbl && (state.labelDragOrigX !== lbl.x || state.labelDragOrigY !== lbl.y)) {
-      state.undoStack.push({ type: 'MOVE_LABEL', areaId, labelId,
+      pushUndo({ type: 'MOVE_LABEL', areaId, labelId,
         fromX: state.labelDragOrigX, fromY: state.labelDragOrigY, toX: lbl.x, toY: lbl.y,
         label: `Przesunięcie etykiety "${lbl.text || '#' + labelId}" (#${labelId})` });
       if (state.undoStack.length > 50) state.undoStack.shift();
@@ -7980,7 +7980,7 @@ function handleClick(sx, sy) {
         buildRoomsZ();  // Z6
       };
       doAdd();
-      state.undoStack.push({ type: 'ADD_ROOM', roomId: newId, roomData: JSON.parse(JSON.stringify(newRoom)), areaId, label: `Dodanie pokoju "" (#${newId})` }); // Z5: format per spec
+      pushUndo({ type: 'ADD_ROOM', roomId: newId, roomData: JSON.parse(JSON.stringify(newRoom)), areaId, label: `Dodanie pokoju "" (#${newId})` }); // Z5: format per spec
       if (state.undoStack.length > 50) state.undoStack.shift();
       state.redoStack = [];
       updateUndoRedoUI();
@@ -8147,14 +8147,14 @@ function commitCLDrawing() {
   if (isNew) {
     const newCL = { points, color: [255, 0, 0], arrow: true };
     room.custom_lines[dir] = { ...newCL, points: [...points] };
-    state.undoStack.push({ type: 'ADD_CL', roomId: room.id, dir, snapshot: JSON.parse(JSON.stringify(newCL)), label: `Dodano CL dir=${dir} w pokoju "${room.name||'#'+room.id}" (#${room.id})` });
+    pushUndo({ type: 'ADD_CL', roomId: room.id, dir, snapshot: JSON.parse(JSON.stringify(newCL)), label: `Dodano CL dir=${dir} w pokoju "${room.name||'#'+room.id}" (#${room.id})` });
   } else {
     const origPoints = state.clOriginalPoints ? [...state.clOriginalPoints] : [];
     const beforeFull = JSON.parse(JSON.stringify(room.custom_lines[dir]));
     beforeFull.points = origPoints;
     if (room.custom_lines[dir]) room.custom_lines[dir].points = [...points];
     const afterFull = JSON.parse(JSON.stringify(room.custom_lines[dir]));
-    state.undoStack.push({ type: 'EDIT_CL', roomId: room.id, dir, after: afterFull, before: beforeFull, label: `Edycja CL dir=${dir} w pokoju "${room.name||'#'+room.id}" (#${room.id})` });
+    pushUndo({ type: 'EDIT_CL', roomId: room.id, dir, after: afterFull, before: beforeFull, label: `Edycja CL dir=${dir} w pokoju "${room.name||'#'+room.id}" (#${room.id})` });
   }
 
   if (state.undoStack.length > 50) state.undoStack.shift();
@@ -8676,14 +8676,15 @@ function _performArkmapSaveAs() {
   // Zawsze pokaż dialog wyboru pliku (ignoruj istniejący handle)
   if (!state.map) return;
   _prepareArkmapForSave();
-  state._savedAtUndoIndex = state.undoStack.length;  // dirty tracking
+  // A11': dirty kasowane dopiero po POTWIERDZONYM zapisie (success-pointy niżej), nie przed dialogiem
   const suggestedName = _arkmapSuggestedName();
   const hasFSAPI = typeof window.showSaveFilePicker === 'function';
   if (hasFSAPI) {
     saveWithDialog(suggestedName, 'application/json', () => _serializeMap())
-      .then(fh => { if (fh) { _arkmapFileHandle = fh; _updateSaveButtonText(); } });
+      .then(fh => { if (fh) { state.dirty = false; _arkmapFileHandle = fh; _updateSaveButtonText(); } });
   } else {
-    saveWithDialog(suggestedName, 'application/json', () => _serializeMap());
+    saveWithDialog(suggestedName, 'application/json', () => _serializeMap())
+      .then(r => { if (r) state.dirty = false; });
   }
 }
 
@@ -8746,7 +8747,7 @@ function saveArkmap(onSaved) {
 function _performArkmapSave(onSaved) {
   if (!state.map) return;
   _prepareArkmapForSave();
-  state._savedAtUndoIndex = state.undoStack.length;  // dirty tracking
+  // A11': dirty kasowane dopiero po POTWIERDZONYM zapisie; clear PRZED onSaved (latentny TypeError z A16 nie pominie cleara)
   const suggestedName = _arkmapSuggestedName();
 
   // K6: jeśli mamy istniejący handle → zapisz bezpośrednio (Pass 59)
@@ -8756,12 +8757,13 @@ function _performArkmapSave(onSaved) {
         const writable = await _arkmapFileHandle.createWritable();
         await writable.write(_serializeMap());
         await writable.close();
+        state.dirty = false;
         toast('✓ Zapisano ' + _arkmapFileHandle.name);
         if (onSaved) onSaved();
       } catch (err) {
         _arkmapFileHandle = null;
         saveWithDialog(suggestedName, 'application/json', () => _serializeMap())
-          .then(r => { if (r && onSaved) onSaved(); });
+          .then(r => { if (r) { state.dirty = false; if (onSaved) onSaved(); } });
       }
     })();
     return;
@@ -8771,10 +8773,10 @@ function _performArkmapSave(onSaved) {
   const hasFSAPI = typeof window.showSaveFilePicker === 'function';
   if (hasFSAPI) {
     saveWithDialog(suggestedName, 'application/json', () => _serializeMap())
-      .then(fh => { if (fh) { _arkmapFileHandle = fh; _updateSaveButtonText(); if (onSaved) onSaved(); } });
+      .then(fh => { if (fh) { state.dirty = false; _arkmapFileHandle = fh; _updateSaveButtonText(); if (onSaved) onSaved(); } });
   } else {
     saveWithDialog(suggestedName, 'application/json', () => _serializeMap())
-      .then(r => { if (r && onSaved) onSaved(); });
+      .then(r => { if (r) { state.dirty = false; if (onSaved) onSaved(); } });
   }
 }
 
@@ -8901,7 +8903,7 @@ function closeOnlineConfirm() {
 
 btnLoadOnline.addEventListener('click', () => {
   // Pass 69-D: editMode && undoStack > 0 → pokaż dlg-load-during-edit ZAMIAST ol-confirm
-  if (state.editMode && state.undoStack.length > (state._savedAtUndoIndex || 0)) {
+  if (state.editMode && state.dirty) {
     const dlgLDE = document.getElementById('dlg-load-during-edit');
     if (dlgLDE) {
       const [cancelBtn, discardBtn, saveBtn] = dlgLDE.querySelectorAll('button');
@@ -8944,7 +8946,7 @@ async function fetchReleaseInfo() {
 
 olBtnOk.addEventListener('click', async () => {
   // Guard: gdy edit mode i niezapisane zmiany (Pass 69) ─────────────────────
-  if (state.editMode && state.undoStack.length > (state._savedAtUndoIndex || 0)) {
+  if (state.editMode && state.dirty) {
     closeOnlineConfirm();
     const dlgLDE = document.getElementById('dlg-load-during-edit');
     if (dlgLDE) {
@@ -10467,7 +10469,7 @@ const btnSaveDat     = document.getElementById('btn-save-dat');
 // K8: Guard — wczytanie lokalnego pliku podczas aktywnej sesji edycji (Pass 68)
 // Spec: gdy editMode && cc-num > 0 → pokaż dlg-load-during-edit. Wczytaj bez zapisu → applyMap.
 function checkLocalLoadDuringEdit(loadCallback) {
-  if (state.editMode && state.undoStack.length > (state._savedAtUndoIndex || 0)) {
+  if (state.editMode && state.dirty) {
     const dlgLDE = document.getElementById('dlg-load-during-edit');
     if (dlgLDE) {
       const [cancelBtn, discardBtn, saveBtn] = dlgLDE.querySelectorAll('button');
@@ -11892,7 +11894,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.14';
+const APP_VERSION = 'v1.5.15';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -11912,6 +11914,11 @@ Object.assign(state, {
   _paintHover:        null,   // ZAD 14: id pokoju pod kursorem w trybie paint | null
   undoStack:          [],
   redoStack:          [],
+  // dirty = "pamięć może się różnić od ostatniego potwierdzonego zapisu" (audyt A11').
+  // Ustawiana przy KAŻDEJ zmianie stosu undo (pushUndo + undo/redo), kasowana
+  // WYŁĄCZNIE po potwierdzonym zapisie. Konserwatywna: undo do stanu zapisanego
+  // nadal daje dirty=true (bezpieczny false positive, nigdy false negative).
+  dirty:              false,
   editDirty:          false,
   // ── Room drag (Pass 42, 56) ──
   editDraggingRoom:   false,
@@ -11991,7 +11998,7 @@ function toggleEditMode() {
     startLocalEditMode();
   } else {
     // Wychodzenie z edit mode
-    if (state.undoStack.length > (state._savedAtUndoIndex || 0)) {
+    if (state.dirty) {
       openDialog(state.githubSession ? 'dlg-unsaved-exit' : 'dlg-unsaved-local');
     } else {
       exitEditMode();
@@ -12004,7 +12011,7 @@ function startLocalEditMode() {
   if (dlg) dlg.classList.remove('open');
   state.editMode = true;
   state.githubSession = false;
-  state._savedAtUndoIndex = 0;  // dirty tracking: save resets this
+  state.dirty = false;  // A11': wejście w tryb edycji nie zmienia treści
   document.getElementById('app').classList.add('edit-mode');
   updateEditUI();
   // Odśwież panel pokoju jeśli zaznaczony
@@ -12696,6 +12703,7 @@ function undoAction() {
   const entry = state.undoStack.pop();
   _dispatchUndo(entry);
   state.redoStack.push(entry);
+  state.dirty = true;  // A11': undo po zapisie odjeżdża od treści pliku
   updateUndoRedoUI();
   draw();
 }
@@ -12705,6 +12713,7 @@ function redoAction() {
   const entry = state.redoStack.pop();
   _dispatchRedo(entry);
   state.undoStack.push(entry);
+  state.dirty = true;  // A11'
   updateUndoRedoUI();
   draw();
 }
@@ -12717,6 +12726,7 @@ function undoToIndex(targetIdx) {
     state.redoStack.push(entry);
   }
   const undone = startLen - state.undoStack.length;
+  if (undone > 0) state.dirty = true;  // A11'
   updateUndoRedoUI();
   draw();
   const popup = document.getElementById('changelog-popup');
@@ -12737,9 +12747,18 @@ function redoAll() {
     _dispatchRedo(entry);
     state.undoStack.push(entry);
   }
+  if (n > 0) state.dirty = true;  // A11'
   updateUndoRedoUI();
   draw();
   toast(`✓ ${plPl(n, 'przywrócona operacja', 'przywrócone operacje', 'przywróconych operacji')}`);
+}
+
+// pushUndo — choke point nowych akcji edycji (audyt A11'): push + flaga dirty.
+// NIE używać w ścieżkach redo (redoAction/redoAll) — tam czyszczenie redoStack byłoby błędem.
+// Cap 50 i czyszczenie redoStack pozostają inline przy miejscach wywołań.
+function pushUndo(entry) {
+  state.undoStack.push(entry);
+  state.dirty = true;
 }
 
 function updateUndoRedoUI() {
@@ -12775,6 +12794,7 @@ applyMap = function(map) {
   // Reset editor state (Pass 59 — 11 dodatkowych kroków)
   state.undoStack = [];
   state.redoStack = [];
+  state.dirty = false;  // A11': nowa mapa = czysty stan
   state.editDirty = false; state.editSnapshot = null; state.areaSnapshot = null;  // krok 3
   state.selectedLabel = null;  // krok 4
   if (_lockInterval) { clearInterval(_lockInterval); _lockInterval = null; }
@@ -13980,7 +14000,7 @@ function updateCLTab(room) {
         delete r.custom_lines[dir];
         const type = isSupp ? 'DELETE_SUPPRESSOR' : 'DELETE_CL';
         const name = r.name || '#' + r.id;
-        state.undoStack.push({ type, roomId: r.id, dir, snapshot: snap, label: `Usunięcie ${isSupp?'pustej custom line':'CL'} dir=${dir} w pokoju "${name}" (#${r.id})` });
+        pushUndo({ type, roomId: r.id, dir, snapshot: snap, label: `Usunięcie ${isSupp?'pustej custom line':'CL'} dir=${dir} w pokoju "${name}" (#${r.id})` });
         if (state.undoStack.length > 50) state.undoStack.shift();
         state.redoStack = [];
         updateUndoRedoUI();
@@ -14040,7 +14060,7 @@ function openCLEditor(room, dir) {
       if (cl.style === undefined) delete cl.style;
       const after = JSON.parse(JSON.stringify(cl));
       const name = room.name || '#' + room.id;
-      state.undoStack.push({ type:'EDIT_CL', roomId: room.id, dir, before, after, label:`Edycja linii CL dir=${dir} w pokoju "${name}" (#${room.id})` });
+      pushUndo({ type:'EDIT_CL', roomId: room.id, dir, before, after, label:`Edycja linii CL dir=${dir} w pokoju "${name}" (#${room.id})` });
       if (state.undoStack.length > 50) state.undoStack.shift();
       state.redoStack = [];
       updateUndoRedoUI();
@@ -14057,7 +14077,7 @@ function openCLEditor(room, dir) {
     cl.color = rgb;
     const after = JSON.parse(JSON.stringify(cl));
     const name = room.name || '#' + room.id;
-    state.undoStack.push({ type:'EDIT_CL', roomId: room.id, dir, before, after, label:`Edycja linii CL dir=${dir} w pokoju "${name}" (#${room.id})` });
+    pushUndo({ type:'EDIT_CL', roomId: room.id, dir, before, after, label:`Edycja linii CL dir=${dir} w pokoju "${name}" (#${room.id})` });
     if (state.undoStack.length > 50) state.undoStack.shift();
     state.redoStack = [];
     updateUndoRedoUI();
@@ -14073,7 +14093,7 @@ function openCLEditor(room, dir) {
     if (!cl.arrow) delete cl.arrow;
     const after = JSON.parse(JSON.stringify(cl));
     const name = room.name || '#' + room.id;
-    state.undoStack.push({ type:'EDIT_CL', roomId: room.id, dir, before, after, label:`Edycja linii CL dir=${dir} w pokoju "${name}" (#${room.id})` });
+    pushUndo({ type:'EDIT_CL', roomId: room.id, dir, before, after, label:`Edycja linii CL dir=${dir} w pokoju "${name}" (#${room.id})` });
     if (state.undoStack.length > 50) state.undoStack.shift();
     state.redoStack = [];
     updateUndoRedoUI();
@@ -14259,6 +14279,7 @@ function cancelRoomEdit() {
     if (lastUndo.type === 'ADD_ROOM' && lastUndo.roomId === state.selected) {
       // Undo the add
       state.undoStack.pop();
+      state.dirty = true;  // A11': cichy pop — gdy pokój był już zapisany, treść odjeżdża od pliku
       const areaId = state.roomArea[lastUndo.roomId];
       const area = state.areas.get(areaId);
       if (area) area.rooms = area.rooms.filter(r => r.id !== lastUndo.roomId);
@@ -14601,7 +14622,7 @@ function commitRoomEdit() {
   const doFn   = () => { Object.assign(state.roomById[roomId], after); draw(); };
   const undoFn = () => { Object.assign(state.roomById[roomId], before); draw(); };
 
-  state.undoStack.push({ type: labelType, roomId, before, after, label });
+  pushUndo({ type: labelType, roomId, before, after, label });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   state.editSnapshot = after;
@@ -14841,7 +14862,7 @@ function deleteRoom(roomId) {
   doFn();
   const wpCleared = state._lastWpCleared || [];
   state._lastWpCleared = null;
-  state.undoStack.push({ type: 'DELETE_ROOM', roomId, areaId, snapshot: snap, removedIncoming, removedIncomingSpecial, wpCleared,
+  pushUndo({ type: 'DELETE_ROOM', roomId, areaId, snapshot: snap, removedIncoming, removedIncomingSpecial, wpCleared,
     label: `Usunięcie pokoju "${snap.name||'#'+roomId}" (#${roomId})` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
@@ -14871,7 +14892,7 @@ function commitAddArea(name) {
   doFn();
   // Po dodaniu — przejdź do nowego obszaru
   if (typeof selectArea === 'function') selectArea(newId);
-  state.undoStack.push({ type: 'ADD_AREA', areaId: newId, areaData: JSON.parse(JSON.stringify(newArea)),
+  pushUndo({ type: 'ADD_AREA', areaId: newId, areaData: JSON.parse(JSON.stringify(newArea)),
     label: `Dodanie obszaru "${name.trim()}" (#${newId})` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
@@ -15024,7 +15045,7 @@ function commitDeleteArea(areaId) {
   state._lastCleanedCrossExits = null;
   const wpCleared2 = state._lastWpCleared2 || [];
   state._lastWpCleared2 = null;
-  state.undoStack.push({ type: 'DELETE_AREA', areaId, removedRoomIds, snapshot: snap, cleanedExits, wpCleared: wpCleared2,
+  pushUndo({ type: 'DELETE_AREA', areaId, removedRoomIds, snapshot: snap, cleanedExits, wpCleared: wpCleared2,
     label: `Usunięcie obszaru "${snap.name}" (#${areaId})` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
@@ -15088,7 +15109,7 @@ function commitEditArea(areaId) {
   const doFn   = () => { const a = state.areas.get(areaId); if (a) Object.assign(a, after); buildAreaList(); draw(); };
   const undoFn = () => { const a = state.areas.get(areaId); if (a) Object.assign(a, before); buildAreaList(); draw(); };
 
-  state.undoStack.push({ type: 'EDIT_AREA', areaId, before, after,
+  pushUndo({ type: 'EDIT_AREA', areaId, before, after,
     label: `Edycja obszaru "${after.name}" (#${areaId})` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
@@ -15216,7 +15237,7 @@ function commitMoveRoomToArea(roomId, targetAreaId) {
   };
 
   doFn();
-  state.undoStack.push({ type: 'MOVE_ROOM_TO_AREA', roomId, fromAreaId, toAreaId: targetAreaId,
+  pushUndo({ type: 'MOVE_ROOM_TO_AREA', roomId, fromAreaId, toAreaId: targetAreaId,
     label: `Przeniesienie pokoju "${room.name||'#'+roomId}" (#${roomId}) do obszaru "${toArea.name}"` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
@@ -15239,7 +15260,7 @@ function commitAddExit(sourceId, dir, targetId, bidirectional) {
   const label = bidirectional
     ? `Dodanie wyjścia ${dir} ↔ ${opp||'?'} między #${sourceId} a #${targetId}`
     : `Dodanie wyjścia ${dir} → #${targetId} (z #${sourceId})`;
-  state.undoStack.push({ type: 'ADD_EXIT', sourceId, dir, targetId, bidirectional, opp, label });
+  pushUndo({ type: 'ADD_EXIT', sourceId, dir, targetId, bidirectional, opp, label });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
@@ -15266,7 +15287,7 @@ function commitDeleteExit(room, dir) {
   if (room.exit_locks)   room.exit_locks = (room.exit_locks || []).filter(d => d !== dir);
   if (!snap.hasStub && room.doors) delete room.doors[dir];
   draw();
-  state.undoStack.push({ type: 'DELETE_EXIT', roomId, dir, snap,
+  pushUndo({ type: 'DELETE_EXIT', roomId, dir, snap,
     label: `Usunięcie wyjścia ${dir} z #${roomId}` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
@@ -15284,7 +15305,7 @@ function commitMoveRoom(room, fromX, fromY, fromZ, toX, toY, toZ) {
   const doFn   = () => { room.x = toX;   room.y = toY;   room.z = toZ;   draw(); };
   const undoFn = () => { room.x = fromX; room.y = fromY; room.z = fromZ; draw(); };
 
-  state.undoStack.push({ type: 'MOVE_ROOM', roomId, fromX, fromY, fromZ, toX, toY, toZ,
+  pushUndo({ type: 'MOVE_ROOM', roomId, fromX, fromY, fromZ, toX, toY, toZ,
     label: `Przesunięcie pokoju "${roomName}" (#${roomId})` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
@@ -15444,7 +15465,7 @@ function _paintStrokeCommit() {
   _paintStroke = null;
   if (changes.length === 0) { draw(); return; }
   const n = changes.length;
-  state.undoStack.push({ type:'PAINT_BATCH', changes, label:`Malowanie „${sw ? sw.label : ''}" — ${n} ${n===1?'pokój':'pokoi'}` });
+  pushUndo({ type:'PAINT_BATCH', changes, label:`Malowanie „${sw ? sw.label : ''}" — ${n} ${n===1?'pokój':'pokoi'}` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
@@ -15546,7 +15567,7 @@ function addRoomAtPosition(mx, my) {
     buildRoomsZ();
   };
   doAdd();
-  state.undoStack.push({ type: 'ADD_ROOM', roomId: newId, roomData: JSON.parse(JSON.stringify(newRoom)), areaId, label: `Dodanie pokoju "" (#${newId})` });
+  pushUndo({ type: 'ADD_ROOM', roomId: newId, roomData: JSON.parse(JSON.stringify(newRoom)), areaId, label: `Dodanie pokoju "" (#${newId})` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
@@ -15583,7 +15604,7 @@ function deleteExitFromCtx() {
     if (room.special_exit_locks) room.special_exit_locks = room.special_exit_locks.filter(c => c !== _ctxExitDir);
     if (room.doors)        { delete room.doors[_ctxExitDir];        if (!Object.keys(room.doors).length)        delete room.doors; }
     if (room.exit_weights) { delete room.exit_weights[_ctxExitDir]; if (!Object.keys(room.exit_weights).length) delete room.exit_weights; }
-    state.undoStack.push({ type: 'DELETE_SPECIAL_EXIT', roomId: room.id, snap,
+    pushUndo({ type: 'DELETE_SPECIAL_EXIT', roomId: room.id, snap,
       label: `Usunięcie wyjścia specjalnego „${_ctxExitDir}" z #${room.id}` });
     if (state.undoStack.length > 50) state.undoStack.shift();
     state.redoStack = []; updateUndoRedoUI(); _syncEditSnapshot(); draw();
@@ -15642,7 +15663,7 @@ function commitSetPosition() {
   room.x = newX; room.y = newY; room.z = newZ;
   const afterSnap  = JSON.parse(JSON.stringify(room));
   buildRoomsZ();
-  state.undoStack.push({
+  pushUndo({
     type: 'EDIT_ROOM', roomId, before: beforeSnap, after: afterSnap,
     label: `Pozycja #${roomId} → (${newX},${newY},${newZ})`
   });
@@ -15924,7 +15945,7 @@ function commitSuppressor(dir) {
   const doFn   = () => { room.custom_lines[dir] = JSON.parse(JSON.stringify(newCL)); draw(); };
   const undoFn = () => { if (prevCL) room.custom_lines[dir] = JSON.parse(JSON.stringify(prevCL)); else delete room.custom_lines[dir]; draw(); };
   doFn();
-  state.undoStack.push({ type: 'ADD_SUPPRESSOR', roomId, dir, prevCL: prevCL || undefined, label: `Dodanie pustej custom line dir=${dir} w pokoju "${name}" (#${roomId})` });
+  pushUndo({ type: 'ADD_SUPPRESSOR', roomId, dir, prevCL: prevCL || undefined, label: `Dodanie pustej custom line dir=${dir} w pokoju "${name}" (#${roomId})` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
@@ -16018,7 +16039,7 @@ function autoFixSuppressors(missing) {
   }
   const nDel = removed.length, nAdd = added.length, n = nDel + nAdd;
   if (!n) { toast('Brak zmian.'); return; }
-  state.undoStack.push({ type: 'AUTO_FIX_SUPPRESSORS', added, removed, label: `Naprawa podwójnych linii (${nDel} usun., ${nAdd} dod.)` });
+  pushUndo({ type: 'AUTO_FIX_SUPPRESSORS', added, removed, label: `Naprawa podwójnych linii (${nDel} usun., ${nAdd} dod.)` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
@@ -16247,7 +16268,7 @@ function saveLabelEdit() {
     if (document.getElementById('dle-ontop')?.checked)      lbl.show_on_top = true;
     area.labels.push(JSON.parse(JSON.stringify(lbl)));
     state.selectedLabel = { areaId, labelId: newId };
-    state.undoStack.push({ type: 'ADD_LABEL', areaId, snapshot: JSON.parse(JSON.stringify(lbl)),
+    pushUndo({ type: 'ADD_LABEL', areaId, snapshot: JSON.parse(JSON.stringify(lbl)),
       label: `Dodanie etykiety "${text}" (#${newId})` });
     if (state.undoStack.length > 50) state.undoStack.shift();
     state.redoStack = [];
@@ -16270,7 +16291,7 @@ function saveLabelEdit() {
     if (document.getElementById('dle-ontop')?.checked) lbl.show_on_top = true; else delete lbl.show_on_top;
     const after = JSON.parse(JSON.stringify(lbl));
     if (JSON.stringify(before) === JSON.stringify(after)) { toast('Brak zmian'); closeDialog('dlg-label-edit'); return; }
-    state.undoStack.push({ type: 'EDIT_LABEL', areaId, labelId: _labelEditId, before, after,
+    pushUndo({ type: 'EDIT_LABEL', areaId, labelId: _labelEditId, before, after,
       label: `Edycja etykiety "${text}" (#${_labelEditId})` });
     if (state.undoStack.length > 50) state.undoStack.shift();
     state.redoStack = [];
@@ -16294,7 +16315,7 @@ function deleteLabelFromCtx() {
   const snap = JSON.parse(JSON.stringify(lbl));
   area.labels = area.labels.filter(l => l.id !== labelId);
   state.selectedLabel = null;
-  state.undoStack.push({ type: 'DELETE_LABEL', areaId, snapshot: snap,
+  pushUndo({ type: 'DELETE_LABEL', areaId, snapshot: snap,
     label: `Usunięcie etykiety "${snap.text||'#'+labelId}" (#${labelId})` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
@@ -16400,7 +16421,7 @@ function _decWirePickers() {
     delete state.map.colors.custom_env_colors[_decEnvId];
     buildColorCache(state.map.colors);
     draw();
-    state.undoStack.push({
+    pushUndo({
       type: 'EDIT_ENV_COLOR', envId: _decEnvId,
       oldColor: oldColor, newColor: null,
       label: `Przywróć domyślny kolor env ${_decEnvId}`
@@ -16426,7 +16447,7 @@ function commitEnvColor() {
   state.map.colors.custom_env_colors[_decEnvId] = [...newColor];
   buildColorCache(state.map.colors);
   draw();
-  state.undoStack.push({
+  pushUndo({
     type: 'EDIT_ENV_COLOR', envId: _decEnvId,
     oldColor: oldColor ? [...oldColor] : null,
     newColor: [...newColor],
