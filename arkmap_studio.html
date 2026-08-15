@@ -10775,24 +10775,15 @@ document.addEventListener('click', (e) => {
   } catch(e) {}
 })();
 
-// Restore GitHub token from localStorage
-(async function restoreGitHub() {
+// Purge stale GitHub token — sesja GitHub jest ukryta/nieaktywna, token niczego
+// nie obsługuje (state._ghToken/_ghUser są write-only), a leżący w localStorage
+// PAT scope repo to zbędne ryzyko. Zero sieci przy starcie. (audyt A22)
+(async function purgeStaleGitHubToken() {
   try {
     const token = localStorage.getItem('gh_token');
     if (!token) return;
-    const resp = await fetch('https://api.github.com/user', { headers: { Authorization: 'token ' + token } });
-    if (!resp.ok) { localStorage.removeItem('gh_token'); return; }
-    const user = await resp.json();
-    state._ghToken = token;
-    state._ghUser = user.login;
-    const logged = document.getElementById('sp-gh-logged');
-    const notLogged = document.getElementById('sp-gh-notlogged');
-    const status = document.getElementById('sp-gh-status');
-    const username = document.getElementById('sp-gh-username');
-    if (logged) logged.style.display = '';
-    if (notLogged) notLogged.style.display = 'none';
-    if (status) status.style.display = '';
-    if (username) username.textContent = user.login;
+    localStorage.removeItem('gh_token');
+    console.info('[ArkMap] Usunięto nieużywany token GitHub z localStorage (sesja GitHub nieaktywna).');
   } catch(e) {}
 })();
 
@@ -11901,7 +11892,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.13';
+const APP_VERSION = 'v1.5.14';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
