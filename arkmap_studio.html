@@ -11894,7 +11894,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.15';
+const APP_VERSION = 'v1.5.16';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -16689,6 +16689,14 @@ document.addEventListener('keydown', function(e) {
       draw();
       return;
     }
+  }
+});
+
+// ── BEFOREUNLOAD — ochrona przed utratą niezapisanej pracy (audyt A18) ────
+window.addEventListener('beforeunload', (e) => {
+  if (state.dirty || state.editDirty) {
+    e.preventDefault();
+    e.returnValue = '';
   }
 });
 
