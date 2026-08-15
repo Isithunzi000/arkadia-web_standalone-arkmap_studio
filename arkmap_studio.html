@@ -6033,7 +6033,7 @@ function applyMap(map) {
     if (state.filename) line2parts.push(state.filename);
     line2parts.push(`${roomCount.toLocaleString()} pokoi`);
     const line2 = line2parts.join(' · ');
-    sbMapInfo.innerHTML = [line1, line2].filter(Boolean).map(l => `<span>${l}</span>`).join('<br>');
+    sbMapInfo.innerHTML = [line1, line2].filter(Boolean).map(l => `<span>${escHtml(l)}</span>`).join('<br>');
     sbMapInfo.style.display = 'block';
     sbMapInfo.title = [
       state.filename ? `Źródło: ${state.filename}` : '',
@@ -11901,7 +11901,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.11';
+const APP_VERSION = 'v1.5.12';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
