@@ -268,7 +268,7 @@
 <tr><td><code>env</code></td><td>integer</td><td class="req">YES</td><td>Environment ID. Determines room color via the color resolution chain (§4).</td></tr>
 <tr><td><code>name</code></td><td>string</td><td class="opt">optional</td><td>Room name. Omit if empty string.</td></tr>
 <tr><td><code>weight</code></td><td>integer ≥ 1</td><td class="opt">optional</td><td>Pathfinding cost. Default: 1. Omit if 1.</td></tr>
-<tr><td><code>symbol</code></td><td>string (max 2 chars)</td><td class="opt">optional</td><td>Room symbol displayed on map (e.g. "P", "K", "[]"). Omit if empty.</td></tr>
+<tr><td><code>symbol</code></td><td>string</td><td class="opt">optional</td><td>Room symbol displayed on map (e.g. "P", "K", "[]"). Omit if empty. No length limit (Mudlet has none). ArkMap Studio fits the symbol font to the room square; symbols too long to stay legible are not drawn. Short symbols (1–2 chars) are recommended for readability.</td></tr>
 <tr><td><code>locked</code></td><td>boolean</td><td class="opt">optional</td><td>Room locked flag (Mudlet isLocked). Locked rooms are skipped by pathfinding (not traversed through, but can be a destination). Omit if false.</td></tr>
 <tr><td><code>hash</code></td><td>string</td><td class="opt">optional</td><td>Mudlet room database hash (mpRoomDbHashToRoomId). Omit if not present.</td></tr>
 <tr><td><code>exits</code></td><td>object</td><td class="opt">optional</td><td>Standard exits. See <a href="#exits">§7</a>.</td></tr>

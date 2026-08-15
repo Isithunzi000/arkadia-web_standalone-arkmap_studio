@@ -2459,7 +2459,7 @@
           <div class="rp-field-err" id="rp-name-err">Nazwa nie może być pusta</div>
           <div class="rp-erow"><span class="rp-elbl">Środowisko</span>
             <select class="rp-eselect" id="rp-env" onchange="if(typeof setEditDirty==='function')setEditDirty();if(state.selected){const r=state.roomById[state.selected];if(r){r.env=parseInt(this.value);draw()}}"><option value="1">1 — (brak)</option></select></div>
-          <div class="rp-erow"><span class="rp-elbl">Symbol</span><input class="rp-einput-sm" id="rp-symbol" maxlength="2" placeholder="(pusty)" title="Max 2 znaki — np. &quot;[]&quot; dla Tablicy" oninput="if(typeof setEditDirty==='function')setEditDirty()"></div>
+          <div class="rp-erow"><span class="rp-elbl">Symbol</span><input class="rp-einput-sm" id="rp-symbol" placeholder="(pusty)" title="Symbol pokoju (dowolna długość) — np. &quot;[]&quot; dla Tablicy; na mapie czcionka dopasuje się do kwadratu" oninput="if(typeof setEditDirty==='function')setEditDirty()"></div>
           <div class="rp-erow"><span class="rp-elbl">Waga</span><input class="rp-einput-sm" type="number" value="1" id="rp-weight" oninput="this.classList.remove('invalid');if(typeof setEditDirty==='function')setEditDirty()"></div>
           <div class="rp-erow"><span class="rp-elbl">Obrys</span>
             <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--dim);cursor:pointer"><input type="checkbox" id="rp-border-on" onchange="rpApplyBorder()"> własny</label>
@@ -6742,19 +6742,28 @@ function drawRooms(rooms, rs) {
     const _sym0 = r.symbol || r.user_data?.['system.fallback_symbol'] || '';
     if (state.zoom > 0.8 && _sym0) {
       ctx.save();
-      const sym = _sym0.length > 2 ? _sym0.slice(0, 2) : _sym0;
-      let symSize = Math.round(rs * (sym.length > 1 ? 0.52 : 0.7));
-      symSize = Math.max(7, symSize);
-      ctx.font         = `bold ${symSize}px monospace`;
-      ctx.textAlign    = 'center';
-      ctx.textBaseline = 'middle';
-      // Kolor symbolu wg Delwinga; halo kontrastuje z kolorem symbolu (ZAD 1)
-      const _symCol = symbolColorFor(r);
-      ctx.strokeStyle = (contrastColor(_symCol) === '#fff') ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.65)';
-      ctx.lineWidth   = Math.max(1.5, symSize * 0.18);
-      ctx.strokeText(sym, cx, cy);
-      ctx.fillStyle   = _symCol;
-      ctx.fillText(sym, cx, cy);
+      // Symbol 1:1 z Mudletem (audyt A10): pełny tekst bez ucinania; czcionka dopasowana do
+      // kwadratu pokoju (monospace ≈ 0.6 em/znak, emoji/szerokie glify 1.0); zbyt długi → nie rysujemy.
+      const _symCps = [..._sym0];
+      const _symW = _symCps.reduce((a, ch) => a + (ch.codePointAt(0) > 0xFFFF ? 1.0 : 0.6), 0);
+      let symSize;
+      if (_symCps.length > 2) {
+        symSize = Math.min(Math.round(rs * 0.52), Math.floor(rs / _symW));
+      } else {
+        symSize = Math.max(7, Math.round(rs * (_symCps.length > 1 ? 0.52 : 0.7)));
+      }
+      if (symSize >= 7) {
+        ctx.font         = `bold ${symSize}px monospace`;
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        // Kolor symbolu wg Delwinga; halo kontrastuje z kolorem symbolu (ZAD 1)
+        const _symCol = symbolColorFor(r);
+        ctx.strokeStyle = (contrastColor(_symCol) === '#fff') ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.65)';
+        ctx.lineWidth   = Math.max(1.5, symSize * 0.18);
+        ctx.strokeText(_sym0, cx, cy);
+        ctx.fillStyle   = _symCol;
+        ctx.fillText(_sym0, cx, cy);
+      }
       ctx.restore();
     }
 
@@ -11894,7 +11903,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.17';
+const APP_VERSION = 'v1.5.18';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
