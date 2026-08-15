@@ -11894,7 +11894,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.16';
+const APP_VERSION = 'v1.5.17';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -13264,7 +13264,7 @@ function _acceptSet(){
 }
 function _acceptSave(arr){
   if (_acceptStore()==='file'){
-    if (state.map){ state.map.meta = state.map.meta || {}; if (arr.length) state.map.meta.accepted_dir_issues = arr; else delete state.map.meta.accepted_dir_issues; }
+    if (state.map){ state.map.meta = state.map.meta || {}; if (arr.length) state.map.meta.accepted_dir_issues = arr; else delete state.map.meta.accepted_dir_issues; state.dirty = true; }
   } else {
     if (arr.length) localStorage.setItem('arkmap_accepted_dir_issues', JSON.stringify(arr)); else localStorage.removeItem('arkmap_accepted_dir_issues');
   }
@@ -13304,6 +13304,7 @@ function _vdMigrate(){
   state.map.meta = state.map.meta || {};
   const merged = Array.from(new Set([...(state.map.meta.accepted_dir_issues||[]), ...browserArr]));
   state.map.meta.accepted_dir_issues = merged;
+  state.dirty = true;   // audyt A19: meta zmienione → plik do zapisu
   localStorage.removeItem('arkmap_accepted_dir_issues');
   localStorage.setItem('arkmap_accept_store','file');
   const sel = document.getElementById('vd-store'); if (sel) sel.value = 'file';
