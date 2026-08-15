@@ -10631,7 +10631,7 @@ function plPl(n, one, few, many) {
 }
 
 function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // Neutralizuje metaznaki regexa — bezpieczne budowanie RegExp z dowolnego stringa użytkownika
@@ -11901,7 +11901,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.12';
+const APP_VERSION = 'v1.5.13';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -14027,7 +14027,7 @@ function openCLEditor(room, dir) {
   ).join('');
   editorEl.style.display = 'block';
   editorEl.innerHTML = `
-    <div class="cl-editor-title">CL dir=${dir} — edytujesz</div>
+    <div class="cl-editor-title">CL dir=${escHtml(dir)} — edytujesz</div>
     <div class="cl-style-row">
       <span style="font-size: 10px;color:var(--dim);min-width:32px">Styl</span>${styleBtns}
     </div>
