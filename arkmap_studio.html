@@ -4734,23 +4734,24 @@ function writeQVector(w, v) {
 function readQPixMap(r) {
   r.readUInt32();                         // nagłówkowy uint32 (zawsze 1 lub ignorowany)
   const startPos = r.pos;
-  if (r.remaining() < 4) return new Uint8Array(0);
+  if (r.remaining() < 8) return new Uint8Array(0);
 
-  // Sprawdź sygnaturę PNG: 89 50 4E 47
-  const b0 = r.readUInt8(), b1 = r.readUInt8(), b2 = r.readUInt8(), b3 = r.readUInt8();
-  if (b0 !== 0x89 || b1 !== 0x50 || b2 !== 0x4E || b3 !== 0x47) {
-    r.pos -= 4;                           // cofnij — nie jest PNG
-    return new Uint8Array(0);
+  // audyt A9: pełna 8-bajtowa sygnatura PNG + parsowanie chunków zamiast skanowania bajtów za IEND
+  const sig = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+  for (const s of sig) {
+    if (r.readUInt8() !== s) { r.pos = startPos; return new Uint8Array(0); }  // nie PNG — cofnij
   }
 
-  // Szukaj chunku IEND: 49 45 4E 44
-  while (r.remaining() >= 4) {
-    const c0 = r.readUInt8(), c1 = r.readUInt8(), c2 = r.readUInt8(), c3 = r.readUInt8();
-    if (c0 === 0x49 && c1 === 0x45 && c2 === 0x4E && c3 === 0x44) {
-      r.pos += 4;                         // CRC chunku IEND (4 bajty)
-      break;
-    }
-    r.pos -= 3;                           // przesuń o 1 bajt do przodu (nakładające szukanie)
+  // Chunki: uint32 length BE | typ 4 B | data(length) | CRC 4 B; koniec na IEND.
+  // Bajty "IEND" wewnątrz danych IDAT nie mylą parsera (dawniej ucinały pixmapę).
+  // Uszkodzony/ucięty chunk → kontrolowany błąd przez _need (audyt A7) — pozycja strumienia
+  // byłaby nieodwracalna, więc ciche pochłanianie reszty pliku (dawne zachowanie) było gorsze.
+  for (;;) {
+    const len = r.readUInt32();
+    const t0 = r.readUInt8(), t1 = r.readUInt8(), t2 = r.readUInt8(), t3 = r.readUInt8();
+    r._need(len + 4);                     // data + CRC
+    r.pos += len + 4;
+    if (t0 === 0x49 && t1 === 0x45 && t2 === 0x4E && t3 === 0x44) break;  // IEND
   }
 
   const endPos = r.pos;
@@ -11921,7 +11922,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.25';
+const APP_VERSION = 'v1.5.26';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
