@@ -8,12 +8,18 @@ on:
     - cron: '23 3 * * 0'   # niedziela 03:23 UTC
   workflow_dispatch:
 
+# Jeden run naraz — bez równoległych pushy na main.
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 10   # zawieszony checkout nie pali domyślnych 6 h
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4

@@ -1,0 +1,229 @@
+# Changelog — ArkMap Studio
+
+Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
+
+## v1.5.32 — atrybucja, dokumentacja, CHANGELOG.md, hardening Actions
+
+- **Atrybucja:** ujednolicona na wyłącznie „Isithunzi" — sidebar (lewy górny róg), dialog „O programie" (linia autora, copyright, „o autorach" → „o autorze"), stopki manuala i specyfikacji.
+- **Manual:** doprecyzowana różnica A* vs Dijkstra (remisy kosztu — A* może wybrać inną, równie krótką trasę); domyślny stan „Pokaż puste custom lines" = OFF (zgodnie z kodem); sekcja mobilna: kod ARKMAP2; tabela Nawigacja: dwa nowe wiersze dwukliku (skok do innego obszaru, skok po linii transportowej); „autorów" → „autora" w opisie sidebara; wersja w podtytule → 1.5.32. Spec: nagłówek Version 1.1 i stopka z ujednoliconą atrybucją.
+- **CHANGELOG.md w root:** import dziennika fixów (wcześniej prowadzonego poza repo), najnowsze wpisy na górze; README linkuje do CHANGELOG.md. Od tej wersji każdy commit zawiera swój wpis.
+- **Hardening Actions (oba workflowy):** `timeout-minutes: 10` (zawieszony clone/checkout nie pali domyślnych 6 h limitu joba); `concurrency` per workflow z `cancel-in-progress: false` (równoległe runy — np. cron + ręczny dispatch — nie odbijają się na pushu i nie dają fałszywie czerwonego runu); w syncu liczniki linii/przystanków w treści commita odporne na brak dopasowania (`|| true` + `${VAR:-?}` — poprawne także przy wielu dopasowaniach pod pipefail).
+- **Testy:** pełna regresja **306 OK / 0 FAIL** (harnessy nietknięte — zmiany nie dotykają logiki); walidacja: YAML obu workflowów sparsowane, `bash -n` wszystkich 5 bloków run, dry-run keepalive (repo żyje → cisza).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
+## v1.5.31 — popup wyboru przystanku: autofit (commit 4e3c910)
+
+Popup „🚢 Skocz do przystanku" ucinał długie nazwy (ellipsis przy max-width: 320px). Fix: `width: max-content` (szerokość dopasowana do najdłuższej pozycji), sufit `max-width: calc(100vw - 16px)` + `overflow-x: auto` na wypadek ekstremalnie długiej nazwy; usunięte `text-overflow: ellipsis`. Pozycjonowanie przy kursorze już trzymało popup w granicach ekranu. Harness planner_ui.js: +2 asercje strukturalne (autofit, brak ucinania) → 62 asercje. Regresja: **306 OK / 0 FAIL**.
+
+## v1.5.30 — UX planera: 7 poprawek (commit adc0b0e)
+
+- **P1 — napis „✏ tryb planowania"** zasłaniał minimapę podglądu trasy (`#wp-overview` w lewym dolnym rogu). Przeniesiony: wyśrodkowany w poziomie względem ekranu (`left: 50%; transform: translateX(-50%)`), `bottom: 70px` — nad strefą toasta/baneru (24px). Mobile bez zmian (ukryty).
+- **P2 — hopy transportowe** były niebieskie przerywane i niewidoczne na minimapce. Teraz: kolor trasy (pomarańczowy), linia **kropkowana** (gęsty dash + okrągły lineCap) — na mapie tam, gdzie oba przystanki w bieżącym regionie/poziomie (dyliżans: tak; statek między regionami: bez zmian), w podglądzie trasy zawsze (rysowanie segmentami z `segHop[]`).
+- **P3 — podświetlenia przełączników (bug):** selektor `.wp-algo-btn:not(.wp-dir-btn)` w handlerze Dijkstra/A* łapał też przyciski transportów i gasił im `wp-algo-on` (puste `dataset.algo`). To samo w imporcie share-linka. Fix: wszystkie 4 wystąpienia → `.wp-algo-btn[data-algo]`; każda grupa (algo/dir/trans/aggro) odświeża wyłącznie siebie. Zweryfikowane wyczerpująco symulacją DOM: zgłoszony przypadek (klik A* gasił Pieszo) + 6 sekwencji × 4 kliki — zawsze dokładnie 1 włączony przycisk w każdej widocznej grupie, stan ≡ podświetlenie.
+- **P5 — spinner prędkości** ucinał „10.1": `#wp-speed-input` 68px → 92px, padding-right 22px → 18px.
+- **P6 — dwuklik na pokoju transportowym** nic nie robił (połączenia linii są wirtualne, nie ma ich w `exits`). Nowy fallback w `handleDblClick` + czysta funkcja `_transportNeighbors(roomId)` (deduplikacja, filtr po wczytanej mapie): 1 sąsiedni przystanek → skok (z dirty-check edycji); ≥2 (środek A-B-C lub pokój na kilku liniach) → lista wyboru przy kursorze (Esc/klik poza zamyka). Zmiana guardu: `!_lastCrossExits.length` już nie ucina dwukliku — pokoje bez cross-exitów też działają.
+- **P7 — „↺ Przywróć ustawienia domyślne"** nie ruszało planera. Teraz resetuje: algorytm → Dijkstra, filtr kierunków → wszystkie, transporty → pieszo, prędkość → 3 + odświeża UI wszystkich grup i przelicza trasę; confirm wspomina przełączniki planera.
+- **Testy:** nowy `tests/planner_ui.js` (60 asercji: sąsiedztwo transportów na prawdziwej linii i syntetyku, symulacja DOM przełączników, asercje strukturalne). Pełna regresja: **304 OK / 0 FAIL** (8 harnessów).
+- **Uwaga:** krok D (18f437d) wypchnął się bez bumpa APP_VERSION (plik nadal miał v1.5.28) — naprawione skokiem do v1.5.30.
+
+## Krok D — share-linki v2 (v1.5.29, commit 18f437d)
+
+Nowy, czysty format kodu trasy kodujący WSZYSTKIE ustawienia planera — bez kompatybilności wstecznej (nie było starych linków w obiegu).
+
+- **Format `ARKMAP2:<algo><dir><trans>:<base64>`** — trzy pozycyjne znaki: algo `d`/`a` (Dijkstra/A*), dir `k`/`p`/`w` (kardynalne/+pionowe/wszystkie), trans `p`/`n`/`g` (pieszo/normalny/agresywny). Pokrywa wszystkie 2×3×3 = 18 permutacji. Payload = base64 CSV roomId (bez zmian).
+- **Ścisła walidacja `wpDecodeRoute`:** zły prefiks (w tym stary `ARKMAP:`), złe kody flag, zła liczba znaków, nie-base64, nie-liczbowe/ujemne/zerowe/niecałkowite ID, leading zero, puste tokeny — wszystko odrzucane (`null` → jasny toast). Nieistniejące w mapie pokoje nadal miękko pomijane z licznikiem (jak dotychczas).
+- **Import stosuje wszystkie trzy parametry:** algorithm + dirMode + transportMode, odświeża wszystkie przełączniki UI (algo + nowy helper `wpRefreshDirUI()` + istniejący `wpRefreshTransportUI()`) i przelicza trasę.
+- **Testy:** nowy harness `tests/share_link.js` — 56 asercji: round-trip 18 permutacji, struktura formatu, determinizm encode/decode, 21 przypadków śmieciowych odrzucanych, walidacja ID przeciw mapie, asercje strukturalne okablowania importu.
+- **Regresja:** wszystkie 7 harnessów — **244 OK / 0 FAIL** (25+26+20+17+74+26+56).
+- Manual: sekcje „Kod trasy" i „Import trasy" opisują format ARKMAP2 i znaczenie kodów.
+
+## Krok C — (1f11537, bez zmian w HTML) — GitHub Actions: sync transportów + keepalive
+
+Automatyka repo, zero ingerencji w aplikację (bez bumpa APP_VERSION).
+- **sync-transports.yml** (cron 04:17 UTC + workflow_dispatch): sparse-clone upstreama (ships/ + other/), short-circuit po SHA (ten sam = cisza), generator `tools/sync-transports.mjs` z walidacją schematu (błąd = czerwony run, nic nie merguje), `git diff --quiet` jako druga linia obrony, commit prosto na main z metką `@<short-sha> (N linii, M przystanków)`.
+- **keepalive.yml** (cron niedziela 03:23 UTC + workflow_dispatch): commit z timestampem w `.github/KEEPALIVE` tylko gdy repo śpi > 30 dni — pilnuje 60-dniowego limitu uśpienia schedulów GitHuba.
+- **Weryfikacja:** YAML sparsowane, logika keepalive na sucho (repo świeże → cisza), short-circuit na sucho (SHA równe → bez zmian), token z uprawnieniem Workflows (push workflow przeszedł), **próba generalna end-to-end**: ręczny dispatch synca → run zielony, zero nowych commitów (poprawna ścieżka „bez zmian").
+
+## Krok B — v1.5.28 (0f29c84) — Planer: transporty (statki/dyliżanse) wg modelu Delwinga
+
+Nowa funkcja: przełącznik **Pieszo / Statki-dyliżanse** + sub-tryb **Normalny / Agresywny** w planerze trasy.
+- **Dane:** 41 linii (28 statków + 13 dyliżansów) z Delwing/arkadia-web-client-extension (MIT), bundlowane inline w bloku `TRANSPORT-DATA` (8.4 KB kompaktowo; upstream 6d9bb01). Generator `tools/sync-transports.mjs`: sortowane pliki, walidacja schematu (błąd = kod 1, HTML nietknięty), idempotentny (ten sam SHA = bajtowo ten sam blok). Przygotowany pod dzienną Akcję (krok C).
+- **Graf:** `_rebuildTransportEdges()` — krawędzie dla każdego spójnego podfragmentu linii (ride-through bez wysiadania, kara raz na pokład); koszt = Σczas×ratio + kara (normal: 30/0.5, agresywny: 10/0.1 — wartości Delwinga). Walidacja ID przeciw roomById (obca mapa → brak krawędzi). Leniva przebudowa w `wpRecalcPaths` (odporna na editMode).
+- **Pathfinding:** hopy relaksowane w `dijkstraPath` po pętli wyjść (poza filtrem kierunków); `_pathHops` rejestruje hop per target, kasowany gdy lepszy marsz wyprzedzi hop. Z transportami `findPath` wymusza Dijkstrę (heurystyka A* niedopuszczalna przy hopach — jak u Delwinga); przyciski algo przygaszone z tooltipem.
+- **Prezentacja:** hop = niebieska linia przerywana na mapie; odcinek `N kroków · 🚢 M` z tooltipem (linia, czas, przez); podsumowanie: kroki piesze + transporty z czasem; ETA = kroki×speed + Σ czasów hopów.
+- **Weryfikacja na mapie rzeczywistej:** Kraina Zgromadzenia→Nuln: pieszo 81 kroków → z transportem 1 hop (Błękitna Wstęga–Kreutzhofen); ride-through 6621→5207 przez Nuln jednym hopem 87 s, kara raz.
+- **Testy:** `tests/transport.js` (26 asercji: wybór wg trybu, dokładność kosztów, kara raz, wymuszenie Dijkstry, mapa rzeczywista, regresja off≡254ac05). Regresja łącznie 188 OK / 0 FAIL.
+
+## Krok A — v1.5.27 (254ac05) — Planer: filtr kierunków (kardynalne / +pionowe / wszystkie)
+
+Nowa funkcja (poza audytem): 3-stanowy filtr kierunków w planerze trasy.
+- **Model:** `wpState.dirMode` (`cardinal | vertical | all`, domyślnie `all` = zachowanie 1:1 sprzed zmiany). Helper `_dirAllowed(dir, room)`: wyjście specjalne (klucz istniejący w `special_exits`, także gdy nazwany długą nazwą kierunku jak „northwest") przechodzi tylko w trybie `all`; zwykłe idx 1–8 (n…nw) w każdym trybie; idx 9–12 (up/down/in/out) w `vertical` i `all`; nieznany klucz — bezpiecznie tylko `all`.
+- **Pathfinding:** guard `_dirAllowed` w identycznej pętli krawędzi `dijkstraPath` i `astarPath` (po sprawdzeniu locków). `_recomputeAstarParams` nietknięte — min/max po większym zbiorze krawędzi zachowuje dopuszczalność heurystyki A*.
+- **UI:** blok „Kierunki" w panelu planera (Kardynalne / + Pionowe / Wszystkie) między „Algorytm" a „Kod trasy"; selektory algorytmu zawężone do `.wp-algo-btn:not(.wp-dir-btn)` (także przy imporcie share-linka), żeby kontrolki się nie gryzły.
+- **Weryfikacja na mapie rzeczywistej:** trasa 17983→18030 — `all`: 25 kroków przez rozpadlinę (18719); `cardinal`: 29 kroków drogą, bez 18719, zero kroków specjalnych.
+- **Uwaga udokumentowana:** A* i Dijkstra mogą dać różne ścieżki o równym koszcie (tie-break przy remisach) — zachowanie pre-existing, potwierdzone dyferencjalnie na kodzie sprzed filtra; harness asertuje koszt i końce, nie identyczność tablic.
+- **Testy:** nowy harness `tests/dir_filter.js` (74 asercje: klasyfikacja 45, graf syntetyczny, regresja all≡stary kod, mapa rzeczywista); regresja łącznie 162 OK / 0 FAIL.
+- Pliki: `arkmap_studio.html` (+~45 linii), `docs/arkmap_manual.html` (tabela filtra), `tests/dir_filter.js` (nowy), `tests/run-all.sh`, `tests/README.md`.
+
+## Commit dodatkowy — README.md ✅
+- Commit: `b3cde1b` na main (+27). Bez bumpu — docs-only.
+- Treść wg wzorca z `arkadia-web_standalone-tools`: czym jest ArkMap Studio, link do aplikacji na GitHub Pages, 4 punkty „co to robi", linki do manuala i specyfikacji (przez Pages, nie podgląd źródła), notka o testach, licencja MIT.
+- Linki zweryfikowane przed commitem: aplikacja + oba docsy odpowiadają 200 na `isithunzi000.github.io/arkadia-web_standalone-arkmap_studio/`.
+
+## Commit dodatkowy — harnessy testowe w repo ✅
+- Commit: `f940f35` na main (9 plików, +749). **Bez bumpu APP_VERSION** — `arkmap_studio.html` nietknięte (udowodnione pustym diffem).
+- Zawartość `tests/`: `a12a14_undo_core.js`, `a13_delete_area.js`, `a7_readbuffer.js`, `a9_pixmap.js`, `run-all.sh`, `fetch-fixture.sh`, `README.md`, `fixtures/tiny.png`; `.gitignore` dla `map_master3.dat`.
+- Cechy wersji repo: ścieżki względne repo, snapshoty różnicowe pobierane przez `git show <hash>` (50f37ea / c84da83 / 45aee0f / fb8e013), sprawdzanie wersji odpięte od numeru (regex), fixture z czytelnym błędem + skryptem pobierającym (przypięty release 0.205.0).
+- Weryfikacja z poziomu repo: **88 OK / 0 FAIL** (25 + 26 + 20 + 17), runner `bash tests/run-all.sh` → PASS.
+- Harnessy a11 (dirty/save) i ur_core_new (zamrożony baseline dispatcherów) nie są w repo — opisy w tym dzienniku pozwalają je odtworzyć, gdyby były potrzebne.
+
+## Krok 17 (Fala 4) — A9: readQPixMap parsuje chunki PNG ✅ — WSZYSTKIE 21 FINDINGÓW ZAMKNIĘTYCH
+- Commit: `0df3a20` na main, wersja v1.5.25 → **v1.5.26**. Diff: 1 plik (+16/−15).
+- Zmiana: `readQPixMap` przepisane — pełna 8-bajtowa sygnatura PNG (dawniej 4) + pętla po strukturze chunków (uint32 length | typ | data | CRC, koniec na IEND) zamiast skanowania bajtów za sekwencją „IEND". Pomijanie data+CRC przez guard `_need` z kroku 16 → uszkodzona pixmapa = kontrolowany błąd importu zamiast cichego pochłonięcia strumienia. Rewind nie-PNG przez `r.pos = startPos` (równoważny). Writer nietknięty, spec nietknięty (strategia odczytu .dat nie jest specyfikowana).
+- Testy (harness a9, ekstrakcja verbatim; PNG testowy wygenerowany PIL-em): **17/17 OK** — T1: prawdziwy PNG odczytany 1:1 + round-trip; T2 różnicowy: bajty „IEND" wewnątrz IDAT — NOWY pełny PNG (66 B), STARY ucinał (51 B, dawny bug potwierdzony); T3: dane po IEND — ogon nietknięty, pos poprawny; T4: nie-PNG → rewind (nowy ≡ stary), niepełna sygnatura 4/8 → NOWY odrzuca; T5 różnicowy: PNG ucięty w środku chunku — NOWY kontrolowany błąd, STARY ciche śmieci; T6: liczniki kotwic.
+- Regresja: harness a7 po reticie bazy różnicowej na snapshot pre-A7 (50f37ea) + aktualizacji oczekiwań T6 (_need ×9, audyt A7 ×2, wersja odpięta od numeru) → **20/20 OK**; node --check obu `<script>` OK.
+- Baseline: commit `0df3a20`. **Audyt A1–A22 (21 po deduplikacji) — wszystkie findingi obsłużone.**
+
+## Krok 16 (Fala 4) — A7: ReadBuffer z bounds-checkami ✅
+- Commit: `c84da83` na main, wersja v1.5.24 → **v1.5.25**. Diff: 1 plik (+15/−8).
+- Zmiana: jeden hunk w `ReadBuffer` — nowa metoda `_need(n)` rzuca kontrolowany `Error` („Uszkodzony lub obcięty plik .dat: odczyt N B na pozycji P, plik ma M B") gdy `n < 0` lub `n > remaining()`; wszystkie 6 getterów DataView + `readBytes` przepięte przez guard **przed** przesunięciem `pos` (check-then-advance — pozycja nienaruszona przy błędzie, dawna cicha desynchronizacja usunięta). Komunikat trafia do istniejącego toastu w catchu `loadDat` — zero zmian poza klasą. Spec nietknięty (jakość komunikatu, nie obietnica formatu).
+- Fixture `map_master3.dat`: release 0.205.0, 7 847 878 B, untracked (poza repo, pobierany skryptem `tests/fetch-fixture.sh`).
+- Testy (harness a7, ekstrakcja verbatim warstwy formatu + DEPS): **20/20 OK** — T1: odczyty poprawne identyczne nowy≡stary; T2: wszystkie gettery + readBytes na obciętym buforze → kontrolowany Error (nigdy RangeError), komunikat z pozycją/rozmiarem, pos nietknięty, readBytes(0) działa; T3: QString z byteLen=2GB → kontrolowany błąd, null/empty → "" bez zmian; T4: **8 deterministycznych obcięć produkcyjnego pliku — STARY: 8× RangeError, NOWY: 8× kontrolowany polski komunikat**; T5: nieobcięty plik: 26988 pokoi, 60 obszarów, 19 wpisów mRoomIdHash; T6: liczniki kotwic. node --check obu `<script>` OK.
+- Baseline następnego kroku: commit `c84da83`.
+
+## Krok 15 (Fala 4) — A13: undo DELETE_AREA odtwarza puste kontenery ✅
+- Commit: `50f37ea` na main, wersja v1.5.23 → **v1.5.24**. Diff: 1 plik (+31/−4).
+- Problem: trzy polityki w trzech miejscach — commit doFn kasował tylko kontenery, które sam opróżnił; redo dispatcher kasował WSZYSTKIE puste (5 typów + exits/special_exits) bez zapisu; undo nie odtwarzał pustych wcale. Cykl commit→undo→redo→undo gubił uprzednio puste kontenery na stałe.
+- Decyzja: **wyrównanie commit do redo + nagrywanie + przywracanie**. (1) doFn: usunięte kasowanie opróżnionych exits/special_exits z pętli czyszczących; (2) doFn: nowy blok zbiorczy kasujący wszystkie puste kontenery 7 typów w pokojach spoza obszaru z nagraniem `{roomId, container}` do `state._lastRemovedEmptyContainers`; (3) entry DELETE_AREA dostaje pole `removedEmptyContainers` (wzorzec `_lastCleanedCrossExits`); (4) undo DELETE_AREA: pętla odtwarzająca puste kontenery (`{}` / `[]` dla locków) ze strażnikiem `||` (nie nadpisuje kontenerów odtworzonych przez cleanedExits); (5) redo dispatcher bez zmian — po wyrównaniu commit ≡ redo, entry z commitu wystarcza na wszystkie cykle.
+- Wpadka w trakcie: edycja 2 urwała klamrę zamykającą zewnętrzną pętlę czyszczącą (blok zbiorczy wszedł do środka pętli) — wykryte natychmiast weryfikacją struktury, poprawione przed testami; node --check i harness potwierdziły.
+- Testy (harness a13, ekstrakcja verbatim): **26/26 OK** — T1: 7 pustych kontenerów nagrane i odtworzone (deep-equal, typy: locki = tablice); T2: pełny cykl commit→undo→redo→undo z wyjściem cross-area z pełnymi metadanymi (cl/door/waga/lock/specLock) — undo ≡ oryginał, redo ≡ post-commit, drugi undo ≡ oryginał; T3: różnicowy — NOWY commit kasuje puste (jak redo) i undo je odtwarza, STARY redo kasował bez zapisu → utrata na stałe (zdemonstronowane źródło A13); T4: entry legacy bez pola → undo bez crasha; T5: liczniki kotwic; T6: smoke regresji dispatcherów (A12/A14 z kroku 14 na tym samym ekstrakcie — deep-equal).
+- Porównania deep-equal kanoniczne (sortowane klucze) + obszary jako zbiory — kolejność map.areas po undo i kolejność kluczy po restore to istniejące zachowanie poza scope'm (zapis sortuje przez stableStringify).
+- Krok 15 dotyka wyłącznie DELETE_AREA — regresję pokrywa T6.
+- Baseline następnego kroku: commit `50f37ea`.
+
+## Krok 14 (Fala 4) — A12 + A14: latentne strażniki rdzenia undo ✅
+- Commit: `45aee0f` na main, wersja v1.5.22 → **v1.5.23**. Diff: 1 plik (+23/−10).
+- **A12** — `commitAddExit`: (1) dwa guardy odmowne z toastem ⚠ — zajęty kierunek źródła LUB zajęty kierunek powrotny przy bidi → return bez mutacji i bez wpisu undo (operacja atomowa); (2) entry ADD_EXIT zapisuje `prevExit`/`prevOppExit` (po guardzie zawsze undefined — defense in depth na przyszłe źródła wpisów); (3) undo ADD_EXIT przywraca `prevExit`/`prevOppExit` gdy zdefiniowane + sprząta pusty kontener `exits` po usunięciu (ścisła odwrotność — pokój bez wyjść przed operacją nie ma po undo pustego `exits:{}`).
+- **A14** — undo ADD_ROOM: usunięta pętla czyszcząca reverse-exity (zwykłe + specjalne) z innych pokoi. Uzasadnienie: entry ADD_ROOM pushowane w chwili tworzenia pokoju (świeże ID, 2 call-site'y sprawdzone), kolejność LIFO gwarantuje że wyjścia do pokoju schodzą ze stosu wcześniej → pętla była martwym kodem, ale destrukcyjnym (redo ADD_ROOM wstawia tylko roomData, skasowane wyjścia przepadały). Gdyby kiedyś powstała ścieżka z auto-wyjściami, wiszące wyjście wykryje walidator — ciche kasowanie byłoby nieodwracalne. Wariant „zapisuj usuwane w entry + przywracaj w redo" odrzucony (wymagałby mutowania entry w czasie undo — złożoność dla nieosiągalnej ścieżki).
+- Recon potwierdził strażników UI w obu call-site'ach commitAddExit (13794: przycisk „Dodaj" ukryty dla zajętych + bidi oferowane tylko gdy wolne; 14705: filtr zajętych w masowych powrotnych) — ale oba przechodzą przez asynchroniczny dialog, więc guard w rdzeniu był konieczny (ryzyko latentne).
+- Testy (harness a12a14, ekstrakcja verbatim przez kotwice): **26/26 OK** — T1 guard źródła (zero mutacji/undo, toast); T2 guard powrotny (atomowość); T3/T4 happy path jednokierunkowy+bidi ze ścisłą odwrotnością (deep-equal, brak pustych kontenerów); T5 dispatcher przywraca prevExit/prevOppExit z ręcznie złożonego entry; T6 różnicowy stary/nowy (git show HEAD): NOWY zachowuje wyjścia „z boku stosu", STARY je kasował; T7 normalny LIFO undo×2 → deep-equal; T8 liczniki kotwic (korekta oczekiwań po grepie: audyt A12 ×3, prevExit ×4 — błąd w oczekiwaniach, nie w kodzie). node --check obu `<script>` OK.
+- Regresja: a11 ALL PASS; ur_core_new 21/4 — FAIL-e to ten sam baseline (DELETE_ROOM/EDIT_ROOM/ADD_EXIT bidi/DELETE_AREA — zamrożona kopia starego dispatchera w harnessie, dokumentująca właśnie klaster A12/A13/A14; A12 i A14 zamknięte tym krokiem w realnym pliku, A13 = krok 15).
+- Baseline następnego kroku: commit `45aee0f`.
+
+## Krok 13 (Fala 4) — A17: guard w loadArkmap na poprawny JSON niebędący mapą ✅
+- Commit: `fb8e013` na main, wersja v1.5.21 → **v1.5.22**. Diff: 2 hunki (+2/−1).
+- Zmiana: guard `if (!map || typeof map !== 'object')` z toastem błędu zaraz po parsowaniu — null/prymitywy nie dochodzą do validate (TypeError → nieobsłużony rejection zamieniony na komunikat). Tablice celowo przechodzą guard — obsługuje je normalna ścieżka walidacji (dialog), bez crasha.
+- Recon: wszystkie 4 wejścia wczytywania leją przez loadArkmap → jeden guard pokrywa wszystko.
+- Testy: T2 harness verbatim 7/7 (null/42/"tekst"/true → toast + validate nie wołane; wadliwy JSON → stara ścieżka nietknięta; {} → dialog walidacji; poprawna mapa → applyMap); T3 regresja a11 ALL PASS + ur_core 21/4 baseline; node --check OK.
+- Baseline następnego kroku: commit `fb8e013`.
+
+## Krok 12 (Fala 4) — A16: saveArkmap wołane ze stringiem/Eventem ✅
+- Commit: `d9964c0` na main, wersja v1.5.20 → **v1.5.21**. Diff: 4 hunki (+4/−4).
+- Zmiany: (1) listener przycisku Zapisz — wrapper `() => saveArkmap()` (Event nie leci jako onSaved); (2) Ctrl+S — usunięty ignorowany `fname`, `saveArkmap()` (nazwa z _arkmapSuggestedName, zachowanie bez zmian); (3) guard na wejściu saveArkmap: `typeof onSaved !== 'function' → undefined` — pokrywa wszystkie 4 downstream `if (onSaved) onSaved()`; (4) bump wersji.
+- Recon: 8 call-site'ów, 2 wadliwe; saveArkmapAs bez parametrów — Event ignorowany, nieszkodliwe (notatka).
+- Testy: T2 harness verbatim 7/7 (Event→undefined, string→undefined, funkcja przechodzi referencyjnie, brak arg, ścieżka przez dialog suppressorów dziedziczy normalizację, legalna funkcja przez dialog); T1 liczniki OK; T3 regresja a11 ALL PASS + ur_core 21/4 baseline; node --check OK.
+- Baseline następnego kroku: commit `d9964c0`.
+
+## Krok 11 (Fala 3) — A4: orphan custom line attrs — tylko dokumentacja ✅ — FALA 3 ZAMKNIĘTA
+- Commit: `23825e3` na main. **Bez bumpu APP_VERSION** (kod nietknięty — md5 studio identyczne z bazą, udowodnione).
+- Recon odwrócił rekomendację z audytu: (1) Mudlet sam usuwa orphan style/arrow/color przy wczytaniu mapy (`TRoom::audit` — „points — the master element"), więc te ~52 wpisy to martwe artefakty; (2) sugestia audytu „przenoś jako points:[] + style" była błędna — pusta tablica to suppressor CHOWAJĄCY domyślną linię, konwersja zmieniałaby rendering; (3) edytor ArkMap nigdy nie tworzy orphanów (openCLEditor wymaga wpisu z punktami). Wniosek: przenoszenie = przechowywanie śmieci → udokumentowane odrzucanie.
+- Zmiany (tylko spec, 2 hunki): §10 nowy podrozdział „Orphan style/arrow entries"; §19 — orphan przeniesiony do „Normalizations" (5→6), „Known limitations" zastąpione zdaniem zamykającym (od v1.1 brak znanych utrat danych).
+- Testy: T1 normalizacje 6/6, limitations = zdanie zamykające, §10 notka obecna; T2 parser OK, kotwice całe; T3 dokładnie 2 hunki; T4 md5 studio + manual identyczne z bazą.
+- Baseline następnego kroku: commit `23825e3`.
+
+## Krok 10 (Fala 3) — A3: wagi wyjść = 1 zachowane przy imporcie ✅
+- Commit: `79ddae3` na main, wersja v1.5.19 → **v1.5.20**. Diff: studio 2 hunki (+3/−2), spec 2 hunki.
+- Zmiana kod: `_datConvertRoom` — usunięte `w !== 1 &&` (jedyny drop w całym pliku; warunek istnienia wyjścia zostaje, zgodnie z §17). Eksport był już czysty (passthrough 5729–5730/5275), edytor już pisał explicite (14529–14534), pathfinding respektuje jawną 1 (9100) — zero zmian tam.
+- Zmiana spec: §7 — waga 1 dozwolona i znacząca (w .dat brak wpisu = 0; ArkMap zachowuje jawne 1 z importu i edytora; w routing ArkMap brak wpisu = waga pokoju docelowego); §19 limitations 2→1.
+- Testy na produkcyjnym pliku 9/9: nowy import = dokładnie 17 wpisów z wagą 1 (m.in. pokój 6628), stary = 0; łącznie 11794 = 11777 + 17, pozostałe wagi identyczne; round-trip 17/17 odtworzone w .dat; walidator: produkcyjny import OK, waga 0 odrzucana; przyrost kontenerów 2180→2190 (10 pokoi dostało kontener tylko z wagami=1, 7 wpisów doszło do istniejących).
+- Regresja: a11 ALL PASS, ur_core 21/4 baseline, node --check OK, spec parser OK, manual nietknięty.
+- Baseline następnego kroku: commit `79ddae3`.
+
+## Krok 9 (Fala 3) — A2: meta.room_id_hash w spec v1.1 + oba kierunki ✅
+- Commit: `d18723b` na main, wersja v1.5.18 → **v1.5.19**. Diff: studio 4 hunki (+10/−3), spec 4 hunki.
+- Zmiany kod: (1) `datToArkmap` — meta dostaje `room_id_hash` (warunkowo, puste pomijane); (2) `arkmapToDat` — `mRoomIdHash: arkmap.meta?.room_id_hash ?? {}` zamiast `{}` na sztywno; (3) walidator — opcjonalny check typu obiekt string→int; (4) bump wersji.
+- Zmiany spec: §3 wiersz room_id_hash; nagłówek Version 1 → **1.1**; §17 reguła walidacyjna; §19 „Known limitations" 3→2 (pozycja mRoomIdHash usunięta — naprawiona).
+- Kluczowy fakt z recon: parser i writer .dat **już** czytały/pisały mRoomIdHash — gubienie było tylko w 2 miejscach konwersji.
+- Testy: 15/15 na produkcyjnym `map_master3.dat` — import: 19 wpisów (m.in. Delwing, Dargoth), deep-equal z oryginałem; round-trip: eksport→reparse daje identyczną zawartość; metryka bajtowa: delta dokładnie 442 B = blok hash w UTF-16 (writer QString = uint32 + UTF-16LE); pusty hash → pole pomijane; walidator: OK/string/nie-int/brak pola. Korekty harnessa w trakcie: kolejność kluczy po reparsee kanoniczna (writeQMapSI sortuje) → porównanie bez względu na kolejność; validate() zwraca {ok, errors, warnings}, err() → {path, msg}; zależność ansiPaletteRgb+ANSI_PAL dołączona verbatim.
+- Regresja: a11 ALL PASS, ur_core 21/4 baseline, node --check OK, spec parser OK, manual nietknięty.
+- Baseline następnego kroku: commit `d18723b`.
+
+## Krok 8 (Fala 3) — A10: symbol pokoju 1:1 z Mudletem (kod + spec) ✅
+- Commit: `322e2ea` na main, wersja v1.5.17 → **v1.5.18**. Diff: studio 3 hunki (+24/−15), spec 1 hunk (§6).
+- Zmiany: (1) renderer drawRooms — usunięte `slice(0, 2)`; pełny tekst symbolu; szerokość liczona arytmetycznie (monospace 0.6 em/znak, emoji >0xFFFF = 1.0, po code points); 1–2 znaki = stara formuła bez zmian (`max(7, round(rs·0.7/0.52))`); 3+ znaki = `min(round(rs·0.52), floor(rs/szerokość))`, poniżej 7 px → nie rysujemy (zasada Mudleta); (2) pole rp-symbol — usunięte maxlength="2", nowy title; (3) spec §6 — brak limitu długości + opis zachowania renderera + zalecenie 1–2 znaków.
+- Testy: T1 harness różnicowy verbatim (stary blok z git show vs nowy) — 10/10: regresja 1–2 znaki identyczna dla rs 10..100 co do parametrów wywołań; 3 znaki pełne z ciągłością rozmiaru (0.52rs); 10 znaków dopasowane (floor(rs/6)); 30 znaków przy małym pokoju → zero fillText, save/restore sparowane; fallback_symbol w całości; emoji = 1 code point × 1.0 szerokości; T2 slice(0,2)=0, maxlength=0, wersja OK; T3 node --check OK, spec parser OK, kotwice całe; T4 a11 ALL PASS, ur_core 21/4 baseline, manual nietknięty.
+- Recon kompletności: ucinanie było w DOKŁADNIE 1 miejscu (6745), maxlength w 1 (2462); panel pokoju pokazuje pełny symbol (bez zmian); walidator sprawdza tylko typ — zgodnie z Mudletem, bez zmian; eksport PNG nie rysuje symboli osobno.
+- Świadomie nie kopiowane z Mudleta: pixmap cache, fudge factor, fallback glifów (robi przeglądarka).
+- Baseline następnego kroku: commit `322e2ea`.
+
+## Decyzja projektowa (krok 8) — A10 w wersji „1:1 z Mudletem"
+- Odrzucona redakcyjna droga 1 dla A10; wybrane **zrównanie zachowania z Mudletem** (kod + spec).
+- Fakty z recon Mudleta (src/T2DMap.cpp, addSymbolToPixmapCache): brak limitu długości symbolu; czcionka dopasowywana do kwadratu pokoju (pompuj w górę aż nie wychodzi, cofnij o krok); jeśli nie mieści się nawet przy minimalnym rozmiarze (4pt) — nic nie rysuje; za mały pokój (<8px) — nic nie rysuje.
+- Zakres kroku 8: (1) renderer (linia ~6745) — usunąć slice(0,2), dopasowanie rozmiaru czcionki arytmetycznie (monospace → szerokość = znaki × stała), za długi → nie rysuj; (2) pole rp-symbol (linia 2462) — usunąć maxlength="2", poprawić title; (3) spec §6 — brak limitu + opis zachowania renderera.
+- Świadomie NIE kopiujemy: pixmap cache, fudge factor, fallback na znak zastępczy (przeglądarka robi sama). 1:1 = zasady, nie piksele.
+- Kolejność Fali 3 po zmianie: krok 8 = A10 (kod+spec), krok 9 = A2 (spec v1.1 + room_id_hash), krok 10 = A3 (wagi=1), krok 11 = A4 (orphan style).
+
+## Krok 7 (Fala 3) — A1+A5+A6+A8: redakcja spec (docs-only) ✅
+- Commit: `c128df2` na main. **Bez bumpu APP_VERSION** (aplikacja nietknięta; md5 arkmap_studio.html identyczne z bazą — udowodnione w T4).
+- Zakres zmieniony decyzją projektową w trakcie: A10 wycofane z kroku 7 — staje się krokiem 8 jako zmiana KODOWA „1:1 z Mudletem" (patrz niżej). Krok 7 = 3 edycje w `docs/arkmap_spec.html`.
+- Zmiany: (1) §1 — obietnica bitowa zawężona do plików w kanonicznym układzie Qt (pisanych przez ArkMap), zewnętrzne = bezstratne semantycznie + link do §19; (2) §19 — to samo zawężenie + nowy podrozdział „Normalizations on .dat import" (5 pozycji: kolejność kluczy, bounds obszarów, 4dp na custom lines, label spec=0→czarny, QString null vs pusty) + „Known limitations" (3 pozycje: mRoomIdHash, wagi=1, orphan style/arrow — kroki 9–11 będą je usuwać); (3) §10 — „Precision: 4 decimal places max" zastąpione opisem, gdzie dzieje się zaokrąglenie (import .dat, sub-piksel).
+- Testy: T1 stare sformułowania zniknęły (0 wystąpień), nowe obecne (canonical Qt layout ×2), listy 5/3; T2 parser HTML OK, zero kotwic bez celu, zero zduplikowanych id; T3 dokładnie 3 hunki, tylko spec; T4 md5 studio + manual identyczne z bazą.
+- Baseline następnego kroku: commit `c128df2`.
+
+## Krok 6 (Fala 2) — A19: akceptacje walidatora bez dirty ✅ — FALA 2 ZAMKNIĘTA
+- Commit: `a24907e` na main, wersja v1.5.16 → **v1.5.17**. Diff: +3/−2 (dokładnie 3 hunki).
+- Zmiany (2 linie): (1) `_acceptSave` gałąź file — `state.dirty = true` wewnątrz `if (state.map)` (pokrywa `_vdAccept` i `_vdUnaccept`, oba idą przez `_acceptSave`); (2) `_vdMigrate` — `state.dirty = true` po merge do meta.
+- Recon: wyczerpujący grep potwierdził, że to jedyne 2 miejsca mutacji `state.map.meta` w pliku. Walidator osiągalny tylko w edit mode (`#edit-toolbar` pod `#app.edit-mode`) — load-guardy `state.editMode && state.dirty` działają bez zmian. Świadomie bez dirty: gałąź browser, `_vdClearAccepts`, select `vd-store` (tylko localStorage, nie mutują pliku).
+- Testy: T1 liczniki (`state.dirty = true` 6→8, `state.dirty` 19→21, wersja OK); T2 `_acceptSave` verbatim 4 scenariusze (file+arr, file+pusty, file bez mapy, browser) — 8/8; T3 `_vdMigrate` verbatim 3 scenariusze (happy path z dedupem, brak akceptacji, brak mapy) — 8/8; T4 regresja: a11 ALL PASS, ur_core 21 OK / 4 znane FAIL = baseline; node --check OK. Razem 16/16 + regresja czysta.
+- Incydent w trakcie: harness bez zależności `_acceptStore` → ReferenceError; poprawione ekstrakcją verbatim zależności (ta sama lekcja co `_replaceRoomData` w kroku 4).
+- Poza scope'm: undo dla akceptacji (osobny feature); poszerzanie guardów poza editMode (niepotrzebne — fakt z recon).
+- Baseline następnego kroku: commit `a24907e`, md5 liczony na starcie kroku 7.
+
+## Decyzje projektowe (Fala 3) — zatwierdzone
+- **A1 → droga A (korekta obietnicy):** przeredagować §1 spec — „bitowo identyczny dla plików w kanonicznym układzie Qt / zapisanych przez ArkMap" + katalog świadomych normalizacji. NIE robimy bezstratnego importu bajtowego. Przy okazji redakcyjnie domknięte A6 i A10.
+- **A2 → naprawić:** dodać `meta.room_id_hash` (object string→int) do spec v1.1 + przenosić w obu kierunkach (datToArkmap + arkmapToDat). 19 wpisów w produkcyjnym pliku.
+- Kolejność Fali 3 po zamknięciu Fali 2: (1) A1+A6+A10 redakcja spec, (2) A2 spec v1.1 + kodek, (3) A3 wagi=1, (4) A4 orphan style.
+
+## Krok 5 (Fala 2) — A18: brak beforeunload → utrata pracy przy zamknięciu karty ✅
+- Commit: `b59435f` na main, wersja v1.5.15 → **v1.5.16**. Diff: +9/−1 (dokładnie 2 hunki).
+- Zmiana: nowy listener `window.addEventListener('beforeunload', …)` po globalnym handlerze klawiatury (przed sekcją UNDO/REDO BUTTONS). Ostrzeżenie gdy `state.dirty || state.editDirty` — obie flagi już istniały i są utrzymywane (dirty z kroku 4; editDirty = formularz pokoju, reszta kodu traktuje go jako niezapisaną pracę).
+- Semantyka: celowo BEZ bramki editMode — dirty nie jest kasowane przy wyjściu z trybu edycji (tylko w 6 punktach zapisu), więc jedyny możliwy false positive to „edytowałem → wyszedłem z trybu → zamykam kartę" (bezpieczny).
+- Recon: 0 wystąpień beforeunload przed zmianą; kotwica `});\n\n// ── UNDO/REDO BUTTONS` unikalna.
+- Testy: T1 harness na verbatim handlerze — 6/6 OK (dirty→preventDefault+returnValue; czyste→brak reakcji; samo editDirty→ostrzeżenie); T2 `'beforeunload'`=1, `state.dirty`=19 (korekta oczekiwania 18→19: nowy handler sam referencjonuje flagę — jedyny przyrost); T3 `node --check` OK; T4 regresja kroku 4: a11_harness ALL PASS, ur_core_new 21 OK / 4 FAIL = identycznie z udokumentowanym baseline'em.
+- Poza scope'm: A19 (akceptacje walidatora) = krok 6; semantyka dirty/editDirty nietknięta; brak beforeunload pod import/eksport (audyt nie wymagał).
+- Baseline następnego kroku: commit `b59435f`, md5 liczony na starcie kroku 6.
+
+## Krok 4 (Fala 2) — A11' (A11+A15): dirty tracking na fladze state.dirty ✅
+- Commit: `439da95` na main, wersja v1.5.14 → **v1.5.15**. Diff: +65/−44.
+- Model: flaga `state.dirty` ustawiana przy każdej zmianie stosu undo, kasowana wyłącznie po potwierdzonym zapisie. `_savedAtUndoIndex` usunięty całkowicie (0 wystąpień).
+- Choke point: nowy `pushUndo(entry)` — 31 miejsc przemianowanych skryptem z asercjami; **2 pushe w redoAction/redoAll wykluczone** (rename tam rozsadziłby redo — pułapka wykryta w recon).
+- Set-true także w: undoAction, redoAction, undoToIndex, redoAll, cichy pop w cancelRoomEdit (6 punktów — scenariusz „save→undo" zmienia treść bez pusha; pułapka nr 2 z recon).
+- Clear: 6 success-pointów zapisu (Save: handle/handle-fallback/FSAPI/download; SaveAs: FSAPI + dopięty `.then` na download, który go nie miał); clear PRZED onSaved (latentny TypeError A16 nie pominie cleara). Resety: startLocalEditMode + wrapper applyMap.
+- Testy: T1 liczniki (31/2/0/4/6/8); T2 5 scenariuszy zapisu na verbatim `_performArkmapSave` (AbortError zostawia dirty — A15 zamknięte; onSaved rzucający nie pomija cleara); T3 łańcuch pushUndo→save→undo→dirty (A11 zamknięte); T4 regresja odwrotności undo/redo **identyczna z baseline audytu** (21 OK + 4 znane: 3 artefakty testowe + udokumentowane A13 — dispatchery byte-identyczne); T5 node --check OK, diff przejrzany.
+- Semantyka konserwatywna udokumentowana w kodzie: undo do stanu zapisanego nadal daje dirty=true (bezpieczny false positive).
+- Haczyk dla kroku 6 (A19): `_acceptSave` ustawi `state.dirty = true`.
+- Baseline następnego kroku: commit `439da95`.
+
+## Krok 3 (Fala 1) — A22: gh_token walidowany przy starcie mimo martwego UI ✅
+- Commit: `44c62c8` na main, wersja v1.5.13 → **v1.5.14**. **FALA 1 ZAMKNIĘTA.**
+- Zmiana: IIFE `restoreGitHub` → `purgeStaleGitHubToken` — zero sieci przy starcie; stale token usuwany z localStorage (+ console.info). Martwy kod OAuth/PR zostaje (decyzja projektu).
+- Recon wykazał: `state._ghToken`/`_ghUser` są write-only (żadna funkcjonalność ich nie czyta); requesty „Wczytaj mapę online" są publiczne i niezależne od tokena — nietknięte.
+- Testy: T1 pre potwierdził fetch z `Authorization: token …` przy starcie; post: fetch nie wołany, token usuwany, brak tokena = no-op, wyjątek localStorage połknięty; T4: dokładnie 1 wystąpienie `api.github.com/user` (martwy handler PAT — świadomie); `node --check` OK.
+- Pominięte jako redundantne (inwariant udokumentowany): `resetAllDefaults` + `gh_token` — po purge przy starcie token nie może istnieć w runtime (jedyny setter w martwym UI).
+- Baseline następnego kroku: commit `44c62c8`.
+
+## Krok 2 (Fala 1) — A21: escHtml bez cudzysłowów + sink w cl-editor ✅
+- Commit: `4f04ea7` na main, wersja v1.5.12 → **v1.5.13**.
+- Zmiany (3 linie): (1) `escHtml` += `"`→`&quot;` — zamyka wszystkie 16 sinków atrybutowych naraz; (2) linia 14030 `CL dir=${dir}` → `escHtml(dir)` — surowy sink znaleziony w recon kroku (komenda special exit przez dataset → innerHTML).
+- Recon potwierdził bezpieczeństwo globalnej zmiany: 47 użyć escHtml, zero w atrybutach w apostrofach, zero w JS-stringach w atrybutach; `_vdEsc` bez zmian (5 użyć, tylko treść tekstowa).
+- Testy: T1/T2 unit na verbatim escHtml (korpus 20 stringów — formalny dowód, że jedyna zmiana to `"`→`&quot;`); T3 E2E w prawdziwym parserze Chromium — pre-fix breakout (ucięty value + atrybut onfocus na wszystkich 3 elementach), post-fix pełny round-trip payloadu i zero obcych atrybutów; T4 sink 14030; T5 diff = dokładnie 3 linie, `node --check` OK.
+- Incident w trakcie: równoległe edycje tego samego pliku się rozjechały (wyścig zapisów) — wykryte przez harness (T1/T2 FAIL), poprawione sekwencyjnie. Wniosek procesowy: edycje jednego pliku tylko sekwencyjnie.
+- Poza scope'm (notatka): `value="${col}"` (14033) — latentne, wymaga override'u walidacji (crafted cl.color).
+- Baseline następnego kroku: commit `4f04ea7`.
+
+## Krok 1 (Fala 1) — A20: XSS w sbMapInfo ✅
+- Commit: `6ebd3d0` na main, wersja v1.5.11 → **v1.5.12** (BUILD_DATE liczy się w runtime).
+- Zmiana: 1 linia — escapowanie na joinie w `sbMapInfo.innerHTML` (`applyMap`, była linia 6036). Pokrywa `ver`/`rev`/`state.filename` i przyszłe składowe.
+- Testy (harness na verbatim bloku z pliku): T1/T2 payloady `<img onerror>`/`<svg onload>` escapowane; T3 benign output bitowo identyczny z baseline (zero regresji wizualnej); T4 `& < >` escapowane; `node --check` obu bloków script OK.
+- Poza scope'm (świadomie): `.title` (property — bezpieczne), cudzysłowy (krok 2/A21).
+- Baseline następnego kroku: commit `6ebd3d0`, md5 pliku liczony na starcie kroku 2.
