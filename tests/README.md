@@ -7,7 +7,7 @@ Harnessy Node.js dla krytycznych ścieżek `arkmap_studio.html`. Powstały przy 
 
 - Node.js (bez zależności npm)
 - repo sklonowane z historią git (snapshoty różnicowe pobierane przez `git show <hash>`)
-- fixture `map_master3.dat` w katalogu głównym repo (tylko dla `a7_readbuffer.js`):
+- fixture `map_master3.dat` w katalogu głównym repo (dla `a7_readbuffer.js` i `dir_filter.js`):
   ```bash
   bash tests/fetch-fixture.sh
   ```
@@ -21,6 +21,7 @@ node tests/a12a14_undo_core.js    # undo: guard ADD_EXIT + prevExit, undo ADD_RO
 node tests/a13_delete_area.js     # undo DELETE_AREA: puste kontenery nagrywane i odtwarzane
 node tests/a7_readbuffer.js       # ReadBuffer: kontrolowany błąd zamiast RangeError (wymaga fixture)
 node tests/a9_pixmap.js           # readQPixMap: parsowanie chunków PNG zamiast skanowania IEND
+node tests/dir_filter.js        # planer: filtr kierunków kardynalne/+pionowe/wszystkie (wymaga fixture)
 ```
 
 albo wszystkie naraz:
