@@ -2,6 +2,13 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.5.33 — dialog „O programie": linki projektowe + czyszczenie opisów
+
+- **Nowe linki** (po „ArkMap Studio"): Standalone Tools — kalendarze Ishtar/Imperium i denominacja monet; Klient Dargoth plugins — kalendarze Ishtar/Imperium, Truwer; Oficjalny klient WWW — kalendarze Ishtar/Imperium; Oficjalny klient WWW — Truwer.
+- **Czyszczenie opisów:** usunięte dopiski „(Delwing)" ×3 i „na GitHub" ×1 — docelowy serwis widać po kliknięciu.
+- Czysty markup (4 bloki `<a class="about-link">`), JS/CSS nietknięte. Testy: regresja **306 OK / 0 FAIL**.
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.5.32 — atrybucja, dokumentacja, CHANGELOG.md, hardening Actions
 
 - **Atrybucja:** ujednolicona na wyłącznie „Isithunzi" — sidebar (lewy górny róg), dialog „O programie" (linia autora, copyright, „o autorach" → „o autorze"), stopki manuala i specyfikacji.
