@@ -1610,12 +1610,12 @@
   .ctx-sep { height: 1px; background: var(--border); margin: 3px 0; }
   /* Dwuklik na pokoju transportowym — wybór sąsiedniego przystanku */
   #tp-jump-chooser { position: fixed; background: var(--panel); border: 1px solid var(--border);
-    border-radius: 4px; min-width: 200px; max-width: 320px; z-index: 9500;
+    border-radius: 4px; width: max-content; min-width: 200px; max-width: calc(100vw - 16px);
+    overflow-x: auto; z-index: 9500;
     box-shadow: 0 4px 20px rgba(0,0,0,.7); font-size: 12px; padding: 4px 0; }
   #tp-jump-chooser .tp-jump-title { padding: 4px 14px 5px; font-size: 10px; color: var(--dim);
     text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border); margin-bottom: 3px; }
-  .tp-jump-item { padding: 6px 14px; color: var(--fg); cursor: pointer; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis; }
+  .tp-jump-item { padding: 6px 14px; color: var(--fg); cursor: pointer; white-space: nowrap; }
   .tp-jump-item:hover { background: #1a2035; color: var(--text); }
   .tp-jump-item .tp-jump-line { color: var(--dim); font-size: 10px; }
   /* ─── LABEL EDITING ────────────────────────────────────────────────────── */
@@ -12248,7 +12248,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.30';
+const APP_VERSION = 'v1.5.31';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
