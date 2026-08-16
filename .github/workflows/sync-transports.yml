@@ -1,0 +1,65 @@
+# Dzienny sync definicji transportów (statki/dyliżanse) z Delwing/arkadia-web-client-extension.
+# - Ten sam SHA upstreama co w bloku TRANSPORT-DATA ⇒ cisza, zero commitów.
+# - Generator (tools/sync-transports.mjs) waliduje schemat: błąd ⇒ workflow czerwony, nic nie ląduje w main.
+# - Zmiana tylko danych ⇒ bez bumpa APP_VERSION.
+name: Sync transportów
+
+on:
+  schedule:
+    - cron: '17 4 * * *'   # codziennie 04:17 UTC
+  workflow_dispatch:        # ręczne odpalenie z zakładki Actions
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: "Pobierz upstream (sparse: tylko definicje transportów)"
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --filter=blob:none --sparse \
+            https://github.com/Delwing/arkadia-web-client-extension upstream
+          cd upstream
+          git sparse-checkout set src/client/scripts/ships src/client/scripts/other
+          git rev-parse HEAD > UPSTREAM_SHA
+          mv src/client/scripts/ships src/client/scripts/other "$GITHUB_WORKSPACE/"
+          mv UPSTREAM_SHA "$GITHUB_WORKSPACE/"
+          cd "$GITHUB_WORKSPACE"
+          rm -rf upstream
+          echo "Upstream SHA: $(cat UPSTREAM_SHA)"
+
+      - name: Short-circuit — ten sam SHA = cisza
+        id: gate
+        run: |
+          set -euo pipefail
+          UP=$(cat UPSTREAM_SHA)
+          CUR=$(grep -oP '(?<=// Upstream: )[0-9a-f]{40}' arkmap_studio.html || echo "brak")
+          echo "obecny=$CUR nowy=$UP"
+          if [ "$CUR" = "$UP" ]; then echo "changed=false" >> "$GITHUB_OUTPUT"; else echo "changed=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Generuj blok (z walidacją schematu)
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p transport-src
+          mv ships other UPSTREAM_SHA transport-src/
+          node tools/sync-transports.mjs transport-src arkmap_studio.html
+
+      - name: Commit i push, jeśli jest diff
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then echo "generator: bez zmian — cisza"; exit 0; fi
+          SHORT=$(cut -c1-7 transport-src/UPSTREAM_SHA)
+          LINES=$(grep -oP '(?<=linii: )\d+' arkmap_studio.html | head -1)
+          STOPS=$(grep -oP '(?<=przystanków: )\d+' arkmap_studio.html | head -1)
+          git config user.name "Isithunzi000"
+          git config user.email "isithunzi000@users.noreply.github.com"
+          git add arkmap_studio.html
+          git commit -m "Transporty: sync z upstream @${SHORT} (${LINES} linii, ${STOPS} przystanków)"
+          git push origin HEAD:main
