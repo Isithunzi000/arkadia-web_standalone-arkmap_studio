@@ -310,6 +310,15 @@
 <tr><td><strong>A*</strong></td><td>Zoptymalizowana wersja z heurystyką — szybszy przy dużych mapach, identyczny wynik. Automatycznie przełącza się na Dijkstrę dla tras cross-area (różne układy współrzędnych).</td></tr>
 </table>
 
+<h3>Filtr kierunków</h3>
+<table>
+<tr><th>Tryb</th><th>Opis</th></tr>
+<tr><td><strong>Kardynalne</strong></td><td>Tylko kierunki poziome (n, ne, e, se, s, sw, w, nw) — trasy „po drogach", bez schodów i wyjść specjalnych</td></tr>
+<tr><td><strong>+ Pionowe</strong></td><td>Kardynalne + up, down, in, out — bez wyjść specjalnych (wspinaczki, przeciskania itp.)</td></tr>
+<tr><td><strong>Wszystkie</strong> (domyślnie)</td><td>Wszystkie kierunki + wyjścia specjalne — najkrótsza możliwa trasa</td></tr>
+</table>
+<p>Filtr działa na oba algorytmy. Przy ograniczonych trybach trasa może być dłuższa lub nie istnieć („brak trasy"), jeśli jedynym połączeniem jest wyjście specjalne.</p>
+
 <div class="note"><strong>Pathfinding uwzględnia:</strong> wagi pokojów (<code>weight</code>), wagi wyjść (<code>exit_weights</code>), wyjścia specjalne z wagami. Pokoje z flagą <code>locked</code> są pomijane (nie można przez nie przejść, ale można do nich dotrzeć jako cel). Zablokowane wyjścia (<code>exit_locks</code>, <code>special_exit_locks</code>) są ignorowane. Drzwi (<code>doors</code>) nie blokują pathfindingu.</div>
 
 <h3>Prędkość</h3>

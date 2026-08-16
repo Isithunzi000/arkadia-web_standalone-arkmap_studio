@@ -2780,6 +2780,14 @@
           <button class="wp-algo-btn" data-algo="astar">A*</button>
         </div>
       </div>
+      <div id="wp-dirfilter">
+        <label>Kierunki</label>
+        <div class="wp-algo-btns">
+          <button class="wp-algo-btn wp-dir-btn" data-dir="cardinal">Kardynalne</button>
+          <button class="wp-algo-btn wp-dir-btn" data-dir="vertical">+ Pionowe</button>
+          <button class="wp-algo-btn wp-dir-btn wp-algo-on" data-dir="all">Wszystkie</button>
+        </div>
+      </div>
       <div id="wp-route-code">
         <label>Kod trasy</label>
         <input id="wp-route-code-input" type="text" readonly placeholder="(brak trasy)">
@@ -9066,6 +9074,7 @@ const wpState = {
   visible:    false,
   planning:   false,   // tryb planowania: klik na mapie dodaje WP
   algorithm:  'dijkstra', // 'dijkstra' | 'astar'
+  dirMode:    'all',      // 'cardinal' | 'vertical' | 'all' — filtr kierunków w pathfindingu
 };
 let _wpSearchTimer = 0;  // DS 2.13: debounce dla waypoint search
 
@@ -9113,6 +9122,19 @@ function _edgeWeight(room, dir, neighborRoom) {
   return Math.max(neighborRoom.weight ?? 1, 1);
 }
 
+// Filtr kierunków planera (wpState.dirMode):
+// wyjście specjalne (klucz z special_exits, też gdy nazwany jak kierunek np. "northwest") → tylko tryb 'all';
+// zwykłe idx 1–8 (n…nw) → wszystkie tryby; idx 9–12 (up/down/in/out) → 'vertical' i 'all'.
+function _dirAllowed(dir, room) {
+  if (room.special_exits && Object.prototype.hasOwnProperty.call(room.special_exits, dir)) {
+    return wpState.dirMode === 'all';
+  }
+  const d = DIR_BY_SHORT[dir];
+  if (!d) return wpState.dirMode === 'all'; // nieznany klucz — nie powinno się zdarzyć; bezpiecznie: tylko 'all'
+  if (d.idx <= 8) return true;
+  return wpState.dirMode !== 'cardinal';
+}
+
 // Dijkstra: najkrótsza ścieżka uwzględniająca wagi pokojów i wyjść
 function dijkstraPath(fromId, toId) {
   if (fromId === toId) return [fromId];
@@ -9139,6 +9161,7 @@ function dijkstraPath(fromId, toId) {
     for (const [dir, nid] of Object.entries(allExits).sort((a, b) => a[1] - b[1])) {
       if (!nid || visited.has(nid)) continue;
       if (exitLockSet.has(dir) || specLockSet.has(dir)) continue; // locked exit — pathfinder skips
+      if (!_dirAllowed(dir, room)) continue; // filtr kierunków planera (wpState.dirMode)
       const nbr = state.roomById[nid];
       if (!nbr) continue;
       const newCost = cost + _edgeWeight(room, dir, nbr);
@@ -9221,6 +9244,7 @@ function astarPath(fromId, toId) {
     for (const [dir, nid] of Object.entries(allExits).sort((a, b) => a[1] - b[1])) {
       if (!nid || visited.has(nid)) continue;
       if (exitLockSet.has(dir) || specLockSet.has(dir)) continue; // locked exit — pathfinder skips
+      if (!_dirAllowed(dir, room)) continue; // filtr kierunków planera (wpState.dirMode)
       const nbr = state.roomById[nid];
       if (!nbr) continue;
       const newG = gCur + _edgeWeight(room, dir, nbr);
@@ -10065,7 +10089,7 @@ document.getElementById('wp-import-confirm').addEventListener('click', () => {
   // Ustaw algorytm zakodowany w trasie
   if (res.algorithm) {
     wpState.algorithm = res.algorithm;
-    document.querySelectorAll('.wp-algo-btn').forEach(b =>
+    document.querySelectorAll('.wp-algo-btn:not(.wp-dir-btn)').forEach(b =>
       b.classList.toggle('wp-algo-on', b.dataset.algo === res.algorithm));
   }
 
@@ -10113,13 +10137,28 @@ document.getElementById('wp-import-textarea').addEventListener('keydown', functi
 });
 
 // Algorytm pathfindingu
-document.querySelectorAll('.wp-algo-btn').forEach(btn => {
+document.querySelectorAll('.wp-algo-btn:not(.wp-dir-btn)').forEach(btn => {
   btn.addEventListener('click', () => {
     const algo = btn.dataset.algo;
     if (wpState.algorithm === algo) return;
     wpState.algorithm = algo;
-    document.querySelectorAll('.wp-algo-btn').forEach(b =>
+    document.querySelectorAll('.wp-algo-btn:not(.wp-dir-btn)').forEach(b =>
       b.classList.toggle('wp-algo-on', b.dataset.algo === algo));
+    wpRecalcPaths();
+    wpRebuildList();
+    wpUpdateSummary();
+    draw();
+  });
+});
+
+// Filtr kierunków planera (kardynalne / +pionowe / wszystkie)
+document.querySelectorAll('.wp-dir-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const mode = btn.dataset.dir;
+    if (wpState.dirMode === mode) return;
+    wpState.dirMode = mode;
+    document.querySelectorAll('.wp-dir-btn').forEach(b =>
+      b.classList.toggle('wp-algo-on', b.dataset.dir === mode));
     wpRecalcPaths();
     wpRebuildList();
     wpUpdateSummary();
@@ -11922,7 +11961,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.26';
+const APP_VERSION = 'v1.5.27';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
