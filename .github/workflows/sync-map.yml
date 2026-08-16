@@ -1,0 +1,129 @@
+name: sync-map
+# Codzienna synchronizacja mapy z Delwing/arkadia-mapa (master) do gałęzi `mapa`.
+# Brama na SHA: ten sam commit upstream = cisza (zero commitów). Nowy commit =
+# pobranie map_master3.dat, konwersja do .arkmap (tools/dat2arkmap.mjs), publikacja
+# na gałęzi `mapa` (max 2 snapshoty: bieżący + poprzedni, force-push jednym commitem).
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-map
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: SHA upstreama i brama (cisza gdy bez zmian)
+        id: gate
+        run: |
+          set -euo pipefail
+          SHA=$(git ls-remote https://github.com/Delwing/arkadia-mapa.git refs/heads/master | cut -f1)
+          test -n "$SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          OLD=""
+          if git fetch -q --depth=1 origin mapa 2>/dev/null; then
+            OLD=$(git show FETCH_HEAD:index.json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).revision??'')}catch{console.log('')}})" || true)
+          fi
+          echo "old=$OLD" >> "$GITHUB_OUTPUT"
+          if [ "$OLD" = "$SHA" ]; then
+            echo "bez zmian upstream ($SHA) — koniec"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "zmiana upstream: $OLD → $SHA"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pobranie map_master3.dat (przypięte do SHA)
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          curl -sfL --retry 3 -o map_master3.dat \
+            "https://raw.githubusercontent.com/Delwing/arkadia-mapa/${{ steps.gate.outputs.sha }}/map_master3.dat"
+          echo "pobrano $(stat -c%s map_master3.dat) B"
+
+      - name: Wersja (tag release wskazujący na ten commit, jeśli jest)
+        if: steps.gate.outputs.changed == 'true'
+        id: ver
+        run: |
+          set -euo pipefail
+          VER=$(git ls-remote --tags https://github.com/Delwing/arkadia-mapa.git \
+                | grep "${{ steps.gate.outputs.sha }}" \
+                | grep -oE 'refs/tags/[0-9][0-9.]*' | sed 's|refs/tags/||' \
+                | sort -V | tail -1 || true)
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "wersja: ${VER:-brak tagu — master}"
+
+      - name: Konwersja do .arkmap (fail-closed)
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          ARGS=(--revision "${{ steps.gate.outputs.sha }}")
+          if [ -n "${{ steps.ver.outputs.version }}" ]; then
+            ARGS+=(--version "${{ steps.ver.outputs.version }}")
+          fi
+          node tools/dat2arkmap.mjs map_master3.dat map_master3.arkmap "${ARGS[@]}"
+
+      - name: index.json
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs = require("fs");
+            const idx = {
+              version: process.argv[1] || null,
+              revision: process.argv[2],
+              synced_at: new Date().toISOString(),
+              dat_size: fs.statSync("map_master3.dat").size,
+              arkmap_size: fs.statSync("map_master3.arkmap").size,
+            };
+            fs.writeFileSync("index.json", JSON.stringify(idx, null, 1) + "\n");
+            console.log(JSON.stringify(idx));
+          ' "${{ steps.ver.outputs.version }}" "${{ steps.gate.outputs.sha }}"
+
+      - name: Publikacja na gałęzi mapa (max 2 snapshoty, force-push)
+        if: steps.gate.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PUB=$(mktemp -d)
+          cp map_master3.dat map_master3.arkmap index.json "$PUB/"
+          # poprzedni snapshot → prev/ (best effort; pierwszy run = brak)
+          if [ -n "${{ steps.gate.outputs.old }}" ]; then
+            mkdir -p "$PUB/prev"
+            for f in map_master3.dat map_master3.arkmap index.json; do
+              git show "FETCH_HEAD:$f" > "$PUB/prev/$f" 2>/dev/null || rm -f "$PUB/prev/$f"
+            done
+          fi
+          cd "$PUB"
+          git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "sync: map_master3 @${{ steps.gate.outputs.sha }}"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push -q --force origin HEAD:refs/heads/mapa
+          rm -rf "$PUB"
+
+      - name: Podsumowanie
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          echo "revision: ${{ steps.gate.outputs.sha }}"
+          echo "version:  ${{ steps.ver.outputs.version }}"
+          echo "dat:      $(stat -c%s map_master3.dat) B"
+          echo "arkmap:   $(stat -c%s map_master3.arkmap) B"
+          echo "raw:      https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/mapa/map_master3.arkmap"

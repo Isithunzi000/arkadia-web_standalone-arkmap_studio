@@ -2,6 +2,15 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.5.35 — codzienny sync mapy do gałęzi `mapa` + walidacja kierunków 1:1 z Delwing
+
+- **Sync mapy (nowy workflow `sync-map.yml`):** cron 05:17 UTC + ręczny dispatch. Brama na SHA mastera Delwing/arkadia-mapa — ten sam commit = cisza (zero commitów). Przy zmianie: pobranie `map_master3.dat` przypięte do SHA, konwersja do `.arkmap` nowym narzędziem `tools/dat2arkmap.mjs` (ekstrakcja verbatim konwertera z `arkmap_studio.html`, zero zależności, wyjście bajtowo jak zapis w edytorze — sortowanie + checksumy + stableStringify, walidacja fail-closed), publikacja na gałęzi `mapa` (max 2 snapshoty: bieżący + `prev/`, force-push jednym commitem) + `index.json` (version/revision/synced_at/rozmiary). Lustro: bez czyszczenia błędów mapy upstream.
+- **UI:** przycisk „Wczytaj mapę online" zastąpiony „🌐 Pobierz mapę online…" — dialog z informacją o synchronizacji (wersja, @commit, data, rozmiary z `index.json`) i wyborem formatu `.arkmap` / `.dat` z gałęzi `mapa` (raw.githubusercontent ma CORS `*`). `.arkmap` idzie ścieżką `loadArkmap` (walidacja + checksumy, jak plik z dysku), `.dat` jest konwertowany na bieżąco ze wtryskiem version/revision z index.json. Kopia niegotowa → komunikat i zablokowane przyciski. Dirty-guardy bez zmian.
+- **Walidacja kierunków 1:1 z Delwing:** alias `gore→up`; `team_follow_link` dzielone na pierwszym `*` (walidator i panel Skrypty); fallback geometryczny `move()`/`findRoomByExit` (MapHelper.ts) — ten sam obszar, osie ściśle (składowa 0 = dokładnie 0), wyjścia specjalne i zwykłe. Flagi tylko dla naprawdę martwych bindów: na fixture 0.205.0 z 32 znalezień zostaje 17 (15 ratuje geometria). Bez warstwy „soft" — to, co działa w kliencie, nie jest zgłaszane.
+- **Testy:** nowe harnessy `tests/sync_map.js` (25 asercji: CLI, złote liczby fixture, wtrysk version/revision, lustro user_data, determinizm, walidacja wyjścia, fail-closed) i `tests/dir_validation.js` (21 asercji: 32 złote przypadki z fixture + jednostkowe: gore, pierwszy *, ścisłe osie, cross-area, in/out, stuby, wiszące cele). Regresja: **352 OK / 0 FAIL** (11 harnessów).
+- **Znana uwaga:** bajtowy roundtrip `.dat→.arkmap→.dat` dla pliku upstream NIE jest identyczny (kolejność QSet/QHash w plikach Mudleta); treściowo bezstratny (kanonicznie równy po posortowaniu list stubów/locków). Byte-identyczność z manuala dotyczy plików zapisywanych przez ArkMap.
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.5.34 — dialog „O programie": usunięte 3 linki
 
 - Usunięte linki: „Mapa online" (przeglądarka mapy), „arkadia-mapa" (dane mapy), „mudlet-map-reader" (plugin Mudlet) — wszystkie trzy prowadziły do zasobów projektu arkadia-mapa.

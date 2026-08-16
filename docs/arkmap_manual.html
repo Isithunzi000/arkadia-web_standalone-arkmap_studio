@@ -75,7 +75,7 @@
 <button id="top-btn" onclick="window.scrollTo({top:0})" title="Do góry">↑</button>
 
 <h1>ARKMAP <span>STUDIO</span></h1>
-<div class="subtitle">Dokumentacja użytkownika · wersja edytora 1.5.32 · Isithunzi · 2026</div>
+<div class="subtitle">Dokumentacja użytkownika · wersja edytora 1.5.35 · Isithunzi · 2026</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <div class="toc">
@@ -127,7 +127,7 @@
 
 <ol>
   <li>Otwórz plik <code>arkmap_studio.html</code> w przeglądarce (Chrome, Firefox, Edge)</li>
-  <li>Kliknij <strong>🌐 Wczytaj mapę online…</strong> aby pobrać aktualną mapę Arkadii z GitHuba, <em>lub</em> upuść plik <code>.arkmap</code> / <code>.dat</code> na strefę drop w sidebarze</li>
+  <li>Kliknij <strong>🌐 Pobierz mapę online…</strong> aby pobrać mapę Arkadii z synchronizowanej kopii na GitHubie (format .arkmap lub .dat do wyboru), <em>lub</em> upuść plik <code>.arkmap</code> / <code>.dat</code> na strefę drop w sidebarze</li>
   <li>Wybierz obszar z listy po lewej stronie — mapa się wyświetli</li>
   <li>Nawiguj: przeciągaj mapę myszą, scrolluj aby zoomować, klikaj pokoje aby zobaczyć szczegóły</li>
   <li>Naciśnij <kbd>Ctrl+E</kbd> aby włączyć tryb edycji</li>
@@ -165,8 +165,8 @@
   <li><strong>Wczytaj Mudlet .dat</strong> — otwiera okno wyboru pliku dla binarnego formatu Mudlet</li>
 </ul>
 
-<h3>Metoda 3: Wczytaj mapę online</h3>
-<p>Przycisk <strong>🌐 Wczytaj mapę online…</strong> pobiera aktualną wersję mapy z repozytorium <code>Delwing/arkadia-mapa</code> na GitHubie. Wymaga połączenia z internetem. Przed pobraniem wyświetlany jest dialog potwierdzenia z informacją o źródle i rozmiarze pliku.</p>
+<h3>Metoda 3: Pobierz mapę online</h3>
+<p>Przycisk <strong>🌐 Pobierz mapę online…</strong> pobiera mapę z gałęzi <code>mapa</code> tego repozytorium — codziennie synchronizowane <strong>lustro</strong> (wierna kopia, bez poprawek) mapy z <code>Delwing/arkadia-mapa</code>. Wymaga połączenia z internetem. Dialog pokazuje wersję mapy, skrót commita upstream, datę synchronizacji i rozmiary, a następnie pozwala wybrać format: <strong>.arkmap</strong> (gotowy do wczytania) albo <strong>.dat</strong> (konwertowany na bieżąco). Jeśli kopia nie jest jeszcze gotowa (np. przed pierwszą synchronizacją), dialog pokaże stosowny komunikat, a przyciski formatów będą zablokowane.</p>
 
 <div class="note">Przy wczytywaniu pliku .arkmap uruchamiana jest <strong>walidacja</strong> (sprawdzenie struktury JSON) i <strong>weryfikacja checksumów CRC-32</strong>. Jeśli wykryte zostaną problemy, zobaczysz dialog z listą błędów (czerwone) i/lub ostrzeżeń (żółte — np. kolizje nazw wyjść specjalnych z kierunkami) z wyborem: „Załaduj mimo to" lub „Anuluj".</div>
 
@@ -630,6 +630,7 @@
   <li><strong>Puste bindy <code>dir_bind</code></strong> — wpis ma kierunek, ale <strong>brak komendy</strong> po znaku <code>=</code>.</li>
 </ul>
 <p>Walidacja jest <strong>read-only</strong> — niczego nie zmienia w mapie, jedynie raportuje. Lista jest deterministyczna (sortowana wg nazwy obszaru, potem ID pokoju).</p>
+<p>Rozstrzyganie kierunków jest <strong>1:1 z klientem arkadia-web (Delwing)</strong>: kierunek z <code>team_follow_link</code> jest żywy, gdy pasuje do niego klucz wyjścia (zwykłego lub specjalnego) <em>albo</em> gdy któreś wyjście prowadzi geometrycznie w tę stronę — ten sam obszar i ścisła zgodność osi (jak <code>findRoomByExit</code> w MapHelper.ts). Flagi dostają więc wyłącznie naprawdę martwe bindy — to, co działa w kliencie, nie jest zgłaszane. Rozpoznawany jest też alias <code>gore → up</code>, a wpisy <code>team_follow_link</code> dzielone są na pierwszym <code>*</code> (jak u Delwinga).</p>
 
 <h3>Akceptacje</h3>
 <p>Część rozjazdów bywa <strong>celowa</strong>. Taki problem możesz <strong>uznać za OK</strong> (zaakceptować) — zniknie z listy otwartych. Akceptacje przechowywane są w jednym z dwóch źródeł, wybieranym w panelu (pole „Akceptacje w:"):</p>
@@ -701,7 +702,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="github">21. Integracja z GitHub <span class="badge badge-edit">EDYTOR</span></h2>
 
-<div class="warn"><strong>Status: funkcja ukryta i nieaktywna.</strong> Interfejs sesji GitHub jest obecnie wyłączony — edytor działa <strong>wyłącznie lokalnie</strong> (tryb „Edycja lokalna"). Poniższy opis dotyczy mechanizmu wbudowanego w aplikację, który pozostaje schowany do czasu ewentualnej aktywacji. (Samo <em>wczytanie</em> mapy online — przycisk „🌐 Wczytaj mapę online…" — działa niezależnie i jest dostępne.)</div>
+<div class="warn"><strong>Status: funkcja ukryta i nieaktywna.</strong> Interfejs sesji GitHub jest obecnie wyłączony — edytor działa <strong>wyłącznie lokalnie</strong> (tryb „Edycja lokalna"). Poniższy opis dotyczy mechanizmu wbudowanego w aplikację, który pozostaje schowany do czasu ewentualnej aktywacji. (Samo <em>pobranie</em> mapy online — przycisk „🌐 Pobierz mapę online…" — działa niezależnie i jest dostępne.)</div>
 
 <p>ArkMap Studio ma wbudowaną (lecz aktualnie ukrytą) integrację z repozytorium <strong>Delwing/arkadia-mapa</strong> na GitHubie. Po aktywacji sesja GitHub pozwoliłaby:</p>
 <ul>
