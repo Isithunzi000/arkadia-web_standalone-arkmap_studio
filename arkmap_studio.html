@@ -4566,13 +4566,20 @@ class ReadBuffer {
     this.view = new DataView(this.buf);
     this.pos  = 0;
   }
-  readInt8()   { return this.view.getInt8(this.pos++); }
-  readUInt8()  { return this.view.getUint8(this.pos++); }
-  readUInt16() { const v = this.view.getUint16(this.pos, false); this.pos += 2; return v; }
-  readInt32()  { const v = this.view.getInt32(this.pos, false);  this.pos += 4; return v; }
-  readUInt32() { const v = this.view.getUint32(this.pos, false); this.pos += 4; return v; }
-  readDouble() { const v = this.view.getFloat64(this.pos, false); this.pos += 8; return v; }
-  readBytes(n) { const b = new Uint8Array(this.buf, this.pos, n); this.pos += n; return b; }
+  // audyt A7: bounds-check przed każdym odczytem — kontrolowany błąd formatu zamiast surowego
+  // RangeError (trafia do toastu przez catch w loadDat); pos zostaje nienaruszony przy rzuceniu
+  _need(n) {
+    if (n < 0 || n > this.remaining()) {
+      throw new Error(`Uszkodzony lub obcięty plik .dat: odczyt ${n} B na pozycji ${this.pos}, plik ma ${this.buf.byteLength} B`);
+    }
+  }
+  readInt8()   { this._need(1); const v = this.view.getInt8(this.pos);           this.pos += 1; return v; }
+  readUInt8()  { this._need(1); const v = this.view.getUint8(this.pos);          this.pos += 1; return v; }
+  readUInt16() { this._need(2); const v = this.view.getUint16(this.pos, false);  this.pos += 2; return v; }
+  readInt32()  { this._need(4); const v = this.view.getInt32(this.pos, false);   this.pos += 4; return v; }
+  readUInt32() { this._need(4); const v = this.view.getUint32(this.pos, false);  this.pos += 4; return v; }
+  readDouble() { this._need(8); const v = this.view.getFloat64(this.pos, false); this.pos += 8; return v; }
+  readBytes(n) { this._need(n); const b = new Uint8Array(this.buf, this.pos, n); this.pos += n; return b; }
   remaining()  { return this.buf.byteLength - this.pos; }
 }
 
@@ -11914,7 +11921,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.24';
+const APP_VERSION = 'v1.5.25';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
