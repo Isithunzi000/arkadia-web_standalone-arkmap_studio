@@ -8361,9 +8361,12 @@ function showTransportJumpChooser(cands, sx, sy) {
     item.innerHTML = '';
     item.appendChild(document.createTextNode(primaries[ci] + ' '));
     if (primaryCount.get(primaries[ci]) > 1) {
+      // v1.5.38: duplikat na TEJ SAMEJ linii (dwa doki Blaviken) — nazwa linii nic
+      // nie rozstrzyga, dokładamy kierunek dalszej jazdy zamiast niej.
+      const sameLineDup = cands.some((c2, ci2) => ci2 !== ci && primaries[ci2] === primaries[ci] && c2.lineName === c.lineName);
       const line = document.createElement('span');
       line.className = 'tp-jump-line';
-      line.textContent = '— ' + c.lineName;
+      line.textContent = (sameLineDup && c.nextLabel) ? '— kierunek: ' + c.nextLabel : '— ' + c.lineName;
       item.appendChild(line);
     }
     item.addEventListener('click', () => {
@@ -9344,17 +9347,36 @@ function _collectPathHops(path) {
 function _transportNeighbors(roomId) {
   // v1.5.37: dedup po stopId preferuje kandydata z etykietą (leg[3]) — dotychczas
   // wygrywał pierwszy trafiony leg, więc etykieta ginęła, gdy był to leg odwrotny.
+  // v1.5.38: etykieta przystanku = etykieta legu, którego ten przystanek jest CELEM.
+  // Kandydaci z legów odwrotnych (pętle statkowe, np. Ard Skellig-Faroe-Rozrog)
+  // dostają nazwę z tej mapy zamiast fallbacku na nazwę/numer pokoju.
+  const stopLabel = new Map();
+  for (const def of TRANSPORT_DEFS)
+    for (const leg of def[3])
+      if (leg[3] && !stopLabel.has(leg[1])) stopLabel.set(leg[1], leg[3]);
   const out = [], byId = new Map();
   for (const def of TRANSPORT_DEFS) {
     const lineName = def[0], stops = def[3];
     for (const leg of stops) {
+      // nextLabel: dokąd transport jedzie/płynie DALEJ z przystanku kandydata —
+      // rozróżnia przystanki o tej samej nazwie na tej samej linii (dwa doki
+      // Blaviken: jeden płynie do Novigradu, drugi do Daevon).
       let cand = null;
-      if (leg[0] === roomId) cand = { stopId: leg[1], lineName, label: leg[3] || null };
-      else if (leg[1] === roomId) cand = { stopId: leg[0], lineName, label: null };
+      if (leg[0] === roomId) {
+        cand = { stopId: leg[1], lineName, label: leg[3] || null, nextLabel: null };
+        const cont = stops.find(l2 => l2[0] === cand.stopId);
+        if (cont) cand.nextLabel = cont[3] || stopLabel.get(cont[1]) || null;
+      } else if (leg[1] === roomId) {
+        cand = { stopId: leg[0], lineName, label: stopLabel.get(leg[0]) || null,
+                 nextLabel: leg[3] || stopLabel.get(leg[1]) || null }; // transport z leg[0] zmierza do roomId
+      }
       if (!cand || !state.roomById[cand.stopId]) continue;
       const prev = byId.get(cand.stopId);
       if (!prev) { byId.set(cand.stopId, cand); out.push(cand); }
-      else if (cand.label && !prev.label) prev.label = cand.label;
+      else {
+        if (cand.label && !prev.label) prev.label = cand.label;
+        if (cand.nextLabel && !prev.nextLabel) prev.nextLabel = cand.nextLabel;
+      }
     }
   }
   return out;
@@ -12311,7 +12333,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.37';
+const APP_VERSION = 'v1.5.38';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
