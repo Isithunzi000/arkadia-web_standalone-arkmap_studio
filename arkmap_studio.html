@@ -181,12 +181,14 @@
   /* Online load confirm */
   #ol-confirm-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:9999; align-items:center; justify-content:center; backdrop-filter:blur(3px); }
   #ol-confirm-bg.visible { display:flex; }
-  #ol-confirm { background:var(--panel); border:1px solid var(--border); border-radius:8px; width:380px; max-width:90vw; box-shadow:0 16px 64px rgba(0,0,0,.85); overflow:hidden; }
+  #ol-confirm { background:var(--panel); border:1px solid var(--border); border-radius:8px; width:420px; max-width:92vw; box-shadow:0 16px 64px rgba(0,0,0,.85); overflow:hidden; }
   #ol-confirm-header { padding:12px 16px 10px; border-bottom:1px solid var(--border); }
   #ol-confirm-title { font-size:12px; color:var(--accent); letter-spacing:0.5px; }
   #ol-confirm-body { padding:14px 16px; }
   #ol-confirm-desc { font-size: 11px; color:var(--dim); line-height:1.6; }
-  #ol-confirm-desc .ol-src { font-family:var(--font); }
+  #ol-confirm-desc .ol-src { font-family:var(--font); white-space:nowrap; }
+  #ol-sync-info { font-size:11px; color:var(--dim); margin-top:8px; min-height:15px; display:flex; flex-wrap:wrap; column-gap:10px; row-gap:2px; }
+  #ol-sync-info span { white-space:nowrap; }
   #ol-confirm-progress { font-size: 11px; color:var(--dim); text-align:center; min-height:16px; margin-top:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #ol-confirm-footer { padding:10px 16px 12px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end; align-items:center; }
   #btn-load-online { width:100%; text-align:left; margin-top:8px; border-color:var(--accent); color:var(--accent); font-size: 12px; padding:6px 8px; }
@@ -1909,8 +1911,8 @@
       </div>
       <div id="ol-confirm-body">
         <div id="ol-confirm-desc">
-          Synchronizowana kopia mapy Arkadii (<span class="ol-src">Delwing/arkadia-mapa</span>) —<br>
-          lustro bez poprawek, odświeżane codziennie.
+          Synchronizowana kopia mapy Arkadii (<span class="ol-src">Delwing/arkadia-mapa</span>)
+          — lustro bez poprawek, odświeżane codziennie.
         </div>
         <div id="ol-sync-info"></div>
         <div id="ol-confirm-progress"></div>
@@ -9081,10 +9083,12 @@ async function openOnlineConfirm() {
     if (!olIndex || typeof olIndex.revision !== 'string') throw new Error('niepoprawny index.json');
     const ver  = olIndex.version ? 'v' + olIndex.version : 'master';
     const rev  = olIndex.revision.slice(0, 7);
-    const when = olIndex.synced_at ? new Date(olIndex.synced_at).toLocaleString('pl-PL') : '?';
+    // v1.5.39: 3 segmenty nowrap — linia łamie się wyłącznie między nimi; data bez sekund
+    const when = olIndex.synced_at
+      ? new Date(olIndex.synced_at).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' }) : '?';
     const sz   = Number.isFinite(olIndex.arkmap_size) && Number.isFinite(olIndex.dat_size)
-      ? ` · .arkmap ${(olIndex.arkmap_size/1024/1024).toFixed(1)} MB · .dat ${(olIndex.dat_size/1024/1024).toFixed(1)} MB` : '';
-    olSyncInfo.innerHTML = `mapa <strong>${ver}</strong> · <strong>@${rev}</strong> · sync ${when}${sz}`;
+      ? `<span>.arkmap ${(olIndex.arkmap_size/1024/1024).toFixed(1)} MB · .dat ${(olIndex.dat_size/1024/1024).toFixed(1)} MB</span>` : '';
+    olSyncInfo.innerHTML = `<span>mapa <strong>${ver}</strong> · <strong>@${rev}</strong></span><span>sync ${when}</span>${sz}`;
   } catch(e) {
     olIndex = null;
     olSyncInfo.textContent = e.name === 'AbortError'
@@ -12333,7 +12337,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.38';
+const APP_VERSION = 'v1.5.39';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)

@@ -26,4 +26,4 @@ Harnessy regresyjne Node.js w katalogu [`tests/`](tests/) — szczegóły w [tes
 
 ## Licencja
 
-[MIT](LICENSE)
+[MIT](LICENSE) · atrybucje zasobów zewnętrznych: [NOTICE](NOTICE.md)
