@@ -265,7 +265,7 @@
 <tr><td>Oryginalne pixmapy</td><td>ON</td><td>Etykiety jako obrazki (pixmap) z pliku Mudlet — pokazywane gdy „Etykiety Mudleta" są wyłączone</td></tr>
 </table>
 
-<div class="note">Wszystkie ustawienia są zapamiętywane w localStorage przeglądarki. Przycisk <strong>↺ Przywróć ustawienia domyślne</strong> na dole panelu resetuje pozycje i rozmiary okien, ustawienia wyświetlania, preferencje edytora — czyści cały localStorage ArkMap.</div>
+<div class="note">Wszystkie ustawienia są zapamiętywane w localStorage przeglądarki. Przycisk <strong>↺ Przywróć ustawienia domyślne</strong> na dole panelu resetuje pozycje i rozmiary okien, ustawienia wyświetlania, preferencje edytora oraz przełączniki planera (algorytm, filtr kierunków, transporty, prędkość) — czyści cały localStorage ArkMap.</div>
 
 <h3>Sekcja Edytor</h3>
 <p>Ustawienia związane z trybem edycji, w tym domyślny czas locka dla sesji GitHub (obecnie nieaktywne — wymaga akceptacji Delwinga).</p>
@@ -326,7 +326,8 @@
 <tr><td><strong>Normalny</strong></td><td>Kara 30, czas × 0.5 — transport wybierany, gdy wyraźnie się opłaca</td></tr>
 <tr><td><strong>Agresywny</strong></td><td>Kara 10, czas × 0.1 — planer chętnie sadza na statek/dyliżans</td></tr>
 </table>
-<p>Przejazd rysowany jest na mapie <strong>niebieską linią przerywaną</strong>, a przy odcinku i w podsumowaniu widać liczbę przesiadek 🚢 i łączny czas transportów. Z włączonymi transportami działa wyłącznie algorytm Dijkstry (jak w kliencie Dargotha — heurystyka A* nie działa poprawnie przy skokach transportowych). Definicje linii pochodzą z projektu <code>Delwing/arkadia-web-client-extension</code> (licencja MIT) i są aktualizowane automatycznie.</p>
+<p>Przejazd rysowany jest w kolorze trasy, ale <strong>kropkowaną linią</strong> (na mapie — tam, gdzie oba przystanki są w bieżącym regionie; w podglądzie trasy — zawsze). Przy odcinku i w podsumowaniu widać liczbę przesiadek 🚢 i łączny czas transportów. Z włączonymi transportami działa wyłącznie algorytm Dijkstry (jak w kliencie Dargotha — heurystyka A* nie działa poprawnie przy skokach transportowych). Definicje linii pochodzą z projektu <code>Delwing/arkadia-web-client-extension</code> (licencja MIT) i są aktualizowane automatycznie.</p>
+<p><strong>Dwuklik na pokoju leżącym na linii transportowej</strong> przenosi widok do sąsiedniego przystanku. Gdy pokój leży w środku trasy (np. A–B–C) albo na kilku liniach, pojawia się lista wyboru przystanku.</p>
 
 <div class="note"><strong>Pathfinding uwzględnia:</strong> wagi pokojów (<code>weight</code>), wagi wyjść (<code>exit_weights</code>), wyjścia specjalne z wagami. Pokoje z flagą <code>locked</code> są pomijane (nie można przez nie przejść, ale można do nich dotrzeć jako cel). Zablokowane wyjścia (<code>exit_locks</code>, <code>special_exit_locks</code>) są ignorowane. Drzwi (<code>doors</code>) nie blokują pathfindingu.</div>
 
