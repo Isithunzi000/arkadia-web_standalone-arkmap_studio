@@ -4352,6 +4352,13 @@ function validate(map) {
         errors.push(err('meta.symbol_font_fudge_factor', 'must be number'));
       if (typeof meta.use_only_map_font !== 'boolean')
         errors.push(err('meta.use_only_map_font', 'must be boolean'));
+      if (meta.room_id_hash !== undefined) {
+        if (typeof meta.room_id_hash !== 'object' || meta.room_id_hash === null || Array.isArray(meta.room_id_hash))
+          errors.push(err('meta.room_id_hash', 'must be an object (contributor → starting room ID)'));
+        else
+          for (const [k, v] of Object.entries(meta.room_id_hash))
+            if (!Number.isInteger(v)) errors.push(err(`meta.room_id_hash.${k}`, 'must be integer'));
+      }
       if (meta.user_data !== undefined)
         validateUserData(meta.user_data, 'meta.user_data', errors);
     }
@@ -5663,6 +5670,7 @@ function datToArkmap(arrayBuffer) {
       symbol_font:              qfont(raw.mapSymbolFont),
       symbol_font_fudge_factor: raw.mapFontFudgeFactor ?? 1.0,
       use_only_map_font:        raw.useOnlyMapFont ?? false,
+      ...(Object.keys(raw.mRoomIdHash || {}).length ? { room_id_hash: raw.mRoomIdHash } : {}),
       ...(raw.mUserData && Object.keys(raw.mUserData).length ? { user_data: raw.mUserData } : {}),
     },
     colors: {
@@ -5852,7 +5860,7 @@ function arkmapToDat(arkmap) {
     mapSymbolFont: toQFont(arkmap.meta?.symbol_font),
     mapFontFudgeFactor: arkmap.meta?.symbol_font_fudge_factor ?? 1.0,
     useOnlyMapFont: arkmap.meta?.use_only_map_font ?? false,
-    areas, mRoomIdHash: {}, labels, rooms,
+    areas, mRoomIdHash: arkmap.meta?.room_id_hash ?? {}, labels, rooms,
   };
 
   return writeMudletDat(dat);
@@ -11903,7 +11911,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.18';
+const APP_VERSION = 'v1.5.19';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
