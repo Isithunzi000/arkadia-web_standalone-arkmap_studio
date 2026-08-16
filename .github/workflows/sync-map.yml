@@ -30,11 +30,11 @@ jobs:
         id: gate
         run: |
           set -euo pipefail
-          SHA=$(git ls-remote https://github.com/Delwing/arkadia-mapa.git refs/heads/master | cut -f1)
+          SHA=$(timeout 90 git ls-remote https://github.com/Delwing/arkadia-mapa.git refs/heads/master | cut -f1)
           test -n "$SHA"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           OLD=""
-          if git fetch -q --depth=1 origin mapa 2>/dev/null; then
+          if timeout 90 git fetch -q --depth=1 origin mapa 2>/dev/null; then
             OLD=$(git show FETCH_HEAD:index.json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).revision??'')}catch{console.log('')}})" || true)
           fi
           echo "old=$OLD" >> "$GITHUB_OUTPUT"
@@ -50,7 +50,7 @@ jobs:
         if: steps.gate.outputs.changed == 'true'
         run: |
           set -euo pipefail
-          curl -sfL --retry 3 -o map_master3.dat \
+          curl -sfL --retry 3 --connect-timeout 30 --max-time 180 -o map_master3.dat \
             "https://raw.githubusercontent.com/Delwing/arkadia-mapa/${{ steps.gate.outputs.sha }}/map_master3.dat"
           echo "pobrano $(stat -c%s map_master3.dat) B"
 
@@ -59,7 +59,7 @@ jobs:
         id: ver
         run: |
           set -euo pipefail
-          VER=$(git ls-remote --tags https://github.com/Delwing/arkadia-mapa.git \
+          VER=$(timeout 90 git ls-remote --tags https://github.com/Delwing/arkadia-mapa.git \
                 | grep "${{ steps.gate.outputs.sha }}" \
                 | grep -oE 'refs/tags/[0-9][0-9.]*' | sed 's|refs/tags/||' \
                 | sort -V | tail -1 || true)
@@ -115,7 +115,7 @@ jobs:
           git add -A
           git commit -q -m "sync: map_master3 @${{ steps.gate.outputs.sha }}"
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git push -q --force origin HEAD:refs/heads/mapa
+          timeout 120 git push -q --force origin HEAD:refs/heads/mapa
           rm -rf "$PUB"
 
       - name: Podsumowanie

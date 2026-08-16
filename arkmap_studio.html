@@ -9040,8 +9040,10 @@ async function openOnlineConfirm() {
   olSetBusy(true);
   olSyncInfo.textContent = 'Sprawdzanie kopii…';
   olConfirmBg.classList.add('visible');
+  const ctrl = new AbortController();                    // v1.5.36: fetch bez domyślnego timeoutu
+  const timer = setTimeout(() => ctrl.abort(), 30000);   // → zawieszony request przerywany po 30 s
   try {
-    const resp = await fetch(MAPA_RAW_URL + 'index.json?_=' + Date.now(), { cache: 'no-cache' });
+    const resp = await fetch(MAPA_RAW_URL + 'index.json?_=' + Date.now(), { cache: 'no-cache', signal: ctrl.signal });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     olIndex = await resp.json();
     if (!olIndex || typeof olIndex.revision !== 'string') throw new Error('niepoprawny index.json');
@@ -9053,8 +9055,12 @@ async function openOnlineConfirm() {
     olSyncInfo.innerHTML = `mapa <strong>${ver}</strong> · <strong>@${rev}</strong> · sync ${when}${sz}`;
   } catch(e) {
     olIndex = null;
-    olSyncInfo.textContent = '⚠ Kopia jeszcze nie gotowa — spróbuj później.';
-  }
+    olSyncInfo.textContent = e.name === 'AbortError'
+      ? '⚠ Serwer nie odpowiada (timeout 30 s) — spróbuj później.'
+      : (e.message && e.message.startsWith('HTTP')
+          ? '⚠ Kopia jeszcze nie gotowa — spróbuj później.'
+          : '⚠ Nie można pobrać informacji o kopii — sprawdź połączenie.');
+  } finally { clearTimeout(timer); }
   olSetBusy(false);
 }
 function closeOnlineConfirm() {
@@ -9087,9 +9093,14 @@ btnLoadOnline.addEventListener('click', () => {
 olBtnCancel.addEventListener('click', closeOnlineConfirm);
 olConfirmBg.addEventListener('click', e => { if (e.target === olConfirmBg) closeOnlineConfirm(); });
 
-// Pobieranie z paskiem postępu — wspólne dla .arkmap i .dat
+// Pobieranie z paskiem postępu — wspólne dla .arkmap i .dat.
+// v1.5.36: AbortController 180 s — zawieszony transfer (fetch nie ma domyślnego
+// timeoutu) kończy się błędem zamiast wisieć do reloadu strony.
 async function olFetchFile(url, label) {
-  const resp = await fetch(url + '?_=' + Date.now(), { cache: 'no-cache' });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 180000);
+  try {
+  const resp = await fetch(url + '?_=' + Date.now(), { cache: 'no-cache', signal: ctrl.signal });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const contentLength = resp.headers.get('content-length');
   const total = contentLength ? parseInt(contentLength) : null;
@@ -9113,6 +9124,7 @@ async function olFetchFile(url, label) {
   let offset = 0;
   for (const ch of chunks) { buf.set(ch, offset); offset += ch.length; }
   return buf;
+  } finally { clearTimeout(timer); }
 }
 
 async function olLoadArkmap() {
@@ -9123,7 +9135,7 @@ async function olLoadArkmap() {
     // Ta sama ścieżka co „Wczytaj .arkmap…" z dysku (validate + checksumy + applyMap)
     loadArkmap(new TextDecoder().decode(buf), '🌐 online · map_master3.arkmap');
   } catch(e) {
-    toast('✗ Online .arkmap — błąd: ' + e.message, true);
+    toast('✗ Online .arkmap — ' + (e.name === 'AbortError' ? 'przekroczono limit czasu (180 s)' : 'błąd: ' + e.message), true);
     console.error(e);
     olSetBusy(false);
     olConfirmPrg.textContent = '';
@@ -9153,7 +9165,7 @@ async function olLoadDat() {
     toast((allClean ? '✓' : '⚠') + ' Online: map_master3.dat' + fmtSz(buf.length) + ' [Mudlet .dat]');
     closeOnlineConfirm();
   } catch(e) {
-    toast('✗ Online .dat — błąd: ' + e.message, true);
+    toast('✗ Online .dat — ' + (e.name === 'AbortError' ? 'przekroczono limit czasu (180 s)' : 'błąd: ' + e.message), true);
     console.error(e);
     olSetBusy(false);
     olConfirmPrg.textContent = '';
@@ -12258,7 +12270,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.35';
+const APP_VERSION = 'v1.5.36';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)

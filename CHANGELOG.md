@@ -2,6 +2,13 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.5.36 — timeouty sieciowe: workflow sync-map i pobieranie online w UI
+
+- **Workflow `sync-map.yml`:** ziarniste timeouty na wszystkich operacjach sieciowych — curl z `--connect-timeout 30 --max-time 180`, `timeout 90` na obu `git ls-remote` i na `git fetch` gałęzi `mapa`, `timeout 120` na force-push. Zawieszone połączenie = szybki czerwony run zamiast wypalania 10-minutowego timeoutu joba (siatka job-level zostaje jako ostateczność). Fail-closed bez zmian: żaden timeout nie publikuje niczego.
+- **UI pobierania online:** `fetch()` w przeglądarce nie ma domyślnego timeoutu — dodany `AbortController`: 30 s na `index.json`, 180 s na transfer plików (13,7 MB przy słabym 3G ≈ 110 s). `AbortError` mapowany na czytelne komunikaty (timeout / kopia nie gotowa / brak połączenia); po błędzie przyciski odblokowują się jak dotychczas.
+- **Testy:** `tests/sync_map.js` +10 asercji strukturalnych pilnujących timeoutów w workflow i UI → 35 asercji. Regresja: **362 OK / 0 FAIL** (11 harnessów).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.5.35 — codzienny sync mapy do gałęzi `mapa` + walidacja kierunków 1:1 z Delwing
 
 - **Sync mapy (nowy workflow `sync-map.yml`):** cron 05:17 UTC + ręczny dispatch. Brama na SHA mastera Delwing/arkadia-mapa — ten sam commit = cisza (zero commitów). Przy zmianie: pobranie `map_master3.dat` przypięte do SHA, konwersja do `.arkmap` nowym narzędziem `tools/dat2arkmap.mjs` (ekstrakcja verbatim konwertera z `arkmap_studio.html`, zero zależności, wyjście bajtowo jak zapis w edytorze — sortowanie + checksumy + stableStringify, walidacja fail-closed), publikacja na gałęzi `mapa` (max 2 snapshoty: bieżący + `prev/`, force-push jednym commitem) + `index.json` (version/revision/synced_at/rozmiary). Lustro: bez czyszczenia błędów mapy upstream.
