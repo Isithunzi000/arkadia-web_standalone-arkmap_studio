@@ -8747,6 +8747,7 @@ function _updateSaveButtonText() {
 }
 
 function saveArkmap(onSaved) {
+  if (typeof onSaved !== 'function') onSaved = undefined;   // audyt A16: np. Event z addEventListener albo string
   if (!state.map) return;
   const missing = checkSuppressors();
   if (missing.length > 0) {
@@ -10532,7 +10533,7 @@ fiDat.addEventListener('change', async e => {
 });
 
 // ─── Przyciski zapisz ─────────────────────────────────────────────────────────
-btnSaveArkmap.addEventListener('click',  saveArkmap);
+btnSaveArkmap.addEventListener('click',  () => saveArkmap());   // audyt A16: bez wrappera listener przekazałby Event jako onSaved
 const btnSaveAs = document.getElementById('btn-save-arkmap-as');
 if (btnSaveAs) btnSaveAs.addEventListener('click', saveArkmapAs);
 btnSaveDat.addEventListener('click',    saveDat);
@@ -11912,7 +11913,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.20';
+const APP_VERSION = 'v1.5.21';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -16614,8 +16615,7 @@ document.addEventListener('keydown', function(e) {
     if (!state.map) return;
     if (state.editDraggingRoom) return;
     if (document.querySelector('.dlg-bg.open')) return;
-    const fname = (state.currentFileName || 'mapa') + '.arkmap';
-    saveArkmap(fname);
+    saveArkmap();   // audyt A16: nazwa i tak pochodzi z _arkmapSuggestedName(); fname był ignorowany
     return;
   }
   // Enter w cl-drawing → commit CL
