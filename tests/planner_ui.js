@@ -203,6 +203,8 @@ console.log('── T3: struktura HTML/CSS ──');
   ok(NEW.includes('function _transportNeighbors(roomId)'), 'P6: _transportNeighbors istnieje');
   ok(NEW.includes('showTransportJumpChooser(cands, sx, sy)'), 'P6: dwuklik → lista wyboru przy ≥2 kandydatach');
   ok(NEW.includes('id = \'tp-jump-chooser\'') || NEW.includes("el.id = 'tp-jump-chooser'"), 'P6: element listy wyboru');
+  ok(/#tp-jump-chooser\s*{[^}]*width:\s*max-content/.test(NEW), 'P6: popup autofit (width: max-content, sufit viewport)');
+  ok(!/\.tp-jump-item\s*{[^}]*text-overflow/.test(NEW), 'P6: pozycje listy bez ucinania tekstu');
   const rdA = NEW.indexOf('function resetAllDefaults()');
   const rd = NEW.slice(rdA, rdA + 4000);
   ok(rd.includes("wpState.algorithm = 'dijkstra'") && rd.includes("wpState.dirMode = 'all'")
