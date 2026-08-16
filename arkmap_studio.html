@@ -5948,6 +5948,7 @@ function evY(e){ const r = cv.getBoundingClientRect(); return r.height ? (e.clie
 async function loadArkmap(text, filename) {
   let map;
   try { map = JSON.parse(text); } catch { toast('✗ Błąd parsowania JSON (.arkmap)', true); return; }
+  if (!map || typeof map !== 'object') { toast('✗ To nie jest mapa .arkmap (poprawny JSON, ale nie obiekt mapy)', true); return; }   // audyt A17
 
   const valRes  = validate(map);
   const chkRes  = verifyChecksums(map);
@@ -11913,7 +11914,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.21';
+const APP_VERSION = 'v1.5.22';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
