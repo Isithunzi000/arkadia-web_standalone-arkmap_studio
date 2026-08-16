@@ -314,7 +314,7 @@
 <pre>{ <span class="s">"n"</span>: <span class="n">12840</span>, <span class="s">"e"</span>: <span class="n">12848</span>, <span class="s">"up"</span>: <span class="n">12900</span> }</pre>
 
 <h3>exit_weights object</h3>
-<p>Per-exit pathfinding cost overrides. Keys must be valid direction strings that exist in <code>exits</code> or <code>special_exits</code>. Values are integers ≥ 1. Only non-default weights (≠ 1) should be included.</p>
+<p>Per-exit pathfinding cost overrides. Keys must be valid direction strings that exist in <code>exits</code> or <code>special_exits</code>. Values are integers ≥ 1. A weight of 1 is allowed and meaningful: in Mudlet's .dat an absent weight entry means weight 0, so explicit 1s are preserved across .dat round-trips (both from import and from the editor). In ArkMap Studio's own routing an absent weight falls back to the target room's weight.</p>
 <pre>{ <span class="s">"e"</span>: <span class="n">3</span> }</pre>
 
 <h3>stubs array</h3>
@@ -686,7 +686,6 @@
 <h3>Known limitations</h3>
 <p>The following source data is currently <strong>lost</strong> on a .dat → .arkmap → .dat round-trip:</p>
 <ul>
-  <li><strong>Exit weights equal to 1</strong> — not imported (treated as "no weight"); in Mudlet "no weight" means weight 0, so such exits change weight 1 → 0 after a round-trip.</li>
   <li><strong>Orphan custom line style/arrow entries</strong> — style/arrow values for directions that have no custom line points entry are dropped.</li>
 </ul>
 
