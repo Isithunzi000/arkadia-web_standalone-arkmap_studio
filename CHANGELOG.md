@@ -2,6 +2,13 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.5.39 — okienko pobierania online: ładne łamanie linii + NOTICE.md z atrybucjami
+
+- **Okienko „🌐 Pobierz mapę online":** linia sync-info łamała się brzydko (data pękała między datą a godziną, nazwa repo w połowie). Teraz sync-info to 3 segmenty `nowrap` w kontenerze flex (`mapa master · @rev` / `sync data` / rozmiary) — łamanie wyłącznie między segmentami; data bez sekund (`timeStyle: 'short'`); `.ol-src` z `nowrap` (nazwa repo w całości); opis bez sztywnego `<br>`; szerokość okna 380 → 420px (`max-width:92vw`); `min-height` pod sync-info — okno nie skacze przy ładowaniu.
+- **NOTICE.md (nowy plik):** bare minimum atrybucji — dane mapy = lustro `Delwing/arkadia-mapa` (upstream bez licencji), TRANSPORT_DEFS z `Delwing/arkadia-web-client-extension` (MIT wg package.json upstream) z pełnym tekstem zgody MIT i copyright Delwing. README linkuje NOTICE z sekcji Licencja.
+- **Testy:** `tests/sync_map.js` +7 asercji strukturalnych (reguła `#ol-sync-info`, nowrap `.ol-src`, brak sztywnego `<br>`, segmenty + data bez sekund, szerokość, NOTICE: oba credit-y + tekst MIT) → 49 asercji. Regresja: **392 OK / 0 FAIL** (10 harnessów).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.5.38 — chooser transportów: etykiety na trasach okrężnych + kierunek przy duplikatach
 
 - **Etykiety dla legów odwrotnych:** `_transportNeighbors` buduje mapę `stopId → etykieta` (etykieta legu, którego przystanek jest celem) i zasila nią kandydatów z legów odwrotnych. Na 4 pętlach statkowych (Ard Skellig–Faroe–Rozrog, Novigrad–Blaviken–Daevon, Novigrad–Oxenfurt–Bialy Most, Obawa zach.–Novigrad–Obawa srod.–Scala) 14 pozycji chooser-a przestaje pokazywać fallback — w tym dwa gołe numery pokoi („23669", „10313" — numeryczne nazwy w danych upstream, lustra nie ruszamy) — a zamiast tego nazwy przystanków („Faroe", „Ard Skellig", „Obawa srod.", „Blaviken"…). Wszystkie 120 przystanków ma etykietę w danych, więc po tej zmianie **każda** z 98 pozycji chooser-a to nazwa przystanku.

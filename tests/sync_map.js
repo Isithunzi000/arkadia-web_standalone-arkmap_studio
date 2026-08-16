@@ -154,6 +154,26 @@ console.log('— v1.5.37: pinning / transports / TOCTOU (struktura) —');
   ok((OL.match(/olBaseUrl \+ /g) || []).length === 3, 'UI: index.json i oba pliki po URL-ach przypiętych do SHA');
 }
 
+// ── v1.5.39: okienko online (segmenty/nowrap/szerokość) + NOTICE.md ─────────
+console.log('— v1.5.39: okienko online + NOTICE (struktura) —');
+{
+  const syncCss = (HTML.match(/#ol-sync-info\s*{[^}]*}/) || [''])[0];
+  ok(/display:\s*flex/.test(syncCss) && /flex-wrap:\s*wrap/.test(syncCss) && /min-height:\s*15px/.test(syncCss),
+    'okienko: #ol-sync-info ma regułę flex/wrap/min-height (brak skakania, łamanie między segmentami)');
+  ok(/\.ol-src\s*{[^}]*white-space:\s*nowrap/.test(HTML), 'okienko: nazwa repo w opisie nowrap');
+  const bodyA = HTML.indexOf('id="ol-confirm-body"'), bodyB = HTML.indexOf('id="ol-confirm-footer"');
+  ok(!HTML.slice(bodyA, bodyB).includes('—<br>'), 'okienko: opis bez sztywnego łamania <br>');
+  ok(HTML.includes("timeStyle: 'short'") && (HTML.match(/<span>mapa <strong>|<span>sync \${when}<\/span>/g) || []).length === 2,
+    'okienko: sync-info z segmentów span, data bez sekund');
+  ok(/#ol-confirm\s*{[^}]*width:\s*420px[^}]*max-width:\s*92vw/.test(HTML), 'okienko: szerokość 420px / 92vw');
+
+  const notice = fs.readFileSync(path.join(ROOT, 'NOTICE.md'), 'utf8');
+  ok(notice.includes('github.com/Delwing/arkadia-mapa') && notice.includes('github.com/Delwing/arkadia-web-client-extension'),
+    'NOTICE.md: atrybucje obu źródeł upstream (mapa + transporty)');
+  ok(notice.includes('Permission is hereby granted') && notice.includes('Copyright © Delwing'),
+    'NOTICE.md: tekst zgody MIT z copyright Delwing');
+}
+
 // ── Posprzątanie ────────────────────────────────────────────────────────────
 fs.rmSync(TMP, { recursive: true, force: true });
 
