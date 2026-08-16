@@ -5580,7 +5580,8 @@ function _datConvertRoom(raw, hashLookup) {
   const exitWeights = {};
   for (const [dir, w] of Object.entries(raw.exitWeights || {})) {
     const key = DIR_BY_LONG[dir] ? DIR_BY_LONG[dir].short : dir;
-    if (w !== 1 && (exits[key] !== undefined || specialExits[key] !== undefined || specialExits[dir] !== undefined))
+    // audyt A3: waga 1 jest znacząca — w Mudlecie brak wpisu oznacza wagę 0, więc jawna 1 musi przetrwać round-trip
+    if (exits[key] !== undefined || specialExits[key] !== undefined || specialExits[dir] !== undefined)
       exitWeights[key] = w;
   }
   if (Object.keys(exitWeights).length) room.exit_weights = exitWeights;
@@ -11911,7 +11912,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.19';
+const APP_VERSION = 'v1.5.20';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
