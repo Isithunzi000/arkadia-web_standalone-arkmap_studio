@@ -114,6 +114,24 @@ const r2 = runTool([FIX, OUT2, '--version', '0.205.0', '--revision', TEST_SHA]);
 ok(r2.status === 0, 'druga konwersja → kod 0');
 ok(fs.readFileSync(OUT1).equals(fs.readFileSync(OUT2)), 'dwa przebiegi = bajtowo identyczne wyjście');
 
+// ── Hardening timeoutów (v1.5.36) — asercje strukturalne ───────────────────
+console.log('— timeouty (struktura) —');
+{
+  const WF = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'sync-map.yml'), 'utf8');
+  ok(WF.includes('--connect-timeout 30 --max-time 180'), 'workflow: curl z --connect-timeout/--max-time');
+  ok((WF.match(/timeout 90 git ls-remote/g) || []).length === 2, 'workflow: timeout 90 na obu ls-remote');
+  ok(WF.includes('timeout 90 git fetch'), 'workflow: timeout na fetch gałęzi mapa');
+  ok(WF.includes('timeout 120 git push'), 'workflow: timeout na force-push');
+  ok(WF.includes('timeout-minutes: 10'), 'workflow: siatka job-level 10 min');
+  const a = HTML.indexOf('// ─── ONLINE LOAD'), b = HTML.indexOf('// ─── WAYPOINT PLANNER');
+  const OL = HTML.slice(a, b);
+  ok((OL.match(/new AbortController\(\)/g) || []).length === 2, 'UI: AbortController ×2 (index.json + pliki)');
+  ok(OL.includes('ctrl.abort(), 30000'), 'UI: timeout 30 s na index.json');
+  ok(OL.includes('ctrl.abort(), 180000'), 'UI: timeout 180 s na pobieranie plików');
+  ok((OL.match(/finally \{ clearTimeout\(timer\); \}/g) || []).length === 2, 'UI: clearTimeout w finally ×2 (bez wycieku timerów)');
+  ok((OL.match(/e\.name === 'AbortError'/g) || []).length === 3, 'UI: AbortError → czytelny komunikat we wszystkich 3 catch');
+}
+
 // ── Posprzątanie ────────────────────────────────────────────────────────────
 fs.rmSync(TMP, { recursive: true, force: true });
 

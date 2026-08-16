@@ -75,7 +75,7 @@
 <button id="top-btn" onclick="window.scrollTo({top:0})" title="Do góry">↑</button>
 
 <h1>ARKMAP <span>STUDIO</span></h1>
-<div class="subtitle">Dokumentacja użytkownika · wersja edytora 1.5.35 · Isithunzi · 2026</div>
+<div class="subtitle">Dokumentacja użytkownika · wersja edytora 1.5.36 · Isithunzi · 2026</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <div class="toc">
@@ -166,7 +166,7 @@
 </ul>
 
 <h3>Metoda 3: Pobierz mapę online</h3>
-<p>Przycisk <strong>🌐 Pobierz mapę online…</strong> pobiera mapę z gałęzi <code>mapa</code> tego repozytorium — codziennie synchronizowane <strong>lustro</strong> (wierna kopia, bez poprawek) mapy z <code>Delwing/arkadia-mapa</code>. Wymaga połączenia z internetem. Dialog pokazuje wersję mapy, skrót commita upstream, datę synchronizacji i rozmiary, a następnie pozwala wybrać format: <strong>.arkmap</strong> (gotowy do wczytania) albo <strong>.dat</strong> (konwertowany na bieżąco). Jeśli kopia nie jest jeszcze gotowa (np. przed pierwszą synchronizacją), dialog pokaże stosowny komunikat, a przyciski formatów będą zablokowane.</p>
+<p>Przycisk <strong>🌐 Pobierz mapę online…</strong> pobiera mapę z gałęzi <code>mapa</code> tego repozytorium — codziennie synchronizowane <strong>lustro</strong> (wierna kopia, bez poprawek) mapy z <code>Delwing/arkadia-mapa</code>. Wymaga połączenia z internetem. Dialog pokazuje wersję mapy, skrót commita upstream, datę synchronizacji i rozmiary, a następnie pozwala wybrać format: <strong>.arkmap</strong> (gotowy do wczytania) albo <strong>.dat</strong> (konwertowany na bieżąco). Jeśli kopia nie jest jeszcze gotowa (np. przed pierwszą synchronizacją), dialog pokaże stosowny komunikat, a przyciski formatów będą zablokowane. Pobieranie ma limit czasu (30 s na informacje o kopii, 180 s na plik) — po jego przekroczeniu zobaczysz komunikat o timeoutcie i możesz spróbować ponownie.</p>
 
 <div class="note">Przy wczytywaniu pliku .arkmap uruchamiana jest <strong>walidacja</strong> (sprawdzenie struktury JSON) i <strong>weryfikacja checksumów CRC-32</strong>. Jeśli wykryte zostaną problemy, zobaczysz dialog z listą błędów (czerwone) i/lub ostrzeżeń (żółte — np. kolizje nazw wyjść specjalnych z kierunkami) z wyborem: „Załaduj mimo to" lub „Anuluj".</div>
 
