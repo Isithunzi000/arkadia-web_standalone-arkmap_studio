@@ -75,7 +75,7 @@
 <button id="top-btn" onclick="window.scrollTo({top:0})" title="Do góry">↑</button>
 
 <h1>ARKMAP <span>STUDIO</span></h1>
-<div class="subtitle">Dokumentacja użytkownika · wersja edytora 1.5.6 · Isithunzi &amp; Claude AI · 2026</div>
+<div class="subtitle">Dokumentacja użytkownika · wersja edytora 1.5.32 · Isithunzi · 2026</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <div class="toc">
@@ -185,6 +185,8 @@
 <tr><td>Przesuwanie klawiaturą</td><td><kbd>←</kbd> <kbd>↑</kbd> <kbd>↓</kbd> <kbd>→</kbd> (gdy brak zaznaczonego pokoju w trybie edycji)</td></tr>
 <tr><td>Zmiana poziomu Z</td><td>Kliknij numer poziomu w toolbarze po prawej stronie</td></tr>
 <tr><td>Zaznaczenie pokoju</td><td>Kliknij na pokój — pojawi się panel szczegółów</td></tr>
+<tr><td>Skok do innego obszaru</td><td>Dwuklik na strzałce wyjścia cross-area lub kwadraciku łącznika — przenosi widok do docelowego obszaru</td></tr>
+<tr><td>Skok po linii transportowej</td><td>Dwuklik na pokoju transportowym (dylizans/statek) — przenosi do następnego przystanku; przy kilku opcjach pojawia się okienko wyboru</td></tr>
 <tr><td>Odznaczenie</td><td><kbd>Esc</kbd> lub kliknij puste miejsce</td></tr>
 </table>
 
@@ -194,7 +196,7 @@
 <h2 id="sidebar-sect">6. Sidebar — panel boczny</h2>
 
 <h3>Nagłówek</h3>
-<p>Wyświetla nazwę projektu, wersję edytora/viewera, autorów. Kliknięcie na napis „ARKMAP Studio" otwiera dialog <strong>O programie</strong> z informacjami o licencji, linkach i wersji.</p>
+<p>Wyświetla nazwę projektu, wersję edytora/viewera, autora. Kliknięcie na napis „ARKMAP Studio" otwiera dialog <strong>O programie</strong> z informacjami o licencji, linkach i wersji.</p>
 
 <h3>Sekcja Wczytaj</h3>
 <p>Strefa drag&amp;drop oraz trzy przyciski wczytywania opisane w rozdziale <a href="#load">Wczytywanie mapy</a>.</p>
@@ -257,7 +259,7 @@
 <tr><td>Skala interfejsu</td><td>100%</td><td>Suwak 80–150% — skaluje rozmiar tekstu i paneli. Przydatne na małych ekranach / laptopach z wysokim DPI. Zoom stosowany po puszczeniu suwaka.</td></tr>
 <tr><td>Papier milimetrowy</td><td>ON</td><td>Wyświetla subtelną siatkę w tle canvasa — pomaga wizualnie ocenić odległości</td></tr>
 <tr><td>Minimapa</td><td>ON</td><td>Włącza/wyłącza miniaturowy podgląd obszaru w prawym dolnym rogu</td></tr>
-<tr><td>Pokaż puste custom lines</td><td>ON</td><td>Wyświetla symbol ⊘ przy krawędziach pokojów, które mają puste custom lines (zaawansowane)</td></tr>
+<tr><td>Pokaż puste custom lines</td><td>OFF</td><td>Wyświetla symbol ⊘ przy krawędziach pokojów, które mają puste custom lines (zaawansowane)</td></tr>
 <tr><td>Znaczniki edytora</td><td>ON</td><td>Wyświetla ✦ przy pokojach z wyjściem specjalnym (widoczne od pewnego poziomu zoomu)</td></tr>
 <tr><td>Ukryte pokoje</td><td>Przygaszony</td><td>Tryb renderu pokojów oznaczonych jako ukryte. Dropdown: <strong>Przygaszony</strong>, <strong>Przerywany</strong>, <strong>Pokaż</strong> (jak zwykłe pokoje), <strong>Ukryj</strong> (całkowicie niewidoczne).</td></tr>
 <tr><td>Wyjścia z obszarów</td><td>ON</td><td>Etykiety obszaru docelowego przy wyjściach prowadzących do innego obszaru</td></tr>
@@ -307,7 +309,7 @@
 <table>
 <tr><th>Algorytm</th><th>Opis</th></tr>
 <tr><td><strong>Dijkstra</strong></td><td>Klasyczny algorytm najkrótszej ścieżki — zawsze znajduje optymalną trasę, gwarantowane minimum</td></tr>
-<tr><td><strong>A*</strong></td><td>Zoptymalizowana wersja z heurystyką — szybszy przy dużych mapach, identyczny wynik. Automatycznie przełącza się na Dijkstrę dla tras cross-area (różne układy współrzędnych).</td></tr>
+<tr><td><strong>A*</strong></td><td>Zoptymalizowana wersja z heurystyką — szybszy przy dużych mapach, ten sam koszt trasy (przy remisach — kilku trasach o identycznym koszcie — może wybrać inną, równie krótką). Automatycznie przełącza się na Dijkstrę dla tras cross-area (różne układy współrzędnych).</td></tr>
 </table>
 
 <h3>Filtr kierunków</h3>
@@ -787,7 +789,7 @@
   <li>Panel pokoju wyświetla się jako <strong>bottom sheet</strong> (od dołu ekranu, max 50vh)</li>
   <li>Ukryte zostają: minimapa, eksport, planer trasy, edytor (tryb edycji niedostępny na mobile)</li>
   <li>Przyciski zoom są większe (38px) dla łatwości obsługi dotykiem</li>
-  <li>Przycisk <strong>⊙ Trasa</strong> pozwala zaimportować trasę z kodu ARKMAP</li>
+  <li>Przycisk <strong>⊙ Trasa</strong> pozwala zaimportować trasę z kodu ARKMAP2</li>
 </ul>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -843,7 +845,7 @@
 <hr>
 
 <p style="text-align:center;color:var(--dim);font-size:11px;margin-top:40px">
-  ArkMap Studio · Isithunzi &amp; Claude AI · MIT License · 2026
+  ArkMap Studio · Isithunzi · MIT License · 2026
 </p>
 
 </body>

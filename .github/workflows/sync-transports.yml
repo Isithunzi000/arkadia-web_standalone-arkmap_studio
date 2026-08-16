@@ -9,12 +9,19 @@ on:
     - cron: '17 4 * * *'   # codziennie 04:17 UTC
   workflow_dispatch:        # ręczne odpalenie z zakładki Actions
 
+# Jeden run naraz — równoległe uruchomienia (cron + dispatch) odbijałyby się
+# na pushu (non-fast-forward) i dawały fałszywie czerwony run.
+concurrency:
+  group: sync-transports
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 10   # zawieszony clone nie pali domyślnych 6 h
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
