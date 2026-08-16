@@ -677,8 +677,8 @@
   #wp-speed label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
   .wp-speed-wrap { display: flex; align-items: center; gap: 4px; flex: 1; }
   #wp-speed-input {
-    width: 68px; background: var(--bg); border: 1px solid var(--border);
-    border-radius: 3px; padding: 3px 22px 3px 6px;
+    width: 92px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 3px; padding: 3px 18px 3px 6px;
     font-family: inherit; font-size: 11px; color: var(--text);
     outline: none; text-align: right; transition: border-color .12s;
   }
@@ -1033,7 +1033,7 @@
     50% { opacity: 0.25; }
   }
   #wp-mode-indicator {
-    position: fixed; bottom: 24px; left: calc(var(--sidebar) + 52px);
+    position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%);
     font-size: 22px; color: #ffcc40; letter-spacing: 4px;
     text-transform: uppercase; pointer-events: none; z-index: 9999;
     display: none; font-weight: 900;
@@ -1608,6 +1608,16 @@
   .ctx-item.edit { color: #cc9966; }
   .ctx-item.edit:hover { background: #1a1008; color: var(--edit); }
   .ctx-sep { height: 1px; background: var(--border); margin: 3px 0; }
+  /* Dwuklik na pokoju transportowym — wybór sąsiedniego przystanku */
+  #tp-jump-chooser { position: fixed; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 4px; min-width: 200px; max-width: 320px; z-index: 9500;
+    box-shadow: 0 4px 20px rgba(0,0,0,.7); font-size: 12px; padding: 4px 0; }
+  #tp-jump-chooser .tp-jump-title { padding: 4px 14px 5px; font-size: 10px; color: var(--dim);
+    text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border); margin-bottom: 3px; }
+  .tp-jump-item { padding: 6px 14px; color: var(--fg); cursor: pointer; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; }
+  .tp-jump-item:hover { background: #1a2035; color: var(--text); }
+  .tp-jump-item .tp-jump-line { color: var(--dim); font-size: 10px; }
   /* ─── LABEL EDITING ────────────────────────────────────────────────────── */
   .ap-lbl-item { display:flex; align-items:center; gap:5px; padding:3px 0; border-bottom:1px solid #151d28; min-width:0; }
   .ap-lbl-item:last-of-type { border-bottom:none; }
@@ -8221,7 +8231,7 @@ function commitCLDrawing() {
 
 // Double-click on cross-area arrow → jump to that area
 function handleDblClick(sx, sy) {
-  if (!state.map || !_lastCrossExits.length) return;
+  if (!state.map) return;
   const [mx, my] = screenToMap(sx, sy);
 
   // Resolve target: find cross-area exit to jump to
@@ -8244,16 +8254,22 @@ function handleDblClick(sx, sy) {
     if (d < hitRadius && d < bestD) { bestD = d; best = exit; }
   }
 
-  if (best) {
-    jumpAreaId = state.roomArea[best.targetId];
-    jumpRoomId = best.targetId;
-  } else {
-    // Fallback: znajdź pokój z cross-area exit
+  // Najbliższy pokój (map coords) — wspólne dla fallbacku cross-exit i transportowego
+  const findNearRoom = () => {
     let nearRoom = null, nearD = Infinity;
     for (const r of state.roomsZ) {
       const d = Math.max(Math.abs(r.x - mx), Math.abs(r.y - my));
       if (d < 0.6 && d < nearD) { nearD = d; nearRoom = r; }
     }
+    return nearRoom;
+  };
+
+  if (best) {
+    jumpAreaId = state.roomArea[best.targetId];
+    jumpRoomId = best.targetId;
+  } else {
+    // Fallback: znajdź pokój z cross-area exit
+    const nearRoom = findNearRoom();
     if (!nearRoom) return;
     const roomSet = new Set(state.roomsZ.map(r => r.id));
     // Collect cross-area exits from BOTH normal exits AND special exits
@@ -8279,6 +8295,21 @@ function handleDblClick(sx, sy) {
     }
   }
 
+  // Fallback transportowy: pokój leży na linii statku/dyliżansa → skok do sąsiedniego przystanku
+  if (jumpAreaId == null) {
+    const nearRoom = findNearRoom();
+    if (nearRoom) {
+      const cands = _transportNeighbors(nearRoom.id);
+      if (cands.length === 1) {
+        jumpAreaId = state.roomArea[cands[0].stopId];
+        jumpRoomId = cands[0].stopId;
+      } else if (cands.length > 1) {
+        showTransportJumpChooser(cands, sx, sy);
+        return;
+      }
+    }
+  }
+
   if (jumpAreaId == null) return;
 
   const doJump = () => { selectArea(jumpAreaId, false); jumpToRoom(jumpRoomId); };
@@ -8289,6 +8320,54 @@ function handleDblClick(sx, sy) {
     return;
   }
   doJump();
+}
+
+// ── Dwuklik na pokoju transportowym: lista wyboru sąsiedniego przystanku ────
+let _tpJumpChooser = null;
+function closeTransportJumpChooser() {
+  if (_tpJumpChooser) { _tpJumpChooser.remove(); _tpJumpChooser = null; }
+  document.removeEventListener('keydown', _tpJumpKey, true);
+  document.removeEventListener('mousedown', _tpJumpOutside, true);
+}
+function _tpJumpKey(e) { if (e.key === 'Escape') closeTransportJumpChooser(); }
+function _tpJumpOutside(e) {
+  if (_tpJumpChooser && !_tpJumpChooser.contains(e.target)) closeTransportJumpChooser();
+}
+function showTransportJumpChooser(cands, sx, sy) {
+  closeTransportJumpChooser();
+  const el = document.createElement('div');
+  el.id = 'tp-jump-chooser';
+  const title = document.createElement('div');
+  title.className = 'tp-jump-title';
+  title.textContent = '🚢 Skocz do przystanku';
+  el.appendChild(title);
+  for (const c of cands) {
+    const r = state.roomById[c.stopId];
+    const item = document.createElement('div');
+    item.className = 'tp-jump-item';
+    const stopName = r ? (r.name || `#${c.stopId}`) : `#${c.stopId}`;
+    item.innerHTML = '';
+    item.appendChild(document.createTextNode(stopName + ' '));
+    const line = document.createElement('span');
+    line.className = 'tp-jump-line';
+    line.textContent = '— ' + c.lineName;
+    item.appendChild(line);
+    item.addEventListener('click', () => {
+      closeTransportJumpChooser();
+      const doJump = () => { selectArea(state.roomArea[c.stopId], false); jumpToRoom(c.stopId); };
+      if (state.editMode && state.editDirty) { showDirtyConfirm(doJump); return; }
+      doJump();
+    });
+    el.appendChild(item);
+  }
+  document.body.appendChild(el);
+  // Pozycja przy kursorze, w granicach ekranu
+  const w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = Math.max(4, Math.min(sx, window.innerWidth - w - 8)) + 'px';
+  el.style.top = Math.max(4, Math.min(sy, window.innerHeight - h - 8)) + 'px';
+  _tpJumpChooser = el;
+  document.addEventListener('keydown', _tpJumpKey, true);
+  setTimeout(() => document.addEventListener('mousedown', _tpJumpOutside, true), 0);
 }
 
 // ─── ROOM INFO (floating panel) ─────────────────────────────────────────────
@@ -9209,6 +9288,25 @@ function _collectPathHops(path) {
   return out;
 }
 
+// Sąsiednie przystanki transportowe pokoju (dwuklik na mapie → skok do portu).
+// Zwraca [{stopId, lineName, label}] — deduplikowane po stopId; [] gdy pokój nie leży na żadnej linii.
+function _transportNeighbors(roomId) {
+  const out = [], seen = new Set();
+  for (const def of TRANSPORT_DEFS) {
+    const lineName = def[0], stops = def[3];
+    for (const leg of stops) {
+      let cand = null;
+      if (leg[0] === roomId) cand = { stopId: leg[1], lineName, label: leg[3] || null };
+      else if (leg[1] === roomId) cand = { stopId: leg[0], lineName, label: null };
+      if (cand && state.roomById[cand.stopId] && !seen.has(cand.stopId)) {
+        seen.add(cand.stopId);
+        out.push(cand);
+      }
+    }
+  }
+  return out;
+}
+
 // Dijkstra: najkrótsza ścieżka uwzględniająca wagi pokojów i wyjść
 function dijkstraPath(fromId, toId) {
   if (fromId === toId) return [fromId];
@@ -9935,13 +10033,14 @@ function drawRoute() {
         // Rysuj linię trasy między pokojami na bieżącym widoku
         const ax = wx(ra.x), ay = wy(ra.y);
         const bx = wx(rb.x), by = wy(rb.y);
-        if (isHop) ctx.setLineDash([Math.max(4, rs * 0.9), Math.max(3, rs * 0.6)]);
+        // Hop (statek/dyliżans): kolor trasy, kropki zamiast linii ciągłej
+        if (isHop) ctx.setLineDash([Math.max(1.5, rs * 0.2), Math.max(3, rs * 0.55)]);
         // Poświata
-        ctx.strokeStyle = isHop ? 'rgba(80,170,255,0.2)' : routeGlow;
+        ctx.strokeStyle = routeGlow;
         ctx.lineWidth = rs * 1.6;
         ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
-        // Linia główna (hop: niebieska przerywana — statek/dyliżans)
-        ctx.strokeStyle = isHop ? 'rgba(80,170,255,0.85)' : routeColor;
+        // Linia główna
+        ctx.strokeStyle = routeColor;
         ctx.lineWidth = Math.max(2, rs * 0.55);
         ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
         if (isHop) ctx.setLineDash([]);
@@ -9997,6 +10096,7 @@ function wpUpdateOverview() {
   // Zamiast używać współrzędnych pokojów (które mają teleport-jumpy),
   // każdy krok = dx/dy między sąsiednimi pokojami na ścieżce Dijkstra/A*.
   const pts = [];      // cumulative positions
+  const segHop = [];   // segHop[i] = segment pts[i]→pts[i+1] jest hopem (statek/dyliżans)
   const wpMarkers = []; // {ptIdx, wpIdx}
   let cx = 0, cy = 0;
   pts.push([cx, cy]);
@@ -10007,6 +10107,7 @@ function wpUpdateOverview() {
 
     const path = wpState.paths[pi];
     if (!path || path.length < 2) continue;
+    const legHops = wpState.hops?.[pi];
     for (let i = 0; i < path.length - 1; i++) {
       const ra = state.roomById[path[i]], rb = state.roomById[path[i+1]];
       if (!ra || !rb) continue;
@@ -10014,6 +10115,7 @@ function wpUpdateOverview() {
       const dy = Math.max(-1, Math.min(1, rb.y - ra.y));
       cx += dx; cy -= dy;
       pts.push([cx, cy]);
+      segHop.push(!!(legHops && legHops[i]));
     }
   }
   // Ostatni WP (koniec ostatniego odcinka)
@@ -10211,7 +10313,7 @@ document.getElementById('wp-import-confirm').addEventListener('click', () => {
 
   // Ustaw parametry zakodowane w trasie: algorytm + filtr kierunków + transporty
   wpState.algorithm = res.algorithm;
-  document.querySelectorAll('.wp-algo-btn:not(.wp-dir-btn)').forEach(b =>
+  document.querySelectorAll('.wp-algo-btn[data-algo]').forEach(b =>
     b.classList.toggle('wp-algo-on', b.dataset.algo === res.algorithm));
   wpState.dirMode = res.dirMode;
   wpRefreshDirUI();
@@ -10261,13 +10363,13 @@ document.getElementById('wp-import-textarea').addEventListener('keydown', functi
   if (e.key === 'Escape') wpImportClose();
 });
 
-// Algorytm pathfindingu
-document.querySelectorAll('.wp-algo-btn:not(.wp-dir-btn)').forEach(btn => {
+// Algorytm pathfindingu — selektor atrybutowy: NIE może zgasić przełączników transportów
+document.querySelectorAll('.wp-algo-btn[data-algo]').forEach(btn => {
   btn.addEventListener('click', () => {
     const algo = btn.dataset.algo;
     if (wpState.algorithm === algo) return;
     wpState.algorithm = algo;
-    document.querySelectorAll('.wp-algo-btn:not(.wp-dir-btn)').forEach(b =>
+    document.querySelectorAll('.wp-algo-btn[data-algo]').forEach(b =>
       b.classList.toggle('wp-algo-on', b.dataset.algo === algo));
     wpRecalcPaths();
     wpRebuildList();
@@ -10304,7 +10406,7 @@ function wpRefreshTransportUI() {
   const row = document.getElementById('wp-trans-aggro-row');
   if (row) row.style.display = on ? 'flex' : 'none';
   // Z transportami działa wyłącznie Dijkstra (jak u Delwinga) — przygaś wybór algorytmu
-  document.querySelectorAll('.wp-algo-btn:not(.wp-dir-btn):not(.wp-trans-btn):not(.wp-trans-aggro)').forEach(b => {
+  document.querySelectorAll('.wp-algo-btn[data-algo]').forEach(b => {
     b.disabled = on;
     b.title = on ? 'Z włączonymi transportami używany jest algorytm Dijkstry' : '';
   });
@@ -11134,7 +11236,7 @@ _uiScaleSlider.addEventListener('change', function() {
 
 // ── resetAllDefaults() — reset ALL settings, positions, localStorage ──────────
 function resetAllDefaults() {
-  if (!confirm('Przywrócić ustawienia domyślne?\n\nResetuje: pozycje i rozmiary okien, siatka, minimapa, puste custom lines, preferencje edytora.\n\nMapa i dane NIE zostaną usunięte.')) return;
+  if (!confirm('Przywrócić ustawienia domyślne?\n\nResetuje: pozycje i rozmiary okien, siatka, minimapa, puste custom lines, preferencje edytora, przełączniki planera (algorytm, kierunki, transporty, prędkość).\n\nMapa i dane NIE zostaną usunięte.')) return;
   // v1.4.58: zapamiętaj, czy źródło akceptacji było 'plik' (do komunikatu po resecie — opcja C)
   const _wasFileAcceptSrc = (typeof _acceptStore === 'function' && _acceptStore() === 'file');
   // Clear ALL arkmap localStorage keys — ALE zachowaj zatwierdzenia walidatora (to dane, nie ustawienie)
@@ -11178,6 +11280,20 @@ function resetAllDefaults() {
   if (state.map) buildAreaList();
   // Reset lock states
   wpLocked = false; wpUpdateLockBtn();
+  // Reset przełączników planera: algorytm / filtr kierunków / transporty / prędkość
+  wpState.algorithm = 'dijkstra';
+  document.querySelectorAll('.wp-algo-btn[data-algo]').forEach(b =>
+    b.classList.toggle('wp-algo-on', b.dataset.algo === 'dijkstra'));
+  wpState.dirMode = 'all';
+  wpRefreshDirUI();
+  wpState.transportMode = 'off';
+  wpRefreshTransportUI();
+  wpState.speed = 3;
+  const spIn = document.getElementById('wp-speed-input');
+  if (spIn) spIn.value = 3;
+  document.querySelectorAll('.wp-sp').forEach(b =>
+    b.classList.toggle('wp-sp-on', parseFloat(b.dataset.s) === 3));
+  if (wpHasActiveRoute()) { wpRecalcPaths(); wpRebuildList(); wpUpdateSummary(); }
   // Room panel: unlock if locked
   const rpLock = document.getElementById('rp-lock');
   if (rpLock?.classList.contains('locked')) togglePanelLock();
@@ -12132,7 +12248,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.28';
+const APP_VERSION = 'v1.5.30';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
