@@ -253,5 +253,48 @@ console.log('── T4: v1.5.37 — etykiety / chooser / hop-dash ──');
   ok(OV.includes('octx.setLineDash([2, 2.5])'), 'minimapka: hop = kreska kropkowana [2, 2.5]');
   ok(OV.includes('octx.setLineDash([]);'), 'minimapka: reset dash po rysowaniu');
 }
+
+// ── T5: v1.5.38 — etykiety dla legów odwrotnych (pętle) + kierunek przy duplikatach ──
+console.log('── T5: v1.5.38 — pętle: etykiety odwrotne + kierunek ──');
+{
+  // Syntetyczna pętla A→B→C→A: każdy przystanek ma etykietę z legu, który w nim kończy
+  const CYKL = [['Pętla A-B-C', [], null, [[1, 2, 10, 'B'], [2, 3, 10, 'C'], [3, 1, 10, 'A']]]];
+  const stC = { roomById: { 1: {}, 2: {}, 3: {} } };
+  const fnC = new Function('state', 'TRANSPORT_DEFS', neighborsFn() + '\n;return _transportNeighbors;')(stC, CYKL);
+  const n1 = fnC(1);
+  ok(n1.length === 2 && n1.every(c => c.label),
+    'pętla: obaj kandydaci z etykietami (także z legu odwrotnego)');
+  ok(n1.find(c => c.stopId === 2).label === 'B' && n1.find(c => c.stopId === 3).label === 'C',
+    'pętla: właściwe etykiety docelowych przystanków');
+  ok(n1.find(c => c.stopId === 2).nextLabel === 'C' && n1.find(c => c.stopId === 3).nextLabel === 'A',
+    'pętla: nextLabel = kierunek dalszej jazdy z przystanku kandydata');
+
+  // Prawdziwe definicje: pętla Ard Skellig - Faroe - Rozrog (numeryczne nazwy pokoi upstream)
+  const DEFS = transportDefs(NEW);
+  const stR = { roomById: { 3280: {}, 23669: {}, 10313: {} } };
+  const fnR = new Function('state', 'TRANSPORT_DEFS', neighborsFn() + '\n;return _transportNeighbors;')(stR, DEFS);
+  const n3280 = fnR(3280);
+  ok(n3280.find(c => c.stopId === 23669)?.label === 'Faroe'
+    && n3280.find(c => c.stopId === 10313)?.label === 'Ard Skellig',
+    'pętla Skellige: „Faroe"/„Ard Skellig" zamiast numerów pokoi');
+  ok(fnR(23669).find(c => c.stopId === 10313)?.label === 'Ard Skellig',
+    'pętla Skellige: odwrotny kandydat #10313 → „Ard Skellig"');
+
+  // Dwa doki Blaviken: obaj kandydaci „Blaviken", rozróżnieni kierunkiem
+  const stB = { roomById: { 2223: {}, 4058: {}, 4061: {} } };
+  const fnB = new Function('state', 'TRANSPORT_DEFS', neighborsFn() + '\n;return _transportNeighbors;')(stB, DEFS);
+  const nB = fnB(2223);
+  const nl = nB.map(c => c.nextLabel).sort();
+  ok(nB.length === 2 && nB.every(c => c.label === 'Blaviken')
+    && nl[0] === 'Daevon' && nl[1] === 'Novigrad',
+    'Blaviken ×2: kandydaci rozróżnieni kierunkiem (Daevon / Novigrad)');
+
+  // Chooser: duplikat na tej samej linii → sufiks „kierunek:", nie nazwa linii
+  ok(NEW.includes("line.textContent = (sameLineDup && c.nextLabel) ? '— kierunek: ' + c.nextLabel : '— ' + c.lineName;"),
+    'chooser: duplikat na tej samej linii → „— kierunek: …" zamiast nazwy linii');
+  ok(NEW.includes('const stopLabel = new Map();')
+    && NEW.includes("label: stopLabel.get(leg[0]) || null"),
+    'transportNeighbors: mapa stopId→etykieta zasila legi odwrotne');
+}
 console.log(`\n═══ planner_ui.js: ${pass} OK, ${fail} FAIL ═══`);
 process.exit(fail ? 1 : 0);

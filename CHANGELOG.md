@@ -2,6 +2,13 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.5.38 — chooser transportów: etykiety na trasach okrężnych + kierunek przy duplikatach
+
+- **Etykiety dla legów odwrotnych:** `_transportNeighbors` buduje mapę `stopId → etykieta` (etykieta legu, którego przystanek jest celem) i zasila nią kandydatów z legów odwrotnych. Na 4 pętlach statkowych (Ard Skellig–Faroe–Rozrog, Novigrad–Blaviken–Daevon, Novigrad–Oxenfurt–Bialy Most, Obawa zach.–Novigrad–Obawa srod.–Scala) 14 pozycji chooser-a przestaje pokazywać fallback — w tym dwa gołe numery pokoi („23669", „10313" — numeryczne nazwy w danych upstream, lustra nie ruszamy) — a zamiast tego nazwy przystanków („Faroe", „Ard Skellig", „Obawa srod.", „Blaviken"…). Wszystkie 120 przystanków ma etykietę w danych, więc po tej zmianie **każda** z 98 pozycji chooser-a to nazwa przystanku.
+- **Kierunek przy duplikatach na tej samej linii:** dwa doki Blaviken (jeden płynie do Novigradu, drugi do Daevon) pokazywały się identycznie — przy duplikacie nazwy na tej samej linii sufiks to teraz „— kierunek: …" (kandydaci dostają `nextLabel` = etykieta następnego przystanku na trasie). Duplikat na różnych liniach = nadal sufiks z nazwą linii.
+- **Testy:** `tests/planner_ui.js` +8 asercji (syntetyczna pętla: etykiety odwrotne + nextLabel; prawdziwe definicje: Skellige „Faroe"/„Ard Skellig", Blaviken ×2 z kierunkami; struktura chooser-a i mapy etykiet). Regresja: **385 OK / 0 FAIL** (10 harnessów).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.5.37 — pinning SHA akcji, spójna migawka pobierania online, hopy na minimapce, chooser po nazwach przystanków
 
 - **Workflow:** wszystkie akcje (`actions/checkout` ×3, `actions/setup-node`) spinowane pełnym SHA commita zamiast ruchomego tagu `@v4` (komentarz `# v4` zachowuje czytelność). Tag to wskaźnik, który właściciel repo akcji może podmienić — SHA jest niezmiennicze (rekomendacja OpenSSF i GitHuba). W `sync-transports.yml` doszły ziarniste timeouty: `timeout 180` na clone upstream, `timeout 120` na push.
