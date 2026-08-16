@@ -12,6 +12,7 @@ Samowystarczalna aplikacja przeglądarkowa do podglądu i edycji map gry MUD **A
 - **Import i eksport Mudlet `.dat`** — binarna zgodność z formatem map Mudleta w obie strony.
 - **Własny format `.arkmap`** — czytelny JSON przyjazny gitowi (stabilna serializacja, sumy kontrolne CRC).
 - **Działa offline** — mapa trzymana lokalnie w przeglądarce, zapis do pliku na dysku.
+- **Mapa online** — przycisk „🌐 Pobierz mapę online…" pobiera z gałęzi `mapa` tego repo codziennie synchronizowane lustro mapy z Delwing/arkadia-mapa (workflow `sync-map.yml`), jako `.arkmap` lub `.dat`.
 
 ## Dokumentacja
 

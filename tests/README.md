@@ -7,7 +7,7 @@ Harnessy Node.js dla krytycznych ścieżek `arkmap_studio.html`. Powstały przy 
 
 - Node.js (bez zależności npm)
 - repo sklonowane z historią git (snapshoty różnicowe pobierane przez `git show <hash>`)
-- fixture `map_master3.dat` w katalogu głównym repo (dla `a7_readbuffer.js`, `dir_filter.js` i `transport.js`):
+- fixture `map_master3.dat` w katalogu głównym repo (dla `a7_readbuffer.js`, `dir_filter.js`, `transport.js`, `sync_map.js` i `dir_validation.js`):
   ```bash
   bash tests/fetch-fixture.sh
   ```
@@ -25,6 +25,8 @@ node tests/dir_filter.js        # planer: filtr kierunków kardynalne/+pionowe/w
 node tests/transport.js         # planer: statki/dyliżanse — wirtualne krawędzie, kary, hopy (wymaga fixture)
 node tests/share_link.js        # planer: share-linki ARKMAP2 — 18 permutacji round-trip + ścisła walidacja
 node tests/planner_ui.js        # planer UX: podświetlenia przełączników, sąsiedztwo transportów (dwuklik), struktura CSS/HTML
+node tests/sync_map.js          # sync mapy online: tools/dat2arkmap.mjs na fixture (wymaga fixture)
+node tests/dir_validation.js    # walidacja kierunków 1:1 z Delwing: złote przypadki + jednostkowe (wymaga fixture)
 ```
 
 albo wszystkie naraz:

@@ -1854,7 +1854,7 @@
       <button id="btn-load-dat" style="margin-top:6px">Wczytaj Mudlet .dat&hellip;</button>
       <input type="file" id="fi-dat" accept=".dat">
       <br>
-      <button id="btn-load-online" style="margin-top:6px">🌐 Wczytaj mapę online&hellip;</button>
+      <button id="btn-load-online" style="margin-top:6px">🌐 Pobierz mapę online&hellip;</button>
     </div>
 
     <!-- ZAPISZ -->
@@ -1905,18 +1905,19 @@
   <div id="ol-confirm-bg">
     <div id="ol-confirm">
       <div id="ol-confirm-header">
-        <div id="ol-confirm-title">🌐 Wczytaj mapę online</div>
+        <div id="ol-confirm-title">🌐 Pobierz mapę online</div>
       </div>
       <div id="ol-confirm-body">
         <div id="ol-confirm-desc">
-          Pobierze aktualną mapę Arkadii (<strong>map_master3.dat</strong>) bezpośrednio<br>
-          z GitHub (<span class="ol-src">Delwing/arkadia-mapa</span>).<br>
-          Dane aktualizowane przez społeczność.
+          Synchronizowana kopia mapy Arkadii (<span class="ol-src">Delwing/arkadia-mapa</span>) —<br>
+          lustro bez poprawek, odświeżane codziennie.
         </div>
+        <div id="ol-sync-info"></div>
         <div id="ol-confirm-progress"></div>
       </div>
       <div id="ol-confirm-footer">
-        <button id="ol-btn-ok" class="dialog-btn ok-btn">Pobierz</button>
+        <button id="ol-btn-arkmap" class="dialog-btn ok-btn">.arkmap</button>
+        <button id="ol-btn-dat" class="dialog-btn">.dat</button>
         <button id="ol-btn-cancel" class="dialog-btn">Anuluj</button>
       </div>
     </div>
@@ -9012,20 +9013,49 @@ function download(name, text, mime) {
 }
 
 // ─── ONLINE LOAD ─────────────────────────────────────────────────────────────
-// map_master3.dat bezpośrednio z repozytorium Delwing/arkadia-mapa
-const RELEASES_API_URL = 'https://api.github.com/repos/Delwing/arkadia-mapa/releases/latest';
+// Synchronizowana kopia mapy z gałęzi `mapa` tego repo (workflow sync-map — cron
+// codziennie). Lustro Delwing/arkadia-mapa master: bez poprawek, bez czyszczenia.
+// raw.githubusercontent.com ma Access-Control-Allow-Origin: * — fetch działa z Pages.
+const MAPA_RAW_URL = 'https://raw.githubusercontent.com/Isithunzi000/arkadia-web_standalone-arkmap_studio/mapa/';
 
 const olConfirmBg  = document.getElementById('ol-confirm-bg');
 const olConfirmPrg = document.getElementById('ol-confirm-progress');
-const olBtnOk      = document.getElementById('ol-btn-ok');
+const olSyncInfo   = document.getElementById('ol-sync-info');
+const olBtnArkmap  = document.getElementById('ol-btn-arkmap');
+const olBtnDat     = document.getElementById('ol-btn-dat');
 const olBtnCancel  = document.getElementById('ol-btn-cancel');
 const btnLoadOnline = document.getElementById('btn-load-online');
 
-function openOnlineConfirm() {
+let olIndex = null; // index.json z gałęzi mapa (null = kopia jeszcze nie gotowa)
+
+function olSetBusy(busy) {
+  olBtnArkmap.disabled = busy || !olIndex;
+  olBtnDat.disabled    = busy || !olIndex;
+  olBtnCancel.disabled = busy;
+}
+
+async function openOnlineConfirm() {
   olConfirmPrg.textContent = '';
-  olBtnOk.disabled      = false;
-  olBtnCancel.disabled  = false;
+  olIndex = null;
+  olSetBusy(true);
+  olSyncInfo.textContent = 'Sprawdzanie kopii…';
   olConfirmBg.classList.add('visible');
+  try {
+    const resp = await fetch(MAPA_RAW_URL + 'index.json?_=' + Date.now(), { cache: 'no-cache' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    olIndex = await resp.json();
+    if (!olIndex || typeof olIndex.revision !== 'string') throw new Error('niepoprawny index.json');
+    const ver  = olIndex.version ? 'v' + olIndex.version : 'master';
+    const rev  = olIndex.revision.slice(0, 7);
+    const when = olIndex.synced_at ? new Date(olIndex.synced_at).toLocaleString('pl-PL') : '?';
+    const sz   = Number.isFinite(olIndex.arkmap_size) && Number.isFinite(olIndex.dat_size)
+      ? ` · .arkmap ${(olIndex.arkmap_size/1024/1024).toFixed(1)} MB · .dat ${(olIndex.dat_size/1024/1024).toFixed(1)} MB` : '';
+    olSyncInfo.innerHTML = `mapa <strong>${ver}</strong> · <strong>@${rev}</strong> · sync ${when}${sz}`;
+  } catch(e) {
+    olIndex = null;
+    olSyncInfo.textContent = '⚠ Kopia jeszcze nie gotowa — spróbuj później.';
+  }
+  olSetBusy(false);
 }
 function closeOnlineConfirm() {
   olConfirmBg.classList.remove('visible');
@@ -9057,79 +9087,53 @@ btnLoadOnline.addEventListener('click', () => {
 olBtnCancel.addEventListener('click', closeOnlineConfirm);
 olConfirmBg.addEventListener('click', e => { if (e.target === olConfirmBg) closeOnlineConfirm(); });
 
-// ─── GitHub release info ─────────────────────────────────────────────────────
-async function fetchReleaseInfo() {
-  // 2 requesty do GitHub API — limit 60 req/h bez tokena = wystarczy w zupełności
-  let version = null, revision = null;
-  try {
-    const [relResult, commitResult] = await Promise.allSettled([
-      fetch(RELEASES_API_URL, { cache: 'no-cache' }),
-      fetch('https://api.github.com/repos/Delwing/arkadia-mapa/commits/master?per_page=1', { cache: 'no-cache' }),
-    ]);
-    if (relResult.status === 'fulfilled' && relResult.value.ok)
-      version = (await relResult.value.json()).tag_name || null;
-    if (commitResult.status === 'fulfilled' && commitResult.value.ok)
-      revision = (await commitResult.value.json()).sha || null;
-  } catch(e) { /* nie blokuj pobierania gdy API niedostępne */ }
-  return { version, revision };
+// Pobieranie z paskiem postępu — wspólne dla .arkmap i .dat
+async function olFetchFile(url, label) {
+  const resp = await fetch(url + '?_=' + Date.now(), { cache: 'no-cache' });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const contentLength = resp.headers.get('content-length');
+  const total = contentLength ? parseInt(contentLength) : null;
+  const reader = resp.body.getReader();
+  const chunks = [];
+  let loaded = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loaded += value.length;
+    if (total) {
+      const pct = Math.round(loaded / total * 100);
+      olConfirmPrg.textContent = `Pobieranie: ${label}… ${pct}% (${(loaded/1024/1024).toFixed(1)} / ${(total/1024/1024).toFixed(1)} MB)`;
+    } else {
+      olConfirmPrg.textContent = `Pobieranie: ${label}… ${(loaded/1024/1024).toFixed(1)} MB`;
+    }
+  }
+  const totalLen = chunks.reduce((s, c) => s + c.length, 0);
+  const buf = new Uint8Array(totalLen);
+  let offset = 0;
+  for (const ch of chunks) { buf.set(ch, offset); offset += ch.length; }
+  return buf;
 }
 
-olBtnOk.addEventListener('click', async () => {
-  // Guard: gdy edit mode i niezapisane zmiany (Pass 69) ─────────────────────
-  if (state.editMode && state.dirty) {
-    closeOnlineConfirm();
-    const dlgLDE = document.getElementById('dlg-load-during-edit');
-    if (dlgLDE) {
-      // Wire buttons
-      const [cancelBtn, discardBtn, saveBtn] = dlgLDE.querySelectorAll('button');
-      if (cancelBtn) cancelBtn.onclick = () => closeDialog('dlg-load-during-edit');
-      if (discardBtn) discardBtn.onclick = () => {
-        closeDialog('dlg-load-during-edit');
-        exitEditMode(true);
-        olBtnOk.click(); // ponów pobieranie
-      };
-      if (saveBtn) saveBtn.onclick = () => {
-        closeDialog('dlg-load-during-edit');
-        saveArkmap();
-      };
-      openDialog('dlg-load-during-edit');
-    }
-    return;
-  }
-
-  olBtnOk.disabled     = true;
-  olBtnCancel.disabled = true;
+async function olLoadArkmap() {
+  olSetBusy(true);
   try {
-    olConfirmPrg.textContent = 'Sprawdzanie wersji…';
+    const buf = await olFetchFile(MAPA_RAW_URL + 'map_master3.arkmap', 'map_master3.arkmap');
+    closeOnlineConfirm();
+    // Ta sama ścieżka co „Wczytaj .arkmap…" z dysku (validate + checksumy + applyMap)
+    loadArkmap(new TextDecoder().decode(buf), '🌐 online · map_master3.arkmap');
+  } catch(e) {
+    toast('✗ Online .arkmap — błąd: ' + e.message, true);
+    console.error(e);
+    olSetBusy(false);
+    olConfirmPrg.textContent = '';
+  }
+}
 
-    const [{ version: releaseVersion, revision: releaseRevision }, resp] = await Promise.all([
-      fetchReleaseInfo(),
-      fetch('https://raw.githubusercontent.com/Delwing/arkadia-mapa/master/map_master3.dat?_=' + Date.now(), { cache: 'no-cache' }),
-    ]);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-    const contentLength2 = resp.headers.get('content-length');
-    const total2 = contentLength2 ? parseInt(contentLength2) : null;
-    const reader2 = resp.body.getReader();
-    const chunks2 = [];
-    let loaded2 = 0;
-    while (true) {
-      const { done, value } = await reader2.read();
-      if (done) break;
-      chunks2.push(value);
-      loaded2 += value.length;
-      if (total2) {
-        const pct = Math.round(loaded2 / total2 * 100);
-        olConfirmPrg.textContent = `Pobieranie: map_master3.dat… ${pct}% (${(loaded2/1024/1024).toFixed(1)} / ${(total2/1024/1024).toFixed(1)} MB)`;
-      } else {
-        olConfirmPrg.textContent = `Pobieranie: map_master3.dat… ${(loaded2/1024/1024).toFixed(1)} MB`;
-      }
-    }
-    const totalLen2 = chunks2.reduce((s, c) => s + c.length, 0);
-    const buf = new Uint8Array(totalLen2);
-    let offset2 = 0;
-    for (const ch of chunks2) { buf.set(ch, offset2); offset2 += ch.length; }
-
+async function olLoadDat() {
+  olSetBusy(true);
+  try {
+    const buf = await olFetchFile(MAPA_RAW_URL + 'map_master3.dat', 'map_master3.dat');
     olConfirmPrg.textContent = 'Konwertowanie .dat…';
     const arkmap = datToArkmap(buf.buffer);
     const r = validate(arkmap);
@@ -9141,21 +9145,23 @@ olBtnOk.addEventListener('click', async () => {
     }
     if (!arkmap.meta) arkmap.meta = {};
     if (!arkmap.meta.user_data) arkmap.meta.user_data = {};
-    if (releaseVersion)  arkmap.meta.user_data.version  = releaseVersion;
-    if (releaseRevision) arkmap.meta.user_data.revision = releaseRevision;
+    if (olIndex && olIndex.version)  arkmap.meta.user_data.version  = olIndex.version;
+    if (olIndex && olIndex.revision) arkmap.meta.user_data.revision = olIndex.revision;
     state.filename = '🌐 online · map_master3.dat';
     applyMap(arkmap);
     const allClean = r.ok && !hasWarnings;
-    toast((allClean ? '✓' : '⚠') + ' Online: map_master3.dat' + fmtSz(totalLen2) + ' [Mudlet .dat]');
+    toast((allClean ? '✓' : '⚠') + ' Online: map_master3.dat' + fmtSz(buf.length) + ' [Mudlet .dat]');
     closeOnlineConfirm();
   } catch(e) {
     toast('✗ Online .dat — błąd: ' + e.message, true);
     console.error(e);
-    olBtnOk.disabled     = false;
-    olBtnCancel.disabled = false;
+    olSetBusy(false);
     olConfirmPrg.textContent = '';
   }
-});
+}
+
+olBtnArkmap.addEventListener('click', olLoadArkmap);
+olBtnDat.addEventListener('click', olLoadDat);
 
 // ─── WAYPOINT PLANNER ────────────────────────────────────────────────────────
 
@@ -12252,7 +12258,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.34';
+const APP_VERSION = 'v1.5.35';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -13557,9 +13563,9 @@ function updateSkryptyTab(room) {
   const db = ud.dir_bind || '';
   const dbPairs = db ? db.split('&').map(p => { const i = p.indexOf('='); return i < 0 ? [p, ''] : [p.slice(0, i), p.slice(i + 1)]; }) : [];
   _skRenderPairs('rp-dirbind-list', dbPairs, 'dir_bind', '=', 'kierunek', 'komenda');
-  // ZAD 10 team_follow_link: "label*dir#label*dir" (split # ; ostatni *)
+  // ZAD 10 team_follow_link: "label*dir#label*dir" (split # ; pierwszy * — 1:1 z Delwing)
   const tf = ud.team_follow_link || '';
-  const tfPairs = tf ? tf.split('#').map(p => { const i = p.lastIndexOf('*'); return i < 0 ? [p, ''] : [p.slice(0, i), p.slice(i + 1)]; }) : [];
+  const tfPairs = tf ? tf.split('#').map(p => { const i = p.indexOf('*'); return i < 0 ? [p, ''] : [p.slice(0, i), p.slice(i + 1)]; }) : [];
   _skRenderPairs('rp-teamfollow-list', tfPairs, 'team_follow_link', '*', 'etykieta', 'kierunek');
   // ZAD 11 gps: JSON array
   let gpsArr = [];
@@ -13584,10 +13590,33 @@ const _DIR_ALIAS = {
   n:'n',north:'n',polnoc:'n', s:'s',south:'s',poludnie:'s', e:'e',east:'e',wschod:'e', w:'w',west:'w',zachod:'w',
   ne:'ne',northeast:'ne','polnocny-wschod':'ne','polnocny wschod':'ne', nw:'nw',northwest:'nw','polnocny-zachod':'nw','polnocny zachod':'nw',
   se:'se',southeast:'se','poludniowy-wschod':'se','poludniowy wschod':'se', sw:'sw',southwest:'sw','poludniowy-zachod':'sw','poludniowy zachod':'sw',
-  up:'up',u:'up',gora:'up', down:'down',d:'down',dol:'down', in:'in',out:'out'
+  up:'up',u:'up',gora:'up',gore:'up', down:'down',d:'down',dol:'down', in:'in',out:'out'
 };
 function _dirCanon(t){ const k=String(t).trim().toLowerCase(); return _DIR_ALIAS[k] || k; }
 function _roomExitsList(r){ return [...Object.keys(r.exits||{}), ...Object.keys(r.special_exits||{})]; }
+
+// v1.5.35: fallback geometryczny 1:1 z Delwing findRoomByExit (MapHelper.ts).
+// Kierunek bez pasującego klucza wyjścia jest ŻYWY, gdy któreś wyjście prowadzi
+// geometrycznie w tę stronę: ten sam obszar + osie ŚCIŚLE (składowa 0 = dokładnie 0).
+// Orientacja współrzędnych .dat: północ = +Y (Mudlet), góra = +Z.
+const _DIR_GEO_DELTA = {
+  n:[0,1,0], s:[0,-1,0], e:[1,0,0], w:[-1,0,0],
+  ne:[1,1,0], nw:[-1,1,0], se:[1,-1,0], sw:[-1,-1,0],
+  up:[0,0,1], down:[0,0,-1]
+};
+function _dirGeoMatch(r, canon){
+  const d = _DIR_GEO_DELTA[canon]; if (!d) return false;
+  const area = state.roomArea[r.id];
+  for (const t of [...Object.values(r.special_exits||{}), ...Object.values(r.exits||{})]){
+    const tr = state.roomById[t]; if (!tr) continue;
+    if (state.roomArea[tr.id] !== area) continue;
+    const dx = tr.x - r.x, dy = tr.y - r.y, dz = (tr.z||0) - (r.z||0);
+    if ((d[0]===0 ? dx===0 : d[0]>0 ? dx>0 : dx<0) &&
+        (d[1]===0 ? dy===0 : d[1]>0 ? dy>0 : dy<0) &&
+        (d[2]===0 ? dz===0 : d[2]>0 ? dz>0 : dz<0)) return true;
+  }
+  return false;
+}
 
 // Błędy kierunkowe pojedynczego pokoju (read-only). {tf:{...}|null, db:{...}|null}
 function _roomDirIssues(r){
@@ -13598,8 +13627,8 @@ function _roomDirIssues(r){
   const validCanon = new Set(exits.map(_dirCanon));
   if (ud.team_follow_link){
     const bad=[];
-    ud.team_follow_link.split('#').forEach(p=>{ const i=p.lastIndexOf('*'); const to=(i<0?'':p.slice(i+1)).trim();
-      if(to && !validCanon.has(_dirCanon(to)) && !bad.includes(to)) bad.push(to); });
+    ud.team_follow_link.split('#').forEach(p=>{ const i=p.indexOf('*'); const to=(i<0?'':p.slice(i+1)).trim();
+      if(to && !validCanon.has(_dirCanon(to)) && !_dirGeoMatch(r,_dirCanon(to)) && !bad.includes(to)) bad.push(to); });
     if(bad.length) out.tf = { tf:ud.team_follow_link, bad, exits };
   }
   if (ud.dir_bind){
