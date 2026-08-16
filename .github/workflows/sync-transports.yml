@@ -24,12 +24,12 @@ jobs:
     timeout-minutes: 10   # zawieszony clone nie pali domyślnych 6 h
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: "Pobierz upstream (sparse: tylko definicje transportów)"
         run: |
           set -euo pipefail
-          git clone --depth 1 --filter=blob:none --sparse \
+          timeout 180 git clone --depth 1 --filter=blob:none --sparse \
             https://github.com/Delwing/arkadia-web-client-extension upstream
           cd upstream
           git sparse-checkout set src/client/scripts/ships src/client/scripts/other
@@ -69,4 +69,4 @@ jobs:
           git config user.email "isithunzi000@users.noreply.github.com"
           git add arkmap_studio.html
           git commit -m "Transporty: sync z upstream @${SHORT} (${LINES} linii, ${STOPS} przystanków)"
-          git push origin HEAD:main
+          timeout 120 git push origin HEAD:main
