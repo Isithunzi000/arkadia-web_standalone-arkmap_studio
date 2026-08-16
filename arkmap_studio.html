@@ -8346,17 +8346,26 @@ function showTransportJumpChooser(cands, sx, sy) {
   title.className = 'tp-jump-title';
   title.textContent = '🚢 Skocz do przystanku';
   el.appendChild(title);
-  for (const c of cands) {
+  // v1.5.37: pozycja = nazwa DOCELOWEGO przystanku (etykieta z TRANSPORT_DEFS,
+  // fallback: nazwa pokoju → #ID) — user klika cel z nazwy, nie pełną trasę linii.
+  // Sufiks z nazwą linii tylko gdy nazwy docelowe powtarzają się wśród kandydatów.
+  const primaries = cands.map(c => {
     const r = state.roomById[c.stopId];
+    return c.label || (r && r.name) || `#${c.stopId}`;
+  });
+  const primaryCount = new Map();
+  for (const p of primaries) primaryCount.set(p, (primaryCount.get(p) || 0) + 1);
+  cands.forEach((c, ci) => {
     const item = document.createElement('div');
     item.className = 'tp-jump-item';
-    const stopName = r ? (r.name || `#${c.stopId}`) : `#${c.stopId}`;
     item.innerHTML = '';
-    item.appendChild(document.createTextNode(stopName + ' '));
-    const line = document.createElement('span');
-    line.className = 'tp-jump-line';
-    line.textContent = '— ' + c.lineName;
-    item.appendChild(line);
+    item.appendChild(document.createTextNode(primaries[ci] + ' '));
+    if (primaryCount.get(primaries[ci]) > 1) {
+      const line = document.createElement('span');
+      line.className = 'tp-jump-line';
+      line.textContent = '— ' + c.lineName;
+      item.appendChild(line);
+    }
     item.addEventListener('click', () => {
       closeTransportJumpChooser();
       const doJump = () => { selectArea(state.roomArea[c.stopId], false); jumpToRoom(c.stopId); };
@@ -8364,7 +8373,7 @@ function showTransportJumpChooser(cands, sx, sy) {
       doJump();
     });
     el.appendChild(item);
-  }
+  });
   document.body.appendChild(el);
   // Pozycja przy kursorze, w granicach ekranu
   const w = el.offsetWidth, h = el.offsetHeight;
@@ -9017,6 +9026,25 @@ function download(name, text, mime) {
 // codziennie). Lustro Delwing/arkadia-mapa master: bez poprawek, bez czyszczenia.
 // raw.githubusercontent.com ma Access-Control-Allow-Origin: * — fetch działa z Pages.
 const MAPA_RAW_URL = 'https://raw.githubusercontent.com/Isithunzi000/arkadia-web_standalone-arkmap_studio/mapa/';
+// v1.5.37: TOCTOU — resolve tipa gałęzi `mapa` raz na otwarcie dialogu, potem
+// index.json i oba pliki z niezmienniczych URL-i /<sha>/ (raw.githubusercontent
+// akceptuje SHA w miejscu gałęzi) — spójna migawka, brak wyścigu z nowym syncem.
+// Gdy API GitHub nie odpowiada (rate limit, sieć) → fallback na URL-e gałęziowe.
+const MAPA_API_URL = 'https://api.github.com/repos/Isithunzi000/arkadia-web_standalone-arkmap_studio/commits/mapa';
+let olBaseUrl = MAPA_RAW_URL;
+
+async function olResolveBaseUrl(signal) {
+  try {
+    const resp = await fetch(MAPA_API_URL, { cache: 'no-cache', signal });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    if (!data || typeof data.sha !== 'string' || !/^[0-9a-f]{40}$/.test(data.sha)) throw new Error('niepoprawny sha');
+    return 'https://raw.githubusercontent.com/Isithunzi000/arkadia-web_standalone-arkmap_studio/' + data.sha + '/';
+  } catch(e) {
+    if (e.name === 'AbortError') throw e; // prawdziwy timeout → nie maskuj fallbackiem
+    return MAPA_RAW_URL;
+  }
+}
 
 const olConfirmBg  = document.getElementById('ol-confirm-bg');
 const olConfirmPrg = document.getElementById('ol-confirm-progress');
@@ -9043,7 +9071,8 @@ async function openOnlineConfirm() {
   const ctrl = new AbortController();                    // v1.5.36: fetch bez domyślnego timeoutu
   const timer = setTimeout(() => ctrl.abort(), 30000);   // → zawieszony request przerywany po 30 s
   try {
-    const resp = await fetch(MAPA_RAW_URL + 'index.json?_=' + Date.now(), { cache: 'no-cache', signal: ctrl.signal });
+    olBaseUrl = await olResolveBaseUrl(ctrl.signal);
+    const resp = await fetch(olBaseUrl + 'index.json?_=' + Date.now(), { cache: 'no-cache', signal: ctrl.signal });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     olIndex = await resp.json();
     if (!olIndex || typeof olIndex.revision !== 'string') throw new Error('niepoprawny index.json');
@@ -9130,7 +9159,7 @@ async function olFetchFile(url, label) {
 async function olLoadArkmap() {
   olSetBusy(true);
   try {
-    const buf = await olFetchFile(MAPA_RAW_URL + 'map_master3.arkmap', 'map_master3.arkmap');
+    const buf = await olFetchFile(olBaseUrl + 'map_master3.arkmap', 'map_master3.arkmap');
     closeOnlineConfirm();
     // Ta sama ścieżka co „Wczytaj .arkmap…" z dysku (validate + checksumy + applyMap)
     loadArkmap(new TextDecoder().decode(buf), '🌐 online · map_master3.arkmap');
@@ -9145,7 +9174,7 @@ async function olLoadArkmap() {
 async function olLoadDat() {
   olSetBusy(true);
   try {
-    const buf = await olFetchFile(MAPA_RAW_URL + 'map_master3.dat', 'map_master3.dat');
+    const buf = await olFetchFile(olBaseUrl + 'map_master3.dat', 'map_master3.dat');
     olConfirmPrg.textContent = 'Konwertowanie .dat…';
     const arkmap = datToArkmap(buf.buffer);
     const r = validate(arkmap);
@@ -9313,17 +9342,19 @@ function _collectPathHops(path) {
 // Sąsiednie przystanki transportowe pokoju (dwuklik na mapie → skok do portu).
 // Zwraca [{stopId, lineName, label}] — deduplikowane po stopId; [] gdy pokój nie leży na żadnej linii.
 function _transportNeighbors(roomId) {
-  const out = [], seen = new Set();
+  // v1.5.37: dedup po stopId preferuje kandydata z etykietą (leg[3]) — dotychczas
+  // wygrywał pierwszy trafiony leg, więc etykieta ginęła, gdy był to leg odwrotny.
+  const out = [], byId = new Map();
   for (const def of TRANSPORT_DEFS) {
     const lineName = def[0], stops = def[3];
     for (const leg of stops) {
       let cand = null;
       if (leg[0] === roomId) cand = { stopId: leg[1], lineName, label: leg[3] || null };
       else if (leg[1] === roomId) cand = { stopId: leg[0], lineName, label: null };
-      if (cand && state.roomById[cand.stopId] && !seen.has(cand.stopId)) {
-        seen.add(cand.stopId);
-        out.push(cand);
-      }
+      if (!cand || !state.roomById[cand.stopId]) continue;
+      const prev = byId.get(cand.stopId);
+      if (!prev) { byId.set(cand.stopId, cand); out.push(cand); }
+      else if (cand.label && !prev.label) prev.label = cand.label;
     }
   }
   return out;
@@ -10157,21 +10188,31 @@ function wpUpdateOverview() {
   const oy = (H - spanY * sc) / 2 - minY * sc;
   const toC = ([px, py]) => [ox + px * sc, oy + py * sc];
 
+  // ── Rysowanie per-segment — hopy (statek/dyliżans) kropkowane jak na mapie głównej ──
+  // segHop[i-1] opisuje segment pts[i-1]→pts[i]; dash włączany tylko dla hopów.
+  const ovSeg = (hop) => {
+    if (hop) octx.setLineDash([2, 2.5]); else octx.setLineDash([]);
+  };
+
   // ── Glow ──
   octx.lineCap = 'round'; octx.lineJoin = 'round';
   octx.lineWidth = 3; octx.strokeStyle = 'rgba(232,160,32,0.12)';
-  octx.beginPath();
-  const [sx, sy] = toC(pts[0]);
-  octx.moveTo(sx, sy);
-  for (let i = 1; i < pts.length; i++) { const [px, py] = toC(pts[i]); octx.lineTo(px, py); }
-  octx.stroke();
+  for (let i = 1; i < pts.length; i++) {
+    ovSeg(segHop[i-1]);
+    const [ax, ay] = toC(pts[i-1]);
+    const [px, py] = toC(pts[i]);
+    octx.beginPath(); octx.moveTo(ax, ay); octx.lineTo(px, py); octx.stroke();
+  }
 
   // ── Linia główna ──
   octx.lineWidth = 1.5; octx.strokeStyle = 'rgba(255,190,50,0.9)';
-  octx.beginPath();
-  octx.moveTo(sx, sy);
-  for (let i = 1; i < pts.length; i++) { const [px, py] = toC(pts[i]); octx.lineTo(px, py); }
-  octx.stroke();
+  for (let i = 1; i < pts.length; i++) {
+    ovSeg(segHop[i-1]);
+    const [ax, ay] = toC(pts[i-1]);
+    const [px, py] = toC(pts[i]);
+    octx.beginPath(); octx.moveTo(ax, ay); octx.lineTo(px, py); octx.stroke();
+  }
+  octx.setLineDash([]);
 
   // ── Markery WP — kolorowe kwadraty z numerami (tylko wypełnione WP) ──
   const COLORS = ['#00c896', '#4a90e8', '#e84a90', '#e8c84a', '#a04ae8'];
@@ -12270,7 +12311,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.36';
+const APP_VERSION = 'v1.5.37';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)

@@ -2,6 +2,15 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.5.37 — pinning SHA akcji, spójna migawka pobierania online, hopy na minimapce, chooser po nazwach przystanków
+
+- **Workflow:** wszystkie akcje (`actions/checkout` ×3, `actions/setup-node`) spinowane pełnym SHA commita zamiast ruchomego tagu `@v4` (komentarz `# v4` zachowuje czytelność). Tag to wskaźnik, który właściciel repo akcji może podmienić — SHA jest niezmiennicze (rekomendacja OpenSSF i GitHuba). W `sync-transports.yml` doszły ziarniste timeouty: `timeout 180` na clone upstream, `timeout 120` na push.
+- **Pobieranie online (TOCTOU):** dialog najpierw rozwiązuje tip gałęzi `mapa` przez API GitHub, a `index.json` i oba pliki pobiera z niezmienniczych URL-i `raw/<sha>/…` — spójna migawka, brak wyścigu z nowym syncem między sprawdzeniem a pobraniem. Gdy API nie odpowiada (rate limit, sieć), fallback na URL-e gałęziowe; prawdziwy timeout (AbortError) nie jest maskowany fallbackiem.
+- **Minimapka planera:** odcinki transportowe (hopy) rysowane kropkowaną linią `[2, 2.5]` w obu przejściach (glow + linia główna) — dotychczas tablica `segHop[]` była liczona, ale nigdy nieużyta. Na mapie głównej hopy były kropkowane już wcześniej.
+- **Skok po linii transportowej (dwuklik):** lista wyboru pokazuje nazwę DOCELOWEGO przystanku (etykieta z definicji linii; fallback: nazwa pokoju → `#ID`) zamiast pełnej trasy linii — klikasz cel z nazwy. Nazwa linii dokładana tylko wtedy, gdy nazwy docelowe powtarzają się wśród kandydatów. Deduplikacja sąsiadów preferuje kandydata z etykietą (stare first-wins gubiło etykietę, gdy pierwszy trafiony był leg odwrotny).
+- **Testy:** `tests/planner_ui.js` +8 asercji (preferencja etykiet na syntetycznych definicjach, struktura chooser-a, hop-dash w podglądzie trasy), `tests/sync_map.js` +7 asercji (regex pinningu SHA, brak referencji `@vN`, timeouty sync-transports, resolve-sha + fallback w UI). Regresja: **377 OK / 0 FAIL** (10 harnessów).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.5.36 — timeouty sieciowe: workflow sync-map i pobieranie online w UI
 
 - **Workflow `sync-map.yml`:** ziarniste timeouty na wszystkich operacjach sieciowych — curl z `--connect-timeout 30 --max-time 180`, `timeout 90` na obu `git ls-remote` i na `git fetch` gałęzi `mapa`, `timeout 120` na force-push. Zawieszone połączenie = szybki czerwony run zamiast wypalania 10-minutowego timeoutu joba (siatka job-level zostaje jako ostateczność). Fail-closed bez zmian: żaden timeout nie publikuje niczego.

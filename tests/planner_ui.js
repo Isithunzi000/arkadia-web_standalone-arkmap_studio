@@ -219,5 +219,39 @@ console.log('── T3: struktura HTML/CSS ──');
   ok((NEW.match(/data-aggro="/g) || []).length === 2, 'HTML: 2 przyciski data-aggro');
 }
 
+
+// ── T4: v1.5.37 — etykiety przystanków, chooser po nazwach, hopy na minimapce ──
+console.log('── T4: v1.5.37 — etykiety / chooser / hop-dash ──');
+{
+  // Preferencja etykiety przy deduplikacji: leg odwrotny (label null) trafiony
+  // PRZED legiem w przód (label) → etykieta i tak wygrywa.
+  // Pokój 1 sąsiaduje z 2 przez leg odwrotny (label null) ORAZ leg w przód (label).
+  // Leg odwrotny występuje w danych PIERWSZY — stare first-wins gubiło etykietę.
+  const SYNT = [
+    ['Linia X', [], null, [[2, 1, 10, 'Etykieta Pokoju 1'], [1, 2, 10, 'Etykieta Pokoju 2']]],
+  ];
+  const st = { roomById: { 1: {}, 2: {} } };
+  const fn = new Function('state', 'TRANSPORT_DEFS', neighborsFn() + '\n;return _transportNeighbors;')(st, SYNT);
+  const n1 = fn(1);
+  ok(n1.length === 1 && n1[0].stopId === 2, 'dedup: ten sam przystanek z legów w obie strony = raz');
+  ok(n1[0].label === 'Etykieta Pokoju 2', 'dedup: etykieta wygrywa mimo że leg odwrotny był pierwszy');
+  const n2 = fn(2);
+  ok(n2.length === 1 && n2[0].stopId === 1 && n2[0].label === 'Etykieta Pokoju 1',
+    'leg w przód przed odwrotnym: etykieta obecna, deduplikacja zachowana');
+
+  // Chooser: primary = etykieta → nazwa pokoju → #ID; sufiks linii tylko przy duplikatach
+  ok(NEW.includes('return c.label || (r && r.name) || `#${c.stopId}`;'),
+    'chooser: pozycja = etykieta docelowego przystanku (fallback nazwa pokoju → #ID)');
+  ok(NEW.includes('primaryCount.get(primaries[ci]) > 1'),
+    'chooser: sufiks z nazwą linii tylko gdy nazwy docelowe się powtarzają');
+
+  // Minimapka: hopy kropkowane per-segment w obu przejściach (glow + linia główna)
+  const ovA = NEW.indexOf('function wpUpdateOverview() {');
+  const ovB = NEW.indexOf('// ── Markery WP', ovA);
+  const OV = NEW.slice(ovA, ovB);
+  ok((OV.match(/ovSeg\(segHop\[i-1\]\)/g) || []).length === 2, 'minimapka: segHop użyty w glow i linii głównej');
+  ok(OV.includes('octx.setLineDash([2, 2.5])'), 'minimapka: hop = kreska kropkowana [2, 2.5]');
+  ok(OV.includes('octx.setLineDash([]);'), 'minimapka: reset dash po rysowaniu');
+}
 console.log(`\n═══ planner_ui.js: ${pass} OK, ${fail} FAIL ═══`);
 process.exit(fail ? 1 : 0);

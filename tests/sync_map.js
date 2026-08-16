@@ -129,7 +129,29 @@ console.log('— timeouty (struktura) —');
   ok(OL.includes('ctrl.abort(), 30000'), 'UI: timeout 30 s na index.json');
   ok(OL.includes('ctrl.abort(), 180000'), 'UI: timeout 180 s na pobieranie plików');
   ok((OL.match(/finally \{ clearTimeout\(timer\); \}/g) || []).length === 2, 'UI: clearTimeout w finally ×2 (bez wycieku timerów)');
-  ok((OL.match(/e\.name === 'AbortError'/g) || []).length === 3, 'UI: AbortError → czytelny komunikat we wszystkich 3 catch');
+  ok((OL.match(/e\.name === 'AbortError'/g) || []).length === 4, 'UI: AbortError → 3 czytelne komunikaty + rethrow w resolve SHA');
+}
+
+// ── v1.5.37: pinning SHA akcji + timeouty transports + TOCTOU w UI ──────────
+console.log('— v1.5.37: pinning / transports / TOCTOU (struktura) —');
+{
+  const wfs = ['sync-map.yml', 'sync-transports.yml', 'keepalive.yml']
+    .map(f => fs.readFileSync(path.join(ROOT, '.github', 'workflows', f), 'utf8'));
+  const ALL = wfs.join('\n');
+  ok(!/uses: actions\/[^\s]*@v\d/.test(ALL), 'workflow: żadna akcja nie jest referencją tagową (@vN)');
+  const pins = ALL.match(/uses: actions\/(checkout|setup-node)@[0-9a-f]{40} # v4/g) || [];
+  ok(pins.length === 4, 'workflow: 4× akcja spinowana SHA z komentarzem # v4 (checkout×3, setup-node×1)');
+  const TR = wfs[1];
+  ok(TR.includes('timeout 180 git clone'), 'sync-transports: timeout 180 na clone upstream');
+  ok(TR.includes('timeout 120 git push'), 'sync-transports: timeout 120 na push');
+
+  const a = HTML.indexOf('// ─── ONLINE LOAD'), b = HTML.indexOf('// ─── WAYPOINT PLANNER');
+  const OL = HTML.slice(a, b);
+  ok(OL.includes("api.github.com/repos/Isithunzi000/arkadia-web_standalone-arkmap_studio/commits/mapa"),
+    'UI: resolve tipa gałęzi mapa przez API (TOCTOU)');
+  ok(OL.includes("if (e.name === 'AbortError') throw e;") && OL.includes('return MAPA_RAW_URL;'),
+    'UI: fallback na URL-e gałęziowe, AbortError nie jest maskowany');
+  ok((OL.match(/olBaseUrl \+ /g) || []).length === 3, 'UI: index.json i oba pliki po URL-ach przypiętych do SHA');
 }
 
 // ── Posprzątanie ────────────────────────────────────────────────────────────
