@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## Sync mapy 2×/d + doprecyzowanie dokumentacji (bez bumpu APP_VERSION)
+
+- **Workflow `sync-map.yml`:** drugi cron `0 21 * * *` obok porannego `17 5 * * *` — sync 2× dziennie. Pory dobrane analizą 198 commitów `map_master3.dat` z Delwing/arkadia-mapa (2022–2026): aktywność upstream koncentruje się w 09–23 PL ze szczytem 20–22 PL, noc 03–08 PL jest martwa. Wieczorny run 21:00 UTC (23:00 PL latem / 22:00 zimą) domyka dzień tuż za szczytem; poranny łapie commity nocne. Średnie opóźnienie lustra commit→sync spada z ~13,6 h do ~6,9 h (symulacja na ostatnim roku; worst case 22 h → 14 h). Koszt zerowy — brama na SHA: pusty run = cisza.
+- **Spec (`docs/arkmap_spec.html` §7):** kolumna „Map vector [dx, dy]" → „Screen vector [dx, dy]" + notka o dwóch układach: wektory tabeli są ekranowe (północ = −Y przy renderowaniu, konwencja klienta), współrzędne pliku `.arkmap`/`.dat` trzymają północ = **+Y** (odsyłacz do §6). Usunięta dwuznaczność §6 vs §7.
+- **tests/README.md:** nowa sekcja „Walidacja E2E na silniku Mudlet (mudix) — procedura ręczna": wystawienie eksportu (scratch-branch + raw URL), profil offline w mudix, komendy `downloadFile`/`loadMap`, złote wyniki (60 area / 26988 pokoi, exits pokoju 746, nazwa), kontrola wizualna, sprzątanie brancha; notki: błędy `generic_mapper` niezwiązane, szybka alternatywa npm `mudlet-map-binary-reader`.
+- **Bez bumpu APP_VERSION** — `arkmap_studio.html` nietknięte (docs + workflow). Testy: pełna regresja **392 OK / 0 FAIL** (harnessy bez zmian — brak asercji pinujących cron).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.5.39 — okienko pobierania online: ładne łamanie linii + NOTICE.md z atrybucjami
 
 - **Okienko „🌐 Pobierz mapę online":** linia sync-info łamała się brzydko (data pękała między datą a godziną, nazwa repo w połowie). Teraz sync-info to 3 segmenty `nowrap` w kontenerze flex (`mapa master · @rev` / `sync data` / rozmiary) — łamanie wyłącznie między segmentami; data bez sekund (`timeStyle: 'short'`); `.ol-src` z `nowrap` (nazwa repo w całości); opis bez sztywnego `<br>`; szerokość okna 380 → 420px (`max-width:92vw`); `min-height` pod sync-info — okno nie skacze przy ładowaniu.

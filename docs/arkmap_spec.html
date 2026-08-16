@@ -294,7 +294,7 @@
 <p>Exits use <strong>short direction strings</strong> as keys. The complete set of 12 valid directions:</p>
 
 <table>
-<tr><th>Short</th><th>Long (Mudlet)</th><th>Index</th><th>Map vector [dx, dy]</th></tr>
+<tr><th>Short</th><th>Long (Mudlet)</th><th>Index</th><th>Screen vector [dx, dy]</th></tr>
 <tr><td><code>n</code></td><td>north</td><td>1</td><td>[0, -1]</td></tr>
 <tr><td><code>ne</code></td><td>northeast</td><td>2</td><td>[1, -1]</td></tr>
 <tr><td><code>nw</code></td><td>northwest</td><td>3</td><td>[-1, -1]</td></tr>
@@ -308,6 +308,8 @@
 <tr><td><code>in</code></td><td>in</td><td>11</td><td>[0, 0]</td></tr>
 <tr><td><code>out</code></td><td>out</td><td>12</td><td>[0, 0]</td></tr>
 </table>
+
+<div class="note"><strong>Coordinate systems:</strong> the screen vectors above are in <strong>display coordinates</strong> — as rendered, north/up on screen = negative Y (the same convention the Arkadia web client uses). Stored coordinates are different: in <code>.arkmap</code> and Mudlet <code>.dat</code> files north = <strong>positive Y</strong> (see §6). The display layer negates Y; the data model never does.</div>
 
 <h3>exits object</h3>
 <p>Maps direction → target room ID. Keys are short direction strings; values are integers (room IDs). Only existing exits are listed.</p>

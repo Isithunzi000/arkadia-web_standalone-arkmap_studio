@@ -48,6 +48,35 @@ Kod wyjścia: 0 = wszystko OK, 1 = są FAIL-e, 2 = brak fixture.
   gdy świadomie zmieniasz odpowiedni fragment, zaktualizuj też oczekiwania w harnessie.
   To celowe: liczniki wykrywają niezapowiedziany drift.
 
+## Walidacja E2E na silniku Mudlet (mudix) — procedura ręczna
+
+Harnessy powyżej sprawdzają konwerter `.dat` ↔ `.arkmap` statycznie. Ostateczny test —
+załadowanie naszego eksportu w **prawdziwym silniku Mudlet (WASM)** — wykonuje się ręcznie
+przez Mudlet Web: https://delwing.github.io/mudix/ (legacy deployment; rozwój przeniesiony
+do Mudlet/mudlet-web).
+
+1. Wygeneruj eksport: w edytorze „Zapisz jako Mudlet .dat" (albo użyj fixture).
+2. Wystaw plik pod publicznym URL-em z CORS — najprościej scratch-branch w tym repo
+   i adres `raw.githubusercontent.com/.../plik.dat` (CORS `*`).
+3. W mudix utwórz profil — działa offline, bez połączenia z MUD-em. Alias `lua`
+   pochodzi z preinstalowanego pakietu run-lua-code.
+4. W command line:
+   - `lua downloadFile('test.dat', '<url>')` → `true`
+   - `lua loadMap('test.dat')` → `true`
+   - liczba obszarów/pokoi: pętla po `getAreaTable()` — **uwaga: zwraca mapę
+     nazwa→id, iteruj po wartościach**; złoty wynik: **60 area / 26988 pokoi**
+   - spot-check: `getRoomExits(746)` → `south:47, east:2206, north:747`;
+     `getRoomName(746)` → „Placyk w centrum miasta, Bialy Most # Woz Oxenfurt - Wyzima"
+5. Kontrola wizualna: widok Map renderuje obszar (np. Wyzima, ID 1).
+6. Sprzątanie: usuń scratch-branch z remote.
+
+Uwagi:
+
+- Błędy `generic_mapper` w konsoli mudix są niezwiązane z mapą (profil offline).
+- Szybka alternatywa bez przeglądarki: cross-check parserem npm
+  `mudlet-map-binary-reader` (ESM-only; `readMapFromBuffer(Uint8Array)` — nie
+  ArrayBuffer) — odczyt oryginału i naszego eksportu musi być identyczny.
+
 ## Fixture
 
 - `map_master3.dat` — produkcyjna mapa (release 0.205.0 z Delwing/arkadia-mapa),
