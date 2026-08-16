@@ -11914,7 +11914,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.23';
+const APP_VERSION = 'v1.5.24';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -12325,6 +12325,17 @@ function _dispatchUndo(entry) {
           if (ce.exitWeight) { src.exit_weights = src.exit_weights || {}; src.exit_weights[ce.key] = ce.exitWeight; }
         }
         if (ce.cl) { src.custom_lines = src.custom_lines || {}; src.custom_lines[ce.key] = JSON.parse(JSON.stringify(ce.cl)); }
+      }
+      // audyt A13: przywróć puste kontenery usunięte przez cleanup (commit/redo) —
+      // strażnik || zapobiega nadpisaniu kontenerów już odtworzonych przez cleanedExits
+      for (const rc of (entry.removedEmptyContainers || [])) {
+        const src = state.roomById[rc.roomId];
+        if (!src) continue;
+        if (rc.container === 'exit_locks' || rc.container === 'special_exit_locks') {
+          src[rc.container] = src[rc.container] || [];
+        } else {
+          src[rc.container] = src[rc.container] || {};
+        }
       }
       buildAreaList(); buildRoomsZ();
       // Restore waypoints that were cleared when area was deleted
@@ -15001,7 +15012,7 @@ function commitDeleteArea(areaId) {
             if (r.exit_locks)    { r.exit_locks = r.exit_locks.filter(d => d !== dir); if (!r.exit_locks.length) delete r.exit_locks; }
           }
         }
-        if (r.exits && !Object.keys(r.exits).length) delete r.exits;
+        // audyt A13: opróżnionego kontenera exits nie kasujemy tutaj — robi to blok zbiorczy niżej (z nagraniem)
       }
       if (r.special_exits) {
         for (const [cmd, tid] of Object.entries(r.special_exits)) {
@@ -15019,11 +15030,25 @@ function commitDeleteArea(areaId) {
             if (r.exit_weights)  { delete r.exit_weights[cmd];  if (!Object.keys(r.exit_weights).length)  delete r.exit_weights; }
           }
         }
-        if (r.special_exits && !Object.keys(r.special_exits).length) delete r.special_exits;
+        // audyt A13: opróżnionego kontenera special_exits nie kasujemy tutaj — robi to blok zbiorczy niżej (z nagraniem)
+      }
+    }
+    // audyt A13: usuń WSZYSTKIE puste kontenery w pokojach spoza obszaru (zgodność commit ≡ redo
+    // DELETE_AREA) i nagraj je do przywrócenia w undo — dotychczas redo kasował je bez zapisu,
+    // a undo ich nie odtwarzało (uprzednio puste custom_lines:{} / exit_locks:[] itd. przepadały)
+    const removedEmptyContainers = [];
+    for (const [rid, r] of Object.entries(state.roomById)) {
+      if (removedSet.has(parseInt(rid))) continue;
+      for (const key of ['exits', 'special_exits', 'custom_lines', 'doors', 'exit_weights']) {
+        if (r[key] && !Object.keys(r[key]).length) { removedEmptyContainers.push({ roomId: parseInt(rid), container: key }); delete r[key]; }
+      }
+      for (const key of ['exit_locks', 'special_exit_locks']) {
+        if (r[key] && !r[key].length) { removedEmptyContainers.push({ roomId: parseInt(rid), container: key }); delete r[key]; }
       }
     }
     // Store for undo
     state._lastCleanedCrossExits = cleanedExits;
+    state._lastRemovedEmptyContainers = removedEmptyContainers;
     // Usuń wszystkie pokoje obszaru
     for (const r of (area.rooms || [])) {
       delete state.roomById[r.id];
@@ -15073,7 +15098,9 @@ function commitDeleteArea(areaId) {
   state._lastCleanedCrossExits = null;
   const wpCleared2 = state._lastWpCleared2 || [];
   state._lastWpCleared2 = null;
-  pushUndo({ type: 'DELETE_AREA', areaId, removedRoomIds, snapshot: snap, cleanedExits, wpCleared: wpCleared2,
+  const removedEmptyContainers = state._lastRemovedEmptyContainers || [];   // audyt A13
+  state._lastRemovedEmptyContainers = null;
+  pushUndo({ type: 'DELETE_AREA', areaId, removedRoomIds, snapshot: snap, cleanedExits, removedEmptyContainers, wpCleared: wpCleared2,
     label: `Usunięcie obszaru "${snap.name}" (#${areaId})` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
