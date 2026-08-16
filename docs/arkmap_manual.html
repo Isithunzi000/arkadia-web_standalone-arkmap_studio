@@ -337,10 +337,10 @@
 <p>Na dole panelu widać: łączną liczbę pokojów, łączną wagę trasy, szacowany czas podróży, informacje o drzwiach na trasie.</p>
 
 <h3>Kod trasy</h3>
-<p>Pole <strong>Kod trasy</strong> wyświetla serializowaną trasę w formacie <code>ARKMAP:...</code>. Możesz skopiować ten kod (przycisk ⎘) i udostępnić innej osobie, która zaimportuje go w swoim ArkMap Studio.</p>
+<p>Pole <strong>Kod trasy</strong> wyświetla serializowaną trasę w formacie <code>ARKMAP2:&lt;algo&gt;&lt;kierunki&gt;&lt;transport&gt;:...</code>. Kod zawiera nie tylko waypointy, ale też wszystkie ustawienia planera: algorytm (<code>d</code> = Dijkstra, <code>a</code> = A*), filtr kierunków (<code>k</code> = kardynalne, <code>p</code> = +pionowe, <code>w</code> = wszystkie) i transporty (<code>p</code> = pieszo, <code>n</code> = normalny, <code>g</code> = agresywny). Możesz skopiować ten kod (przycisk ⎘) i udostępnić innej osobie, która zaimportuje go w swoim ArkMap Studio.</p>
 
 <h3>Import trasy</h3>
-<p>Kliknij <strong>Importuj</strong> w nagłówku panelu → wklej kod <code>ARKMAP:...</code> w oknie dialogowym → kliknij „Importuj trasę".</p>
+<p>Kliknij <strong>Importuj</strong> w nagłówku panelu → wklej kod <code>ARKMAP2:...</code> w oknie dialogowym → kliknij „Importuj trasę". Import ustawia algorytm, filtr kierunków i transporty zgodnie z kodem, a następnie przelicza trasę.</p>
 
 <h3>Dodatkowe akcje</h3>
 <ul>
