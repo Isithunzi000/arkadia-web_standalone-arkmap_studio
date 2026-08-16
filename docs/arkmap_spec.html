@@ -77,7 +77,7 @@
 
 <h1>.arkmap Format Specification</h1>
 <div class="subtitle">
-  Version 1 · ArkMap Studio · Isithunzi &amp; Claude AI · 2026<br>
+  Version 1.1 · ArkMap Studio · Isithunzi &amp; Claude AI · 2026<br>
   File extension: <code>.arkmap</code> · MIME type: <code>application/json</code> · Encoding: UTF-8
 </div>
 
@@ -165,6 +165,7 @@
 <tr><td><code>symbol_font</code></td><td><a href="#font">Font</a></td><td class="req">YES</td><td>Font used for rendering room symbols on the map</td></tr>
 <tr><td><code>symbol_font_fudge_factor</code></td><td>number</td><td class="req">YES</td><td>Mudlet's font size scaling factor (typically 1.0)</td></tr>
 <tr><td><code>use_only_map_font</code></td><td>boolean</td><td class="req">YES</td><td>If true, only use symbol_font; false = allow fallback</td></tr>
+<tr><td><code>room_id_hash</code></td><td>object (string → integer)</td><td class="opt">optional</td><td>Mudlet's <code>mRoomIdHash</code>: contributor name → starting room ID, used by multi-contributor map merging (crowdmap). Preserved through .dat round-trips. Omit if empty. Added in spec v1.1.</td></tr>
 <tr><td><code>user_data</code></td><td><a href="#user-data">UserData</a></td><td class="opt">optional</td><td>Map-level key-value metadata. May contain <code>version</code>, <code>revision</code>, <code>map_sync_version</code> etc.</td></tr>
 <tr><td><code>checksums</code></td><td>object</td><td class="opt">optional</td><td>Hierarchical CRC-32 checksums. See <a href="#checksums">§15</a>.</td></tr>
 <tr><td><code>accepted_dir_issues</code></td><td>array of strings</td><td class="opt">optional</td><td><span style="color:#5570a0">.arkmap-only</span> — Acceptances for the direction validator (intentional <code>team_follow_link</code> / <code>dir_bind</code> mismatches marked as OK). Each entry is a key string <code>"type:roomId:value"</code>. Written only when the validator's acceptance store is set to "file". Not preserved in .dat export. See <a href="#user-data">§14</a>.</td></tr>
@@ -622,6 +623,7 @@
   <li><code>format</code> must be <code>"arkmap"</code></li>
   <li><code>version</code> must be <code>1</code></li>
   <li><code>meta</code>, <code>colors</code>, <code>areas</code> must be present</li>
+  <li><code>meta.room_id_hash</code>, if present, must be an object mapping contributor names (strings) to starting room IDs (integers)</li>
   <li>All area IDs must be unique</li>
   <li>All room IDs must be globally unique (across all areas)</li>
   <li>Exit target room IDs must reference existing rooms</li>
@@ -684,7 +686,6 @@
 <h3>Known limitations</h3>
 <p>The following source data is currently <strong>lost</strong> on a .dat → .arkmap → .dat round-trip:</p>
 <ul>
-  <li><strong>mRoomIdHash</strong> — the contributor → starting room ID table used by Mudlet's multi-contributor map merging has no .arkmap representation and is dropped.</li>
   <li><strong>Exit weights equal to 1</strong> — not imported (treated as "no weight"); in Mudlet "no weight" means weight 0, so such exits change weight 1 → 0 after a round-trip.</li>
   <li><strong>Orphan custom line style/arrow entries</strong> — style/arrow values for directions that have no custom line points entry are dropped.</li>
 </ul>
