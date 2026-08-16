@@ -11914,7 +11914,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.22';
+const APP_VERSION = 'v1.5.23';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -12160,13 +12160,11 @@ function _dispatchUndo(entry) {
     case 'ADD_ROOM': {
       const area = state.areas.get(entry.areaId);
       if (!area) break;
-      // Clean reverse exits from other rooms pointing to this room
+      // audyt A14: bez czyszczenia wyjść prowadzących do usuwanego pokoju — kolejność LIFO
+      // gwarantuje, że nie istnieją (były osobnymi wpisami wyżej na stosie, już cofniętymi).
+      // Gdyby kiedyś powstała ścieżka dodająca pokój z auto-wyjściami, wiszące wyjście wykryje
+      // walidator — ciche kasowanie byłoby nieodwracalne (redo ADD_ROOM ich nie przywraca).
       const rid = entry.roomId;
-      for (const [sid, sr] of Object.entries(state.roomById)) {
-        if (parseInt(sid) === rid) continue;
-        if (sr.exits) for (const [d, t] of Object.entries(sr.exits)) { if (t === rid) delete sr.exits[d]; }
-        if (sr.special_exits) for (const [c, t] of Object.entries(sr.special_exits)) { if (t === rid) delete sr.special_exits[c]; }
-      }
       area.rooms = area.rooms.filter(r => r.id !== rid);
       delete state.roomById[rid];
       delete state.roomArea[rid];
@@ -12261,10 +12259,19 @@ function _dispatchUndo(entry) {
     }
     case 'ADD_EXIT': {
       const src = rm(entry.sourceId); if (!src) break;
-      if (src.exits) delete src.exits[entry.dir];
+      // audyt A12: przywróć nadpisane wyjście, jeśli entry je zna; posprzątaj pusty kontener (ścisła odwrotność)
+      if (src.exits) {
+        if (entry.prevExit !== undefined) src.exits[entry.dir] = entry.prevExit;
+        else delete src.exits[entry.dir];
+        if (!Object.keys(src.exits).length) delete src.exits;
+      }
       if (entry.bidirectional && entry.opp) {
         const tgt = rm(entry.targetId);
-        if (tgt?.exits) delete tgt.exits[entry.opp];
+        if (tgt?.exits) {
+          if (entry.prevOppExit !== undefined) tgt.exits[entry.opp] = entry.prevOppExit;
+          else delete tgt.exits[entry.opp];
+          if (!Object.keys(tgt.exits).length) delete tgt.exits;
+        }
       }
       break;
     }
@@ -15273,6 +15280,12 @@ function commitAddExit(sourceId, dir, targetId, bidirectional) {
   if (!src || !tgt) return;
 
   const opp = OPPOSITE[dir];
+  // audyt A12: rdzeń broni się sam przed nadpisaniem istniejącego wyjścia
+  // (strażnicy UI zostają, ale dialogi są asynchroniczne — guard musi być tutaj)
+  if (src.exits?.[dir] !== undefined) { toast(`⚠ Kierunek ${dir.toUpperCase()} w #${sourceId} jest już zajęty`, true); return; }
+  if (bidirectional && opp && tgt.exits?.[opp] !== undefined) { toast(`⚠ Kierunek ${opp.toUpperCase()} w #${targetId} jest już zajęty`, true); return; }
+  const prevExit    = src.exits?.[dir];                              // audyt A12: po guardzie zawsze undefined — defense in depth
+  const prevOppExit = (bidirectional && opp) ? tgt.exits?.[opp] : undefined;
   // Wykonaj operację inline (data-only entry per Pass 60)
   src.exits = src.exits || {}; src.exits[dir] = targetId;
   if (bidirectional && opp) { tgt.exits = tgt.exits || {}; tgt.exits[opp] = sourceId; }
@@ -15281,7 +15294,7 @@ function commitAddExit(sourceId, dir, targetId, bidirectional) {
   const label = bidirectional
     ? `Dodanie wyjścia ${dir} ↔ ${opp||'?'} między #${sourceId} a #${targetId}`
     : `Dodanie wyjścia ${dir} → #${targetId} (z #${sourceId})`;
-  pushUndo({ type: 'ADD_EXIT', sourceId, dir, targetId, bidirectional, opp, label });
+  pushUndo({ type: 'ADD_EXIT', sourceId, dir, targetId, bidirectional, opp, prevExit, prevOppExit, label });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
