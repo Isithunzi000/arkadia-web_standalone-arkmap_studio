@@ -1815,7 +1815,7 @@
   <!-- MOBILE: hamburger -->
   <button id="mob-hamburger" title="Menu" aria-label="Menu"><span></span><span></span><span></span></button>
   <!-- MOBILE: import trasy -->
-  <button id="mob-import-btn" title="Wczytaj trasę ARKMAP">⊙ Trasa</button>
+  <button id="mob-import-btn" title="Wczytaj trasę ARKMAP2">⊙ Trasa</button>
   <button id="mob-clear-btn" title="Usuń trasę">✕ Usuń trasę</button>
 
   <!-- SIDEBAR -->
@@ -10088,8 +10088,11 @@ document.getElementById('wp-show-btn').addEventListener('click', fitRouteToView)
 function wpEncodeRoute() {
   const ids = wpState.waypoints.map(w => w.roomId).filter(id => id !== null);
   if (ids.length < 2) return '';
+  // Format ARKMAP2:<algo><dir><trans>:base64 — algo: d/a, dir: k=cardinal p=vertical w=all, trans: p=off n=normal g=aggressive
   const algoCode = wpState.algorithm === 'astar' ? 'a' : 'd';
-  try { return 'ARKMAP:' + algoCode + ':' + btoa(ids.join(',')); } catch { return ''; }
+  const dirCode = { cardinal: 'k', vertical: 'p', all: 'w' }[wpState.dirMode] || 'w';
+  const transCode = { off: 'p', normal: 'n', aggressive: 'g' }[wpState.transportMode] || 'p';
+  try { return 'ARKMAP2:' + algoCode + dirCode + transCode + ':' + btoa(ids.join(',')); } catch { return ''; }
 }
 
 function wpUpdateRouteCode() {
@@ -10125,32 +10128,36 @@ document.getElementById('wp-route-copy-btn').addEventListener('click', () => {
 // ── Import trasy — modal ────────────────────────────────────────────────────
 
 function wpDecodeRoute(code) {
-  // Zwraca { valid: [roomId,...], invalidCount, total, algorithm } lub null
+  // Zwraca { valid: [roomId,...], invalidCount, total, algorithm, dirMode, transportMode } lub null
+  // Format ARKMAP2:<algo><dir><trans>:base64 — ścisła walidacja, bez kompatybilności wstecznej
   const raw = (code || '').trim();
-  if (!raw.startsWith('ARKMAP:')) return null;
-  const rest = raw.slice(7);
-  if (!rest) return null;
-
-  // Nowy format: ARKMAP:d:base64 lub ARKMAP:a:base64
-  // Stary format: ARKMAP:base64 (backward compat = dijkstra)
-  let algoKey = 'dijkstra';
-  let b64 = rest;
-  if (rest.length >= 2 && rest[1] === ':') {
-    const a = rest[0];
-    if (a === 'a') algoKey = 'astar';
-    b64 = rest.slice(2);
-  }
-  if (!b64) return null;
+  if (!raw.startsWith('ARKMAP2:')) return null;
+  const rest = raw.slice(8);
+  if (rest.length < 5 || rest[3] !== ':') return null;
+  const flags = rest.slice(0, 3);
+  const b64 = rest.slice(4);
+  const algoKey = { d: 'dijkstra', a: 'astar' }[flags[0]];
+  const dirKey = { k: 'cardinal', p: 'vertical', w: 'all' }[flags[1]];
+  const transKey = { p: 'off', n: 'normal', g: 'aggressive' }[flags[2]];
+  if (!algoKey || !dirKey || !transKey || !b64) return null;
   let decoded;
   try { decoded = atob(b64); } catch { return null; }
-  const parts = decoded.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-  if (!parts.length) return null;
-  const valid = [], invalid_count = { n: 0 };
+  // Każdy token musi być dodatnią liczbą całkowitą — inaczej kod jest uszkodzony
+  const tokens = decoded.split(',');
+  if (!tokens.length) return null;
+  const parts = [];
+  for (const t of tokens) {
+    const n = parseInt(t.trim(), 10);
+    if (isNaN(n) || n <= 0 || String(n) !== t.trim()) return null;
+    parts.push(n);
+  }
+  const valid = [];
+  let invalidCount = 0;
   for (const id of parts) {
     if (state.roomById?.[id]) valid.push(id);
-    else invalid_count.n++;
+    else invalidCount++;
   }
-  return { valid, invalidCount: invalid_count.n, total: parts.length, algorithm: algoKey };
+  return { valid, invalidCount, total: parts.length, algorithm: algoKey, dirMode: dirKey, transportMode: transKey };
 }
 
 function wpImportOpen() {
@@ -10193,7 +10200,7 @@ document.getElementById('wp-import-confirm').addEventListener('click', () => {
 
   // Walidacja — poziom 1 (całkowita porażka)
   if (!code) { toast('✗ Wklej kod trasy przed importem'); return; }
-  if (!code.startsWith('ARKMAP:')) { toast('✗ Niepoprawny format — oczekiwano kodu ARKMAP:...'); return; }
+  if (!code.startsWith('ARKMAP2:')) { toast('✗ Niepoprawny format — oczekiwano kodu ARKMAP2:...'); return; }
 
   const res = wpDecodeRoute(code);
   if (!res) { toast('✗ Kod trasy jest uszkodzony lub niepoprawny'); return; }
@@ -10202,12 +10209,14 @@ document.getElementById('wp-import-confirm').addEventListener('click', () => {
   // Załaduj
   wpImportClose();
 
-  // Ustaw algorytm zakodowany w trasie
-  if (res.algorithm) {
-    wpState.algorithm = res.algorithm;
-    document.querySelectorAll('.wp-algo-btn:not(.wp-dir-btn)').forEach(b =>
-      b.classList.toggle('wp-algo-on', b.dataset.algo === res.algorithm));
-  }
+  // Ustaw parametry zakodowane w trasie: algorytm + filtr kierunków + transporty
+  wpState.algorithm = res.algorithm;
+  document.querySelectorAll('.wp-algo-btn:not(.wp-dir-btn)').forEach(b =>
+    b.classList.toggle('wp-algo-on', b.dataset.algo === res.algorithm));
+  wpState.dirMode = res.dirMode;
+  wpRefreshDirUI();
+  wpState.transportMode = res.transportMode;
+  wpRefreshTransportUI();
 
   // Zbuduj nową listę waypointów
   const newWps = res.valid.map(id => {
@@ -10268,13 +10277,16 @@ document.querySelectorAll('.wp-algo-btn:not(.wp-dir-btn)').forEach(btn => {
 });
 
 // Filtr kierunków planera (kardynalne / +pionowe / wszystkie)
+function wpRefreshDirUI() {
+  document.querySelectorAll('.wp-dir-btn').forEach(b =>
+    b.classList.toggle('wp-algo-on', b.dataset.dir === wpState.dirMode));
+}
 document.querySelectorAll('.wp-dir-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const mode = btn.dataset.dir;
     if (wpState.dirMode === mode) return;
     wpState.dirMode = mode;
-    document.querySelectorAll('.wp-dir-btn').forEach(b =>
-      b.classList.toggle('wp-algo-on', b.dataset.dir === mode));
+    wpRefreshDirUI();
     wpRecalcPaths();
     wpRebuildList();
     wpUpdateSummary();
