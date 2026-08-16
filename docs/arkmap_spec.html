@@ -405,6 +405,9 @@
 <h4>Validation rule</h4>
 <p>Custom line keys must reference existing exits or special exits. The key must appear in either <code>exits</code> or <code>special_exits</code> of the same room.</p>
 
+<h4>Orphan style/arrow entries</h4>
+<p>Only custom line entries with a <code>points</code> array (including empty arrays, i.e. suppressors) are represented in .arkmap. Style/arrow/color entries for directions without a points entry — possible in .dat, where these are separate maps — are dropped on import (see <a href="#dat-roundtrip">§19</a>).</p>
+
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="labels">11. Labels</h2>
 
@@ -681,13 +684,11 @@
   <li><strong>Custom line coordinates</strong> — rounded to 4 decimal places on import (sub-pixel difference; Mudlet rounds coordinates to whole pixels when rendering).</li>
   <li><strong>Label colors</strong> — a label with an undefined QColor (spec=0, i.e. "default color") is normalized to black RGB. In Mudlet such a label renders in the default color; after a round-trip it may render black instead.</li>
   <li><strong>Null vs empty strings</strong> — Qt distinguishes a null QString (0xFFFFFFFF length) from an empty QString (length 0); both are read as an empty string and written back as empty.</li>
+  <li><strong>Orphan custom line style/arrow/color entries</strong> — .dat stores custom line style, arrow and color in separate maps keyed by direction, so a file may contain such entries for directions that have no custom line points entry. They have no rendering effect and are dropped on import — matching Mudlet's own load-time audit (<code>TRoom::audit</code>), which removes them as well.</li>
 </ul>
 
 <h3>Known limitations</h3>
-<p>The following source data is currently <strong>lost</strong> on a .dat → .arkmap → .dat round-trip:</p>
-<ul>
-  <li><strong>Orphan custom line style/arrow entries</strong> — style/arrow values for directions that have no custom line points entry are dropped.</li>
-</ul>
+<p>None currently known — as of spec v1.1, all previously identified data-loss cases (mRoomIdHash, exit weights equal to 1, orphan custom line attributes) have been addressed; the normalizations listed above are the only intentional differences from the source file.</p>
 
 <h3>Direction mapping (.arkmap → .dat)</h3>
 <p>.arkmap uses short strings; .dat uses 1-based indices (see §7 table). Convert using the direction table.</p>
