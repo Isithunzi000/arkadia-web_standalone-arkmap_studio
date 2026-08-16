@@ -1,11 +1,15 @@
 name: sync-map
-# Codzienna synchronizacja mapy z Delwing/arkadia-mapa (master) do gałęzi `mapa`.
+# Synchronizacja mapy z Delwing/arkadia-mapa (master) do gałęzi `mapa` — 2× dziennie.
+# Pory pod rytm commitów upstream (analiza 198 commitów mapy, 2022–2026): rano 05:17 UTC
+# łapie commity nocne; wieczorem 21:00 UTC (23:00 PL latem / 22:00 zimą) domyka dzień —
+# główny szczyt aktywności upstream przypada na 20–22 PL, noc (03–08 PL) jest martwa.
 # Brama na SHA: ten sam commit upstream = cisza (zero commitów). Nowy commit =
 # pobranie map_master3.dat, konwersja do .arkmap (tools/dat2arkmap.mjs), publikacja
 # na gałęzi `mapa` (max 2 snapshoty: bieżący + poprzedni, force-push jednym commitem).
 on:
   schedule:
     - cron: '17 5 * * *'
+    - cron: '0 21 * * *'
   workflow_dispatch:
 
 permissions:
