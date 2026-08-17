@@ -12,7 +12,7 @@ Samowystarczalna aplikacja przeglądarkowa do podglądu i edycji map gry MUD **A
 - **Import i eksport Mudlet `.dat`** — binarna zgodność z formatem map Mudleta w obie strony.
 - **Własny format `.arkmap`** — czytelny JSON przyjazny gitowi (stabilna serializacja, sumy kontrolne CRC).
 - **Działa offline** — mapa trzymana lokalnie w przeglądarce, zapis do pliku na dysku.
-- **Mapa online** — przycisk „🌐 Pobierz mapę online…" pobiera z gałęzi `mapa` tego repo codziennie synchronizowane lustro mapy z Delwing/arkadia-mapa (workflow `sync-map.yml`), jako `.arkmap` lub `.dat`.
+- **Mapa online** — przycisk „🌐 Pobierz mapę online…" pobiera z gałęzi `mapa` tego repo automatycznie synchronizowane lustro mapy z Delwing/arkadia-mapa (workflow `sync-map.yml`, 2× dziennie), jako `.arkmap` lub `.dat`.
 
 ## Dokumentacja
 
@@ -22,7 +22,7 @@ Samowystarczalna aplikacja przeglądarkowa do podglądu i edycji map gry MUD **A
 
 ## Testy
 
-Harnessy regresyjne Node.js w katalogu [`tests/`](tests/) — szczegóły w [tests/README.md](tests/README.md).
+Harnessy regresyjne Node.js w katalogu [`tests/`](tests/) — szczegóły w [tests/README.md](tests/README.md). Pełna regresja biegnie też automatycznie w CI na każdy push do main (workflow `ci-tests.yml`).
 
 ## Licencja
 

@@ -2,6 +2,12 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## Dokumentacja: dryfy po automatyzacji (bez bumpu APP_VERSION)
+
+- Audyt dokumentacji po commicie automatyzacji: `tools/sync-transports.mjs` nagłówek — „walidacja schematu" → „walidacja schematu i semantyki etykiet przystanków"; README + manual (Metoda 3) — „codziennie synchronizowane lustro" → „automatycznie synchronizowane (2× dziennie)"; README (sekcja Testy) + `tests/README.md` (nowa sekcja „CI") — wzmianka o automatycznej regresji `ci-tests.yml` na każdy push do main.
+- **Bez bumpu APP_VERSION** — `arkmap_studio.html` nietknięte (docs + komentarz). Regresja: **406 OK / 0 FAIL** (11 harnessów).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## Automatyzacja: bramka semantyczna transportów + auto-issue, sonda 2×/d, CI regresji (bez bumpu APP_VERSION)
 
 - **Bramka semantyczna w generatorze** (`tools/sync-transports.mjs`): obok walidacji schematu trzy nowe reguły fail-closed — etykieta wymagana na każdym legu; sanity etykiet (nie czysto numeryczna, min. 2 znaki); rozstrzygalność przystanków (symulacja mapy `stopLabel` z runtime — przystanek nigdy niebędący celem legu = anomalia). Werdykt: czerwony workflow, HTML nietknięty, nic nie ląduje na main.

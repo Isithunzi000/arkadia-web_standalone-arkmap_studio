@@ -38,6 +38,14 @@ bash tests/run-all.sh
 
 Kod wyjścia: 0 = wszystko OK, 1 = są FAIL-e, 2 = brak fixture.
 
+## CI
+
+Workflow `.github/workflows/ci-tests.yml` odpala **pełną regresję automatycznie na każdy
+push do main** (w tym automatyczne commity sond sync-map/sync-transports): checkout z pełną
+historią (testy różnicowe robią `git show`), fixture pobierany przez `fetch-fixture.sh`
+(przypięty release 0.205.0), timeouty na pobranie i regresję. Czerwony run = commit
+coś złamał — bramka semantyczna generatora transportów to osobna, wcześniejsza linia obrony.
+
 ## Jak to działa
 
 - Harnessy **wyekstrahowują kod verbatim** z `arkmap_studio.html` kotwicami tekstowymi
