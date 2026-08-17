@@ -190,6 +190,8 @@
   #ol-sync-info { font-size:11px; color:var(--dim); margin-top:8px; min-height:15px; display:flex; flex-wrap:wrap; column-gap:10px; row-gap:2px; }
   #ol-sync-info span { white-space:nowrap; }
   #ol-confirm-progress { font-size: 11px; color:var(--dim); text-align:center; min-height:16px; margin-top:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #ol-confirm-bar { height: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  #ol-confirm-bar-fill { height: 100%; width: 0%; background: var(--accent); transition: width .15s; }
   #ol-confirm-footer { padding:10px 16px 12px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end; align-items:center; }
   #btn-load-online { width:100%; text-align:left; margin-top:8px; border-color:var(--accent); color:var(--accent); font-size: 12px; padding:6px 8px; }
   #btn-load-online:hover { background:#1a2840; }
@@ -875,7 +877,7 @@
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
-    width: 480px; max-width: 96vw; max-height: 90vh;
+    width: 520px; max-width: 96vw; max-height: 90vh; /* v1.5.41: 480 → 520 */
     box-shadow: 0 16px 64px rgba(0,0,0,.8);
     overflow: hidden; display: flex; flex-direction: column;
   }
@@ -913,7 +915,9 @@
   }
   .about-desc {
     font-size: 12px; color: var(--fg); line-height: 1.7;
+    text-wrap: pretty; /* v1.5.41 */
   }
+  .about-desc strong { white-space: nowrap; } /* v1.5.41: nazwy formatów bez pękania w pół frazy */
   .about-section-title {
     font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
     color: var(--dim); margin-bottom: 5px;
@@ -922,18 +926,20 @@
     background: var(--bg); border: 1px solid var(--border);
     border-radius: 4px; padding: 10px 12px;
     font-size: 11px; color: var(--fg); line-height: 1.6;
+    text-wrap: pretty; /* v1.5.41 */
   }
   .about-links { display: flex; flex-direction: column; gap: 5px; }
   .about-link {
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: flex-start; gap: 8px; /* v1.5.41: ikona przy pierwszej linii */
     font-size: 11px; color: var(--fg);
     text-decoration: none;
     padding: 5px 8px;
     border: 1px solid var(--border); border-radius: 3px;
     background: var(--bg); transition: border-color .12s, color .12s;
+    text-wrap: pretty; /* v1.5.41 */
   }
   .about-link:hover { border-color: var(--accent); color: var(--text); }
-  .about-link .al-icon { font-size: 12px; width: 16px; text-align: center; }
+  .about-link .al-icon { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; padding-top: 1px; } /* v1.5.41 */
   .about-link .al-name { font-weight: bold; color: var(--text); margin-right: 2px; }
 
   /* ── Modal walidacji / checksumów ─────────────────────── */
@@ -1919,6 +1925,7 @@
         </div>
         <div id="ol-sync-info"></div>
         <div id="ol-confirm-progress"></div>
+        <div id="ol-confirm-bar"><div id="ol-confirm-bar-fill"></div></div>
       </div>
       <div id="ol-confirm-footer">
         <button id="ol-btn-arkmap" class="dialog-btn ok-btn">.arkmap</button>
@@ -2694,7 +2701,7 @@
       <div>
         <div class="about-section-title">Licencja</div>
         <div class="about-license">
-          <strong>MIT License</strong> — wolne oprogramowanie open source.<br>
+          <strong>MIT License</strong> — wolne oprogramowanie open source.
           Możesz używać, kopiować, modyfikować i dystrybuować kod pod warunkiem
           zachowania informacji o autorze i tej licencji w każdej kopii.<br>
           <span style="color:var(--dim)">Copyright © 2026 Isithunzi</span>
@@ -6036,6 +6043,7 @@ function applyMap(map) {
   } catch(_) {}
   state.map = map;
   _pixmapCache.clear();
+  _hopViaCache.clear(); // v1.5.41
   state.areas = new Map();
   state.roomById = {};
   state.roomArea = {};
@@ -9111,6 +9119,7 @@ async function olResolveBaseUrl(signal) {
 
 const olConfirmBg  = document.getElementById('ol-confirm-bg');
 const olConfirmPrg = document.getElementById('ol-confirm-progress');
+const olConfirmBar = document.getElementById('ol-confirm-bar-fill');
 const olSyncInfo   = document.getElementById('ol-sync-info');
 const olBtnArkmap  = document.getElementById('ol-btn-arkmap');
 const olBtnDat     = document.getElementById('ol-btn-dat');
@@ -9127,6 +9136,7 @@ function olSetBusy(busy) {
 
 async function openOnlineConfirm() {
   olConfirmPrg.textContent = '';
+  olConfirmBar.style.width = '0%';
   olIndex = null;
   olSetBusy(true);
   olSyncInfo.textContent = 'Sprawdzanie kopii…';
@@ -9190,14 +9200,17 @@ olConfirmBg.addEventListener('click', e => { if (e.target === olConfirmBg) close
 // Pobieranie z paskiem postępu — wspólne dla .arkmap i .dat.
 // v1.5.36: AbortController 180 s — zawieszony transfer (fetch nie ma domyślnego
 // timeoutu) kończy się błędem zamiast wisieć do reloadu strony.
-async function olFetchFile(url, label) {
+async function olFetchFile(url, label, expectedSize) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 180000);
   try {
   const resp = await fetch(url + '?_=' + Date.now(), { cache: 'no-cache', signal: ctrl.signal });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const contentLength = resp.headers.get('content-length');
-  const total = contentLength ? parseInt(contentLength) : null;
+  // v1.5.41: raw.githubusercontent gzipuje tekstowy .arkmap — content-length jest wtedy
+  // rozmiarem SKOMPRESOWANYM, a reader liczy bajty po dekompresji (procent leciał > 100%).
+  // Prawdziwy rozmiar znamy z index.json (olIndex) — on jest źródłem prawdy.
+  const total = Number.isFinite(expectedSize) ? expectedSize : (contentLength ? parseInt(contentLength) : null);
   const reader = resp.body.getReader();
   const chunks = [];
   let loaded = 0;
@@ -9207,8 +9220,9 @@ async function olFetchFile(url, label) {
     chunks.push(value);
     loaded += value.length;
     if (total) {
-      const pct = Math.round(loaded / total * 100);
+      const pct = Math.min(100, Math.round(loaded / total * 100));
       olConfirmPrg.textContent = `Pobieranie: ${label}… ${pct}% (${(loaded/1024/1024).toFixed(1)} / ${(total/1024/1024).toFixed(1)} MB)`;
+      olConfirmBar.style.width = pct + '%';
     } else {
       olConfirmPrg.textContent = `Pobieranie: ${label}… ${(loaded/1024/1024).toFixed(1)} MB`;
     }
@@ -9224,7 +9238,7 @@ async function olFetchFile(url, label) {
 async function olLoadArkmap() {
   olSetBusy(true);
   try {
-    const buf = await olFetchFile(olBaseUrl + 'map_master3.arkmap', 'map_master3.arkmap');
+    const buf = await olFetchFile(olBaseUrl + 'map_master3.arkmap', 'map_master3.arkmap', olIndex?.arkmap_size);
     closeOnlineConfirm();
     // Ta sama ścieżka co „Wczytaj .arkmap…" z dysku (validate + checksumy + applyMap)
     loadArkmap(new TextDecoder().decode(buf), '🌐 online · map_master3.arkmap');
@@ -9233,13 +9247,14 @@ async function olLoadArkmap() {
     console.error(e);
     olSetBusy(false);
     olConfirmPrg.textContent = '';
+    olConfirmBar.style.width = '0%';
   }
 }
 
 async function olLoadDat() {
   olSetBusy(true);
   try {
-    const buf = await olFetchFile(olBaseUrl + 'map_master3.dat', 'map_master3.dat');
+    const buf = await olFetchFile(olBaseUrl + 'map_master3.dat', 'map_master3.dat', olIndex?.dat_size);
     olConfirmPrg.textContent = 'Konwertowanie .dat…';
     const arkmap = datToArkmap(buf.buffer);
     const r = validate(arkmap);
@@ -9263,6 +9278,7 @@ async function olLoadDat() {
     console.error(e);
     olSetBusy(false);
     olConfirmPrg.textContent = '';
+    olConfirmBar.style.width = '0%';
   }
 }
 
@@ -9470,6 +9486,50 @@ function _transportLineStops(roomId) {
     lines.push({ lineName, stops });
   }
   return lines;
+}
+
+// ── Via-path hopu (v1.5.41): geometria przejazdu LĄDOWEGO przez realne pokoje ──
+// Dyliżans/wóz/powóz jedzie „jak ktoś by szedł" — między kolejnymi przystankami istnieje
+// piesza ścieżka po drogach. Statek nie ma via-path → prosta kreska/ring (jak dotychczas).
+// Via-path jest czysto wizualny: koszt hopu w planerze bez zmian.
+let _hopViaCache = new Map(); // `linia|from>to` → roomId[] | null; czyszczone w wpRecalcPaths/applyMap
+
+function _hopViaRooms(hop) {
+  const key = hop.name + '|' + hop.from + '>' + hop.to; // nazwa linii — dwie linie mogą łączyć tę samą parę
+  if (!_hopViaCache.has(key)) _hopViaCache.set(key, _computeHopVia(hop));
+  return _hopViaCache.get(key);
+}
+
+function _computeHopVia(hop) {
+  // Klasyfikacja po komendach wsiadania: ląd = wóz/dyliżans/powóz.
+  if (!/woz|dylizans|powoz/.test((hop.board || []).join(' '))) return null;
+  // Odtwórz łańcuch kolejnych przystanków z DEFS (hop.via trzyma tylko etykiety).
+  const def = TRANSPORT_DEFS.find(d => d[0] === hop.name);
+  if (!def) return null;
+  const legs = def[3], chain = [hop.from];
+  let cur = hop.from, guard = 0;
+  while (cur !== hop.to && guard++ <= legs.length) {
+    const leg = legs.find(l => l[0] === cur);
+    if (!leg) return null;
+    cur = leg[1];
+    chain.push(cur);
+  }
+  if (cur !== hop.to) return null;
+  // Piesza Dijkstra między każdą parą przystanków — wszystkie kierunki, bez transportów
+  // (trasa wagonu jest fizyczna, nie zależy od filtrów planera).
+  const savedDir = wpState.dirMode, savedTrans = wpState.transportMode;
+  wpState.dirMode = 'all'; wpState.transportMode = 'off';
+  let full = [];
+  try {
+    for (let k = 0; k < chain.length - 1; k++) {
+      const seg = dijkstraPath(chain[k], chain[k + 1]);
+      if (!seg) { full = null; break; }
+      full = full.length ? full.concat(seg.slice(1)) : seg.slice();
+    }
+  } finally {
+    wpState.dirMode = savedDir; wpState.transportMode = savedTrans;
+  }
+  return full;
 }
 
 // Dijkstra: najkrótsza ścieżka uwzględniająca wagi pokojów i wyjść
@@ -9741,6 +9801,7 @@ function wpRecalcPaths() {
   const wps = wpState.waypoints;
   wpState.paths = [];
   wpState.hops = [];
+  _hopViaCache.clear(); // v1.5.41: via-path ważny względem edycji mapy (recalc po każdej zmianie)
   if (wpState.transportMode !== 'off') _rebuildTransportEdges(); // leniwie, świeże względem editMode
   for (let i = 0; i < wps.length - 1; i++) {
     const a = wps[i].roomId, b = wps[i+1].roomId;
@@ -10187,11 +10248,33 @@ function drawRoute() {
       const aVis = state.roomArea[ra.id] === state.areaId && ra.z === state.z;
       const bVis = state.roomArea[rb.id] === state.areaId && rb.z === state.z;
 
-      if (aVis && bVis) {
+      const via = isHop ? _hopViaRooms(legHops[i]) : null; // v1.5.41: geometria przejazdu lądowego
+      if (via) {
+        // Dyliżans/wóz/powóz: kropkowana łamana przez realne pokoje drogi — fragmenty
+        // w bieżącym obszarze i poziomie (przejazd „przechodzi" przez obszary pośrednie).
+        ctx.setLineDash([Math.max(1.5, rs * 0.2), Math.max(3, rs * 0.55)]);
+        for (let k = 0; k < via.length - 1; k++) {
+          const va = state.roomById[via[k]], vb = state.roomById[via[k + 1]];
+          if (!va || !vb) continue;
+          if (state.roomArea[va.id] !== state.areaId || va.z !== state.z) continue;
+          if (state.roomArea[vb.id] !== state.areaId || vb.z !== state.z) continue;
+          const vax = wx(va.x), vay = wy(va.y);
+          const vbx = wx(vb.x), vby = wy(vb.y);
+          ctx.strokeStyle = routeGlow;
+          ctx.lineWidth = rs * 1.6;
+          ctx.beginPath(); ctx.moveTo(vax, vay); ctx.lineTo(vbx, vby); ctx.stroke();
+          ctx.strokeStyle = routeColor;
+          ctx.lineWidth = Math.max(2, rs * 0.55);
+          ctx.beginPath(); ctx.moveTo(vax, vay); ctx.lineTo(vbx, vby); ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        // Ring z etykietą tylko gdy dokładnie jeden koniec hopu widoczny
+        if (aVis !== bVis) hopMarkers.push({ room: aVis ? ra : rb, boarding: aVis, hop: legHops[i] });
+      } else if (aVis && bVis) {
         // Rysuj linię trasy między pokojami na bieżącym widoku
         const ax = wx(ra.x), ay = wy(ra.y);
         const bx = wx(rb.x), by = wy(rb.y);
-        // Hop (statek/dyliżans): kolor trasy, kropki zamiast linii ciągłej
+        // Hop bez via-path (statek): kolor trasy, kropki zamiast linii ciągłej
         if (isHop) ctx.setLineDash([Math.max(1.5, rs * 0.2), Math.max(3, rs * 0.55)]);
         // Poświata
         ctx.strokeStyle = routeGlow;
@@ -10294,12 +10377,21 @@ function wpUpdateOverview() {
     for (let i = 0; i < path.length - 1; i++) {
       const ra = state.roomById[path[i]], rb = state.roomById[path[i+1]];
       if (!ra || !rb) continue;
-      const dx = Math.max(-1, Math.min(1, rb.x - ra.x));
-      const dy = Math.max(-1, Math.min(1, rb.y - ra.y));
-      cx += dx; cy -= dy;
-      pts.push([cx, cy]);
-      segHop.push(!!(legHops && legHops[i]));
-      ptRoom.push(path[i + 1]);
+      const hop = legHops && legHops[i];
+      // v1.5.41: przejazd lądowy rozpisany na realne pokoje drogi (via-path) —
+      // minimapka pokazuje kształt trasy zamiast jednego skoku.
+      const via = hop ? _hopViaRooms(hop) : null;
+      const steps = via || [path[i], path[i + 1]];
+      for (let k = 0; k < steps.length - 1; k++) {
+        const sa = state.roomById[steps[k]], sb = state.roomById[steps[k + 1]];
+        if (!sa || !sb) continue;
+        const dx = Math.max(-1, Math.min(1, sb.x - sa.x));
+        const dy = Math.max(-1, Math.min(1, sb.y - sa.y));
+        cx += dx; cy -= dy;
+        pts.push([cx, cy]);
+        segHop.push(!!hop);
+        ptRoom.push(steps[k + 1]);
+      }
     }
   }
   // Ostatni WP (koniec ostatniego odcinka)
@@ -12473,7 +12565,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.40';
+const APP_VERSION = 'v1.5.41';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
