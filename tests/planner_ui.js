@@ -1,5 +1,7 @@
 // Harness v1.5.30 — UX planera: podświetlenia przełączników (selektory atrybutowe),
 // sąsiedztwo transportów dla dwukliku, asercje strukturalne CSS/HTML.
+// v1.5.40: pełna lista przystanków (_transportLineStops), hop-markery na mapie głównej,
+// fit trasy do bieżącego regionu, podświetlenie „jesteś tu" na minimapce.
 // Uruchamianie z katalogu głównego repo. Bez fixture (dane transportowe z HTML).
 const fs = require('fs');
 const path = require('path');
@@ -201,7 +203,7 @@ console.log('── T3: struktura HTML/CSS ──');
   ok(!NEW.includes(".wp-algo-btn:not(.wp-dir-btn)"), 'P3: brak starego selektora :not(.wp-dir-btn)');
   ok((NEW.match(/\.wp-algo-btn\[data-algo\]/g) || []).length === 5, 'P3: 5× selektor [data-algo] (import/handler×2/disable/reset)');
   ok(NEW.includes('function _transportNeighbors(roomId)'), 'P6: _transportNeighbors istnieje');
-  ok(NEW.includes('showTransportJumpChooser(cands, sx, sy)'), 'P6: dwuklik → lista wyboru przy ≥2 kandydatach');
+  ok(NEW.includes('showTransportStopChooser(lines, sx, sy)'), 'P6: dwuklik → pełna lista przystanków (v1.5.40)');
   ok(NEW.includes('id = \'tp-jump-chooser\'') || NEW.includes("el.id = 'tp-jump-chooser'"), 'P6: element listy wyboru');
   ok(/#tp-jump-chooser\s*{[^}]*width:\s*max-content/.test(NEW), 'P6: popup autofit (width: max-content, sufit viewport)');
   ok(!/\.tp-jump-item\s*{[^}]*text-overflow/.test(NEW), 'P6: pozycje listy bez ucinania tekstu');
@@ -295,6 +297,73 @@ console.log('── T5: v1.5.38 — pętle: etykiety odwrotne + kierunek ──'
   ok(NEW.includes('const stopLabel = new Map();')
     && NEW.includes("label: stopLabel.get(leg[0]) || null"),
     'transportNeighbors: mapa stopId→etykieta zasila legi odwrotne');
+}
+
+// ── T6: v1.5.40 — _transportLineStops, hop-markery, fit regionu, „jesteś tu" ──
+console.log('── T6: v1.5.40 — lista przystanków / hop-markery / fit / jesteś tu ──');
+{
+  const DEFS = transportDefs(NEW);
+  function lineStopsFn() {
+    const a = NEW.indexOf('function _transportLineStops(roomId) {');
+    const b = NEW.indexOf('// Dijkstra: najkrótsza ścieżka');
+    if (a < 0 || b < 0 || b <= a) throw new Error('kotwice _transportLineStops');
+    return NEW.slice(a, b);
+  }
+  // Wszystkie pokoje-przystanki jako fake rooms (filtr roomById w helperze)
+  const allIds = new Set();
+  for (const d of DEFS) for (const leg of d[3]) { allIds.add(leg[0]); allIds.add(leg[1]); }
+  const state = { roomById: Object.fromEntries([...allIds].map(id => [id, {}])) };
+  const fn = new Function('state', 'TRANSPORT_DEFS', lineStopsFn() + '\n;return _transportLineStops;')(state, DEFS);
+
+  ok(fn(999999).length === 0, 'lineStops: pokój spoza linii → 0 linii');
+
+  // Nuln (6879): jedna linia, 6 unikalnych przystanków w kolejności legów, here na początku
+  const nuln = fn(6879);
+  ok(nuln.length === 1 && nuln[0].lineName === 'Nuln - Blekitna Wstega', 'lineStops: 6879 → linia Nuln - Blekitna Wstega');
+  const order = nuln[0].stops.map(x => x.stopId);
+  ok(order.length === 6 && order[0] === 6879 && order[5] === 6430, 'lineStops: kolejność wzdłuż legów + dedup (6 przystanków)');
+  ok(nuln[0].stops.filter(x => x.here).length === 1 && nuln[0].stops[0].here, 'lineStops: dokładnie jeden „here" = pokój dwukliknięty');
+  ok(nuln[0].stops.every(x => typeof x.label === 'string' && x.label.length > 0), 'lineStops: wszystkie przystanki z etykietami');
+
+  // Łańcuchowość: kolejne unikalne przystanki połączone legiem w przód
+  const legs = new Set(DEFS.find(d => d[0] === 'Nuln - Blekitna Wstega')[3].map(l => l[0] + '>' + l[1]));
+  ok(order.slice(1).every((id, k) => legs.has(order[k] + '>' + id)), 'lineStops: kolejność = łańcuch legów');
+
+  // Multi-linia: istnieje przystanek na ≥2 liniach; dostaje sekcję per linia z „here" w każdej
+  const stopsLines = new Map();
+  for (const d of DEFS) {
+    const ids2 = new Set();
+    for (const leg of d[3]) { ids2.add(leg[0]); ids2.add(leg[1]); }
+    for (const id of ids2) stopsLines.set(id, (stopsLines.get(id) || 0) + 1);
+  }
+  const multi = [...stopsLines.entries()].find(([, c]) => c >= 2);
+  ok(!!multi, 'lineStops: istnieje przystanek wieloliniowy w realnych DEFS');
+  if (multi) {
+    const ml = fn(multi[0]);
+    ok(ml.length >= 2 && ml.every(l => l.stops.some(x => x.here)), 'lineStops: pokój multi-linia → sekcja per linia, „here" w każdej');
+  }
+
+  // Asercje strukturalne nowych ficzerów
+  const drA = NEW.indexOf('function drawRoute()');
+  const drB = NEW.indexOf('// ── Overview canvas', drA);
+  const DR = NEW.slice(drA, drB);
+  ok(DR.includes('const hopMarkers = []'), 'drawRoute: hopMarkers zbierane');
+  ok(DR.includes('hopMarkers.push({ room: aVis ? ra : rb, boarding: aVis, hop: legHops[i] })'), 'drawRoute: hop solo-visible → marker');
+  ok(DR.includes('🚢 → ${m.hop.label || m.hop.name}'), 'drawRoute: etykieta wsiadania z celem hopu');
+  ok(NEW.includes('wpUpdateOverviewThrottled(); // minimapka planera'), 'draw(): hook odświeżania minimapki planera');
+  const ovA = NEW.indexOf('function wpUpdateOverview() {');
+  const ovB = NEW.indexOf('// ── Markery WP', ovA);
+  const OV = NEW.slice(ovA, ovB);
+  ok(OV.includes('const ptRoom = [null]') && OV.includes('ptRoom.push(path[i + 1])'), 'minimapka: ptRoom śledzi roomId per punkt');
+  ok(OV.includes('rgba(0,230,170,0.95)'), 'minimapka: podświetlenie „jesteś tu" (zieleń)');
+  const frA = NEW.indexOf('function fitRouteToView()');
+  const frB = NEW.indexOf('// Przelicz wszystkie odcinki trasy', frA);
+  const FR = NEW.slice(frA, frB);
+  ok(FR.includes('const curAreaRoute = ') && FR.includes('routeIds'), 'fitRouteToView: fit do bieżącego regionu (routeIds/curAreaRoute)');
+  ok(FR.includes('const pad = 4;'), 'fitRouteToView: pad 4 (fit do trasy, nie mapy)');
+  ok(NEW.includes('function showTransportStopChooser(lines, sx, sy)'), 'chooser: showTransportStopChooser istnieje');
+  ok(NEW.includes("here.textContent = '— tu jesteś';"), 'chooser: znacznik „— tu jesteś"');
+  ok(/\.tp-jump-here\s*{[^}]*#00c896/.test(NEW), 'CSS: .tp-jump-here zielony');
 }
 console.log(`\n═══ planner_ui.js: ${pass} OK, ${fail} FAIL ═══`);
 process.exit(fail ? 1 : 0);

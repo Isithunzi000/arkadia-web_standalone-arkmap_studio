@@ -2,6 +2,16 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.5.40 — hop-markery na mapie, fit trasy do regionu, „jesteś tu" na minimapce, pełna lista przystanków
+
+- **Przejazdy transportowe widoczne na mapie głównej:** dotychczas hop (przejazd dyliżansem/statkiem) rysował się tylko, gdy oba przystanki były w bieżącym regionie — przesiadki między obszarami były niewidoczne. Teraz, gdy widoczny jest dokładnie jeden koniec hopu, rysuje się kropkowany ring wokół przystanku z etykietą „🚢 → cel" (wsiadanie) albo „🚢 ← linia" (wysiadanie).
+- **⊙ Pokaż trasę dopasowuje widok do regionu:** fit obejmuje fragment trasy w bieżącym obszarze i poziomie (padding 4 pokoje) zamiast całej trasy na mapie świata; gdy trasy w bieżącym regionie nie ma — przenosi do obszaru i poziomu pierwszego waypointa.
+- **Minimapka planera śledzi viewport:** fragment trasy widoczny aktualnie w głównym oknie jest podświetlony na zielono (podwójny obrys: glow + linia główna, z kropkowaniem na hopach); odświeżanie przez `requestAnimationFrame` w pętli `draw()`, tylko gdy planer ma trasę.
+- **Dwuklik na pokoju transportowym = pełna lista przystanków:** nowy helper `_transportLineStops` składa dla każdej linii przechodzącej przez pokój listę wszystkich przystanków w kolejności jazdy (dedup po `stopId`, etykiety z legów docelowych — ta sama semantyka co `_transportNeighbors`); okienko `showTransportStopChooser` grupuje linie nagłówkami, bieżący przystanek ma znacznik „— tu jesteś" (`.tp-jump-here`), kliknięcie skacze do celu (z potwierdzeniem przy niezapisanej edycji). Stary chooser „sąsiedni przystanek" (`_transportNeighbors` / `showTransportJumpChooser`) zostaje w kodzie — jest pokryty testami.
+- **Dokumentacja (manual):** dwuklik = pełna lista przystanków ze znacznikiem „— tu jesteś"; ring + etykieta dla hopów z jednym widocznym końcem; ⊙ Pokaż trasę dopasowuje do bieżącego regionu; zielone śledzenie viewportu na minimapce planera; doprecyzowana uwaga o pokojach `locked` — planer pomija je przy rozwijaniu ścieżki, ale dopuszcza jako cel (świadoma różnica względem Mudlet `getPath`, które zwraca `false` dla celu locked).
+- **Testy:** `tests/planner_ui.js` — asercja P6 przepięta na nowy chooser; nowa sekcja T6 (19 asercji: `_transportLineStops` na realnych TRANSPORT_DEFS — kolejność wzdłuż legów, dedup, dokładnie jeden „here", łańcuchowość, przystanki wieloliniowe; asercje strukturalne hop-markerów, hooka minimapki, fitu regionu i CSS) → 97 asercji w harnessie. Regresja: **425 OK / 0 FAIL** (11 harnessów).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## Dokumentacja: dryfy po automatyzacji (bez bumpu APP_VERSION)
 
 - Audyt dokumentacji po commicie automatyzacji: `tools/sync-transports.mjs` nagłówek — „walidacja schematu" → „walidacja schematu i semantyki etykiet przystanków"; README + manual (Metoda 3) — „codziennie synchronizowane lustro" → „automatycznie synchronizowane (2× dziennie)"; README (sekcja Testy) + `tests/README.md` (nowa sekcja „CI") — wzmianka o automatycznej regresji `ci-tests.yml` na każdy push do main.

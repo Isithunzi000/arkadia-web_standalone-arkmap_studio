@@ -1620,6 +1620,9 @@
   .tp-jump-item { padding: 6px 14px; color: var(--fg); cursor: pointer; white-space: nowrap; }
   .tp-jump-item:hover { background: #1a2035; color: var(--text); }
   .tp-jump-item .tp-jump-line { color: var(--dim); font-size: 10px; }
+  .tp-jump-here { color: #00c896; font-size: 10px; }
+  .tp-jump-header { padding: 5px 14px 2px; font-size: 10px; color: var(--dim); border-top: 1px solid var(--border); }
+  #tp-jump-chooser.tp-multi { max-height: 70vh; overflow-y: auto; }
   /* ─── LABEL EDITING ────────────────────────────────────────────────────── */
   .ap-lbl-item { display:flex; align-items:center; gap:5px; padding:3px 0; border-bottom:1px solid #151d28; min-width:0; }
   .ap-lbl-item:last-of-type { border-bottom:none; }
@@ -6379,6 +6382,14 @@ function buildRoomsZ() {
 }
 
 function updateMinimap_call() { requestAnimationFrame(updateMinimap); }
+// v1.5.40: minimapka planera odświeżana przy każdym draw() — rAF scala serie (pan/zoom)
+let _wpOvPending = false;
+function wpUpdateOverviewThrottled() {
+  if (_wpOvPending) return;
+  if (typeof wpHasAnyFilled !== 'function' || !wpHasAnyFilled()) return;
+  _wpOvPending = true;
+  requestAnimationFrame(() => { _wpOvPending = false; wpUpdateOverview(); });
+}
 
 function updateStatus() {
   const area = state.areas.get(state.areaId);
@@ -6443,6 +6454,7 @@ function draw() {
   const W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
   updateMinimap_call();
+  wpUpdateOverviewThrottled(); // minimapka planera: „jesteś tu" śledzi viewport (v1.5.40)
   ctx.fillStyle = '#0d0f12';
   ctx.fillRect(0, 0, W, H);
   if (state.showGrid) drawGrid();
@@ -8302,16 +8314,13 @@ function handleDblClick(sx, sy) {
     }
   }
 
-  // Fallback transportowy: pokój leży na linii statku/dyliżansa → skok do sąsiedniego przystanku
+  // Fallback transportowy: pokój leży na linii statku/dyliżansa → pełna lista przystanków (v1.5.40)
   if (jumpAreaId == null) {
     const nearRoom = findNearRoom();
     if (nearRoom) {
-      const cands = _transportNeighbors(nearRoom.id);
-      if (cands.length === 1) {
-        jumpAreaId = state.roomArea[cands[0].stopId];
-        jumpRoomId = cands[0].stopId;
-      } else if (cands.length > 1) {
-        showTransportJumpChooser(cands, sx, sy);
+      const lines = _transportLineStops(nearRoom.id);
+      if (lines.length > 0) {
+        showTransportStopChooser(lines, sx, sy);
         return;
       }
     }
@@ -8379,6 +8388,55 @@ function showTransportJumpChooser(cands, sx, sy) {
     });
     el.appendChild(item);
   });
+  document.body.appendChild(el);
+  // Pozycja przy kursorze, w granicach ekranu
+  const w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = Math.max(4, Math.min(sx, window.innerWidth - w - 8)) + 'px';
+  el.style.top = Math.max(4, Math.min(sy, window.innerHeight - h - 8)) + 'px';
+  _tpJumpChooser = el;
+  document.addEventListener('keydown', _tpJumpKey, true);
+  setTimeout(() => document.addEventListener('mousedown', _tpJumpOutside, true), 0);
+}
+
+// ── Dwuklik: pełna lista przystanków linii przechodzących przez pokój ────────
+// v1.5.40: user wybiera DOKĄD skoczyć z całej linii, zamiast przeskakiwać
+// po jednym przystanku (stary chooser pokazywał tylko sąsiadów przed/po).
+// Wiele linii przez ten sam pokój → sekcje z nagłówkami nazw linii.
+function showTransportStopChooser(lines, sx, sy) {
+  closeTransportJumpChooser();
+  const el = document.createElement('div');
+  el.id = 'tp-jump-chooser';
+  el.classList.add('tp-multi');
+  const title = document.createElement('div');
+  title.className = 'tp-jump-title';
+  title.textContent = '🚢 Skocz do przystanku';
+  el.appendChild(title);
+  for (const line of lines) {
+    if (lines.length > 1) {
+      const header = document.createElement('div');
+      header.className = 'tp-jump-header';
+      header.textContent = line.lineName;
+      el.appendChild(header);
+    }
+    for (const st of line.stops) {
+      const item = document.createElement('div');
+      item.className = 'tp-jump-item';
+      item.appendChild(document.createTextNode(st.label + ' '));
+      if (st.here) {
+        const here = document.createElement('span');
+        here.className = 'tp-jump-here';
+        here.textContent = '— tu jesteś';
+        item.appendChild(here);
+      }
+      item.addEventListener('click', () => {
+        closeTransportJumpChooser();
+        const doJump = () => { selectArea(state.roomArea[st.stopId], false); jumpToRoom(st.stopId); };
+        if (state.editMode && state.editDirty) { showDirtyConfirm(doJump); return; }
+        doJump();
+      });
+      el.appendChild(item);
+    }
+  }
   document.body.appendChild(el);
   // Pozycja przy kursorze, w granicach ekranu
   const w = el.offsetWidth, h = el.offsetHeight;
@@ -9386,6 +9444,34 @@ function _transportNeighbors(roomId) {
   return out;
 }
 
+// Pełna lista przystanków linii przechodzących przez pokój (dwuklik, v1.5.40).
+// Zwraca [{ lineName, stops: [{stopId, label, here}] }] — kolejność wzdłuż legów,
+// dedup po stopId (pierwsze wystąpienie), here = pokój dwukliknięty.
+// Etykieta przystanku = etykieta legu, którego jest CELEM (semantyka jak _transportNeighbors).
+function _transportLineStops(roomId) {
+  const stopLabel = new Map();
+  for (const def of TRANSPORT_DEFS)
+    for (const leg of def[3])
+      if (leg[3] && !stopLabel.has(leg[1])) stopLabel.set(leg[1], leg[3]);
+  const lines = [];
+  for (const def of TRANSPORT_DEFS) {
+    const lineName = def[0], legs = def[3];
+    if (!legs.some(l => l[0] === roomId || l[1] === roomId)) continue;
+    const order = [], seen = new Set();
+    for (const leg of legs) {
+      if (!seen.has(leg[0])) { seen.add(leg[0]); order.push(leg[0]); }
+      if (!seen.has(leg[1])) { seen.add(leg[1]); order.push(leg[1]); }
+    }
+    const stops = order.filter(id => state.roomById[id]).map(id => ({
+      stopId: id,
+      label: stopLabel.get(id) || state.roomById[id].name || `#${id}`,
+      here: id === roomId,
+    }));
+    lines.push({ lineName, stops });
+  }
+  return lines;
+}
+
 // Dijkstra: najkrótsza ścieżka uwzględniająca wagi pokojów i wyjść
 function dijkstraPath(fromId, toId) {
   if (fromId === toId) return [fromId];
@@ -9565,40 +9651,33 @@ function fitRouteToView() {
     .map(w => w.roomId);
   if (ids.length === 0) return;
 
-  const areaIds = ids.map(id => state.roomArea[id]);
-  const sameArea = areaIds.every(a => a === areaIds[0]);
+  // v1.5.40: fit do fragmentu trasy w BIEŻĄCYM regionie (obszar+poziom Z), nie do całej mapy.
+  // Bieżący widok nie zawiera żadnego pokoju trasy → skok do obszaru pierwszego WP (jak dotąd).
+  const routeIds = new Set(ids);
+  for (const path of wpState.paths) {
+    if (!path) continue;
+    for (const id of path) routeIds.add(id);
+  }
 
-  // Zbierz pokoje: same-area = cała ścieżka; cross-area = tylko bieżący obszar
-  let fitRooms = [];
-  if (sameArea) {
-    // Wszystkie pokoje ścieżki w tym obszarze na docelowym Z
-    const targetAreaId2 = state.roomArea[ids[0]];
-    for (const path of wpState.paths) {
-      if (!path) continue;
-      for (const id of path) {
-        const r = state.roomById[id];
-        if (r && state.roomArea[id] === targetAreaId2) fitRooms.push(r);
-      }
-    }
+  const curAreaRoute = [...routeIds].filter(id => state.roomArea[id] === state.areaId);
+  let targetAreaId, targetZ;
+  if (curAreaRoute.length > 0) {
+    targetAreaId = state.areaId;
+    const atCurZ = curAreaRoute.filter(id => (state.roomById[id]?.z ?? 0) === state.z);
+    targetZ = atCurZ.length > 0 ? state.z : (state.roomById[curAreaRoute[0]]?.z ?? 0);
   } else {
-    // Cross-area: użyj tylko pokojów bieżącego obszaru i Z — inaczej BBox = pół świata
-    const curAreaId = state.roomArea[ids[0]];
-    const curArea = curAreaId != null ? state.areas.get(curAreaId) : null;
-    if (curArea?.rooms) {
-      const firstRoom = state.roomById[ids[0]];
-      const zTarget = firstRoom?.z ?? 0;
-      fitRooms = curArea.rooms.filter(r => r && r.z === zTarget);
-    }
+    targetAreaId = state.roomArea[ids[0]];
+    targetZ = state.roomById[ids[0]]?.z ?? 0;
   }
-  // Zawsze dodaj pokoje WP (żeby były w BBox)
-  for (const id of ids) {
-    const r = state.roomById[id];
-    if (r) fitRooms.push(r);
-  }
+
+  // BBox wyłącznie z pokoi trasy w obszarze docelowym — pokoje z innych obszarów mają
+  // obce układy współrzędne, ich uwzględnienie rozdmuchiwało BBox (stare zachowanie)
+  const fitRooms = [...routeIds]
+    .map(id => state.roomById[id])
+    .filter(r => r && state.roomArea[r.id] === targetAreaId);
   if (fitRooms.length === 0) return;
 
   // Navigate to target area — bypass dirty dialog (user explicitly asked to view route)
-  const targetAreaId = state.roomArea[ids[0]];
   if (targetAreaId !== undefined && targetAreaId !== state.areaId) {
     // Silently discard pending edits before switching area
     if (state.editDirty && state.selected) {
@@ -9612,9 +9691,8 @@ function fitRouteToView() {
     _doSelectArea(targetAreaId, false);
   }
 
-  // Z-level: preferuj Z pierwszego WP (po selectArea state.z może być złe)
-  const firstRoom = state.roomById[ids[0]];
-  const z = firstRoom?.z ?? fitRooms[0].z;
+  // Z-level docelowy (po selectArea state.z może być złe)
+  const z = targetZ;
   state.z = z;
   buildRoomsZ();
   document.querySelectorAll('.z-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.z) === z));
@@ -9627,7 +9705,7 @@ function fitRouteToView() {
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
   const spanX = Math.max(maxX - minX, 1), spanY = Math.max(maxY - minY, 1);
-  const pad = sameArea ? 4 : 8;
+  const pad = 4; // v1.5.40: fit do trasy — niewielki margines (cross-area też 4)
   // Dostępna przestrzeń: odejmij room-panel + margines
   // Na mobile room-panel to bottom-sheet (full-width) — zmniejsza wysokość, nie szerokość
   const rpEl = document.getElementById('room-panel');
@@ -10093,6 +10171,7 @@ function drawRoute() {
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+  const hopMarkers = []; // {room, boarding, hop} — rysowane po pętli segmentów (v1.5.40)
 
   for (let pi = 0; pi < allPaths.length; pi++) {
     const path = allPaths[pi];
@@ -10104,11 +10183,11 @@ function drawRoute() {
       const rb = state.roomById[path[i+1]];
       if (!ra || !rb) continue;
 
-      const sameArea = state.roomArea[ra.id] === state.areaId && state.roomArea[rb.id] === state.areaId;
-      const sameZ    = ra.z === state.z && rb.z === state.z;
+      const isHop = !!(legHops && legHops[i]);
+      const aVis = state.roomArea[ra.id] === state.areaId && ra.z === state.z;
+      const bVis = state.roomArea[rb.id] === state.areaId && rb.z === state.z;
 
-      if (sameArea && sameZ) {
-        const isHop = !!(legHops && legHops[i]);
+      if (aVis && bVis) {
         // Rysuj linię trasy między pokojami na bieżącym widoku
         const ax = wx(ra.x), ay = wy(ra.y);
         const bx = wx(rb.x), by = wy(rb.y);
@@ -10123,9 +10202,33 @@ function drawRoute() {
         ctx.lineWidth = Math.max(2, rs * 0.55);
         ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
         if (isHop) ctx.setLineDash([]);
+      } else if (isHop && (aVis || bVis)) {
+        // Hop cross-area/cross-Z: dokładnie jeden koniec widoczny → ring + etykieta (po pętli, na wierzchu)
+        hopMarkers.push({ room: aVis ? ra : rb, boarding: aVis, hop: legHops[i] });
       }
-      // Segmenty cross-area/cross-z → widoczne przez istniejące strzałki nawigacji
+      // Pozostałe segmenty cross-area/cross-z → widoczne przez istniejące strzałki nawigacji
     }
+  }
+
+  // Hopy cross-area: widoczny koniec dostaje kropkowany ring + etykietę z kierunkiem (v1.5.40)
+  for (const m of hopMarkers) {
+    const cx0 = wx(m.room.x), cy0 = wy(m.room.y);
+    const ringR = rs * 1.5;
+    ctx.setLineDash([Math.max(1.5, rs * 0.2), Math.max(3, rs * 0.55)]);
+    ctx.strokeStyle = routeColor;
+    ctx.lineWidth = Math.max(2, rs * 0.3);
+    ctx.beginPath(); ctx.arc(cx0, cy0, ringR, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    const txt = m.boarding ? `🚢 → ${m.hop.label || m.hop.name}` : `🚢 ← ${m.hop.name}`;
+    const fs = Math.max(9, rs * 0.45);
+    ctx.font = `bold ${fs}px monospace`;
+    const tw = ctx.measureText(txt).width;
+    const bx = cx0 + ringR + 4, by = cy0 - ringR - fs - 4;
+    ctx.fillStyle = 'rgba(13,15,18,0.85)';
+    ctx.fillRect(bx - 3, by - 2, tw + 6, fs + 5);
+    ctx.fillStyle = '#ffbe32';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(txt, bx, by);
   }
 
   // Markery waypointów
@@ -10176,6 +10279,7 @@ function wpUpdateOverview() {
   // każdy krok = dx/dy między sąsiednimi pokojami na ścieżce Dijkstra/A*.
   const pts = [];      // cumulative positions
   const segHop = [];   // segHop[i] = segment pts[i]→pts[i+1] jest hopem (statek/dyliżans)
+  const ptRoom = [null]; // ptRoom[i] = roomId celu kroku kończącego się w pts[i] (v1.5.40: „jesteś tu")
   const wpMarkers = []; // {ptIdx, wpIdx}
   let cx = 0, cy = 0;
   pts.push([cx, cy]);
@@ -10195,6 +10299,7 @@ function wpUpdateOverview() {
       cx += dx; cy -= dy;
       pts.push([cx, cy]);
       segHop.push(!!(legHops && legHops[i]));
+      ptRoom.push(path[i + 1]);
     }
   }
   // Ostatni WP (koniec ostatniego odcinka)
@@ -10239,6 +10344,37 @@ function wpUpdateOverview() {
     octx.beginPath(); octx.moveTo(ax, ay); octx.lineTo(px, py); octx.stroke();
   }
   octx.setLineDash([]);
+
+  // ── „Jesteś tu" (v1.5.40): fragment trasy widoczny w viewportcie mapy głównej ──
+  // Minimapka jest schematem (delty kroków), więc zamiast prostokąta viewportu
+  // podświetlamy odcinki, których pokój docelowy leży na ekranie (bieżący obszar+Z).
+  {
+    const vx0 = (0 - state.ox) / (CELL * state.zoom), vx1 = (cv.width - state.ox) / (CELL * state.zoom);
+    const vy0 = (state.oy - cv.height) / (CELL * state.zoom), vy1 = (state.oy - 0) / (CELL * state.zoom);
+    const visRoom = (id) => {
+      const r = id !== null ? state.roomById[id] : null;
+      return !!r && state.roomArea[r.id] === state.areaId && (r.z ?? 0) === state.z
+        && r.x >= vx0 && r.x <= vx1 && r.y >= vy0 && r.y <= vy1;
+    };
+    octx.lineCap = 'round'; octx.lineJoin = 'round';
+    octx.lineWidth = 3; octx.strokeStyle = 'rgba(0,200,150,0.28)';
+    for (let i = 1; i < pts.length; i++) {
+      if (!visRoom(ptRoom[i])) continue;
+      ovSeg(segHop[i - 1]);
+      const [ax, ay] = toC(pts[i - 1]);
+      const [px, py] = toC(pts[i]);
+      octx.beginPath(); octx.moveTo(ax, ay); octx.lineTo(px, py); octx.stroke();
+    }
+    octx.lineWidth = 1.5; octx.strokeStyle = 'rgba(0,230,170,0.95)';
+    for (let i = 1; i < pts.length; i++) {
+      if (!visRoom(ptRoom[i])) continue;
+      ovSeg(segHop[i - 1]);
+      const [ax, ay] = toC(pts[i - 1]);
+      const [px, py] = toC(pts[i]);
+      octx.beginPath(); octx.moveTo(ax, ay); octx.lineTo(px, py); octx.stroke();
+    }
+    octx.setLineDash([]);
+  }
 
   // ── Markery WP — kolorowe kwadraty z numerami (tylko wypełnione WP) ──
   const COLORS = ['#00c896', '#4a90e8', '#e84a90', '#e8c84a', '#a04ae8'];
@@ -12337,7 +12473,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.39';
+const APP_VERSION = 'v1.5.40';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
