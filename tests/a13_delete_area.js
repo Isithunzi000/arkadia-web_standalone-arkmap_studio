@@ -185,7 +185,7 @@ console.log('── T5: liczniki kotwic ──');
   const cnt = (s, sub) => s.split(sub).length - 1;
   console.log('  [info] audyt A13: ' + cnt(NEW, 'audyt A13') + ', removedEmptyContainers: ' + cnt(NEW, 'removedEmptyContainers'));
   ok(cnt(NEW, 'removedEmptyContainers') >= 6, 'removedEmptyContainers obecne w doFn+entry+undo');
-  ok(/const APP_VERSION = 'v1\.5\.\d+';/.test(NEW), 'APP_VERSION obecne');
+  ok(/const APP_VERSION = 'v1\.\d+\.\d+';/.test(NEW), 'APP_VERSION obecne');
   ok(cnt(NEW, 'if (r.exits && !Object.keys(r.exits).length) delete r.exits;') === 0, 'stare kasowanie exits bez nagrania usunięte z doFn');
   ok(cnt(NEW, 'if (r.special_exits && !Object.keys(r.special_exits).length) delete r.special_exits;') === 0, 'stare kasowanie special_exits bez nagrania usunięte z doFn');
   ok(cnt(OLD, 'removedEmptyContainers') === 0, 'snapshot 45aee0f nie miał removedEmptyContainers');
