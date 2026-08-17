@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>.arkdelta Format Specification v1</title>
+<style>
+  :root {
+    --bg: #0d0f12; --panel: #141720; --border: #252b3a;
+    --accent: #4a9eff; --accent2: #ff9f4a; --ok: #4aff8a; --err: #ff4a4a;
+    --text: #e8eef8; --dim: #8898b8; --fg: #ccd8ea;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.7 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    max-width: 1000px; margin: 0 auto; padding: 32px 24px 80px;
+  }
+  h1 { font-size: 24px; color: var(--accent); letter-spacing: 2px;
+    margin-bottom: 4px; font-weight: 500; }
+  .subtitle { color: var(--dim); font-size: 12px; margin-bottom: 32px; }
+  h2 { font-size: 18px; color: var(--accent); margin: 36px 0 14px;
+    padding-bottom: 4px; border-bottom: 1px solid var(--border); font-weight: 500; }
+  h3 { font-size: 15px; color: var(--accent2); margin: 24px 0 10px; font-weight: 500; }
+  h4 { font-size: 13px; color: var(--fg); margin: 16px 0 6px; font-weight: 600; }
+  p { margin-bottom: 10px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { background: #1a1e2a; padding: 2px 5px; border-radius: 2px; font-size: 13px;
+    font-family: 'Courier New', 'Fira Code', monospace; color: #e8c880; }
+  pre { background: #0a0c10; border: 1px solid var(--border); border-radius: 4px;
+    padding: 16px 18px; margin: 12px 0 16px; overflow-x: auto; font-size: 12px;
+    font-family: 'Courier New', 'Fira Code', monospace; color: #c8d8e8; line-height: 1.6; }
+  pre .k { color: #cc7832; } /* key */
+  pre .s { color: #6a8759; } /* string */
+  pre .n { color: #6897bb; } /* number */
+  pre .c { color: #606366; } /* comment */
+  pre .t { color: #cc7832; } /* type hint */
+  pre .b { color: #cc7832; } /* boolean */
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 18px; }
+  th, td { padding: 7px 10px; border: 1px solid var(--border); text-align: left; font-size: 12px; }
+  th { background: #1a1e2a; color: var(--accent); font-weight: 500; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.5px; }
+  td { color: var(--fg); }
+  td code { font-size: 11px; }
+  tr:hover td { background: #161a24; }
+  ul, ol { margin: 6px 0 14px 24px; }
+  li { margin-bottom: 5px; font-size: 13px; }
+  .note { background: #0d1a28; border-left: 3px solid var(--accent); padding: 10px 14px;
+    margin: 14px 0; border-radius: 0 4px 4px 0; font-size: 12px; }
+  .warn { background: #1a1500; border-left: 3px solid #e8a020; padding: 10px 14px;
+    margin: 14px 0; border-radius: 0 4px 4px 0; font-size: 12px; color: #e8c880; }
+  .critical { background: #1a0808; border-left: 3px solid var(--err); padding: 10px 14px;
+    margin: 14px 0; border-radius: 0 4px 4px 0; font-size: 12px; color: #e8a0a0; }
+  .req { color: var(--err); font-weight: 600; font-size: 10px; }
+  .opt { color: var(--dim); font-weight: 400; font-size: 10px; }
+  .toc { background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 18px 22px; margin: 20px 0 28px; }
+  .toc-title { font-size: 13px; color: var(--accent); margin-bottom: 10px; letter-spacing: 1px;
+    text-transform: uppercase; }
+  .toc ol { margin: 0; padding-left: 20px; }
+  .toc li { margin-bottom: 3px; font-size: 12px; }
+  .toc a { color: var(--fg); }
+  .toc a:hover { color: var(--accent); }
+  #top-btn { position: fixed; bottom: 20px; right: 20px; background: var(--panel);
+    border: 1px solid var(--border); color: var(--accent); width: 36px; height: 36px;
+    border-radius: 50%; cursor: pointer; font-size: 16px; display: flex;
+    align-items: center; justify-content: center; z-index: 999; }
+  #top-btn:hover { border-color: var(--accent); background: #1a2035; }
+  .schema-path { color: #e8c880; font-family: monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+<button id="top-btn" onclick="window.scrollTo({top:0})" title="Top">↑</button>
+
+<h1>.arkdelta Format Specification</h1>
+<div class="subtitle">
+  Version 1 · ArkMap Studio · Isithunzi · 2026<br>
+  File extension: <code>.arkdelta</code> · MIME type: <code>application/json</code> · Encoding: UTF-8
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="toc">
+<div class="toc-title">Table of Contents</div>
+<ol>
+  <li><a href="#overview">Overview</a></li>
+  <li><a href="#top-level">Top-Level Structure</a></li>
+  <li><a href="#meta">meta Object</a></li>
+  <li><a href="#base">Base Identity</a></li>
+  <li><a href="#serialization">Canonical Serialization &amp; Checksums</a></li>
+  <li><a href="#sid">Symbolic IDs (sid)</a></li>
+  <li><a href="#operations">Operations</a></li>
+  <li><a href="#validation">Validation Rules</a></li>
+  <li><a href="#apply">Apply Semantics</a></li>
+  <li><a href="#versioning">Versioning &amp; Compatibility</a></li>
+  <li><a href="#example">Complete Example</a></li>
+  <li><a href="#changelog">Format Changelog</a></li>
+</ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="overview">1. Overview</h2>
+
+<p>The <code>.arkdelta</code> format is a JSON-based <strong>edit delta</strong> format for Arkadia MUD maps. It records a sequence of editing operations performed in <strong>ArkMap Studio</strong> on top of a known base map version, so the same set of changes can be re-applied later onto a newer upstream map release.</p>
+
+<p>The typical workflow: a user downloads a map, makes local fixes in edit mode, and saves them as a <code>.arkdelta</code> file ("overlay" / <em>kalka</em>). When a fresh map version is released, the user downloads it, loads the overlay, and the changes are re-applied onto the new base.</p>
+
+<p>Key design goals:</p>
+<ul>
+  <li><strong>Deterministic</strong> — the same edit log always produces a byte-identical file (canonical serialization, sorted keys, CRC-32 checksums)</li>
+  <li><strong>Anonymous additions</strong> — rooms, areas and labels created by the delta carry no numeric IDs in the file; they use symbolic IDs (<code>d:N</code>) and receive fresh numbers on apply, like an overlay</li>
+  <li><strong>Fail-closed</strong> — a corrupted or tampered file is refused outright, with precise diagnostics; nothing is loaded</li>
+  <li><strong>Non-destructive</strong> — applying a delta goes through the normal undo machinery: every applied operation enters the undo history as a regular edit, and undo/redo behavior is unchanged</li>
+  <li><strong>Self-describing base</strong> — the file records the identity (CRC) of the map variant it was created from, plus optional version/revision metadata</li>
+</ul>
+
+<div class="note"><strong>Relationship to .arkmap:</strong> A delta never stores a full map — only operations. The base identity is the CRC-32 of the <code>.arkmap</code> canonical form of the map that was loaded when the edits were made (including the reduced-information variant derived from a Mudlet <code>.dat</code> file, where base identity is the CRC of that derived .arkmap form).</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="top-level">2. Top-Level Structure</h2>
+
+<pre>{
+  <span class="k">"meta"</span>:      { ... },   <span class="c">// REQUIRED — format marker, base identity, bookkeeping (see §3)</span>
+  <span class="k">"ops"</span>:       [ ... ],   <span class="c">// REQUIRED — ordered array of operation objects (see §7)</span>
+  <span class="k">"checksums"</span>: { ... }    <span class="c">// REQUIRED — CRC-32 checksums (see §5)</span>
+}</pre>
+
+<p>Keys at every level are serialized in sorted order (see <a href="#serialization">§5</a>). The file is produced by <code>buildDelta()</code> from the editor's full edit log and consumed by <code>validateDeltaText()</code> + <code>applyDelta()</code>.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="meta">3. meta Object</h2>
+
+<table>
+  <tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr>
+  <tr><td><code>format</code></td><td>string</td><td class="req">REQ</td><td>Magic string, must be exactly <code>"arkdelta"</code></td></tr>
+  <tr><td><code>format_version</code></td><td>integer</td><td class="req">REQ</td><td>Format version, currently <code>1</code></td></tr>
+  <tr><td><code>ops_count</code></td><td>integer</td><td class="req">REQ</td><td>Number of operations; must equal <code>ops.length</code></td></tr>
+  <tr><td><code>base</code></td><td>object</td><td class="req">REQ</td><td>Base identity (see <a href="#base">§4</a>); may be empty if the base could not be identified</td></tr>
+  <tr><td><code>app_version</code></td><td>string</td><td class="req">REQ</td><td>ArkMap Studio version that produced the file (informational)</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="base">4. Base Identity</h2>
+
+<p><code>meta.base</code> identifies the map variant the delta was created against:</p>
+
+<table>
+  <tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr>
+  <tr><td><code>crc</code></td><td>string</td><td class="req">REQ</td><td>CRC-32 (hex) of the canonical .arkmap form of the base map — the hierarchical file checksum as defined by the .arkmap spec</td></tr>
+  <tr><td><code>version</code></td><td>string</td><td class="opt">OPT</td><td>Map version, copied from <code>meta.user_data.version</code> when present</td></tr>
+  <tr><td><code>revision</code></td><td>string</td><td class="opt">OPT</td><td>Source revision (commit SHA), copied from <code>meta.user_data.revision</code> when present</td></tr>
+</table>
+
+<p>The CRC is computed <strong>once, at map load time</strong> — not at export time. The computation clones the loaded map, sorts areas/rooms/labels by id, sorts per-room array fields (<code>stubs</code>, <code>exit_locks</code>, <code>special_exit_locks</code>), drops the internal <code>room.area</code> field, and takes the hierarchical <code>meta.checksums.file</code> of the clone. This makes the identity independent of in-memory ordering and of transient editing state.</p>
+
+<div class="note"><strong>Why at load:</strong> the base identity must describe the map the user <em>started from</em>, not the map after edits. Computing it at load keeps it stable no matter what the session does afterwards.</div>
+
+<p>On load of a delta, the application compares <code>base.crc</code> with the identity of the currently loaded map and informs the user whether the base matches ("baza zgodna") or differs ("kalka z innej wersji mapy"). A mismatch is <em>not</em> an error — applying onto a newer upstream version is the primary use case.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="serialization">5. Canonical Serialization &amp; Checksums</h2>
+
+<p>The file is serialized with the same canonical JSON writer as <code>.arkmap</code> (<code>stableStringify</code>): object keys sorted lexicographically at every level, no insignificant whitespace beyond the fixed pretty-print layout, UTF-8 encoding.</p>
+
+<p>Checksums use CRC-32 (hex string, lowercase) over the canonical serialization:</p>
+
+<table>
+  <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+  <tr><td><code>checksums.file</code></td><td>string</td><td>CRC-32 of the canonical form of <code>{ meta, ops }</code> (the whole file minus the checksums object itself)</td></tr>
+  <tr><td><code>checksums.ops</code></td><td>array&lt;string&gt;</td><td>Per-operation CRC-32 of the canonical form of each op, in order; used to localize corruption</td></tr>
+</table>
+
+<div class="critical"><strong>Tamper handling:</strong> if <code>checksums.file</code> does not match, the file is refused. The per-op checksums are then used to name the offending operations precisely (e.g. <em>„op #17, #23 nie zgadza się z sumą kontrolną"</em>). The per-op array is diagnostic only — it is not itself an integrity gate.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="sid">6. Symbolic IDs (sid)</h2>
+
+<p>Objects <em>created</em> by the delta (rooms, areas, labels) do not exist in the base map, so they have no meaningful numeric IDs. In the file they are identified by <strong>symbolic IDs</strong>:</p>
+
+<pre>sid := <span class="s">"d:"</span> N        <span class="c">// N ≥ 1, decimal, no leading zeros — regex: /^d:[1-9][0-9]*$/</span></pre>
+
+<p>Rules:</p>
+<ul>
+  <li><strong>Single global counter</strong> — sids are assigned from one counter shared across object kinds, in edit-log order (<code>d:1</code>, <code>d:2</code>, …). The file stays readable and sids never collide across kinds.</li>
+  <li><strong>Define-before-use</strong> — a sid is defined by its <code>ADD_ROOM</code> / <code>ADD_AREA</code> / <code>ADD_LABEL</code> operation and may be referenced only by later operations. This holds by construction (the editor cannot reference an object that does not exist yet) and is enforced by validation.</li>
+  <li><strong>Liveness</strong> — a sid is <em>live</em> from its ADD until the matching DELETE. Because the editor allocates numeric IDs as max+1 of the current state, deleting an object and adding a new one may reuse the same session numeric ID — each such incarnation gets a <strong>fresh sid</strong>. A sid therefore denotes one live object instance, never a number.</li>
+  <li><strong>No duplicates</strong> — two ADD operations defining the same sid make the file invalid.</li>
+  <li><strong>Reference rewriting</strong> — everywhere a room ID appears in an operation (<code>exits</code>, <code>special_exits</code>, exit targets, source rooms, snapshots), a sid-created ID is written as its sid. Label sids follow the same rule inside their parent area; area sids likewise.</li>
+</ul>
+
+<p>On apply, each sid receives a <strong>fresh numeric ID</strong> from a monotonically increasing counter starting at max(existing IDs)+1 (per area for labels), and every reference is translated through the sid map.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="operations">7. Operations</h2>
+
+<p>Each entry in <code>ops</code>:</p>
+
+<pre>{
+  <span class="k">"seq"</span>:     <span class="n">1</span>,          <span class="c">// REQUIRED — 1-based, contiguous, in application order</span>
+  <span class="k">"type"</span>:    <span class="s">"ADD_ROOM"</span>, <span class="c">// REQUIRED — one of the 25 operation types below</span>
+  <span class="k">"target"</span>:  { ... },     <span class="c">// REQUIRED — object identity the op applies to</span>
+  <span class="k">"payload"</span>: { ... },     <span class="c">// REQUIRED — operation data</span>
+  <span class="k">"label"</span>:   <span class="s">"..."</span>        <span class="c">// REQUIRED (may be "") — human-readable description, as in undo history</span>
+}</pre>
+
+<p>Room objects embedded in payloads (e.g. <code>ADD_ROOM.payload.room</code>) follow the .arkmap omission convention: empty containers and default values are omitted, and the internal <code>area</code> field never appears.</p>
+
+<h3>Room operations</h3>
+<table>
+  <tr><th>type</th><th>target</th><th>payload</th><th>Notes</th></tr>
+  <tr><td><code>ADD_ROOM</code></td><td><code>roomId</code> (sid), <code>areaId</code></td><td><code>room</code> — full room object (id = sid)</td><td>Fresh numeric ID on apply</td></tr>
+  <tr><td><code>DELETE_ROOM</code></td><td><code>roomId</code>, <code>areaId</code></td><td><code>room</code> — snapshot at deletion time (informational)</td><td>Incoming exits are recomputed from live state on apply</td></tr>
+  <tr><td><code>EDIT_ROOM</code></td><td><code>roomId</code></td><td><code>before</code>, <code>after</code> — full room snapshots</td><td>Full-state replace, same semantics as undo entries</td></tr>
+  <tr><td><code>EDIT_EXIT</code></td><td><code>roomId</code></td><td><code>before</code>, <code>after</code> — full room snapshots</td><td>As EDIT_ROOM; distinct type for history labels</td></tr>
+  <tr><td><code>PAINT_BATCH</code></td><td>— (empty)</td><td><code>changes</code>: array of <code>{ roomId, beforeEnv, beforeSymbol, afterEnv, afterSymbol }</code></td><td>Batch recolor; rooms missing on apply are skipped individually</td></tr>
+  <tr><td><code>MOVE_ROOM</code></td><td><code>roomId</code></td><td><code>fromX</code>, <code>fromY</code>, <code>fromZ</code>, <code>toX</code>, <code>toY</code>, <code>toZ</code></td><td>Coordinates in map cells</td></tr>
+  <tr><td><code>MOVE_ROOM_TO_AREA</code></td><td><code>roomId</code></td><td><code>fromAreaId</code>, <code>toAreaId</code></td><td></td></tr>
+</table>
+
+<h3>Exit operations</h3>
+<table>
+  <tr><th>type</th><th>target</th><th>payload</th><th>Notes</th></tr>
+  <tr><td><code>ADD_EXIT</code></td><td><code>sourceId</code>, <code>dir</code></td><td><code>targetId</code>, <code>bidirectional</code></td><td>Refused by the editor guard when <code>dir</code> is occupied on apply</td></tr>
+  <tr><td><code>DELETE_EXIT</code></td><td><code>roomId</code>, <code>dir</code></td><td><code>exitId</code> (optional, informational)</td><td></td></tr>
+  <tr><td><code>DELETE_SPECIAL_EXIT</code></td><td><code>roomId</code></td><td><code>cmd</code>, <code>targetId</code> (optional)</td><td>Also removes attached custom line / lock / door / weight</td></tr>
+</table>
+
+<h3>Area operations</h3>
+<table>
+  <tr><th>type</th><th>target</th><th>payload</th><th>Notes</th></tr>
+  <tr><td><code>ADD_AREA</code></td><td><code>areaId</code> (sid)</td><td><code>area</code> — area object without rooms/labels</td><td>Fresh numeric ID on apply</td></tr>
+  <tr><td><code>DELETE_AREA</code></td><td><code>areaId</code></td><td><code>name</code> (informational)</td><td>Rooms and cross-area exits are cleaned from live state on apply</td></tr>
+  <tr><td><code>EDIT_AREA</code></td><td><code>areaId</code></td><td><code>name</code>, <code>user_data</code>, <code>beforeName</code>, <code>beforeUserData</code></td><td></td></tr>
+</table>
+
+<h3>Custom line / suppressor operations</h3>
+<table>
+  <tr><th>type</th><th>target</th><th>payload</th><th>Notes</th></tr>
+  <tr><td><code>ADD_CL</code></td><td><code>roomId</code>, <code>dir</code></td><td><code>cl</code> — custom line object</td><td></td></tr>
+  <tr><td><code>EDIT_CL</code></td><td><code>roomId</code>, <code>dir</code></td><td><code>before</code>, <code>after</code></td><td></td></tr>
+  <tr><td><code>DELETE_CL</code></td><td><code>roomId</code>, <code>dir</code></td><td><code>cl</code> (optional, informational)</td><td></td></tr>
+  <tr><td><code>ADD_SUPPRESSOR</code></td><td><code>roomId</code>, <code>dir</code></td><td>— (empty)</td><td>Suppressor = empty red custom line</td></tr>
+  <tr><td><code>DELETE_SUPPRESSOR</code></td><td><code>roomId</code>, <code>dir</code></td><td><code>cl</code> (optional, informational)</td><td></td></tr>
+  <tr><td><code>AUTO_FIX_SUPPRESSORS</code></td><td>— (empty)</td><td><code>added</code>: array of <code>{ roomId, dir, cl }</code>, <code>removed</code>: array of <code>{ roomId, dir }</code></td><td>Batch form; entries whose room is missing on apply are dropped</td></tr>
+</table>
+
+<h3>Label operations</h3>
+<table>
+  <tr><th>type</th><th>target</th><th>payload</th><th>Notes</th></tr>
+  <tr><td><code>ADD_LABEL</code></td><td><code>areaId</code></td><td><code>label</code> — full label object (id = sid)</td><td>Fresh per-area ID on apply</td></tr>
+  <tr><td><code>EDIT_LABEL</code></td><td><code>areaId</code>, <code>labelId</code></td><td><code>before</code>, <code>after</code></td><td></td></tr>
+  <tr><td><code>DELETE_LABEL</code></td><td><code>areaId</code>, <code>labelId</code></td><td><code>label</code> — snapshot (informational)</td><td></td></tr>
+  <tr><td><code>MOVE_LABEL</code></td><td><code>areaId</code>, <code>labelId</code></td><td><code>fromX</code>, <code>fromY</code>, <code>toX</code>, <code>toY</code></td><td></td></tr>
+  <tr><td><code>RESIZE_LABEL</code></td><td><code>areaId</code>, <code>labelId</code></td><td><code>fromX</code>, <code>fromY</code>, <code>fromW</code>, <code>fromH</code>, <code>toX</code>, <code>toY</code>, <code>toW</code>, <code>toH</code></td><td></td></tr>
+</table>
+
+<h3>Color operations</h3>
+<table>
+  <tr><th>type</th><th>target</th><th>payload</th><th>Notes</th></tr>
+  <tr><td><code>EDIT_ENV_COLOR</code></td><td><code>envId</code></td><td><code>oldColor</code>, <code>newColor</code> — RGB arrays or null</td><td></td></tr>
+</table>
+
+<div class="note"><strong>Waypoints:</strong> route waypoints are viewer state, not map data — they never appear in a delta.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="validation">8. Validation Rules</h2>
+
+<p>Validation is <strong>fail-closed</strong>: any violation refuses the whole file with a list of diagnostics; nothing is loaded. Checks run in this order:</p>
+
+<ol>
+  <li><strong>Size limit</strong> — file larger than 8&nbsp;MiB is refused.</li>
+  <li><strong>JSON</strong> — the file must parse as a single JSON object.</li>
+  <li><strong>Magic</strong> — <code>meta.format</code> must be <code>"arkdelta"</code>.</li>
+  <li><strong>Version</strong> — <code>meta.format_version</code> must equal <code>1</code> (an unknown version advises updating ArkMap Studio).</li>
+  <li><strong>File checksum</strong> — <code>checksums.file</code> must match the canonical form of <code>{ meta, ops }</code>; on mismatch, per-op checksums localize the corrupted operations by <code>seq</code>.</li>
+  <li><strong>Operation count</strong> — at most 5000 operations; <code>meta.ops_count</code> must equal <code>ops.length</code>.</li>
+  <li><strong>Sequence</strong> — <code>seq</code> values must be 1-based and contiguous.</li>
+  <li><strong>Schema</strong> — <code>type</code> must be one of the 25 known types; <code>target</code>/<code>payload</code> must be objects carrying the required fields per type (§7).</li>
+  <li><strong>Directions</strong> — any <code>target.dir</code> must be a valid direction (<code>n, ne, e, se, s, sw, w, nw, up, down, in, out</code>).</li>
+  <li><strong>Key sanitization</strong> — the keys <code>__proto__</code>, <code>constructor</code>, <code>prototype</code> are forbidden anywhere in an operation.</li>
+  <li><strong>sid integrity</strong> — define-before-use and no duplicate definitions (§6).</li>
+</ol>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="apply">9. Apply Semantics</h2>
+
+<p>Applying a delta replays the operations in <code>seq</code> order onto the currently loaded map:</p>
+
+<ul>
+  <li><strong>Translation</strong> — each op is deep-cloned and every known sid is replaced by its fresh numeric ID (§6). A defensive scan afterwards refuses any op that still contains an unknown sid reference (other than the sid the op itself defines).</li>
+  <li><strong>Fresh IDs</strong> — rooms and areas are numbered from max(existing)+1 with monotonic counters; labels from max+1 within their area.</li>
+  <li><strong>Execution</strong> — where the editor has a programmatic commit with its own guards (<code>deleteRoom</code>, <code>commitDeleteArea</code>, <code>commitMoveRoomToArea</code>, <code>commitAddExit</code>, <code>commitMoveRoom</code>, <code>commitDeleteExit</code>), the apply path calls it, so guard refusals behave exactly as in interactive editing (e.g. <code>ADD_EXIT</code> onto an occupied direction). Remaining types are executed by reconstructing the equivalent undo entry and dispatching it through the same redo machinery used by undo/redo replay.</li>
+  <li><strong>Per-op isolation</strong> — every op runs in its own try/catch. An op that cannot be applied (missing target room/area/label, occupied direction, guard refusal, execution error) is <em>skipped with a reason</em> and does not stop later ops. The result is reported as <code>{ applied, skipped: [{ seq, reason }] }</code>.</li>
+  <li><strong>Undo integration</strong> — every applied op is pushed onto the undo stack like a normal edit (the 50-entry UI cap applies as usual). Undo/redo semantics are unchanged; after applying, the user can undo the whole overlay piece by piece.</li>
+  <li><strong>Rebase</strong> — because applied ops join the edit log, saving <code>.arkdelta</code> again right after applying produces an updated overlay against the new base (rebase = re-save).</li>
+</ul>
+
+<div class="warn"><strong>Base mismatch:</strong> applying onto a different map version is supported by design — operations whose targets no longer exist are skipped with reasons, everything else applies. Geometry review tooling (review window, ghost preview, collision autopositioning) is layered on top of this clean apply path.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="versioning">10. Versioning &amp; Compatibility</h2>
+
+<ul>
+  <li><code>format_version</code> is bumped only on incompatible changes to the envelope or operation schemas.</li>
+  <li>A reader refuses files with an unknown <code>format_version</code> (fail-closed) rather than guessing.</li>
+  <li>New operation types may be introduced within a format version only if old readers refuse them cleanly — which they do, via the schema check (unknown type ⇒ file refused). Producers must therefore treat adding an op type as effectively requiring a version bump for interoperability.</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="example">11. Complete Example</h2>
+
+<p>A delta with three operations: a new area, a new room inside it, and an exit from an existing room (100) into the new room. (Whitespace abridged; real files use the canonical writer.)</p>
+
+<pre>{
+  <span class="k">"meta"</span>: {
+    <span class="k">"format"</span>: <span class="s">"arkdelta"</span>,
+    <span class="k">"format_version"</span>: <span class="n">1</span>,
+    <span class="k">"ops_count"</span>: <span class="n">3</span>,
+    <span class="k">"base"</span>: { <span class="k">"crc"</span>: <span class="s">"3f8a21c0"</span>, <span class="k">"version"</span>: <span class="s">"0.205.0"</span>, <span class="k">"revision"</span>: <span class="s">"0123456789abcdef…"</span> },
+    <span class="k">"app_version"</span>: <span class="s">"v1.6.0"</span>
+  },
+  <span class="k">"ops"</span>: [
+    { <span class="k">"seq"</span>: <span class="n">1</span>, <span class="k">"type"</span>: <span class="s">"ADD_AREA"</span>,
+      <span class="k">"target"</span>: { <span class="k">"areaId"</span>: <span class="s">"d:1"</span> },
+      <span class="k">"payload"</span>: { <span class="k">"area"</span>: { <span class="k">"id"</span>: <span class="s">"d:1"</span>, <span class="k">"name"</span>: <span class="s">"Nowy obszar"</span> } },
+      <span class="k">"label"</span>: <span class="s">"Dodanie obszaru \"Nowy obszar\""</span> },
+    { <span class="k">"seq"</span>: <span class="n">2</span>, <span class="k">"type"</span>: <span class="s">"ADD_ROOM"</span>,
+      <span class="k">"target"</span>: { <span class="k">"roomId"</span>: <span class="s">"d:2"</span>, <span class="k">"areaId"</span>: <span class="s">"d:1"</span> },
+      <span class="k">"payload"</span>: { <span class="k">"room"</span>: { <span class="k">"id"</span>: <span class="s">"d:2"</span>, <span class="k">"x"</span>: <span class="n">12</span>, <span class="k">"y"</span>: <span class="n">-4</span>, <span class="k">"z"</span>: <span class="n">0</span>, <span class="k">"name"</span>: <span class="s">"Polana"</span>, <span class="k">"env"</span>: <span class="n">262</span> } },
+      <span class="k">"label"</span>: <span class="s">"Dodanie pokoju \"Polana\""</span> },
+    { <span class="k">"seq"</span>: <span class="n">3</span>, <span class="k">"type"</span>: <span class="s">"ADD_EXIT"</span>,
+      <span class="k">"target"</span>: { <span class="k">"sourceId"</span>: <span class="n">100</span>, <span class="k">"dir"</span>: <span class="s">"n"</span> },
+      <span class="k">"payload"</span>: { <span class="k">"targetId"</span>: <span class="s">"d:2"</span>, <span class="k">"bidirectional"</span>: <span class="b">true</span> },
+      <span class="k">"label"</span>: <span class="s">"Dodanie wyjścia #100 n"</span> }
+  ],
+  <span class="k">"checksums"</span>: {
+    <span class="k">"file"</span>: <span class="s">"91c04d2e"</span>,
+    <span class="k">"ops"</span>: [ <span class="s">"0a1b2c3d"</span>, <span class="s">"4e5f6071"</span>, <span class="s">"8293a4b5"</span> ]
+  }
+}</pre>
+
+<p>On apply onto a map whose highest room ID is 6400 and highest area ID is 120: the area becomes 121, the room becomes 6401, and room 100 gains exit <code>n → 6401</code> (with the reverse <code>s → 100</code> on the new room, because <code>bidirectional</code>).</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="changelog">12. Format Changelog</h2>
+
+<table>
+  <tr><th>Version</th><th>Date</th><th>Changes</th></tr>
+  <tr><td>1</td><td>2026-08</td><td>Initial format — ArkMap Studio v1.6.0</td></tr>
+</table>
+
+</body>
+</html>
