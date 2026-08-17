@@ -44,12 +44,29 @@ for (const sub of dirs) {
       if (!Number.isInteger(s.destination) || s.destination <= 0) fail(`${sub}/${f} stop[${i}]: destination nie jest dodatnim intem`);
       const time = (typeof s.time === 'number' && s.time > 0) ? s.time : null;
       const label = typeof s.label === 'string' && s.label.trim() ? s.label.trim() : null;
+      // Bramka semantyczna: każdy przystanek musi mieć sensowną etykietę (invariant
+      // chooser-a: 100% pozycji z nazwą). Odchylenie = anomalia upstream → czerwony
+      // workflow, nic nie ląduje w main, auto-issue z diagnozą (sync-transports.yml).
+      if (label === null) fail(`${sub}/${f} stop[${i}]: brak etykiety przystanku (label) — anomalia upstream, wymagany przegląd`);
+      if (label.length < 2) fail(`${sub}/${f} stop[${i}]: etykieta za krótka („${label}")`);
+      if (/^\d+$/.test(label)) fail(`${sub}/${f} stop[${i}]: etykieta czysto numeryczna („${label}") — to numer pokoju, nie nazwa`);
       return [s.start, s.destination, time, label];
     });
     defs.push([name, board, exit, stops]);
   }
 }
 defs.sort((a, b) => a[0].localeCompare(b[0], 'pl')); // stabilna kolejność niezależna od podkatalogu
+
+// Bramka semantyczna: rozstrzygalność przystanków — symulacja mapy stopLabel z runtime
+// (etykieta przystanku pochodzi z legu, którego jest celem). Przystanek występujący
+// wyłącznie jako start legu (nigdy cel) pokazałby w chooserze fallback/#ID.
+const stopLabel = new Map();
+for (const def of defs) for (const leg of def[3]) if (!stopLabel.has(leg[1])) stopLabel.set(leg[1], leg[3]);
+for (const def of defs) for (const leg of def[3]) {
+  for (const stopId of [leg[0], leg[1]]) {
+    if (!stopLabel.has(stopId)) fail(`${def[0]}: przystanek #${stopId} bez rozstrzygalnej etykiety (nigdy nie jest celem legu) — anomalia upstream, wymagany przegląd`);
+  }
+}
 
 const shaFile = path.join(srcDir, 'UPSTREAM_SHA');
 const sha = fs.existsSync(shaFile) ? fs.readFileSync(shaFile, 'utf8').trim() : 'unknown';

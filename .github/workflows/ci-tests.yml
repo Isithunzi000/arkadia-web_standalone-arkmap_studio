@@ -1,0 +1,41 @@
+# Regresja testowa — na każdy push do main (w tym automatyczne commity sond).
+# Fixture przypięty do release 0.205.0 (tests/fetch-fixture.sh) — deterministyczne wejście.
+# Bramka semantyczna generatora transportów (sync-transports.yml) jest ścianą; ten
+# workflow jest siecią — weryfikuje każdy commit po fakcie, ingerencja nie jest wymagana.
+name: CI testy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Jeden run naraz — sonda transportów i ręczne pushy nie odpalają regresji równolegle.
+concurrency:
+  group: ci-tests
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10   # zawieszony runner nie pali domyślnych 6 h
+    steps:
+      - name: Checkout repo (pełna historia — testy różnicowe robią git show)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+
+      - name: Fixture mapy (przypięty release 0.205.0)
+        run: |
+          set -euo pipefail
+          timeout 240 bash tests/fetch-fixture.sh
+
+      - name: Regresja (wszystkie harnessy)
+        run: timeout 420 bash tests/run-all.sh
