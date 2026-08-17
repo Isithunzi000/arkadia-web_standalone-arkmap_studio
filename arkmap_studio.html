@@ -2764,6 +2764,10 @@
             <span class="al-icon">⌥</span>
             <span><span class="al-name">ArkMap Studio</span> — repozytorium projektu</span>
           </a>
+          <a class="about-link" href="docs/arkmap_manual.html" target="_blank">
+            <span class="al-icon">📖</span>
+            <span><span class="al-name">Dokumentacja użytkownika</span> — podręcznik ArkMap Studio</span>
+          </a>
           <a class="about-link" href="https://github.com/Isithunzi000/arkadia-web_standalone-tools" target="_blank">
             <span class="al-icon">🧰</span>
             <span><span class="al-name">Standalone Tools</span> — kalendarze Ishtar/Imperium i denominacja monet</span>
@@ -3252,6 +3256,23 @@
     <div class="dlg-body" id="arkdelta-body"></div>
     <div class="dlg-ftr">
       <button class="dlg-cancel" onclick="closeDialog('dlg-arkdelta')">Zamknij</button>
+    </div>
+  </div>
+</div>
+
+<div id="dlg-arkdelta-mismatch" class="dlg-bg">
+  <div class="dlg-box narrow">
+    <div class="dlg-hdr">
+      <div class="dlg-icon">◈</div>
+      <div class="dlg-hdr-text">
+        <div class="dlg-title">Inna wersja mapy bazowej</div>
+        <div class="dlg-sub">Kalka zmian mapy</div>
+      </div>
+    </div>
+    <div class="dlg-body" id="arkdelta-mismatch-body"></div>
+    <div class="dlg-ftr">
+      <button class="dlg-cancel" id="arkdelta-mismatch-cancel">Anuluj</button>
+      <button class="btn-primary" id="arkdelta-mismatch-ok">Kontynuuj recenzję</button>
     </div>
   </div>
 </div>
@@ -12660,7 +12681,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.8.0';
+const APP_VERSION = 'v1.9.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -13590,6 +13611,12 @@ applyMap = function(map) {
   state.deltaLog = [];  // ARKDELTA: nowa mapa = pusty log
   state.baseInfo = _computeBaseInfo();  // ARKDELTA: tożsamość bazy nowej mapy
   _deltaGhostReset();  // ARKDELTA M3: nowa mapa = bez duchów / override'ów / trybu stawiania
+  // ARKDELTA M4: panel recenzji otwarty → re-klasyfikacja względem nowej mapy
+  if (typeof _deltaReview !== 'undefined' && _deltaReview) {
+    _deltaReview.items = classifyDelta(_deltaReview.delta);
+    document.getElementById('dp-base').textContent = _arkdeltaBaseNote(_deltaReview.delta.meta.base);
+    _renderDeltaPanel();
+  }
   state.dirty = false;  // A11': nowa mapa = czysty stan
   state.editDirty = false; state.editSnapshot = null; state.areaSnapshot = null;  // krok 3
   state.selectedLabel = null;  // krok 4
@@ -17416,7 +17443,6 @@ function submitPullRequest() {
 }
 
 // === ARKDELTA START ===
-/* (marker w kanonicznym pliku bloku) */
 // Format .arkdelta — delta edycyjna mapy: eksport logu operacji (state.deltaLog),
 // walidacja fail-closed, czyste apply. Spec: docs/arkdelta_spec.html.
 // Zasady: undo/redo nietkniete (ops wchodza przez pushUndo jak normalne edycje),
@@ -18603,6 +18629,38 @@ function _arkdeltaBaseNote(base) {
   return 'Kalka z innej wersji mapy (' + srcOf(base) + ' · nakładasz na ' + srcOf(cur) + ').';
 }
 
+// M4: czy wczytywanie kalki wymaga dialogu version-mismatch.
+// null = baza zgodna (prosto do panelu); {kind:'mismatch'|'nobase', ...} = dialog.
+function _deltaBaseCheck(base) {
+  const cur = state.baseInfo || {};
+  if (!base || !base.crc) return { kind: 'nobase' };
+  if (base.crc === cur.crc) return null;
+  return { kind: 'mismatch',
+    baseVersion: base.version || null, baseRevision: base.revision || null, baseCrc: base.crc,
+    curVersion: cur.version || null, curRevision: cur.revision || null, curCrc: cur.crc || null };
+}
+
+// Dialog version-mismatch: Kontynuuj = otworz recenzje, Anuluj = odrzuc kalke.
+function _openDeltaMismatch(delta, chk) {
+  const body = document.getElementById('arkdelta-mismatch-body');
+  const srcOf = (v, r) => r ? '@' + String(r).slice(0, 7) : (v ? 'v' + v : 'nieznana');
+  let html;
+  if (chk.kind === 'nobase') {
+    html = '<div class="dlg-info warn">Kalka nie niesie informacji o bazie — nie można zweryfikować zgodności z wczytaną mapą.</div>';
+  } else {
+    html = '<div class="dlg-info warn">Kalka została zapisana na <strong>innej wersji mapy</strong> niż aktualnie wczytana. To normalny scenariusz (nakładanie na nowszy upstream).</div>'
+      + '<div class="dlg-info">Baza kalki: <strong>' + escHtml(srcOf(chk.baseVersion, chk.baseRevision)) + '</strong> (crc ' + escHtml(String(chk.baseCrc).slice(0, 10)) + '…)<br>'
+      + 'Wczytana mapa: <strong>' + escHtml(srcOf(chk.curVersion, chk.curRevision)) + '</strong> (crc ' + escHtml(String(chk.curCrc || '—').slice(0, 10)) + (chk.curCrc ? '…' : '') + ')</div>';
+  }
+  html += '<div class="dlg-info">Nic nie zostanie naniesione automatycznie — każdy op kalki zostanie sklasyfikowany w oknie recenzji: do naniesienia / konflikt / naniesione / niewykonalne. Opy niewykonalne są wykluczone, konflikty wymagają Twojej decyzji.</div>';
+  body.innerHTML = html;
+  document.getElementById('arkdelta-mismatch-ok').onclick = () => {
+    closeDialog('dlg-arkdelta-mismatch');
+    openDeltaReview(delta);
+  };
+  openDialog('dlg-arkdelta-mismatch');
+}
+
 function openDeltaErrors(errors) {
   const body = document.getElementById('arkdelta-body');
   body.innerHTML = errors.map(e => '<div class="dlg-info warn">' + escHtml(e) + '</div>').join('');
@@ -18947,8 +19005,10 @@ fiArkdelta.addEventListener('change', async e => {
   if (!f) return;
   const text = await f.text();
   const res = validateDeltaText(text);
-  if (res.ok) openDeltaReview(res.delta);
-  else openDeltaErrors(res.errors);
+  if (!res.ok) { openDeltaErrors(res.errors); return; }
+  const chk = _deltaBaseCheck(res.delta.meta.base);  // M4
+  if (chk) _openDeltaMismatch(res.delta, chk);
+  else openDeltaReview(res.delta);
 });
 btnSaveArkdelta.addEventListener('click', saveDelta);
 
@@ -18960,6 +19020,10 @@ btnSaveArkdelta.addEventListener('click', saveDelta);
     b.addEventListener('click', () => { if (_deltaReview) { _deltaReview.filter = b.dataset.f; _renderDeltaPanel(); } });
   }
   document.getElementById('dp-apply').addEventListener('click', _deltaApplyReviewed);
+  document.getElementById('arkdelta-mismatch-cancel').addEventListener('click', () => {
+    closeDialog('dlg-arkdelta-mismatch');
+    toast('Wczytywanie kalki anulowane');
+  });
   document.getElementById('dp-rebase').addEventListener('click', saveDelta);
   const closePanel = () => { panel.classList.remove('visible'); _deltaReview = null; _deltaGhostReset(); draw(); };
   document.getElementById('dp-close').addEventListener('click', closePanel);
@@ -18982,7 +19046,6 @@ function _arkdeltaUpdateSaveBtn() {
   btnSaveArkdelta.disabled = !hasWork;
   btnSaveArkdelta.title = hasWork ? 'Zapisz kalkę zmian (.arkdelta)' : 'Brak zmian do zapisania';
 }
-/* (marker w kanonicznym pliku bloku) */
 // === ARKDELTA END ===
 
 // ── KEYBOARD — EDITOR ADDITIONS ───────────────────────────────────────────

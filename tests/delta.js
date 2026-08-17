@@ -132,7 +132,8 @@ const deltaCode =
   extract(HTML, 'function _dispatchRedo(entry) {') + '\n' +
   blockSlice('// === ARKDELTA START ===', '// ── UI: dialog + wiring') + '\n' +
   extract(HTML, 'function _arkdeltaBaseNote(base) {') + '\n' +
-  '\n;return { pushUndo, _computeBaseInfo, _deltaStripRoom, buildDelta, validateDeltaText, applyDelta, classifyDelta, _arkdeltaBaseNote, crc32str, stableStringify, addChecksums,'
+  extract(HTML, 'function _deltaBaseCheck(base) {') + '\n' +
+  '\n;return { pushUndo, _computeBaseInfo, _deltaStripRoom, buildDelta, validateDeltaText, applyDelta, classifyDelta, _arkdeltaBaseNote, _deltaBaseCheck, crc32str, stableStringify, addChecksums,'
   + '\n  _deltaBuildOcc, _deltaTakenCells, _deltaFindFreeCell, _deltaPlaceCtx, _deltaCellFree, _deltaApplyOverridesToOps, _deltaGhostGeoms, _deltaGhostReset,'
   + '\n  get ghosts() { return _deltaGhosts; }, set ghosts(v) { _deltaGhosts = v; },'
   + '\n  get overrides() { return _deltaOverrides; }, set overrides(v) { _deltaOverrides = v; },'
@@ -451,7 +452,7 @@ ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo 
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.8.0';"), 'wersja: v1.8.0');
+ok(HTML.includes("const APP_VERSION = 'v1.9.0';"), 'wersja: v1.9.0');
 
 console.log('— T8: classifyDelta + recenzja (M2) —');
 {
@@ -741,8 +742,59 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
     && HTML.includes("bShow.textContent = 'Efekt'") && HTML.includes("bHide.textContent = 'Ukryj'"),
     'panel: przyciski Efekt/Ukryj/Autopozycja/Ręcznie');
   ok(HTML.includes('Duchy:') && HTML.includes('pozycja zastępcza'), 'panel: legenda kolorów duchów');
-  ok(HTML.includes("const APP_VERSION = 'v1.8.0';"), 'wersja v1.8.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.9.0';"), 'wersja v1.9.0');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// T10 (v1.9.0): M4 — dialog version-mismatch, re-klasyfikacja w applyMap, manual.
+// ═══════════════════════════════════════════════════════════════════════════
+console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual —');
+{
+  const c = makeDeltaCtx();
+  c.state.baseInfo = c.api._computeBaseInfo();
+  const crc = c.state.baseInfo.crc;
+  ok(c.api._deltaBaseCheck({ crc }) === null, 'baseCheck: zgodne crc → null (prosto do panelu)');
+  const m = c.api._deltaBaseCheck({ crc: 'ffffffff', version: '1.2.3', revision: 'abcdef0123456789' });
+  ok(m && m.kind === 'mismatch' && m.baseVersion === '1.2.3' && m.baseRevision === 'abcdef0123456789'
+    && m.baseCrc === 'ffffffff' && m.curCrc === crc, 'baseCheck: mismatch → kind + pola obu stron');
+  ok(c.api._deltaBaseCheck(null).kind === 'nobase' && c.api._deltaBaseCheck({}).kind === 'nobase',
+    'baseCheck: brak base / brak crc → nobase');
+}
+{
+  // Struktura HTML — dialog i wiring M4
+  ok(HTML.includes('id="dlg-arkdelta-mismatch"') && HTML.includes('Inna wersja mapy bazowej'),
+    'markup: dialog version-mismatch');
+  ok(HTML.includes('id="arkdelta-mismatch-ok">Kontynuuj recenzję') && HTML.includes('id="arkdelta-mismatch-cancel">Anuluj'),
+    'markup: przyciski Kontynuuj / Anuluj');
+  ok(HTML.includes("const chk = _deltaBaseCheck(res.delta.meta.base);")
+    && HTML.indexOf('validateDeltaText(text)') < HTML.indexOf('const chk = _deltaBaseCheck')
+    && HTML.indexOf('const chk = _deltaBaseCheck') < HTML.indexOf('_openDeltaMismatch(res.delta, chk)'),
+    'wiring: validate → baseCheck → dialog (kolejność)');
+  ok(HTML.includes("closeDialog('dlg-arkdelta-mismatch');\n    openDeltaReview(delta);"),
+    'wiring: Kontynuuj → openDeltaReview');
+  ok(HTML.includes("toast('Wczytywanie kalki anulowane')"), 'wiring: Anuluj → toast');
+  ok(HTML.includes('// ARKDELTA M4: panel recenzji otwarty → re-klasyfikacja względem nowej mapy')
+    && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
+    'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
+  ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
+  ok(HTML.includes("const APP_VERSION = 'v1.9.0';"), 'wersja v1.9.0 w HTML');
+}
+{
+  // Manual: sekcja .arkdelta + spójność numeracji
+  const MANUAL = fs.readFileSync(path.join(ROOT, 'docs', 'arkmap_manual.html'), 'utf8');
+  ok(MANUAL.includes('<h2 id="arkdelta">21. Kalka zmian .arkdelta'), 'manual: sekcja 21 .arkdelta');
+  ok((MANUAL.match(/arkdelta/g) || []).length >= 8, 'manual: kalka opisana (>= 8 wzmianek)');
+  ok(MANUAL.includes('<li><a href="#arkdelta">Kalka zmian .arkdelta</a></li>'), 'manual: wpis w TOC');
+  const nums = [...MANUAL.matchAll(/<h2 id="[^"]+">(\d+)\./g)].map(m => +m[1]);
+  const ciagle = nums.length === 26 && nums.every((n, i) => n === i + 1);
+  ok(ciagle, 'manual: numeracja sekcji ciągła 1–26 (26 sekcji)');
+  ok(MANUAL.includes('<h3>.arkdelta (kalka zmian)</h3>'), 'manual: podsekcja w Formatach');
+  ok(MANUAL.includes('Czy kalka .arkdelta zadziała na nowszej wersji mapy?')
+    && MANUAL.includes('Co jeśli pole docelowe operacji z kalki jest zajęte?'), 'manual: 2 pytania FAQ');
+  const SPEC = fs.readFileSync(path.join(ROOT, 'docs', 'arkdelta_spec.html'), 'utf8');
+  ok(SPEC.includes('Position overrides (session-only)') && SPEC.includes('never enter the file format'),
+    'spec: dopisek o sesyjnych override poza formatem');
 }
 
 console.log('');
