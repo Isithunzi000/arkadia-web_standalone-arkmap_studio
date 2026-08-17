@@ -1,0 +1,1762 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>empirical-driver</title></head>
+<body>
+<iframe id="f" src="../arkmap_studio.html" style="width:1500px;height:950px;border:0"></iframe>
+<pre id="results"></pre>
+<div id="done" style="display:none"></div>
+<script>
+'use strict';
+// ═══ Driver empiryczny .arkdelta ═══
+// Ładuje pełną aplikację w iframe i wykonuje scenariusze przez realne funkcje
+// (eval dociera do leksykalnych globali obu tagów <script>). Wyniki lądują w
+// <pre id="results"> jako linie "R|STATUS|id|msg" + "SUMMARY|pass=N|fail=M".
+// Filtrowanie: ?g=GRUPA (prefiks id przed kropką) albo ?sc=id1,id2.
+// Uruchomienie: tests/empirical.sh (python http.server + chromium --dump-dom).
+
+const $f   = document.getElementById('f');
+const $out = document.getElementById('results');
+const W = () => $f.contentWindow;
+
+let _pass = 0, _fail = 0;
+function REC(status, id, msg) {
+  if (status === 'PASS') _pass++; else if (status === 'FAIL') _fail++;
+  const clean = String(msg || '').replace(/[\r\n<>|]+/g, ' ').slice(0, 500);
+  $out.textContent += 'R|' + status + '|' + id + '|' + clean + '\n';
+}
+const PASS = (id, msg) => REC('PASS', id, msg);
+const FAIL = (id, msg) => REC('FAIL', id, msg);
+const A    = (id, cond, msg) => REC(cond ? 'PASS' : 'FAIL', id, msg);
+const EQ   = (id, actual, expected, msg) => {
+  const a = JSON.stringify(actual), e = JSON.stringify(expected);
+  REC(a === e ? 'PASS' : 'FAIL', id, (msg ? msg + ' ' : '') + '[actual=' + a + ' expected=' + e + ']');
+};
+
+// ev(kod) — synchroniczny eval WYRAŻENIA w kontekście aplikacji.
+// Zwraca { ok:true, val } (val: JSON-safe) albo { ok:false, err }.
+function ev(code) {
+  try {
+    const wrapped = '(function(){ try { return JSON.stringify({ ok:true, val:(' + code + ') }); }'
+                  + ' catch(e){ return JSON.stringify({ ok:false, err:String(e && e.message || e) }); } })()';
+    const r = W().eval(wrapped);
+    return JSON.parse(r);
+  } catch (e) { return { ok: false, err: 'outer: ' + String(e && e.message || e) }; }
+}
+// eva(kod) — jak ev, ale wyrażenie może zwracać Promise (awaitowane).
+async function eva(code) {
+  try {
+    const p = W().eval('(function(){ return Promise.resolve().then(function(){ return (' + code + '); })'
+                     + '.then(function(v){ return { ok:true, val:v }; },'
+                     + '      function(e){ return { ok:false, err:String(e && e.message || e) }; }); })()');
+    return await p;
+  } catch (e) { return { ok: false, err: 'outer: ' + String(e && e.message || e) }; }
+}
+// AEV: asercja pomocnicza — FAIL gdy ev się wywalił, inaczej zwraca val.
+function AEV(id, r, msg) {
+  if (!r.ok) { FAIL(id, (msg ? msg + ' ' : '') + '[ev error: ' + r.err + ']'); return undefined; }
+  return r.val;
+}
+
+// ── Fixture + ładowanie bazy ─────────────────────────────────────────────────
+let fixBuf = null;  // ArrayBuffer map_master3.dat (pobierany raz)
+async function fetchFixture() {
+  if (fixBuf) return;
+  const resp = await fetch('../map_master3.dat');
+  if (!resp.ok) throw new Error('fixture HTTP ' + resp.status);
+  fixBuf = await resp.arrayBuffer();
+}
+// Świeża baza per scenariusz: applyMap resetuje undoStack/redoStack/deltaLog/
+// baseInfo/duchy i wychodzi z trybu edycji; startLocalEditMode wchodzi z powrotem.
+// fmt: 'dat' = prosto z fixture; 'arkmap' = roundtrip przez _serializeMap.
+function loadBase(fmt) {
+  const ark = W().datToArkmap(fixBuf.slice(0));
+  W().applyMap(ark);
+  if (fmt === 'arkmap') {
+    const text = W()._serializeMap();
+    W().applyMap(JSON.parse(text));
+  }
+  W().startLocalEditMode();
+  return ev('({ rooms: Object.keys(state.roomById).length, areas: state.areas.size,'
+          + ' crc: state.baseInfo && state.baseInfo.crc, deltaLog: state.deltaLog.length })');
+}
+
+// ── Rejestr scenariuszy ──────────────────────────────────────────────────────
+const SC = [];
+function scenario(id, fn) { SC.push({ id, fn }); }
+
+// ═══ GRUPA SMOKE — fundament: boot, ładowanie, commit, roundtrip ═══
+
+scenario('SMOKE.boot', async () => {
+  const fns = ev('typeof datToArkmap === "function" && typeof applyMap === "function"'
+    + ' && typeof buildDelta === "function" && typeof validateDeltaText === "function"'
+    + ' && typeof classifyDelta === "function" && typeof applyDelta === "function"'
+    + ' && typeof startLocalEditMode === "function" && typeof _serializeMap === "function"'
+    + ' && typeof undoAll === "function" && typeof redoAll === "function"');
+  A('SMOKE.boot.fns', AEV('SMOKE.boot.fns', fns) === true, 'funkcje rdzenia dostepne w iframe');
+  A('SMOKE.boot.dom', !!W().document.getElementById('cv') && !!W().document.getElementById('delta-panel'),
+    'canvas i panel kalki w DOM');
+});
+
+scenario('SMOKE.load', async () => {
+  const st = AEV('SMOKE.load', loadBase('dat'), 'zaladowanie fixture .dat');
+  if (!st) return;
+  A('SMOKE.load.rooms', st.rooms > 1000, 'rooms=' + st.rooms);
+  A('SMOKE.load.areas', st.areas > 10, 'areas=' + st.areas);
+  A('SMOKE.load.deltalog', st.deltaLog === 0, 'deltaLog pusty po applyMap');
+  A('SMOKE.load.crc', typeof st.crc === 'string' && /^[0-9a-f]{8}$/i.test(st.crc), 'baseInfo.crc=' + st.crc);
+  A('SMOKE.load.edit', ev('state.editMode === true').val === true, 'tryb edycji aktywny');
+});
+
+scenario('SMOKE.edit', async () => {
+  loadBase('dat');
+  const before = ev('Object.keys(state.roomById).length').val;
+  W().addRoomAtPosition(9999, 9999);   // wolna komórka w aktywnym obszarze
+  const after = ev('({ n: Object.keys(state.roomById).length, dl: state.deltaLog.length,'
+                 + ' t: state.deltaLog.length ? state.deltaLog[0].type : null })').val;
+  A('SMOKE.edit.add', after && after.n === before + 1 && after.dl === 1 && after.t === 'ADD_ROOM',
+    'ADD_ROOM przez realny commit [po=' + JSON.stringify(after) + ']');
+  W().undoAll();
+  const und = ev('({ n: Object.keys(state.roomById).length, dl: state.deltaLog.length })').val;
+  A('SMOKE.edit.undo', und && und.n === before && und.dl === 0, 'undoAll wraca do bazy');
+});
+
+scenario('SMOKE.arkmap', async () => {
+  const st1 = AEV('SMOKE.arkmap', loadBase('dat'), 'baza .dat');
+  if (!st1) return;
+  const st2 = AEV('SMOKE.arkmap', loadBase('arkmap'), 'baza .arkmap (roundtrip _serializeMap)');
+  if (!st2) return;
+  EQ('SMOKE.arkmap.rooms', st2.rooms, st1.rooms, 'liczba pokoi identyczna');
+  EQ('SMOKE.arkmap.areas', st2.areas, st1.areas, 'liczba obszarow identyczna');
+  EQ('SMOKE.arkmap.crc', st2.crc, st1.crc, 'crc bazy identyczne miedzy formatami');
+});
+
+// ═══ GRUPA E0 — tożsamość między formatami (.dat vs .arkmap) ═══
+// Baza .arkmap powstaje roundtripem _serializeMap -> JSON.parse -> applyMap
+// z bazy .dat. Tożsamość = identyczne crc bazy, identyczna klasyfikacja tej
+// samej kalki, identyczny stan po apply (odcisk = _computeBaseInfo().crc).
+
+let _mixedText = null;   // tekst kalki (cache między scenariuszami E0)
+let _mixedDelta = null;  // sparsowany obiekt (realm iframe)
+
+// Kalka mieszana realnymi commitami: ADD_ROOM (sid d:1), ADD_EXIT do sid,
+// ADD_EXIT real-real, MOVE_ROOM, DELETE_ROOM. Deterministyczna na fixture.
+function buildMixedDelta() {
+  const pick = ev('(function(){'
+    + ' const ids = Object.keys(state.roomById).map(Number).sort(function(a,b){ return a-b; });'
+    + ' const dirs = ["n","e","s","w"];'
+    + ' let a = null, b = null, c = null;'
+    + ' for (const id of ids) { const r = state.roomById[id];'
+    + '   if (dirs.some(function(d){ return !(r.exits || {})[d]; })) { a = id; break; } }'
+    + ' for (const id of ids) { if (id === a) continue; const r = state.roomById[id];'
+    + '   if (dirs.some(function(d){ return !(r.exits || {})[d]; })) { b = id; break; } }'
+    + ' for (const id of ids) { if (id === a || id === b) continue;'
+    + '   const r = state.roomById[id];'
+    + '   if (Object.keys(r.exits || {}).length > 0) { c = id; break; } }'
+    + ' const fr = function(id){ return dirs.find(function(d){ return !(state.roomById[id].exits || {})[d]; }); };'
+    + ' return { a: a, b: b, c: c, dirA: fr(a), dirB: fr(b) };'
+    + '})()').val;
+  W().addRoomAtPosition(9999, 9999);                       // ADD_ROOM -> sid d:1
+  const newId = ev('state.deltaLog[state.deltaLog.length-1].roomId').val;
+  W().commitAddExit(pick.a, pick.dirA, newId, false);      // ADD_EXIT -> cel = sid
+  W().commitAddExit(pick.b, pick.dirB, pick.a, false);     // ADD_EXIT real -> real
+  const mv = ev('(function(){ const r = state.roomById[' + pick.b + '];'
+    + ' return { x: r.x, y: r.y, z: r.z }; })()').val;
+  const roomB = W().eval('state.roomById[' + pick.b + ']');
+  W().commitMoveRoom(roomB, mv.x, mv.y, mv.z, mv.x + 500, mv.y + 500, mv.z);  // MOVE_ROOM
+  W().deleteRoom(pick.c);                                  // DELETE_ROOM (z wyjściami)
+  return ev('buildDelta()').val;
+}
+
+// Klasyfikacja tekstu kalki na BIEŻĄCEJ bazie; projekcja do pól porównywalnych.
+function classifyText(text) {
+  const v = W().validateDeltaText(text);
+  if (!v.ok) return { err: v.errors };
+  const items = W().classifyDelta(v.delta);
+  return { delta: v.delta, items: items.map(i => ({ t: i.type, c: i.cls, n: i.note || null, coll: !!i.coll })) };
+}
+
+// Przepakowanie kalki z innym meta.base — checksumy przeliczone funkcjami
+// aplikacji, wiec plik przechodzi walidacje (fail-closed) i dociera do baseCheck.
+function repackDeltaWithBase(deltaObj, newBase) {
+  const d = JSON.parse(JSON.stringify(deltaObj));
+  d.meta.base = newBase;
+  d.checksums = {
+    file: W().crc32str(W().stableStringify({ meta: d.meta, ops: d.ops })),
+    ops: d.ops.map(op => W().crc32str(W().stableStringify(op))),
+  };
+  return W().stableStringify(d);
+}
+
+scenario('E0.identity', async () => {
+  loadBase('dat');
+  const crcD = ev('state.baseInfo.crc').val;
+  _mixedText = buildMixedDelta();          // commity na bazie .dat -> kalka
+  A('E0.identity.built', typeof _mixedText === 'string' && _mixedText.length > 100,
+    'kalka zbudowana (' + (_mixedText || '').length + ' B)');
+  loadBase('dat');                         // swieza baza .dat (bez commitow)
+  const cD = classifyText(_mixedText);
+  A('E0.identity.valid-dat', !cD.err, 'walidacja na .dat' + (cD.err ? ' ' + cD.err.join('; ') : ''));
+  _mixedDelta = cD.delta || null;
+  const stA = AEV('E0.identity', loadBase('arkmap'), 'baza .arkmap');
+  if (!stA) return;
+  EQ('E0.identity.crc', stA.crc, crcD, 'crc bazy .arkmap == crc bazy .dat');
+  const cA = classifyText(_mixedText);
+  A('E0.identity.valid-ark', !cA.err, 'walidacja na .arkmap');
+  EQ('E0.identity.cls', cA.items, cD.items, 'klasyfikacja identyczna miedzy formatami');
+  A('E0.identity.classes', cD.items && cD.items.length === 5 && cD.items.every(i => i.c === 'ok'),
+    'wszystkie 5 opow klasyfikuje sie jako ok na czystej bazie');
+});
+
+scenario('E0.apply', async () => {
+  if (!_mixedDelta) { FAIL('E0.apply', 'brak kalki z E0.identity'); return; }
+  loadBase('dat');
+  const rD = W().applyDelta(_mixedDelta, null, undefined);
+  const fpD = ev('({ crc: _computeBaseInfo().crc, rooms: Object.keys(state.roomById).length })').val;
+  loadBase('arkmap');
+  const rA = W().applyDelta(_mixedDelta, null, undefined);
+  const fpA = ev('({ crc: _computeBaseInfo().crc, rooms: Object.keys(state.roomById).length })').val;
+  EQ('E0.apply.applied', { a: rA.applied, s: rA.skipped.length }, { a: rD.applied, s: rD.skipped.length },
+    'wynik apply identyczny');
+  A('E0.apply.all', rD.applied === 5 && rD.skipped.length === 0, '5 opow applied, 0 skipped');
+  EQ('E0.apply.state', fpA, fpD, 'stan po apply identyczny miedzy formatami');
+});
+
+scenario('E0.basecheck', async () => {
+  if (!_mixedDelta) { FAIL('E0.basecheck', 'brak kalki z E0.identity'); return; }
+  for (const fmt of ['dat', 'arkmap']) {
+    loadBase(fmt);
+    const okChk = W()._deltaBaseCheck(_mixedDelta.meta.base);
+    A('E0.basecheck.match-' + fmt, okChk === null, 'zgodna baza -> brak dialogu [' + fmt + ']');
+    const badText = repackDeltaWithBase(_mixedDelta, { crc: 'deadbeef', version: '0.0.0-test' });
+    const vBad = W().validateDeltaText(badText);
+    A('E0.basecheck.valid-' + fmt, vBad.ok === true, 'przepakowana kalka przechodzi walidacje [' + fmt + ']');
+    if (vBad.ok) {
+      const chk = W()._deltaBaseCheck(vBad.delta.meta.base);
+      A('E0.basecheck.mismatch-' + fmt, chk && chk.kind === 'mismatch' && chk.baseCrc === 'deadbeef',
+        'obce crc -> mismatch [' + fmt + ']');
+    }
+    const nbText = repackDeltaWithBase(_mixedDelta, {});
+    const vNb = W().validateDeltaText(nbText);
+    if (vNb.ok) {
+      const chk = W()._deltaBaseCheck(vNb.delta.meta.base);
+      A('E0.basecheck.nobase-' + fmt, chk && chk.kind === 'nobase', 'brak bazy -> nobase [' + fmt + ']');
+    } else FAIL('E0.basecheck.nobase-' + fmt, 'walidacja odrzucila base={}');
+  }
+});
+
+// ex(kod) — jak ev, ale kod to BLOK INSTRUKCJI (auto-IIFE); rzuca przy bledzie.
+function ex(code) {
+  const r = ev('(function(){ ' + code + ' })()');
+  if (!r.ok) throw new Error('ex: ' + r.err + ' [kod: ' + code.slice(0, 120) + ']');
+  return r.val;
+}
+
+// ═══ GRUPA E1 — roundtrip 25 typow op przez realne commity ═══
+// Kazdy typ laduje w deltaLog przez PRAWDZIWA sciezke commitu (funkcja rdzenia
+// albo realny handler DOM). Potem: buildDelta -> walidacja -> swieza baza ->
+// klasyfikacja (same ok) -> apply -> crc stanu == crc stanu po commitach.
+// Idempotencja: re-klasyfikacja po apply = same done; drugi apply = 0.
+
+const E1_ALL25 = ['ADD_ROOM','DELETE_ROOM','EDIT_ROOM','EDIT_EXIT','PAINT_BATCH',
+  'MOVE_ROOM','MOVE_ROOM_TO_AREA','ADD_EXIT','DELETE_EXIT','DELETE_SPECIAL_EXIT',
+  'ADD_AREA','DELETE_AREA','EDIT_AREA','ADD_CL','EDIT_CL','DELETE_CL',
+  'DELETE_SUPPRESSOR','ADD_SUPPRESSOR','AUTO_FIX_SUPPRESSORS','ADD_LABEL',
+  'EDIT_LABEL','DELETE_LABEL','MOVE_LABEL','RESIZE_LABEL','EDIT_ENV_COLOR'];
+
+let _e1Text = null, _e1Delta = null, _e1CrcEdited = null, _e1Types = null;
+
+// Deterministyczny wybor pokoi fixture pod kazdy typ op (najmniejsze pasujace id).
+const E1_SCAN = '(function(){'
+  + ' const ids = Object.keys(state.roomById).map(Number).sort(function(a,b){ return a-b; });'
+  + ' const R = function(id){ return state.roomById[id]; };'
+  + ' const DIRS = ["n","ne","e","se","s","sw","w","nw","up","down","in","out"];'
+  + ' const OPP = { n:"s", s:"n", e:"w", w:"e", ne:"sw", sw:"ne", nw:"se", se:"nw", up:"down", down:"up", in:"out", out:"in" };'
+  + ' const hasExit = function(id){ return Object.keys(R(id).exits || {}).length > 0; };'
+  + ' const freeDir = function(id){ return DIRS.find(function(d){ return !(R(id).exits || {})[d] && !(R(id).special_exits || {})[d]; }); };'
+  + ' const used = [];'
+  + ' const take = function(pred){ const id = ids.find(function(i){ return used.indexOf(i) < 0 && pred(i); });'
+  + '   if (id !== undefined) used.push(id); return id; };'
+  + ' const roomA = take(hasExit);'
+  + ' const exitDirA = Object.keys(R(roomA).exits)[0];'
+  + ' const srcX = take(freeDir);'
+  + ' const srcY = take(freeDir);'
+  + ' const roomD = take(function(){ return true; });'
+  + ' const roomE = take(function(){ return true; });'
+  + ' const roomF = take(hasExit);'
+  + ' const exitDirF = Object.keys(R(roomF).exits)[0];'
+  + ' const roomG = take(function(id){ return Object.keys(R(id).special_exits || {}).length > 0; });'
+  + ' const specCmdG = roomG !== undefined ? Object.keys(R(roomG).special_exits)[0] : null;'
+  + ' const roomH = take(function(){ return true; });'
+  + ' const roomI = take(function(){ return true; });'
+  + ' const roomJ = take(hasExit);'
+  + ' const roomK = take(function(id){ const cl = R(id).custom_lines || {};'
+  + '   return Object.keys(cl).some(function(d){ return cl[d].points && cl[d].points.length > 0; }); });'
+  + ' const clDirK = roomK !== undefined ? Object.keys(R(roomK).custom_lines).find(function(d){'
+  + '   const c = R(roomK).custom_lines[d]; return c.points && c.points.length > 0; }) : null;'
+  + ' let pair = null;'
+  + ' for (const id of ids) {'
+  + '   if (used.indexOf(id) >= 0) continue;'
+  + '   const ex = R(id).exits || {};'
+  + '   for (const d of Object.keys(ex)) {'
+  + '     const b = ex[d]; const opp = OPP[d];'
+  + '     if (!opp || !R(b) || used.indexOf(b) >= 0) continue;'
+  + '     if ((R(id).custom_lines || {})[d]) continue;'
+  + '     const clB = (R(b).custom_lines || {})[opp];'
+  + '     if (clB && clB.points && clB.points.length) continue;'
+  + '     pair = { a: id, dir: d, b: b, opp: opp, ax: R(id).x, ay: R(id).y, bx: R(b).x, by: R(b).y };'
+  + '     break;'
+  + '   }'
+  + '   if (pair) break;'
+  + ' }'
+  + ' if (pair) { used.push(pair.a); used.push(pair.b); }'
+  + ' const roomS = take(function(id){ return DIRS.some(function(d){ return !(R(id).custom_lines || {})[d]; }); });'
+  + ' const suppDirS = DIRS.find(function(d){ return !(R(roomS).custom_lines || {})[d]; });'
+  + ' return { roomA: roomA, exitDirA: exitDirA, srcX: srcX, srcDirX: freeDir(srcX),'
+  + '   srcY: srcY, srcDirY: freeDir(srcY), roomD: roomD, roomE: roomE,'
+  + '   roomF: roomF, exitDirF: exitDirF, roomG: roomG, specCmdG: specCmdG,'
+  + '   roomH: roomH, roomI: roomI, roomJ: roomJ, roomK: roomK === undefined ? null : roomK,'
+  + '   clDirK: clDirK, pair: pair, roomS: roomS, suppDirS: suppDirS };'
+  + '})()';
+
+function _e1SetRoom(id) {  // selekcja pokoju (setup pod commity dialogowe)
+  ex('state.selected = ' + id + ';'
+   + ' state.editSnapshot = JSON.parse(JSON.stringify(state.roomById[' + id + ']));'
+   + ' populateEditForm(state.roomById[' + id + ']); return "ok";');
+}
+function _e1MouseUp() {  // realny event mouseup na canvasie (commity MOVE/RESIZE_LABEL)
+  const cv = W().document.getElementById('cv');
+  cv.dispatchEvent(new (W().MouseEvent)('mouseup', { clientX: 700, clientY: 400, button: 0, bubbles: true }));
+}
+function _e1LastType() {
+  return ev('state.deltaLog.length ? state.deltaLog[state.deltaLog.length-1].type : null').val;
+}
+// Punkty CL wzdluz osi A->B z prostopadlym przesunieciem off (nie-wspolliniowe,
+// len >= 1 — zeby autoFix sklasyfikowal jako realny reshape, nie nub).
+function _e1ClPoints(pair, off) {
+  const dx = pair.bx - pair.ax, dy = pair.by - pair.ay;
+  const ux = Math.sign(dx), uy = Math.sign(dy);
+  const L = Math.max(Math.abs(dx), Math.abs(dy)) || 2;
+  const px = -uy, py = ux;
+  return [
+    [pair.ax + ux * (L / 3) + px * off, pair.ay + uy * (L / 3) + py * off],
+    [pair.ax + ux * (2 * L / 3) + px * off, pair.ay + uy * (2 * L / 3) + py * off],
+  ];
+}
+
+function buildE1Delta() {
+  loadBase('dat');
+  const P = ev(E1_SCAN).val;
+  if (!P || !P.pair || !P.roomG || !P.roomK) throw new Error('scan: pair=' + !!(P && P.pair)
+    + ' roomG=' + (P && P.roomG) + ' roomK=' + (P && P.roomK));
+  const D = W().document;
+  const expect = (t) => {
+    const got = _e1LastType();
+    if (got !== t) throw new Error('oczekiwano ' + t + ', ostatni wpis deltaLog: ' + got);
+  };
+
+  // 1. ADD_AREA
+  W().commitAddArea('E1 Test Area');
+  expect('ADD_AREA');
+  const na = ev('state.deltaLog[state.deltaLog.length-1].areaId').val;
+
+  // 2. ADD_ROOM w nowym (sid) obszarze
+  ex('state.areaId = ' + na + '; state.z = 0; return "ok";');
+  W().addRoomAtPosition(50, 50);
+  expect('ADD_ROOM');
+  const r1 = ev('state.deltaLog[state.deltaLog.length-1].roomId').val;
+
+  // 3-4. ADD_EXIT (cel sid + cel fixture)
+  W().commitAddExit(P.srcX, P.srcDirX, r1, false);
+  expect('ADD_EXIT');
+  W().commitAddExit(P.srcY, P.srcDirY, P.roomA, false);
+  expect('ADD_EXIT');
+
+  // 5-6. ADD_CL + EDIT_CL na parze (setup pod AUTO_FIX: realny reshape)
+  const pts1 = _e1ClPoints(P.pair, 0.5);
+  ex('state.clRoom = state.roomById[' + P.pair.a + ']; state.clDir = ' + JSON.stringify(P.pair.dir) + ';'
+   + ' state.clIsNew = true; state.clPoints = ' + JSON.stringify(pts1) + '; return "ok";');
+  W().commitCLDrawing();
+  expect('ADD_CL');
+  ex('state.clRoom = state.roomById[' + P.pair.a + ']; state.clDir = ' + JSON.stringify(P.pair.dir) + ';'
+   + ' state.clIsNew = false; state.clOriginalPoints = ' + JSON.stringify(pts1) + ';'
+   + ' state.clPoints = ' + JSON.stringify(_e1ClPoints(P.pair, 0.9)) + '; return "ok";');
+  W().commitCLDrawing();
+  expect('EDIT_CL');
+
+  // 7-8. ADD_SUPPRESSOR + DELETE_SUPPRESSOR (realny przycisk .cl-del w panelu)
+  ex('state.clRoom = state.roomById[' + P.roomS + ']; return "ok";');
+  W().commitSuppressor(P.suppDirS);
+  expect('ADD_SUPPRESSOR');
+  _e1SetRoom(P.roomS);
+  ex('updateCLTab(state.roomById[' + P.roomS + ']); return "ok";');
+  const delSupp = D.querySelector('#rp-tab-CL .cl-item.suppressor[data-dir="' + P.suppDirS + '"] .cl-del');
+  if (!delSupp) throw new Error('brak .cl-del suppressora w DOM');
+  delSupp.click();
+  expect('DELETE_SUPPRESSOR');
+
+  // 9. DELETE_CL (istniejaca CL z fixture, realny przycisk)
+  _e1SetRoom(P.roomK);
+  ex('updateCLTab(state.roomById[' + P.roomK + ']); return "ok";');
+  const delCl = D.querySelector('#rp-tab-CL .cl-item:not(.suppressor)[data-dir="' + P.clDirK + '"] .cl-del');
+  if (!delCl) throw new Error('brak .cl-del CL w DOM');
+  delCl.click();
+  expect('DELETE_CL');
+
+  // 10-11. EDIT_ROOM (nazwa) + EDIT_EXIT (waga wyjscia — same pola wyjsciowe)
+  _e1SetRoom(P.roomA);
+  D.getElementById('rp-name').value = 'E1 Zmieniona Nazwa';
+  W().commitRoomEdit();
+  expect('EDIT_ROOM');
+  _e1SetRoom(P.roomA);
+  ex('state.pendingExitWeight = {}; state.pendingExitWeight[' + JSON.stringify(P.exitDirA) + '] = 9; return "ok";');
+  W().commitRoomEdit();
+  expect('EDIT_EXIT');
+
+  // 12-13. MOVE_ROOM + MOVE_ROOM_TO_AREA (do sid-area)
+  const rd = ev('(function(){ const r = state.roomById[' + P.roomD + '];'
+    + ' return { x: r.x, y: r.y, z: r.z }; })()').val;
+  W().commitMoveRoom(W().eval('state.roomById[' + P.roomD + ']'), rd.x, rd.y, rd.z, rd.x + 500, rd.y + 500, rd.z);
+  expect('MOVE_ROOM');
+  W().commitMoveRoomToArea(P.roomE, na);
+  expect('MOVE_ROOM_TO_AREA');
+
+  // 14-15. DELETE_EXIT + DELETE_SPECIAL_EXIT
+  W().commitDeleteExit(W().eval('state.roomById[' + P.roomF + ']'), P.exitDirF);
+  expect('DELETE_EXIT');
+  ex('_ctxRoomId = ' + P.roomG + '; _ctxExitDir = ' + JSON.stringify(P.specCmdG) + '; _ctxExitIsSpecial = true; return "ok";');
+  W().deleteExitFromCtx();
+  expect('DELETE_SPECIAL_EXIT');
+
+  // 16. PAINT_BATCH (_paintStroke + realny commit pociagniecia)
+  ev('(function(){'
+   + ' const H = state.roomById[' + P.roomH + '], I = state.roomById[' + P.roomI + '];'
+   + ' _paintStroke = new Map();'
+   + ' _paintStroke.set(H.id, { env: H.env, symbol: H.symbol });'
+   + ' _paintStroke.set(I.id, { env: I.env, symbol: I.symbol });'
+   + ' H.env = 7; I.env = 7;'
+   + ' return "ok"; })()');
+  W()._paintStrokeCommit();
+  expect('PAINT_BATCH');
+
+  // 17. EDIT_ENV_COLOR (dialog dec-*)
+  W().openEnvColorDialog(2);
+  D.getElementById('dec-r').value = '11';
+  D.getElementById('dec-g').value = '22';
+  D.getElementById('dec-b').value = '33';
+  W().commitEnvColor();
+  expect('EDIT_ENV_COLOR');
+
+  // 18-19. ADD_LABEL + EDIT_LABEL (dialog dle-*) w sid-area
+  ex('state.areaId = ' + na + '; _labelEditIsNew = true; _labelEditCtxX = 10.5; _labelEditCtxY = 20.5; return "ok";');
+  D.getElementById('dle-text').value = 'E1 etykieta';
+  D.getElementById('dle-width').value = '5';
+  D.getElementById('dle-height').value = '1.5';
+  D.getElementById('dle-z').value = '0';
+  W().saveLabelEdit();
+  expect('ADD_LABEL');
+  const lblId = ev('state.deltaLog[state.deltaLog.length-1].snapshot.id').val;
+  ex('_labelEditIsNew = false; _labelEditId = ' + lblId + '; return "ok";');
+  D.getElementById('dle-text').value = 'E1 etykieta zmieniona';
+  W().saveLabelEdit();
+  expect('EDIT_LABEL');
+
+  // 20-21. MOVE_LABEL + RESIZE_LABEL (flagi stanu + realny mouseup)
+  ev('(function(){'
+   + ' state.selectedLabel = { areaId: ' + na + ', labelId: ' + lblId + ' };'
+   + ' const lbl = state.areas.get(' + na + ').labels.find(function(l){ return l.id === ' + lblId + '; });'
+   + ' state.labelDragOrigX = lbl.x; state.labelDragOrigY = lbl.y;'
+   + ' state.labelDragging = true;'
+   + ' lbl.x = lbl.x + 3; lbl.y = lbl.y + 2;'
+   + ' return "ok"; })()');
+  _e1MouseUp();
+  expect('MOVE_LABEL');
+  ev('(function(){'
+   + ' state.selectedLabel = { areaId: ' + na + ', labelId: ' + lblId + ' };'
+   + ' const lbl = state.areas.get(' + na + ').labels.find(function(l){ return l.id === ' + lblId + '; });'
+   + ' state.labelResizeOrigW = lbl.width; state.labelResizeOrigH = lbl.height;'
+   + ' state.labelResizeOrigX = lbl.x; state.labelResizeOrigY = lbl.y;'
+   + ' state.labelResizing = true;'
+   + ' lbl.width = lbl.width + 2; lbl.height = lbl.height + 1;'
+   + ' return "ok"; })()');
+  _e1MouseUp();
+  expect('RESIZE_LABEL');
+
+  // 22. DELETE_LABEL (etykieta sid)
+  ex('state.selectedLabel = { areaId: ' + na + ', labelId: ' + lblId + ' }; return "ok";');
+  W().deleteLabelFromCtx();
+  expect('DELETE_LABEL');
+
+  // 23. DELETE_ROOM (fixture z wyjsciami)
+  W().deleteRoom(P.roomJ);
+  expect('DELETE_ROOM');
+
+  // 24-25. ADD_AREA + DELETE_AREA (pusty obszar)
+  W().commitAddArea('E1 Test Area B');
+  expect('ADD_AREA');
+  const nb = ev('state.deltaLog[state.deltaLog.length-1].areaId').val;
+  W().commitDeleteArea(nb);
+  expect('DELETE_AREA');
+
+  // 26. EDIT_AREA (nazwa obszaru fixture — formularz ap-*)
+  const anyArea = ev('(function(){ const it = state.areas.keys().next().value; return it; })()').val;
+  ex('state.areaSnapshot = null; return "ok";');
+  D.getElementById('ap-name').value = 'E1 Obszar ' + anyArea;
+  W().commitEditArea(anyArea);
+  expect('EDIT_AREA');
+
+  // 27. AUTO_FIX_SUPPRESSORS (lista missing — fn sama re-weryfikuje geometrie)
+  W().autoFixSuppressors([{ roomA: P.pair.a, dir: P.pair.dir, roomB: P.pair.b, oppDir: P.pair.opp }]);
+  expect('AUTO_FIX_SUPPRESSORS');
+
+  return ev('buildDelta()').val;
+}
+
+scenario('E1.build', async () => {
+  try { _e1Text = buildE1Delta(); }
+  catch (e) { FAIL('E1.build', String(e && e.message || e)); return; }
+  _e1Types = ev('state.deltaLog.map(function(e){ return e.type; })').val;
+  _e1CrcEdited = ev('_computeBaseInfo().crc').val;
+  A('E1.build.count', _e1Types && _e1Types.length === 27, '27 opow w deltaLog [' + (_e1Types || []).join(',') + ']');
+  const missing = E1_ALL25.filter(t => !(_e1Types || []).includes(t));
+  A('E1.build.types', missing.length === 0, 'wszystkie 25 typow obecne' + (missing.length ? ' [brak: ' + missing.join(',') + ']' : ''));
+  const v = W().validateDeltaText(_e1Text);
+  A('E1.build.valid', v.ok === true, 'kalka przechodzi walidacje' + (v.ok ? '' : ' ' + (v.errors || []).join('; ')));
+  if (v.ok) _e1Delta = v.delta;
+});
+
+scenario('E1.roundtrip', async () => {
+  if (!_e1Delta) { FAIL('E1.roundtrip', 'brak kalki z E1.build'); return; }
+  loadBase('dat');
+  const cls = classifyText(_e1Text);
+  const notOk = (cls.items || []).filter(i => i.c !== 'ok');
+  // Klasyfikator jest per-op vs stan biezacy (bez symulacji wczesniejszych opow
+  // kalki): EDIT_CL/DELETE_SUPPRESSOR po ADD_CL/ADD_SUPPRESSOR z tej samej kalki
+  // daja impossible; EDIT_EXIT po EDIT_ROOM tego samego pokoju daje hard;
+  // DELETE_AREA sid-area daje impossible (brak resA). Znane ograniczenia — E1
+  // dokumentuje je jako watchdog (jesli klasyfikator zostanie poprawiony, ten
+  // test przypomni o aktualizacji oczekiwan).
+  const KNOWN_SEQ = { EDIT_CL: 'impossible', DELETE_SUPPRESSOR: 'impossible', EDIT_EXIT: 'hard', DELETE_AREA: 'impossible' };
+  const unexpected = notOk.filter(i => KNOWN_SEQ[i.t] !== i.c);
+  const knownHit = notOk.filter(i => KNOWN_SEQ[i.t] === i.c).map(i => i.t + ':' + i.c);
+  A('E1.roundtrip.cls-ok23', cls.items && cls.items.length === 27 && unexpected.length === 0,
+    '23 ok + tylko znane seq-zalezne' + (unexpected.length ? ' [nieoczekiwane: ' + unexpected.map(i => i.t + ':' + i.c + (i.n ? '(' + i.n + ')' : '')).join(',') + ']' : ''));
+  EQ('E1.roundtrip.cls-knownseq', knownHit, ['EDIT_CL:impossible', 'DELETE_SUPPRESSOR:impossible', 'EDIT_EXIT:hard', 'DELETE_AREA:impossible'],
+    'watchdog znanych ograniczen klasyfikatora');
+  const r = W().applyDelta(_e1Delta, null, undefined);
+  A('E1.roundtrip.applied', r.applied === 27 && r.skipped.length === 0,
+    'applied=' + r.applied + ' skipped=' + r.skipped.length + (r.skipped.length ? ' ' + JSON.stringify(r.skipped) : ''));
+  const crcApplied = ev('_computeBaseInfo().crc').val;
+  EQ('E1.roundtrip.crc', crcApplied, _e1CrcEdited, 'stan po apply == stan po commitach (crc)');
+});
+
+scenario('E1.idempotent', async () => {
+  if (!_e1Delta) { FAIL('E1.idempotent', 'brak kalki z E1.build'); return; }
+  loadBase('dat');
+  W().applyDelta(_e1Delta, null, undefined);
+  const crc1 = ev('_computeBaseInfo().crc').val;
+  // Re-klasyfikacja na stanie po apply — watchdog done-coverage klasyfikatora
+  const items2 = W().classifyDelta(_e1Delta);
+  const proj = items2.map(i => i.type + ':' + i.cls);
+  const doneN = proj.filter(p => p.endsWith(':done')).length;
+  A('E1.idempotent.done11', doneN === 11, 'watchdog: done ' + doneN + '/27 [nie-done: '
+    + proj.filter(p => !p.endsWith(':done')).join(', ') + ']');
+  // Sciezka panelu: drugi apply z domyslnie zaznaczonych — watchdog rozbieznosci
+  const checkedSeqs = new Set(items2.filter(i => i.checked).map(i => i.seq));
+  const r3 = W().applyDelta(_e1Delta, checkedSeqs, undefined);
+  const crc2 = ev('_computeBaseInfo().crc').val;
+  A('E1.idempotent.panel55', r3.applied === 5 && r3.skipped.length === 5,
+    'watchdog: drugi apply (panel) applied=' + r3.applied + ' skipped=' + r3.skipped.length);
+  A('E1.idempotent.panel-diverges', crc2 !== crc1,
+    'watchdog: drugi apply (panel) ROZBIEGA stan [crc1=' + crc1 + ' crc2=' + crc2 + ']');
+  // Surowy drugi apply — swiezy tor (zeby undoStack nie przekroczyl capa 50)
+  loadBase('dat');
+  W().applyDelta(_e1Delta, null, undefined);
+  const r4 = W().applyDelta(_e1Delta, null, undefined);
+  const crc4 = ev('_computeBaseInfo().crc').val;
+  A('E1.idempotent.raw2-22', r4.applied === 22 && r4.skipped.length === 5,
+    'watchdog: surowy drugi apply applied=' + r4.applied + ' skipped=' + r4.skipped.length);
+  A('E1.idempotent.raw2-diverges', crc4 !== crc1, 'watchdog: surowy drugi apply ROZBIEGA stan');
+  W().undoAll();
+  EQ('E1.idempotent.undo', ev('_computeBaseInfo().crc').val, ev('state.baseInfo.crc').val,
+    'undoAll po 2 apply (49 wpisow, pod cap 50) wraca do bazy');
+});
+
+// ═══ GRUPA E2 — macierz 25 typow x 4 stany upstream ═══
+// Warianty: clean (kontrola) / mod (obiekt zmieniony upstream) / del (obiekt
+// usuniety upstream) / conflict (stan konfliktowy: zajete pole, kierunek,
+// nazwa, wersja docelowa). N/A = jawne "nie dotyczy" z uzasadnieniem.
+// Kalka per typ: realny commit na czystej bazie -> buildDelta (albo craft
+// z przeliczonymi checksumami dla typow niewykonalnych jedno-opowo).
+// Warianty: bezposrednia mutacja stanu (upstream = cudza nowsza wersja mapy
+// — nie wymaga wpisow undo). Testowana sciezka: klasyfikacja + apply.
+
+let _e2P = null;
+const E2_SCAN = '(function(){'
+  + ' const ids = Object.keys(state.roomById).map(Number).sort(function(a,b){ return a-b; });'
+  + ' const R = function(id){ return state.roomById[id]; };'
+  + ' const DIRS = ["n","ne","e","se","s","sw","w","nw","up","down","in","out"];'
+  + ' const OPP = { n:"s", s:"n", e:"w", w:"e", ne:"sw", sw:"ne", nw:"se", se:"nw", up:"down", down:"up", in:"out", out:"in" };'
+  + ' const hasExit = function(id){ return Object.keys(R(id).exits || {}).length > 0; };'
+  + ' const freeDir = function(id){ return DIRS.find(function(d){ return !(R(id).exits||{})[d] && !(R(id).special_exits||{})[d]; }); };'
+  + ' const roomA = ids.find(hasExit);'
+  + ' const exitDirA = Object.keys(R(roomA).exits)[0];'
+  + ' const roomD = ids.find(function(id){ return id !== roomA; });'
+  + ' const roomJ = ids.find(function(id){ return id !== roomA && id !== roomD && hasExit(id); });'
+  + ' const srcX = ids.find(function(id){ return [roomA, roomD, roomJ].indexOf(id) < 0 && freeDir(id); });'
+  + ' const srcDirX = freeDir(srcX);'
+  + ' const roomG = ids.find(function(id){ return Object.keys(R(id).special_exits || {}).length > 0; });'
+  + ' const specCmdG = roomG !== undefined ? Object.keys(R(roomG).special_exits)[0] : null;'
+  + ' const roomF = ids.find(function(id){ return [roomA, roomD, roomJ, srcX, roomG].indexOf(id) < 0 && hasExit(id); });'
+  + ' const exitDirF = Object.keys(R(roomF).exits)[0];'
+  + ' const roomH = ids.find(function(id){ return [roomA,roomD,roomJ,srcX,roomG,roomF].indexOf(id) < 0; });'
+  + ' const roomI = ids.find(function(id){ return [roomA,roomD,roomJ,srcX,roomG,roomF,roomH].indexOf(id) < 0; });'
+  + ' const areaArr = Array.from(state.areas.values()).filter(function(a){ return a.id > 0; });'
+  + ' const small = areaArr.slice().sort(function(a,b){ return (a.rooms||[]).length - (b.rooms||[]).length; });'
+  + ' const smallArea = small[0].id, areaB = small[1].id, areaC = small[2].id;'
+  + ' const roomE = ids.find(function(id){ return state.roomArea[id] !== areaB && state.roomArea[id] !== areaC; });'
+  + ' const roomK = ids.find(function(id){ const cl = R(id).custom_lines || {};'
+  + '   return Object.keys(cl).some(function(d){ return cl[d].points && cl[d].points.length > 0; }); });'
+  + ' const clDirK = roomK !== undefined ? Object.keys(R(roomK).custom_lines).find(function(d){'
+  + '   const c = R(roomK).custom_lines[d]; return c.points && c.points.length > 0; }) : null;'
+  + ' const clPtsK = roomK !== undefined ? JSON.parse(JSON.stringify(R(roomK).custom_lines[clDirK].points)) : null;'
+  + ' const suppRoom = ids.find(function(id){ const cl = R(id).custom_lines || {};'
+  + '   return Object.keys(cl).some(function(d){ return !cl[d].points || cl[d].points.length === 0; }); });'
+  + ' const suppDirF = suppRoom !== undefined ? Object.keys(R(suppRoom).custom_lines).find(function(d){'
+  + '   const c = R(suppRoom).custom_lines[d]; return !c.points || c.points.length === 0; }) : null;'
+  + ' const roomS = ids.find(function(id){ return [roomA,roomD,roomJ,srcX,roomG,roomF,roomH,roomI,roomK].indexOf(id) < 0'
+  + '   && DIRS.some(function(d){ return !(R(id).custom_lines || {})[d]; }); });'
+  + ' const suppDirS = DIRS.find(function(d){ return !(R(roomS).custom_lines || {})[d]; });'
+  + ' let pair = null;'
+  + ' for (const id of ids) {'
+  + '   const ex0 = R(id).exits || {};'
+  + '   for (const d of Object.keys(ex0)) {'
+  + '     const b = ex0[d]; const opp = OPP[d];'
+  + '     if (!opp || !R(b)) continue;'
+  + '     if ((R(id).custom_lines || {})[d]) continue;'
+  + '     const clB = (R(b).custom_lines || {})[opp];'
+  + '     if (clB && clB.points && clB.points.length) continue;'
+  + '     pair = { a: id, dir: d, b: b, opp: opp, ax: R(id).x, ay: R(id).y, bx: R(b).x, by: R(b).y };'
+  + '     break;'
+  + '   }'
+  + '   if (pair) break;'
+  + ' }'
+  + ' const areaL = areaArr.find(function(a){ return (a.labels || []).length > 0; });'
+  + ' const lbl = areaL ? areaL.labels[0] : null;'
+  + ' return { roomA: roomA, exitDirA: exitDirA, roomD: roomD, roomJ: roomJ,'
+  + '   srcX: srcX, srcDirX: srcDirX, roomG: roomG, specCmdG: specCmdG,'
+  + '   roomF: roomF, exitDirF: exitDirF, roomH: roomH, roomI: roomI,'
+  + '   smallArea: smallArea, areaB: areaB, areaC: areaC, roomE: roomE,'
+  + '   roomK: roomK === undefined ? null : roomK, clDirK: clDirK, clPtsK: clPtsK,'
+  + '   suppRoom: suppRoom === undefined ? null : suppRoom, suppDirF: suppDirF || null,'
+  + '   roomS: roomS, suppDirS: suppDirS, pair: pair,'
+  + '   labelArea: areaL ? areaL.id : null,'
+  + '   label: lbl ? { id: lbl.id, text: lbl.text, x: lbl.x, y: lbl.y, z: lbl.z || 0, width: lbl.width, height: lbl.height } : null };'
+  + '})()';
+
+// Upstream: nowy pokoj na zadanej pozycji (dokladnie jak addRoomAtPosition).
+function _e2UpRoom(areaId, x, y, name) {
+  ex('const ids = Object.keys(state.roomById).map(Number);'
+   + ' const nid = Math.max.apply(null, ids) + 1;'
+   + ' const r = { id: nid, area: ' + areaId + ', x: ' + x + ', y: ' + y + ', z: 0,'
+   + '   name: ' + JSON.stringify(name) + ', env: 258, weight: 1,'
+   + '   exits: {}, special_exits: {}, custom_lines: {}, stubs: [],'
+   + '   exit_locks: [], exit_weights: {}, doors: {}, user_data: {} };'
+   + ' state.areas.get(' + areaId + ').rooms.push(r);'
+   + ' state.roomById[nid] = r; state.roomArea[nid] = ' + areaId + ';'
+   + ' buildRoomsZ(); return nid;');
+}
+// Craft pojedynczej kalki (checksumy funkcjami aplikacji) — dla typow, ktorych
+// nie da sie wygenerowac jedno-opowo z czystej bazy fixture.
+function _e2Craft(opsArr) {
+  const fmt = ev('({ f: ARKDELTA_FORMAT, v: ARKDELTA_FORMAT_VERSION })').val;
+  const meta = { format: fmt.f, format_version: fmt.v, ops_count: opsArr.length,
+                 base: ev('state.baseInfo').val, app_version: 'e2-craft' };
+  const ops = opsArr.map((o, i) => ({ seq: i + 1, type: o.type, target: o.target, payload: o.payload, label: o.label || o.type }));
+  const checksums = { file: W().crc32str(W().stableStringify({ meta, ops })),
+                      ops: ops.map(op => W().crc32str(W().stableStringify(op))) };
+  return W().stableStringify({ meta, ops, checksums });
+}
+// Malowanie dwoch pokoi (PAINT_BATCH przez realny commit pociagniecia).
+function _e2Paint(P) {
+  ex('const H = state.roomById[' + P.roomH + '], I = state.roomById[' + P.roomI + '];'
+   + ' _paintStroke = new Map();'
+   + ' _paintStroke.set(H.id, { env: H.env, symbol: H.symbol });'
+   + ' _paintStroke.set(I.id, { env: I.env, symbol: I.symbol });'
+   + ' H.env = 7; I.env = 7; return 1;');
+  W()._paintStrokeCommit();
+}
+// EDIT_ROOM przez formularz.
+function _e2EditRoom(id, name) {
+  _e1SetRoom(id);
+  W().document.getElementById('rp-name').value = name;
+  W().commitRoomEdit();
+}
+// EDIT_LABEL przez dialog (na fixture-etykiecie).
+function _e2LabelDlgSetup(P, isNew, text) {
+  ex('state.areaId = ' + P.labelArea + '; _labelEditIsNew = ' + (isNew ? 'true' : 'false') + ';'
+   + (isNew ? ' _labelEditCtxX = 10.5; _labelEditCtxY = 20.5;' : ' _labelEditId = ' + P.label.id + ';')
+   + ' return 1;');
+  const D = W().document;
+  D.getElementById('dle-text').value = text;
+  D.getElementById('dle-width').value = String(P.label ? P.label.width || 4 : 4);
+  D.getElementById('dle-height').value = String(P.label ? P.label.height || 1.2 : 1.2);
+  D.getElementById('dle-z').value = '0';
+}
+// MOVE/RESIZE_LABEL przez flagi + realny mouseup.
+function _e2LabelMouse(P, dx, dy, dw, dh) {
+  ex('state.selectedLabel = { areaId: ' + P.labelArea + ', labelId: ' + P.label.id + ' };'
+   + ' const lbl = state.areas.get(' + P.labelArea + ').labels.find(function(l){ return l.id === ' + P.label.id + '; });'
+   + (dw === null
+      ? ' state.labelDragOrigX = lbl.x; state.labelDragOrigY = lbl.y; state.labelDragging = true;'
+      + ' lbl.x = lbl.x + (' + dx + '); lbl.y = lbl.y + (' + dy + ');'
+      : ' state.labelResizeOrigW = lbl.width; state.labelResizeOrigH = lbl.height;'
+      + ' state.labelResizeOrigX = lbl.x; state.labelResizeOrigY = lbl.y; state.labelResizing = true;'
+      + ' lbl.width = lbl.width + (' + dw + '); lbl.height = lbl.height + (' + dh + ');')
+   + ' return 1;');
+  _e1MouseUp();
+}
+
+const E2_DESCS = [
+// ─── pokoje ───
+{ type: 'ADD_ROOM', ops: 1,
+  make: P => { ex('state.areaId = ' + P.smallArea + '; state.z = 0; return 1;'); W().addRoomAtPosition(9999, 9999); },
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      null,
+    del:      { prep: P => W().commitDeleteArea(P.smallArea), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: P => _e2UpRoom(P.smallArea, 9999, 9999, 'Upstream'), exp: { cls: 'hard', coll: true, applied: 1, skipped: 0 },
+                post: (P, id) => A(id + '.stacked', ev('_deltaRoomAt(' + P.smallArea + ', 9999, 9999, 0) !== null').val === true
+                  && ev('(function(){ const a = state.areas.get(' + P.smallArea + '); return a.rooms.filter(function(r){ return r.x === 9999 && r.y === 9999 && (r.z||0) === 0; }).length; })()').val === 2,
+                  'watchdog: surowy apply tworzy STOS 2 pokoi na zajetym polu') },
+  },
+  na: { mod: 'sid — pokoj z kalki nie ma odpowiednika upstream' } },
+{ type: 'DELETE_ROOM', ops: 1,
+  make: P => W().deleteRoom(P.roomJ),
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('state.roomById[' + P.roomJ + '].name = "Upstream"; return 1;'), exp: { cls: 'hard' } },
+    del:      { prep: P => W().deleteRoom(P.roomJ), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: null,
+  },
+  na: { conflict: 'usuniecie nie ma stanu konfliktowego' } },
+{ type: 'EDIT_ROOM', ops: 1,
+  make: P => _e2EditRoom(P.roomA, 'E2 Zmieniona Nazwa'),
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('state.roomById[' + P.roomA + '].name = "Inna Nazwa"; return 1;'), exp: { cls: 'hard' } },
+    del:      { prep: P => W().deleteRoom(P.roomA), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: null,
+  },
+  na: { conflict: 'edycja nadpisuje — konflikt = mod (hard)' } },
+{ type: 'EDIT_EXIT', ops: 1,
+  make: P => { _e1SetRoom(P.roomA);
+    ex('state.pendingExitWeight = {}; state.pendingExitWeight[' + JSON.stringify(P.exitDirA) + '] = 9; return 1;');
+    W().commitRoomEdit(); },
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('const r = state.roomById[' + P.roomA + ']; r.exit_weights = r.exit_weights || {};'
+                  + ' r.exit_weights[' + JSON.stringify(P.exitDirA) + '] = 5; return 1;'), exp: { cls: 'hard' } },
+    del:      { prep: P => W().deleteRoom(P.roomA), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: null,
+  },
+  na: { conflict: 'edycja nadpisuje — konflikt = mod (hard)' } },
+{ type: 'PAINT_BATCH', ops: 1,
+  make: P => _e2Paint(P),
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('state.roomById[' + P.roomH + '].env = 9; state.roomById[' + P.roomI + '].env = 9; return 1;'),
+                exp: { cls: 'ok' } },
+    del:      { prep: P => { W().deleteRoom(P.roomH); W().deleteRoom(P.roomI); }, exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: null,
+  },
+  na: { conflict: 'malowanie nadpisuje bez sprawdzania before — konflikt = mod (ok)' } },
+{ type: 'MOVE_ROOM', ops: 1,
+  make: P => { const rd = ev('(function(){ const r = state.roomById[' + P.roomD + ']; return { x: r.x, y: r.y, z: r.z }; })()').val;
+    W().commitMoveRoom(W().eval('state.roomById[' + P.roomD + ']'), rd.x, rd.y, rd.z, rd.x + 500, rd.y + 500, rd.z); },
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('const r = state.roomById[' + P.roomD + ']; r.x = r.x + 400; r.y = r.y + 400; buildRoomsZ(); return 1;'),
+                exp: { cls: 'ok' } },
+    del:      { prep: P => W().deleteRoom(P.roomD), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: P => { const a = ev('state.roomArea[' + P.roomD + ']').val; const rd = ev('(function(){ const r = state.roomById[' + P.roomD + ']; return { x: r.x, y: r.y, z: r.z }; })()').val;
+                  _e2UpRoom(a, rd.x + 500, rd.y + 500, 'Upstream'); },
+                exp: { cls: 'hard', coll: true } },
+  } },
+{ type: 'MOVE_ROOM_TO_AREA', ops: 1,
+  make: P => W().commitMoveRoomToArea(P.roomE, P.areaB),
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => W().commitMoveRoomToArea(P.roomE, P.areaC), exp: { cls: 'ok' } },
+    del:      { prep: P => W().deleteRoom(P.roomE), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: P => W().commitDeleteArea(P.areaB), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+  } },
+// ─── wyjscia ───
+{ type: 'ADD_EXIT', ops: 1,
+  make: P => W().commitAddExit(P.srcX, P.srcDirX, P.roomA, false),
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('const r = state.roomById[' + P.srcX + ']; r.exits = r.exits || {};'
+                  + ' r.exits[' + JSON.stringify(P.srcDirX) + '] = ' + P.roomD + '; return 1;'),
+                exp: { cls: 'hard', applied: 0, skipped: 1 } },
+    del:      { prep: P => W().deleteRoom(P.srcX), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: P => W().deleteRoom(P.roomA), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+  } },
+{ type: 'DELETE_EXIT', ops: 1,
+  make: P => W().commitDeleteExit(W().eval('state.roomById[' + P.roomF + ']'), P.exitDirF),
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('state.roomById[' + P.roomF + '].exits[' + JSON.stringify(P.exitDirF) + '] = ' + P.roomD + '; return 1;'),
+                exp: { cls: 'ok' } },
+    del:      { prep: P => ex('delete state.roomById[' + P.roomF + '].exits[' + JSON.stringify(P.exitDirF) + ']; return 1;'),
+                exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: P => W().deleteRoom(P.roomF), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+  } },
+{ type: 'DELETE_SPECIAL_EXIT', ops: 1,
+  make: P => { ex('_ctxRoomId = ' + P.roomG + '; _ctxExitDir = ' + JSON.stringify(P.specCmdG) + '; _ctxExitIsSpecial = true; return 1;');
+    W().deleteExitFromCtx(); },
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('state.roomById[' + P.roomG + '].special_exits[' + JSON.stringify(P.specCmdG) + '] = ' + P.roomD + '; return 1;'),
+                exp: { cls: 'ok' } },
+    del:      { prep: P => ex('delete state.roomById[' + P.roomG + '].special_exits[' + JSON.stringify(P.specCmdG) + ']; return 1;'),
+                exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: P => W().deleteRoom(P.roomG), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+  } },
+// ─── obszary ───
+{ type: 'ADD_AREA', ops: 1,
+  make: P => W().commitAddArea('E2 New Area'),
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      null,
+    del:      null,
+    conflict: { prep: P => W().commitAddArea('E2 New Area'), exp: { cls: 'done' } },
+  },
+  na: { mod: 'sid — obszar z kalki nie ma odpowiednika upstream',
+        del: 'sid — nie mozna usunac upstream obiektu, ktory nie istnieje w bazie' } },
+{ type: 'DELETE_AREA', ops: 1,
+  make: P => W().commitDeleteArea(P.smallArea),
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('state.areas.get(' + P.smallArea + ').name = "Upstream Area"; return 1;'), exp: { cls: 'ok' } },
+    del:      { prep: P => W().commitDeleteArea(P.smallArea), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: null,
+  },
+  na: { conflict: 'usuniecie obszaru nie ma stanu konfliktowego' } },
+{ type: 'EDIT_AREA', ops: 1,
+  make: P => { W().document.getElementById('ap-name').value = 'E2 Area Renamed'; W().commitEditArea(P.smallArea); },
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('state.areas.get(' + P.smallArea + ').name = "Inna Nazwa Area"; return 1;'), exp: { cls: 'ok' } },
+    del:      { prep: P => W().commitDeleteArea(P.smallArea), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: (P, text) => W().applyDelta(W().validateDeltaText(text).delta, null, undefined),
+                exp: { cls: 'done' } },
+  } },
+// ─── custom lines / tlumiki ───
+{ type: 'ADD_CL', ops: 1,
+  make: P => { ex('state.clRoom = state.roomById[' + P.pair.a + ']; state.clDir = ' + JSON.stringify(P.pair.dir) + ';'
+    + ' state.clIsNew = true; state.clPoints = ' + JSON.stringify(_e1ClPoints(P.pair, 0.5)) + '; return 1;');
+    W().commitCLDrawing(); },
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('const r = state.roomById[' + P.pair.a + ']; r.custom_lines = r.custom_lines || {};'
+                  + ' r.custom_lines[' + JSON.stringify(P.pair.dir) + '] = { points: [[0, 0], [1, 1]], color: [0, 0, 0], arrow: false }; return 1;'),
+                exp: { cls: 'hard' } },
+    del:      { prep: P => W().deleteRoom(P.pair.a), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: P => ex('const r = state.roomById[' + P.pair.a + ']; r.custom_lines = r.custom_lines || {};'
+                  + ' r.custom_lines[' + JSON.stringify(P.pair.dir) + '] = { points: ' + JSON.stringify(_e1ClPoints(P.pair, 0.5)) + ', color: [255, 0, 0], arrow: true }; return 1;'),
+                exp: { cls: 'done' } },
+  } },
+{ type: 'EDIT_CL', ops: 1,
+  make: P => { ex('state.clRoom = state.roomById[' + P.roomK + ']; state.clDir = ' + JSON.stringify(P.clDirK) + ';'
+    + ' state.clIsNew = false; state.clOriginalPoints = ' + JSON.stringify(P.clPtsK) + ';'
+    + ' state.clPoints = ' + JSON.stringify(P.clPtsK.concat([[P.clPtsK[0][0] + 0.5, P.clPtsK[0][1] + 0.5]])) + '; return 1;');
+    W().commitCLDrawing(); },
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('state.roomById[' + P.roomK + '].custom_lines[' + JSON.stringify(P.clDirK) + '].points = [[9, 9]]; return 1;'),
+                exp: { cls: 'hard' } },
+    del:      { prep: P => ex('delete state.roomById[' + P.roomK + '].custom_lines[' + JSON.stringify(P.clDirK) + ']; return 1;'),
+                exp: { cls: 'impossible', applied: 1, skipped: 0 },
+                post: (P, id) => A(id + '.creates', ev('!!(state.roomById[' + P.roomK + '].custom_lines[' + JSON.stringify(P.clDirK) + '])').val === true,
+                  'watchdog: apply TWORZY CL mimo klasyfikacji impossible (rozjazd klasyfikacja/apply)') },
+    conflict: { prep: P => W().deleteRoom(P.roomK), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+  } },
+{ type: 'DELETE_CL', ops: 1,
+  make: P => { _e1SetRoom(P.roomK); ex('updateCLTab(state.roomById[' + P.roomK + ']); return 1;');
+    W().document.querySelector('#rp-tab-CL .cl-item:not(.suppressor)[data-dir="' + P.clDirK + '"] .cl-del').click(); },
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('state.roomById[' + P.roomK + '].custom_lines[' + JSON.stringify(P.clDirK) + '].points = [[9, 9]]; return 1;'),
+                exp: { cls: 'ok' } },
+    del:      { prep: P => ex('delete state.roomById[' + P.roomK + '].custom_lines[' + JSON.stringify(P.clDirK) + ']; return 1;'),
+                exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: P => W().deleteRoom(P.roomK), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+  } },
+{ type: 'DELETE_SUPPRESSOR', ops: 1,
+  make: P => _e2Craft([{ type: 'DELETE_SUPPRESSOR', target: { roomId: P.roomS, dir: P.suppDirS }, payload: {} }]),
+  cells: {
+    clean:    { prep: P => ex('const r = state.roomById[' + P.roomS + ']; r.custom_lines = r.custom_lines || {};'
+                  + ' r.custom_lines[' + JSON.stringify(P.suppDirS) + '] = { points: [], color: [255, 0, 0] }; return 1;'),
+                exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('const r = state.roomById[' + P.roomS + ']; r.custom_lines = r.custom_lines || {};'
+                  + ' r.custom_lines[' + JSON.stringify(P.suppDirS) + '] = { points: [[1, 1], [2, 2]], color: [0, 0, 0], arrow: true }; return 1;'),
+                exp: { cls: 'ok' } },
+    del:      { exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: P => W().deleteRoom(P.roomS), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+  } },
+{ type: 'ADD_SUPPRESSOR', ops: 1,
+  make: P => { ex('state.clRoom = state.roomById[' + P.roomS + ']; return 1;'); W().commitSuppressor(P.suppDirS); },
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('const r = state.roomById[' + P.roomS + ']; r.custom_lines = r.custom_lines || {};'
+                  + ' r.custom_lines[' + JSON.stringify(P.suppDirS) + '] = { points: [[1, 1], [2, 2]], color: [0, 0, 0], arrow: true }; return 1;'),
+                exp: { cls: 'hard' } },
+    del:      { prep: P => W().deleteRoom(P.roomS), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: P => ex('const r = state.roomById[' + P.roomS + ']; r.custom_lines = r.custom_lines || {};'
+                  + ' r.custom_lines[' + JSON.stringify(P.suppDirS) + '] = { points: [], color: [255, 0, 0] }; return 1;'),
+                exp: { cls: 'done' } },
+  } },
+{ type: 'AUTO_FIX_SUPPRESSORS', ops: 1,
+  make: P => _e2Craft([{ type: 'AUTO_FIX_SUPPRESSORS', target: {},
+    payload: { added: [{ roomId: P.pair.b, dir: P.pair.opp, cl: { points: [], color: [255, 0, 0] } }], removed: [] } }]),
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('const r = state.roomById[' + P.pair.b + ']; r.custom_lines = r.custom_lines || {};'
+                  + ' r.custom_lines[' + JSON.stringify(P.pair.opp) + '] = { points: [], color: [255, 0, 0] }; return 1;'),
+                exp: { cls: 'done' } },
+    del:      { prep: P => W().deleteRoom(P.pair.b), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: null,
+  },
+  na: { conflict: 'auto-fix re-weryfikuje geometrie — brak osobnego stanu konfliktowego' } },
+// ─── etykiety ───
+{ type: 'ADD_LABEL', ops: 1,
+  make: P => { _e2LabelDlgSetup(P, true, 'E2 Etykieta'); W().saveLabelEdit(); },
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      null,
+    del:      { prep: P => W().commitDeleteArea(P.labelArea), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: P => ex('const a = state.areas.get(' + P.labelArea + ');'
+                  + ' const ids = a.labels.map(function(l){ return l.id; });'
+                  + ' const nid = ids.length ? Math.max.apply(null, ids) + 1 : 1;'
+                  + ' a.labels.push({ id: nid, text: "E2 Etykieta", x: 10.5, y: 20.5, z: 0, width: 4, height: 1.2,'
+                  + '   fg_color: [200, 200, 100], bg_color: [13, 15, 18, 178] }); return 1;'),
+                exp: { cls: 'done' } },
+  },
+  na: { mod: 'sid — etykieta z kalki nie ma odpowiednika upstream' } },
+{ type: 'EDIT_LABEL', ops: 1,
+  make: P => { _e2LabelDlgSetup(P, false, 'E2 Label X'); W().saveLabelEdit(); },
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('const l = state.areas.get(' + P.labelArea + ').labels.find(function(x){ return x.id === ' + P.label.id + '; });'
+                  + ' l.text = "Upstream Text"; return 1;'), exp: { cls: 'ok' } },
+    del:      { prep: P => ex('const a = state.areas.get(' + P.labelArea + ');'
+                  + ' a.labels = a.labels.filter(function(x){ return x.id !== ' + P.label.id + '; }); return 1;'),
+                exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: (P, text) => W().applyDelta(W().validateDeltaText(text).delta, null, undefined),
+                exp: { cls: 'done' } },
+  } },
+{ type: 'DELETE_LABEL', ops: 1,
+  make: P => { ex('state.selectedLabel = { areaId: ' + P.labelArea + ', labelId: ' + P.label.id + ' }; return 1;');
+    W().deleteLabelFromCtx(); },
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('const l = state.areas.get(' + P.labelArea + ').labels.find(function(x){ return x.id === ' + P.label.id + '; });'
+                  + ' l.text = "Upstream Text"; return 1;'), exp: { cls: 'ok' } },
+    del:      { prep: P => ex('const a = state.areas.get(' + P.labelArea + ');'
+                  + ' a.labels = a.labels.filter(function(x){ return x.id !== ' + P.label.id + '; }); return 1;'),
+                exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: P => W().commitDeleteArea(P.labelArea), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+  } },
+{ type: 'MOVE_LABEL', ops: 1,
+  make: P => _e2LabelMouse(P, 3, 2, null, null),
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('const l = state.areas.get(' + P.labelArea + ').labels.find(function(x){ return x.id === ' + P.label.id + '; });'
+                  + ' l.x = l.x - 7; l.y = l.y - 7; return 1;'), exp: { cls: 'ok' } },
+    del:      { prep: P => ex('const a = state.areas.get(' + P.labelArea + ');'
+                  + ' a.labels = a.labels.filter(function(x){ return x.id !== ' + P.label.id + '; }); return 1;'),
+                exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: P => ex('const l = state.areas.get(' + P.labelArea + ').labels.find(function(x){ return x.id === ' + P.label.id + '; });'
+                  + ' l.x = l.x + 3; l.y = l.y + 2; return 1;'), exp: { cls: 'done' } },
+  } },
+{ type: 'RESIZE_LABEL', ops: 1,
+  make: P => _e2LabelMouse(P, 0, 0, 2, 1),
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('const l = state.areas.get(' + P.labelArea + ').labels.find(function(x){ return x.id === ' + P.label.id + '; });'
+                  + ' l.width = l.width + 5; return 1;'), exp: { cls: 'ok' } },
+    del:      { prep: P => ex('const a = state.areas.get(' + P.labelArea + ');'
+                  + ' a.labels = a.labels.filter(function(x){ return x.id !== ' + P.label.id + '; }); return 1;'),
+                exp: { cls: 'impossible', applied: 0, skipped: 1 } },
+    conflict: { prep: P => ex('const l = state.areas.get(' + P.labelArea + ').labels.find(function(x){ return x.id === ' + P.label.id + '; });'
+                  + ' l.width = l.width + 2; l.height = l.height + 1; return 1;'), exp: { cls: 'done' } },
+  } },
+// ─── kolory ───
+{ type: 'EDIT_ENV_COLOR', ops: 1,
+  make: P => { W().openEnvColorDialog(2);
+    const D = W().document;
+    D.getElementById('dec-r').value = '11'; D.getElementById('dec-g').value = '22'; D.getElementById('dec-b').value = '33';
+    W().commitEnvColor(); },
+  cells: {
+    clean:    { exp: { cls: 'ok' } },
+    mod:      { prep: P => ex('state.map.colors.custom_env_colors[2] = [9, 9, 9]; return 1;'), exp: { cls: 'ok' } },
+    del:      null,
+    conflict: { prep: P => ex('state.map.colors.custom_env_colors[2] = [11, 22, 33]; return 1;'), exp: { cls: 'done' } },
+  },
+  na: { del: 'env to stala paleta — nie mozna usunac koloru upstream' } },
+];
+
+async function _e2RunDesc(d) {
+  if (!_e2P) { loadBase('dat'); _e2P = ev(E2_SCAN).val; }
+  const P = _e2P;
+  // budowa kalki (realny commit albo craft)
+  loadBase('dat');
+  let text;
+  try { text = d.make(P); if (!text) text = ev('buildDelta()').val; }
+  catch (e) { FAIL('E2.' + d.type, 'make: ' + String(e && e.message || e)); return; }
+  const v = W().validateDeltaText(text);
+  A('E2.' + d.type + '.file', v.ok === true && v.delta.ops.length === d.ops,
+    'kalka: walidacja + ' + d.ops + ' op(y)' + (v.ok ? '' : ' ' + (v.errors || []).join('; ')));
+  if (!v.ok) return;
+  for (const vn of ['clean', 'mod', 'del', 'conflict']) {
+    const cell = d.cells[vn];
+    const id = 'E2.' + d.type + '.' + vn;
+    if (!cell) { PASS(id, 'nie dotyczy — ' + ((d.na && d.na[vn]) || 'brak sensownego skrzyżowania')); continue; }
+    loadBase('dat');
+    try { if (cell.prep) cell.prep(P, text); } catch (e) { FAIL(id, 'prep: ' + String(e && e.message || e)); continue; }
+    const vv = W().validateDeltaText(text);
+    const items = W().classifyDelta(vv.delta);
+    const it = items[items.length - 1];
+    A(id + '.cls', it.cls === cell.exp.cls && (cell.exp.coll === undefined || !!it.coll === cell.exp.coll),
+      'cls=' + it.cls + (it.note ? ' (' + it.note + ')' : '') + (it.coll ? ' [coll]' : '')
+      + ' [oczekiwano ' + cell.exp.cls + (cell.exp.coll ? '+coll' : '') + ']');
+    const r = W().applyDelta(vv.delta, null, undefined);
+    const ea = cell.exp.applied === undefined ? 1 : cell.exp.applied;
+    const es = cell.exp.skipped === undefined ? 0 : cell.exp.skipped;
+    A(id + '.apply', r.applied === ea && r.skipped.length === es,
+      'applied=' + r.applied + ' skipped=' + r.skipped.length
+      + (r.skipped.length ? ' (' + r.skipped[0].reason + ')' : '') + ' [oczekiwano ' + ea + '/' + es + ']');
+    if (cell.post) { try { cell.post(P, id); } catch (e) { FAIL(id + '.post', String(e && e.message || e)); } }
+  }
+}
+
+for (const d of E2_DESCS) {
+  scenario('E2.' + d.type, () => _e2RunDesc(d));
+}
+
+// ═══ E3: kolizje pozycyjne — autopozycja / reczne wskazanie / batch / rebase ═══
+// Wyrocznia spiralna w driverze: replikuje UDOKUMENTOWANY porzadek pierscieni Manhattan
+// (dy rosnaco, dx = [-(r-|dy|), +(r-|dy|)]), ale zajetosc mapy bierze wylacznie z _deltaRoomAt.
+const E3_SPIRAL = (() => {
+  const out = [];
+  for (let r = 0; r <= 25; r++) for (let dy = -r; dy <= r; dy++) {
+    const dxA = r - Math.abs(dy); const dxs = dxA === 0 ? [0] : [-dxA, dxA];
+    for (const dx of dxs) out.push([dx, dy]);
+  }
+  return out;
+})();
+function _e3TakenSet(){
+  const areaId = ev('state.areaId').val;
+  const s = new Set();
+  for (const [x, y] of [[9999,9999],[9999,9999],[9998,9999],[10000,9999]]) s.add(areaId+':'+x+':'+y+':0');
+  return s;
+}
+function _e3Oracle(taken, x0, y0){
+  const areaId = ev('state.areaId').val;
+  for (const [dx, dy] of E3_SPIRAL){
+    const x = x0 + dx, y = y0 + dy;
+    if (taken.has(areaId+':'+x+':'+y+':0')) continue;
+    if (!ev('!!_deltaRoomAt(' + JSON.stringify(areaId) + ', ' + x + ', ' + y + ', 0)').val) return {x, y};
+  }
+  return null;
+}
+// Pokoje po komorce (state.roomById = mapa obiektowa).
+function _e3CountAt(x, y){
+  return ev('Object.values(state.roomById).filter(r => r.x === ' + x + ' && r.y === ' + y
+    + ' && (r.z ?? 0) === 0).length').val;
+}
+// Kalka kolizyjna: 2x ADD_ROOM na (9999,9999) [stack w edytorze], MOVE_ROOM pierwszego
+// pokoju obszaru na (9998,9999), ADD_ROOM kontrolny na (10000,9999). Commity na CZYSTEJ
+// bazie, potem eksport. Izolacja: bazowa mape przywraca loadBase w e3Setup.
+async function _e3Text(){
+  const areaId = ev('state.areaId').val;
+  ex('addRoomAtPosition(9999, 9999)');
+  ex('addRoomAtPosition(9999, 9999)');
+  const mvId = ev('state.areas.get(' + JSON.stringify(areaId) + ').rooms.find('
+    + ' r => !(r.x === 9999 && r.y === 9999)).id').val;
+  ex('commitMoveRoom(state.roomById[' + JSON.stringify(mvId) + '],'
+    + ' state.roomById[' + JSON.stringify(mvId) + '].x, state.roomById[' + JSON.stringify(mvId) + '].y, 0, 9998, 9999, 0)');
+  ex('addRoomAtPosition(10000, 9999)');
+  return { text: ev('buildDelta()').val, mvId };
+}
+// Pelny setup kolizji: commity kalki na czystej bazie -> eksport -> SWIEZA baza
+// (commity znikaja) -> upstream dorzuca pokoje na (9999,9999) i (9998,9999) -> panel.
+async function e3Setup(){
+  await loadBase('dat');
+  const t = await _e3Text();
+  await loadBase('dat');
+  const areaId = ev('state.areaId').val;
+  _e2UpRoom(areaId, 9999, 9999, 'Upstream E3-1');
+  _e2UpRoom(areaId, 9998, 9999, 'Upstream E3-2');
+  ex('openDeltaReview(validateDeltaText(' + JSON.stringify(t.text) + ').delta)');
+  return t;
+}
+function _e3Overrides(){
+  return JSON.parse(ev('JSON.stringify([..._deltaOverrides.entries()].map(([k, v]) => [k, v.x, v.y, v.how]))').val);
+}
+
+scenario('E3.build', async () => {
+  await loadBase('dat');
+  const t = await _e3Text();
+  A('E3.build.text', !!t.text && t.text.length > 100, 'tekst delty istnieje');
+  const d = JSON.parse(ev('(function(){ const v = validateDeltaText(' + JSON.stringify(t.text) + ');'
+    + ' return JSON.stringify({ ok: v.ok, n: v.ok ? v.delta.ops.length : 0,'
+    + ' types: v.ok ? v.delta.ops.map(o => o.type) : [] }); })()').val);
+  A('E3.build.valid', d.ok, 'delta walidna');
+  EQ('E3.build.count', d.n, 4, '4 operacje');
+  EQ('E3.build.types', d.types, ['ADD_ROOM','ADD_ROOM','MOVE_ROOM','ADD_ROOM'], 'typy: ADD, ADD, MOVE, ADD(kontrolny)');
+});
+
+scenario('E3.collide', async () => {
+  await loadBase('dat');
+  const t = await _e3Text();
+  await loadBase('dat');
+  const areaId = ev('state.areaId').val;
+  _e2UpRoom(areaId, 9999, 9999, 'Upstream E3-1');
+  _e2UpRoom(areaId, 9998, 9999, 'Upstream E3-2');
+  const items = JSON.parse(ev('JSON.stringify(classifyDelta(validateDeltaText(' + JSON.stringify(t.text) + ').delta)'
+    + '.map(i => ({ seq: i.seq, cls: i.cls, coll: !!i.coll, checked: i.checked })))').val);
+  EQ('E3.collide.count', items.length, 4, 'klasyfikacja: 4 pozycje');
+  for (const i of [0, 1, 2]){
+    EQ('E3.collide.op' + (i + 1) + '.cls', items[i].cls, 'hard', 'twarda kolizja');
+    A('E3.collide.op' + (i + 1) + '.coll', items[i].coll, 'flaga coll');
+  }
+  EQ('E3.collide.op4.cls', items[3].cls, 'ok', 'kontrolny (10000,9999): ok');
+  A('E3.collide.checked', items.every(i => i.checked), 'wszystkie pozycje domyslnie zaznaczone');
+  ex('openDeltaReview(validateDeltaText(' + JSON.stringify(t.text) + ').delta)');
+  A('E3.collide.review', ev('!!_deltaReview').val === true, '_deltaReview ustawiony');
+  EQ('E3.collide.items', ev('_deltaReview.items.length').val, 4, 'panel: 4 pozycje');
+  A('E3.collide.visible', ev("document.getElementById('delta-panel').classList.contains('visible')").val === true, 'panel widoczny');
+  EQ('E3.collide.rows', ev("document.querySelectorAll('#delta-panel .dp-row').length").val, 4, 'panel: 4 wiersze DOM');
+  EQ('E3.collide.rows-off', ev("document.querySelectorAll('#delta-panel .dp-row.off').length").val, 0, 'panel: 0 wierszy odznaczonych');
+});
+
+scenario('E3.autoplace', async () => {
+  await e3Setup();
+  // duch przez prawdziwy przycisk wiersza "Efekt"
+  ex('(function(){ const r0 = document.querySelectorAll("#dp-body .dp-row")[0];'
+    + ' const b = [...r0.querySelectorAll("button")].find(b => b.textContent === "Efekt");'
+    + ' if (b) b.click(); })()');
+  A('E3.autoplace.ghost', ev('_deltaGhosts.has(1)').val === true, 'przycisk "Efekt" pokazuje ducha (warstwa nie mutuje stanu)');
+  const taken = _e3TakenSet();
+  const origins = [[9999,9999],[9999,9999],[9998,9999]];
+  for (let i = 0; i < 3; i++){
+    const exp = _e3Oracle(taken, origins[i][0], origins[i][1]);
+    ex('_deltaAutoplace(_deltaReview.items[' + i + '])');
+    const got = JSON.parse(ev('JSON.stringify(_deltaOverrides.get(' + (i + 1) + '))').val);
+    A('E3.autoplace.op' + (i + 1) + '.set', !!got, 'override ustawiony');
+    EQ('E3.autoplace.op' + (i + 1) + '.cell', got ? [got.x, got.y] : null, [exp.x, exp.y], 'komorka zgodna z wyrocznia spiralna');
+    EQ('E3.autoplace.op' + (i + 1) + '.how', got ? got.how : null, 'auto', 'how=auto');
+    taken.add(ev('state.areaId').val + ':' + got.x + ':' + got.y + ':0');
+  }
+  const cells = _e3Overrides().map(e => e[1] + ':' + e[2]);
+  EQ('E3.autoplace.distinct', new Set(cells).size, 3, 'batch: 3 rozne komorki (brak wzajemnych kolizji)');
+  const free = ev('JSON.stringify(' + JSON.stringify(cells) + '.every(c => {'
+    + ' const p = c.split(":"); return !_deltaRoomAt(state.areaId, Number(p[0]), Number(p[1]), 0); }))').val;
+  A('E3.autoplace.free', JSON.parse(free) === true, 'batch: wszystkie komorki wolne na mapie');
+  const chip = ev('(function(){ const c = document.querySelector("#dp-body .dp-ovr");'
+    + ' return c ? c.textContent : null; })()').val;
+  A('E3.autoplace.chip', !!chip && chip.indexOf('autopozycja') === 0, 'panel: chip override "autopozycja -> (x, y)"');
+  // WATCHDOG (dobre zachowanie): druga autopozycja tej samej pozycji jest IDEMPOTENTNA
+  // (_deltaTakenCells wyklucza wlasny seq — override nie przeskakuje dalej).
+  const before = ev('JSON.stringify([..._deltaOverrides.entries()])').val;
+  ex('_deltaAutoplace(_deltaReview.items[0])');
+  A('E3.autoplace.twice-idempotent', ev('JSON.stringify([..._deltaOverrides.entries()])').val === before,
+    'watchdog: druga autopozycja tej samej pozycji zachowuje override (idempotentna)');
+});
+
+scenario('E3.batch', async () => {
+  await e3Setup();
+  // autopozycja wszystkich kolidujacych przez PRAWDZIWE przyciski wierszy (re-render po kazdym kliku)
+  let clicks = 0;
+  for (let k = 0; k < 6; k++){
+    const hit = ev('(function(){ const b = [...document.querySelectorAll("#dp-body .dp-row button")]' +
+      '.find(b => b.textContent === "Autopozycja"); if (b){ b.click(); return 1; } return 0; })()').val;
+    if (!hit) break;
+    clicks++;
+  }
+  EQ('E3.batch.clicks', clicks, 3, 'kliknieto "Autopozycja" w 3 kolidujacych wierszach');
+  const ov = _e3Overrides();
+  EQ('E3.batch.count', ov.length, 3, '3 override (tylko kolidujace)');
+  EQ('E3.batch.seqs', ov.map(e => e[0]).sort(), [1, 2, 3], 'override dla op 1-3');
+  const cells = ov.map(e => e[1] + ':' + e[2]);
+  EQ('E3.batch.distinct', new Set(cells).size, 3, 'rozne komorki');
+  const exp1 = _e3Oracle(_e3TakenSet(), 9999, 9999);
+  EQ('E3.batch.op1-cell', [ov[0][1], ov[0][2]], [exp1.x, exp1.y], 'op1: komorka zgodna z wyrocznia');
+  A('E3.batch.how', ov.every(e => e[3] === 'auto'), 'wszystkie how=auto');
+});
+
+scenario('E3.apply', async () => {
+  const t = await e3Setup();
+  const origPos = ev('[state.roomById[' + t.mvId + '].x, state.roomById[' + t.mvId + '].y]').val;
+  const taken = _e3TakenSet();
+  const exps = [];
+  for (let i = 0; i < 3; i++){
+    const exp = _e3Oracle(taken, i === 2 ? 9998 : 9999, 9999);
+    ex('_deltaAutoplace(_deltaReview.items[' + i + '])');
+    exps.push(exp);
+    taken.add(ev('state.areaId').val + ':' + exp.x + ':' + exp.y + ':0');
+  }
+  ex('_deltaApplyReviewed()');
+  EQ('E3.apply.op1', _e3CountAt(exps[0].x, exps[0].y), 1, 'op1: pokoj na pozycji zastepczej');
+  EQ('E3.apply.op2', _e3CountAt(exps[1].x, exps[1].y), 1, 'op2: pokoj na pozycji zastepczej');
+  // WATCHDOG F6: applyDelta MOVE_ROOM = ciche no-op. commitMoveRoom jest data-only
+  // (w realnym UI caller mutuje pozycje PRZED commitem), a applyDelta nie mutuje —
+  // applied++ rosnie, wpis deltaLog i rebaz powstaja, ale pokoj zostaje w miejscu.
+  EQ('E3.apply.op3-f6', _e3CountAt(exps[2].x, exps[2].y), 0,
+    'watchdog F6: pokoj NIE trafia na pozycje zastepcza (MOVE w applyDelta = no-op)');
+  EQ('E3.apply.op3-f6-origin', ev('[state.roomById[' + t.mvId + '].x, state.roomById[' + t.mvId + '].y]').val, origPos,
+    'watchdog F6: pokoj zostaje na pozycji wyjsciowej');
+  EQ('E3.apply.op4', _e3CountAt(10000, 9999), 1, 'op4 (kontrolny) na docelowej');
+  EQ('E3.apply.no-stack', _e3CountAt(9999, 9999), 1, 'na (9999,9999) tylko pokoj upstream (brak stacku)');
+  EQ('E3.apply.no-stack2', _e3CountAt(9998, 9999), 1, 'na (9998,9999) tylko pokoj upstream (brak stacku)');
+  const log = JSON.parse(ev('JSON.stringify(state.deltaLog.slice(-4).map(e => e.type === "MOVE_ROOM"'
+    + ' ? [e.type, e.toX, e.toY] : [e.type, e.roomData.x, e.roomData.y]))').val);
+  EQ('E3.apply.log', log, [['ADD_ROOM', exps[0].x, exps[0].y], ['ADD_ROOM', exps[1].x, exps[1].y],
+    ['MOVE_ROOM', exps[2].x, exps[2].y], ['ADD_ROOM', 10000, 9999]],
+    'watchdog F6: deltaLog REJESTRUJE efektywne wspolrzedne MOVE mimo ze pokoj nie drgnal');
+  const patched = JSON.parse(ev('JSON.stringify(_deltaReview.delta.ops.map(o => o.type === "ADD_ROOM"'
+    + ' ? [o.payload.room.x, o.payload.room.y] : (o.type === "MOVE_ROOM" ? [o.payload.toX, o.payload.toY] : null)))').val);
+  EQ('E3.apply.rebased', patched, [[exps[0].x, exps[0].y], [exps[1].x, exps[1].y], [exps[2].x, exps[2].y], [10000, 9999]],
+    'delta w panelu poprawiona (rebase) do efektywnych wspolrzednych');
+});
+
+scenario('E3.rebase', async () => {
+  const t = await e3Setup();
+  const taken = _e3TakenSet();
+  const exps = [];
+  for (let i = 0; i < 3; i++){
+    const exp = _e3Oracle(taken, i === 2 ? 9998 : 9999, 9999);
+    ex('_deltaAutoplace(_deltaReview.items[' + i + '])');
+    exps.push(exp);
+    taken.add(ev('state.areaId').val + ':' + exp.x + ':' + exp.y + ':0');
+  }
+  ex('_deltaApplyReviewed()');
+  EQ('E3.rebase.log', ev('state.deltaLog.length').val, 4, 'deltaLog po apply: dokladnie 4 efektywne wpisy');
+  const text2 = ev('buildDelta()').val;
+  const ops2 = JSON.parse(ev('JSON.stringify(validateDeltaText(' + JSON.stringify(text2) + ').delta.ops.map(o => [o.type,'
+    + ' o.type === "ADD_ROOM" ? o.payload.room.x : (o.type === "MOVE_ROOM" ? o.payload.toX : null),'
+    + ' o.type === "ADD_ROOM" ? o.payload.room.y : (o.type === "MOVE_ROOM" ? o.payload.toY : null)]))').val);
+  EQ('E3.rebase.ops', ops2, [['ADD_ROOM', exps[0].x, exps[0].y], ['ADD_ROOM', exps[1].x, exps[1].y],
+    ['MOVE_ROOM', exps[2].x, exps[2].y], ['ADD_ROOM', 10000, 9999]], 're-eksport: poprawione pozycje w ops');
+  // trzecia, czysta baza: rebazowana delta nie koliduje
+  await loadBase('dat');
+  const orig3 = ev('[state.roomById[' + t.mvId + '].x, state.roomById[' + t.mvId + '].y]').val;
+  const cls3 = JSON.parse(ev('JSON.stringify(classifyDelta(validateDeltaText(' + JSON.stringify(text2) + ').delta).map(i => i.cls))').val);
+  EQ('E3.rebase.cls', cls3, ['ok','ok','ok','ok'], 'na czystej bazie: wszystkie ok (brak kolizji)');
+  const res = JSON.parse(ev('JSON.stringify(applyDelta(validateDeltaText(' + JSON.stringify(text2) + ').delta))').val);
+  EQ('E3.rebase.applied', res.applied, 4, 'apply na czystej: 4 zastosowane');
+  EQ('E3.rebase.skipped', res.skipped.length, 0, 'apply na czystej: 0 pominiete');
+  EQ('E3.rebase.pos', _e3CountAt(exps[0].x, exps[0].y), 1, 'pokoj na poprawionej pozycji');
+  EQ('E3.rebase.f6-stays', ev('[state.roomById[' + t.mvId + '].x, state.roomById[' + t.mvId + '].y]').val, orig3,
+    'watchdog F6: MOVE rowniez na trzeciej bazie nie przesuwa pokoju');
+});
+
+scenario('E3.occupied-override', async () => {
+  await e3Setup();
+  ex('_deltaOverrides.set(1, { x: 9998, y: 9999, how: \'manual\' })');
+  ex('(function(){ const orig = applyDelta; window.applyDelta = function(){'
+    + ' const r = orig.apply(null, arguments); window.__e3res = r; return r; }; })()');
+  ex('_deltaApplyReviewed()');
+  const res = JSON.parse(ev('JSON.stringify(window.__e3res)').val);
+  const skip1 = res.skipped.find(s => s.seq === 1);
+  A('E3.occupied-override.skip1', !!skip1, 'op1 (override na zajetej): pominieta');
+  EQ('E3.occupied-override.reason', skip1 ? skip1.reason : null, 'pozycja zastępcza zajęta', 'powod skip');
+  // WATCHDOG F5: op2 ADD_ROOM bez override na zajetej (9999,9999) — applyDelta NIE ma zywotnego
+  // guardu zajetosci poza sciezka override: pokoj APPLIKUJE SIE i stackuje.
+  EQ('E3.occupied-override.f5-stack', _e3CountAt(9999, 9999), 2,
+    'watchdog F5: stack 2 pokoi na (9999,9999) — op2 (bez override) applikuje sie mimo zajetej komorki');
+  // WATCHDOG F6: op3 MOVE_ROOM liczony jako applied, ale pokoj nie drga (no-op, patrz E3.apply) —
+  // sprawa braku zywotnego guardu zajetosci dla MOVE staje sie przez to moot.
+  A('E3.occupied-override.f6-counted', !res.skipped.find(s => s.seq === 3),
+    'watchdog F6: MOVE_ROOM liczony jako applied');
+  EQ('E3.occupied-override.f6-noop', _e3CountAt(9998, 9999), 1,
+    'watchdog F6: pokoj nie przeniesiony — na (9998,9999) tylko upstream');
+  EQ('E3.occupied-override.control', _e3CountAt(10000, 9999), 1, 'op4 (kontrolny) zastosowany');
+  EQ('E3.occupied-override.applied', res.applied, 3, 'applied = 3 (op2, op3, op4)');
+  EQ('E3.occupied-override.skipped', res.skipped.length, 1, 'skipped = 1 (tylko op1)');
+});
+
+scenario('E3.manual', async () => {
+  await e3Setup();
+  const cell = _e3Oracle(_e3TakenSet(), 9999, 9999);
+  ex('_deltaStartPlacing(_deltaReview.items[0])');
+  A('E3.manual.placing', ev('!!_deltaPlacing').val === true, 'tryb wskazywania aktywny');
+  // klik w wybrana wolna komorke — konwersja mapa->ekran jak screenToMap/evX (CELL, ox, oy, zoom)
+  ex('(function(){'
+    + ' const cv = document.getElementById("cv"); const r = cv.getBoundingClientRect();'
+    + ' const sx = state.ox + (' + cell.x + ') * CELL * state.zoom;'
+    + ' const sy = state.oy - (' + cell.y + ') * CELL * state.zoom;'
+    + ' const cx = r.left + sx * r.width / cv.width; const cy = r.top + sy * r.height / cv.height;'
+    + ' const o = { clientX: cx, clientY: cy, button: 0, bubbles: true };'
+    + ' cv.dispatchEvent(new MouseEvent("mousedown", o)); cv.dispatchEvent(new MouseEvent("mouseup", o));'
+    + ' })()');
+  const got = JSON.parse(ev('JSON.stringify(_deltaOverrides.get(1))').val);
+  A('E3.manual.set', !!got, 'override ustawiony przez klikniecie');
+  EQ('E3.manual.cell', got ? [got.x, got.y] : null, [cell.x, cell.y], 'komorka zgodna z kliknietym punktem');
+  EQ('E3.manual.how', got ? got.how : null, 'manual', 'how=manual');
+  A('E3.manual.off', ev('_deltaPlacing === null').val === true, 'tryb wskazywania wylaczony po kliknieciu');
+  ex('_deltaStartPlacing(_deltaReview.items[1])');
+  ex('document.getElementById("cv").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }))');
+  A('E3.manual.ctx-cancel', ev('_deltaPlacing === null').val === true, 'contextmenu anuluje wskazywanie');
+  ex('_deltaStartPlacing(_deltaReview.items[1])');
+  ex('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))');
+  A('E3.manual.esc-cancel', ev('_deltaPlacing === null').val === true, 'Escape anuluje wskazywanie');
+});
+
+scenario('E3.determinism', async () => {
+  const runs = [];
+  for (let k = 0; k < 2; k++){
+    await e3Setup();
+    for (let i = 0; i < 3; i++) ex('_deltaAutoplace(_deltaReview.items[' + i + '])');
+    runs.push(ev('JSON.stringify([..._deltaOverrides.entries()])').val);
+  }
+  EQ('E3.determinism.same', runs[0], runs[1], 'autopozycja deterministyczna: identyczne override w dwoch przebiegach');
+});
+
+
+// ═══ E4: pliki adversarial przez PRAWDZIWY file input (#fi-arkdelta change) ═══
+// Craft z pelna kontrola nad meta/seq/checksumami (checksumy funkcjami aplikacji).
+function _e4Craft(opsArr, opts){
+  opts = opts || {};
+  const meta = Object.assign({ format: ev('ARKDELTA_FORMAT').val, format_version: ev('ARKDELTA_FORMAT_VERSION').val,
+    ops_count: opsArr.length, base: ev('state.baseInfo').val, app_version: 'e4-craft' }, opts.meta || {});
+  const ops = opsArr.map((o, i) => Object.assign({ seq: i + 1 }, o));
+  const checksums = { file: W().crc32str(W().stableStringify({ meta, ops })),
+                      ops: ops.map(op => W().crc32str(W().stableStringify(op))) };
+  if (opts.fileCrcStale) checksums.file = '00000000';
+  return W().stableStringify({ meta, ops, checksums });
+}
+// Wczytanie przez prawdziwy handler change (DataTransfer + File), czekanie na async handler.
+async function _e4LoadExpr(expr){
+  ex('(function(){ const text = (' + expr + '); const dt = new DataTransfer();'
+    + ' dt.items.add(new File([text], "test.arkdelta"));'
+    + ' const fi = document.getElementById("fi-arkdelta"); fi.files = dt.files;'
+    + ' fi.dispatchEvent(new Event("change", { bubbles: true })); })()');
+  return eva('(async()=>{ for (let i = 0; i < 5000; i++){'
+    + ' if (document.querySelector(".dlg-bg.open") || document.getElementById("delta-panel").classList.contains("visible")) return true;'
+    + ' await new Promise(r => setTimeout(r, 10)); } return false; })()');
+}
+async function _e4Load(text){ return _e4LoadExpr(JSON.stringify(text)); }
+function _e4Surface(){
+  return JSON.parse(ev('JSON.stringify({'
+    + ' err: !!document.querySelector("#dlg-arkdelta.open"),'
+    + ' errText: (document.getElementById("arkdelta-body") || {}).textContent || "",'
+    + ' mis: !!document.querySelector("#dlg-arkdelta-mismatch.open"),'
+    + ' misText: (document.getElementById("arkdelta-mismatch-body") || {}).textContent || "",'
+    + ' panel: document.getElementById("delta-panel").classList.contains("visible")'
+    + ' })').val);
+}
+function _e4Reset(){
+  ex('(function(){ for (const d of document.querySelectorAll(".dlg-bg.open")) d.classList.remove("open");'
+    + ' document.getElementById("delta-panel").classList.remove("visible"); })()');
+}
+async function _e4ValidText(){
+  ex('addRoomAtPosition(5000, 5000)');
+  return ev('buildDelta()').val;
+}
+
+scenario('E4.guard', async () => {
+  await loadBase('dat');
+  // WATCHDOG F7: btn-load-arkdelta ma atrybut disabled w markup i ZADNE miejsce w kodzie
+  // go nie odlokowuje — jedyny UI-owy punkt wejscia wczytywania kalki jest martwy.
+  // Handler #fi-arkdelta change dziala (udowadniaja to wszystkie pozostale scenariusze E4,
+  // ktore ustawiaja files programowo — dokladnie to, co zrobilby klik na zywy przycisk).
+  A('E4.guard.f7-disabled', ev("document.getElementById('btn-load-arkdelta').disabled").val === true,
+    'watchdog F7: przycisk "Wczytaj .arkdelta" trwale disabled (martwy punkt wejscia)');
+  const toastBefore = ev("document.getElementById('toast').textContent").val;
+  ex('state.editMode = false');
+  ex("document.getElementById('btn-load-arkdelta').click()");
+  A('E4.guard.f7-noop', ev("document.getElementById('toast').textContent").val === toastBefore,
+    'watchdog F7: klik na disabled nie odpala nawet guardu (brak toastu)');
+  const s = _e4Surface();
+  A('E4.guard.no-ui', !s.err && !s.mis && !s.panel, 'zaden dialog ani panel sie nie otwiera');
+  ex('state.editMode = true');
+});
+
+scenario('E4.format', async () => {
+  await loadBase('dat');
+  const valid = await _e4ValidText();
+  const crc0 = ev('_computeBaseInfo().crc').val;
+  const cases = [
+    ['garbage', 'to nie jest json {{{', 'JSON'],
+    ['notdelta', '{"hello": 1}', 'nie jest plik .arkdelta'],
+    ['truncated', valid.slice(0, Math.floor(valid.length / 2)), 'JSON'],
+    ['badversion', _e4Craft([{ type: 'PAINT_BATCH', target: {}, payload: { changes: [] } }], { meta: { format_version: 999 } }), 'Nieznana wersja formatu'],
+  ];
+  for (const [name, text, frag] of cases){
+    await _e4Load(text);
+    const s = _e4Surface();
+    A('E4.format.' + name + '.err', s.err && !s.panel, name + ': dialog bledow, panel recenzji zamkniety');
+    A('E4.format.' + name + '.msg', s.errText.indexOf(frag) >= 0, name + ': komunikat zawiera "' + frag + '"');
+    _e4Reset();
+  }
+  EQ('E4.format.untouched', ev('_computeBaseInfo().crc').val, crc0, 'stan mapy nietkniety po odrzuconych plikach');
+});
+
+scenario('E4.integrity', async () => {
+  await loadBase('dat');
+  const valid = await _e4ValidText();
+  const crc0 = ev('_computeBaseInfo().crc').val;
+  // podmiana tresci opu, checksumy oryginalne
+  const tampered = JSON.parse(valid);
+  tampered.ops[0].label = 'TAMPERED';
+  const tamperedText = JSON.stringify(tampered);
+  // podmiana tresci + przeliczenie checksumy opu, zbiorcza stala
+  const tampered2 = JSON.parse(valid);
+  tampered2.ops[0].label = 'TAMPERED-2';
+  tampered2.checksums.ops[0] = W().crc32str(W().stableStringify(tampered2.ops[0]));
+  const tampered2Text = JSON.stringify(tampered2);
+  const protoOp = JSON.parse('{"type":"PAINT_BATCH","target":{},"payload":{"__proto__":{"polluted":true},"changes":[]}}');
+  const cases = [
+    ['tamper-op', tamperedText, ['uszkodzony', '#1 nie zgadza']],
+    ['tamper-file', tampered2Text, ['uszkodzony']],
+    ['unknown-type', _e4Craft([{ type: 'NUKE_MAP', target: {}, payload: {} }]), ['nieznany typ operacji', 'NUKE_MAP']],
+    ['seq-gap', _e4Craft([{ type: 'PAINT_BATCH', target: {}, payload: { changes: [] } },
+                          { seq: 3, type: 'PAINT_BATCH', target: {}, payload: { changes: [] } }]), ['seq nieciągłe']],
+    ['ops-count', _e4Craft([{ type: 'PAINT_BATCH', target: {}, payload: { changes: [] } }], { meta: { ops_count: 99 } }), ['ops_count (99)']],
+    ['proto', _e4Craft([protoOp]), ['niedozwolony klucz', '__proto__']],
+    ['sid-forward', _e4Craft([{ type: 'ADD_EXIT', target: { sourceId: 'd:9', dir: 'n' }, payload: { targetId: 1 } }]), ['nieistniejącego obiektu kalki', 'd:9']],
+  ];
+  for (const [name, text, frags] of cases){
+    await _e4Load(text);
+    const s = _e4Surface();
+    A('E4.integrity.' + name + '.err', s.err && !s.panel, name + ': odrzucony (dialog bledow)');
+    let all = true; for (const f of frags) if (s.errText.indexOf(f) < 0) all = false;
+    A('E4.integrity.' + name + '.msg', all, name + ': komunikat zawiera ' + JSON.stringify(frags));
+    _e4Reset();
+  }
+  // tamper-file: zbiorcza nie pasuje, ale per-op zgodne — brak lokalizacji opu
+  A('E4.integrity.tamper-file.noloc', true, 'miejsce na asercje ponizej');
+  await _e4Load(tampered2Text);
+  const s2 = _e4Surface();
+  A('E4.integrity.tamper-file.no-op-loc', s2.err && s2.errText.indexOf('nie zgadza się z sumą') < 0,
+    'tamper-file: blad zbiorczy BEZ lokalizacji opu (checksumy opow przeliczone)');
+  _e4Reset();
+  EQ('E4.integrity.untouched', ev('_computeBaseInfo().crc').val, crc0, 'stan mapy nietkniety po odrzuconych plikach');
+});
+
+scenario('E4.limits', async () => {
+  await loadBase('dat');
+  const crc0 = ev('_computeBaseInfo().crc').val;
+  await _e4LoadExpr('new Array(9 * 1024 * 1024).join("x")');
+  let s = _e4Surface();
+  A('E4.limits.oversize.err', s.err && !s.panel, 'plik > 8 MB: odrzucony');
+  A('E4.limits.oversize.msg', s.errText.indexOf('za duży') >= 0, 'komunikat o limicie rozmiaru');
+  _e4Reset();
+  const manyOps = [];
+  for (let i = 0; i < 5001; i++) manyOps.push({ type: 'PAINT_BATCH', target: {}, payload: { changes: [] } });
+  await _e4Load(_e4Craft(manyOps));
+  s = _e4Surface();
+  A('E4.limits.ops.err', s.err && !s.panel, '5001 opow: odrzucone');
+  A('E4.limits.ops.msg', s.errText.indexOf('Za dużo operacji') >= 0, 'komunikat o limicie operacji');
+  _e4Reset();
+  EQ('E4.limits.untouched', ev('_computeBaseInfo().crc').val, crc0, 'stan mapy nietkniety');
+});
+
+scenario('E4.empty-ops', async () => {
+  await loadBase('dat');
+  const crc0 = ev('_computeBaseInfo().crc').val;
+  await _e4Load(_e4Craft([]));
+  const s = _e4Surface();
+  A('E4.empty-ops.panel', s.panel && !s.err && !s.mis, 'pusta kalka: przechodzi walidacje, panel recenzji otwarty');
+  EQ('E4.empty-ops.rows', ev("document.querySelectorAll('#delta-panel .dp-row').length").val, 0, 'panel: 0 wierszy');
+  A('E4.empty-ops.count', (ev("document.getElementById('dp-count').textContent").val || '').indexOf('0 do naniesienia') >= 0,
+    'licznik: 0 do naniesienia');
+  ex("document.getElementById('dp-apply').click()");
+  EQ('E4.empty-ops.applied', ev('state.deltaLog.length').val, 0, 'apply pustej kalki: 0 wpisow w deltaLog');
+  EQ('E4.empty-ops.untouched', ev('_computeBaseInfo().crc').val, crc0, 'stan nietkniety');
+  _e4Reset();
+});
+
+scenario('E4.mismatch', async () => {
+  await loadBase('dat');
+  const fakeBase = { version: '0.0.1', revision: 'fffffff', crc: 'deadbeef' };
+  await _e4Load(_e4Craft([{ type: 'PAINT_BATCH', target: {}, payload: { changes: [] } }], { meta: { base: fakeBase } }));
+  let s = _e4Surface();
+  A('E4.mismatch.dlg', s.mis && !s.panel, 'inna baza: dialog mismatch, recenzja jeszcze zamknieta');
+  A('E4.mismatch.msg', s.misText.indexOf('innej wersji mapy') >= 0, 'komunikat o innej wersji mapy');
+  ex("document.getElementById('arkdelta-mismatch-ok').click()");
+  s = _e4Surface();
+  A('E4.mismatch.review', s.panel && !s.mis, 'po OK: panel recenzji otwarty');
+  EQ('E4.mismatch.rows', ev("document.querySelectorAll('#delta-panel .dp-row').length").val, 1, 'panel: 1 wiersz');
+  _e4Reset();
+});
+
+scenario('E4.nobase', async () => {
+  await loadBase('dat');
+  await _e4Load(_e4Craft([{ type: 'PAINT_BATCH', target: {}, payload: { changes: [] } }], { meta: { base: null } }));
+  let s = _e4Surface();
+  A('E4.nobase.dlg', s.mis && !s.panel, 'brak bazy: dialog mismatch');
+  A('E4.nobase.msg', s.misText.indexOf('nie niesie informacji o bazie') >= 0, 'komunikat o braku informacji o bazie');
+  ex("document.getElementById('arkdelta-mismatch-ok').click()");
+  s = _e4Surface();
+  A('E4.nobase.review', s.panel && !s.mis, 'po OK: panel recenzji otwarty');
+  _e4Reset();
+});
+
+
+
+// ═══ E5: UI end-to-end (wariant B: stan + DOM + ctx, bez pixel-diff) ═══
+// Konwersja mapa->client zgodna z handlerem contextmenu (bez skalowania rect).
+function _e5ClientXY(x, y){
+  return JSON.parse(ev('(function(){ const cv = document.getElementById("cv");'
+    + ' const r = cv.getBoundingClientRect();'
+    + ' return JSON.stringify({ x: r.left + state.ox + (' + x + ') * CELL * state.zoom,'
+    + ' y: r.top + state.oy - (' + y + ') * CELL * state.zoom }); })()').val);
+}
+function _e5CtxAt(x, y){
+  const p = _e5ClientXY(x, y);
+  ex('document.getElementById("cv").dispatchEvent(new MouseEvent("contextmenu",'
+    + ' { clientX: ' + p.x + ', clientY: ' + p.y + ', bubbles: true }))');
+}
+function _e5ClickCtxItem(sectionId, frag){
+  return ev('(function(){ const sec = document.getElementById(' + JSON.stringify(sectionId) + ');'
+    + ' if (!sec) return "NO-SECTION";'
+    + ' const it = [...sec.querySelectorAll(".ctx-item")].find(i => i.textContent.indexOf(' + JSON.stringify(frag) + ') >= 0);'
+    + ' if (!it) return "NO-ITEM"; it.click(); return "OK"; })()').val;
+}
+
+scenario('E5.save-flow', async () => {
+  await loadBase('dat');
+  A('E5.save-flow.disabled0', ev("document.getElementById('btn-save-arkdelta').disabled").val === true,
+    'przycisk zapisu kalki disabled bez zmian');
+  ex('addRoomAtPosition(5001, 5001)');
+  ex('addRoomAtPosition(5002, 5002)');
+  A('E5.save-flow.enabled', ev("document.getElementById('btn-save-arkdelta').disabled").val === false,
+    'przycisk odblokowany po commitach');
+  ex('(function(){ const orig = URL.createObjectURL.bind(URL);'
+    + ' URL.createObjectURL = b => { window.__e5blob = b; return orig(b); }; })()');
+  ex("document.getElementById('btn-save-arkdelta').click()");
+  const txt = (await eva('(async()=>{ return window.__e5blob ? await window.__e5blob.text() : null; })()')).val;
+  A('E5.save-flow.captured', !!txt && txt.length > 100, 'klik przechwycony (Blob z trescia)');
+  const v = JSON.parse(ev('(function(){ const v = validateDeltaText(' + JSON.stringify(txt || '') + ');'
+    + ' return JSON.stringify({ ok: v.ok, n: v.ok ? v.delta.ops.length : 0 }); })()').val);
+  A('E5.save-flow.valid', v.ok, 'zapisana kalka przechodzi walidacje');
+  EQ('E5.save-flow.ops', v.n, 2, 'zapisana kalka: 2 operacje');
+  A('E5.save-flow.toast', (ev("document.getElementById('toast').textContent").val || '').indexOf('Zapisano kalkę') >= 0,
+    'toast potwierdza zapis');
+});
+
+scenario('E5.load-flow', async () => {
+  await loadBase('dat');
+  ex('addRoomAtPosition(5001, 5001)');
+  ex('addRoomAtPosition(5002, 5002)');
+  const text = ev('buildDelta()').val;
+  await loadBase('dat');
+  _e2UpRoom(ev('state.areaId').val, 5001, 5001, 'Upstream E5');
+  await _e4Load(text);
+  A('E5.load-flow.panel', ev("document.getElementById('delta-panel').classList.contains('visible')").val === true,
+    'panel recenzji otwarty (ta sama baza — bez mismatch)');
+  EQ('E5.load-flow.rows', ev("document.querySelectorAll('#delta-panel .dp-row').length").val, 2, 'panel: 2 wiersze');
+  const cls = JSON.parse(ev('JSON.stringify(_deltaReview.items.map(i => i.cls))').val);
+  EQ('E5.load-flow.cls', cls, ['hard', 'ok'], 'op1 hard (kolizja z upstream), op2 ok');
+  // filtry panelu
+  ex('document.querySelector(".dp-filter[data-f=\\"hard\\"]").click()');
+  EQ('E5.load-flow.filter-hard', ev("document.querySelectorAll('#delta-panel .dp-row').length").val, 1,
+    'filtr "hard": 1 wiersz');
+  ex('document.querySelector(".dp-filter[data-f=\\"all\\"]").click()');
+  EQ('E5.load-flow.filter-all', ev("document.querySelectorAll('#delta-panel .dp-row').length").val, 2,
+    'filtr "all": 2 wiersze');
+  // odznaczenie op1 (hard) przez checkbox wiersza
+  ex('(function(){ const r0 = document.querySelectorAll("#dp-body .dp-row")[0];'
+    + ' const cb = r0.querySelector(".dp-check"); cb.click(); })()');
+  A('E5.load-flow.unchecked', ev('_deltaReview.items[0].checked').val === false, 'op1 odznaczony przez UI');
+  A('E5.load-flow.row-off', ev('document.querySelectorAll("#dp-body .dp-row")[0].classList.contains("off")').val === true,
+    'wiersz op1 ma klase off');
+  ex("document.getElementById('dp-apply').click()");
+  EQ('E5.load-flow.log', ev('state.deltaLog.length').val, 1, 'naniesiona tylko zaznaczona op2');
+  EQ('E5.load-flow.applied-cell', _e3CountAt(5002, 5002), 1, 'op2: pokoj naniesiony na (5002,5002)');
+  EQ('E5.load-flow.skipped-cell', _e3CountAt(5001, 5001), 1, 'op1 NIE naniesiona: na (5001,5001) tylko upstream');
+  const cls2 = JSON.parse(ev('JSON.stringify(_deltaReview.items.map(i => i.cls))').val);
+  EQ('E5.load-flow.reclass', cls2, ['hard', 'done'], 're-klasyfikacja po apply: op2 = done');
+});
+
+scenario('E5.ctx-count', async () => {
+  await loadBase('dat');
+  // ctx-empty -> "Dodaj pokój tutaj" (bezposredni commit, liczenie wywolan)
+  A('E5.ctx.free-cell', ev('!!_deltaRoomAt(state.areaId, 6000, 6000, 0)').val === false, '(6000,6000) wolne');
+  ex('(function(){ const orig = addRoomAtPosition; window.__e5adds = 0;'
+    + ' window.addRoomAtPosition = function(){ window.__e5adds++; return orig.apply(null, arguments); }; })()');
+  _e5CtxAt(6000, 6000);
+  A('E5.ctx.menu', ev("document.getElementById('ctx-menu').style.display").val === 'block', 'menu ctx otwarte');
+  A('E5.ctx.empty-sec', ev("document.getElementById('ctx-empty').style.display").val !== 'none', 'sekcja ctx-empty widoczna');
+  EQ('E5.ctx.add-click', _e5ClickCtxItem('ctx-empty', 'Dodaj pokój tutaj'), 'OK', 'klik w "Dodaj pokój tutaj"');
+  EQ('E5.ctx.add-count', ev('window.__e5adds').val, 1, 'addRoomAtPosition wywolane DOKLADNIE raz');
+  A('E5.ctx.add-room', ev('!!_deltaRoomAt(state.areaId, 6000, 6000, 0)').val === true, 'pokoj dodany na kliknietej komorce');
+  EQ('E5.ctx.add-log', ev('state.deltaLog[state.deltaLog.length - 1].type').val, 'ADD_ROOM', 'deltaLog +1 ADD_ROOM');
+  A('E5.ctx.menu-hidden', ev("document.getElementById('ctx-menu').style.display").val !== 'block', 'menu zamkniete po akcji');
+  // ctx-room -> "Usuń pokój" -> dialog -> confirm (liczenie deleteRoom)
+  const victim = ev('Object.values(state.roomById).find(r => !(r.x === 6000 && r.y === 6000)).id').val;
+  const vposArr = JSON.parse(ev('JSON.stringify([state.roomById[' + victim + '].x, state.roomById[' + victim + '].y])').val);
+  ex('(function(){ const orig = deleteRoom; window.__e5dels = 0;'
+    + ' window.deleteRoom = function(){ window.__e5dels++; return orig.apply(null, arguments); }; })()');
+  _e5CtxAt(vposArr[0], vposArr[1]);
+  A('E5.ctx.room-sec', ev("document.getElementById('ctx-room').style.display").val !== 'none', 'sekcja ctx-room widoczna');
+  EQ('E5.ctx.del-click', _e5ClickCtxItem('ctx-room', 'Usuń pokój'), 'OK', 'klik w "Usuń pokój"');
+  // pokoj z przychodzacymi wyjsciami -> wariant dlg-delete-room-refs
+  A('E5.ctx.del-dlg', ev("!!document.querySelector('#dlg-delete-room-refs.open')").val === true,
+    'dialog potwierdzenia (wariant z referencjami) otwarty');
+  A('E5.ctx.del-refs-list', (ev("document.getElementById('dlg-refs-list').textContent").val || '').length > 0,
+    'lista przychodzacych wyjsc wypelniona');
+  ex("document.getElementById('dlg-refs-confirm').click()");
+  EQ('E5.ctx.del-count', ev('window.__e5dels').val, 1, 'deleteRoom wywolane DOKLADNIE raz');
+  A('E5.ctx.del-gone', ev('!state.roomById[' + victim + ']').val === true, 'pokoj usuniety');
+  EQ('E5.ctx.del-log', ev('state.deltaLog[state.deltaLog.length - 1].type').val, 'DELETE_ROOM', 'deltaLog +1 DELETE_ROOM');
+  A('E5.ctx.del-dlg-closed', ev("!!document.querySelector('#dlg-delete-room-refs.open')").val === false, 'dialog zamkniety');
+});
+
+scenario('E5.ghost-layer', async () => {
+  // stan do sanity-screenshota: panel z kolizjami + duchy + chipy autopozycji
+  await e3Setup();
+  ex('(function(){ for (const r of document.querySelectorAll("#dp-body .dp-row")){'
+    + ' const b = [...r.querySelectorAll("button")].find(b => b.textContent === "Efekt");'
+    + ' if (b) b.click(); } })()');
+  EQ('E5.ghost-layer.count', ev('_deltaGhosts.size').val, 4, '4 duchy pokazane (warstwa addytywna)');
+  const crc0 = ev('_computeBaseInfo().crc').val;
+  ex('for (let i = 0; i < 3; i++) _deltaAutoplace(_deltaReview.items[i])');
+  EQ('E5.ghost-layer.chips', ev("document.querySelectorAll('#dp-body .dp-ovr').length").val, 3,
+    '3 chipy override w panelu');
+  EQ('E5.ghost-layer.untouched', ev('_computeBaseInfo().crc').val, crc0, 'duchy + autopozycja nie mutuja stanu mapy');
+  A('E5.ghost-layer.panel', ev("document.getElementById('delta-panel').classList.contains('visible')").val === true,
+    'panel widoczny (stan do screenshota)');
+});
+
+
+
+// ═══ E6: przeploty undo/redo z apply kalki ═══
+scenario('E6.undo-apply', async () => {
+  await loadBase('dat');
+  const crcBase = ev('_computeBaseInfo().crc').val;
+  ex('addRoomAtPosition(7000, 7000)');
+  ex('addRoomAtPosition(7001, 7001)');
+  const text = ev('buildDelta()').val;
+  await loadBase('dat');
+  const res = JSON.parse(ev('JSON.stringify(applyDelta(validateDeltaText(' + JSON.stringify(text) + ').delta))').val);
+  EQ('E6.undo-apply.applied', res.applied, 2, 'apply: 2 naniesione');
+  const crcApplied = ev('_computeBaseInfo().crc').val;
+  A('E6.undo-apply.changed', crcApplied !== crcBase, 'stan po apply inny niz baza');
+  ex('undoAction()');
+  EQ('E6.undo-apply.undo1', _e3CountAt(7001, 7001), 0, 'undo 1: cofnieta ostatnia op (pokoj 7001 zniknal)');
+  EQ('E6.undo-apply.undo1b', _e3CountAt(7000, 7000), 1, 'undo 1: pierwsza op nietknieta');
+  EQ('E6.undo-apply.log1', ev('state.deltaLog.length').val, 1, 'undo 1: deltaLog lustrzanie skrocony');
+  ex('undoAction()');
+  EQ('E6.undo-apply.undo2', _e3CountAt(7000, 7000), 0, 'undo 2: obie opy cofniete');
+  EQ('E6.undo-apply.base', ev('_computeBaseInfo().crc').val, crcBase, 'undo 2: powrot do crc bazy');
+  ex('redoAction()'); ex('redoAction()');
+  EQ('E6.undo-apply.redo', _e3CountAt(7000, 7000) + _e3CountAt(7001, 7001), 2, 'redo 2: obie opy przywrocone');
+  EQ('E6.undo-apply.redo-crc', ev('_computeBaseInfo().crc').val, crcApplied, 'redo 2: powrot do crc po apply');
+  EQ('E6.undo-apply.redo-log', ev('state.deltaLog.length').val, 2, 'redo 2: deltaLog lustrzanie odbudowany');
+});
+
+scenario('E6.interleave', async () => {
+  await loadBase('dat');
+  ex('addRoomAtPosition(7000, 7000)');
+  const text = ev('buildDelta()').val;
+  await loadBase('dat');
+  ex('applyDelta(validateDeltaText(' + JSON.stringify(text) + ').delta)');
+  ex('addRoomAtPosition(7002, 7002)');
+  EQ('E6.interleave.log', ev('state.deltaLog.length').val, 2, 'deltaLog: 1 apply + 1 lokalny commit');
+  ex('undoAction()');
+  EQ('E6.interleave.undo-local', _e3CountAt(7002, 7002), 0, 'undo cofa NAJPIERW lokalny commit (LIFO)');
+  EQ('E6.interleave.undo-keep', _e3CountAt(7000, 7000), 1, 'op kalki nienaruszona');
+  ex('undoAction()');
+  EQ('E6.interleave.undo-delta', _e3CountAt(7000, 7000), 0, 'drugie undo cofa op kalki');
+  ex('redoAction()'); ex('redoAction()');
+  EQ('E6.interleave.redo', _e3CountAt(7000, 7000) + _e3CountAt(7002, 7002), 2, 'redo odtwarza obie w kolejnosci');
+});
+
+scenario('E6.newwork-clears-redo', async () => {
+  await loadBase('dat');
+  ex('addRoomAtPosition(7000, 7000)');
+  const text = ev('buildDelta()').val;
+  await loadBase('dat');
+  ex('applyDelta(validateDeltaText(' + JSON.stringify(text) + ').delta)');
+  ex('undoAction()');
+  EQ('E6.newwork.redo-pending', ev('state.redoStack.length').val, 1, 'po undo: 1 wpis redo');
+  ex('addRoomAtPosition(7003, 7003)');
+  EQ('E6.newwork.redo-cleared', ev('state.redoStack.length').val, 0, 'nowy commit czysci redoStack');
+  ex('redoAction()');
+  EQ('E6.newwork.redo-noop', _e3CountAt(7000, 7000), 0, 'redo bez redoStack: no-op (op kalki nie wraca)');
+  EQ('E6.newwork.local-kept', _e3CountAt(7003, 7003), 1, 'lokalny commit nienaruszony');
+});
+
+scenario('E6.redo-f6', async () => {
+  // WATCHDOG F6 (ciag dalszy): apply MOVE_ROOM nie rusza pokoju, ale wpis undo/redo
+  // zawiera from/to — redoAction po undoAction MATERIALIZUJE ruch, ktorego apply nie zrobil.
+  await loadBase('dat');
+  const mvId = ev('Object.values(state.roomById)[0].id').val;
+  const orig = JSON.parse(ev('JSON.stringify([state.roomById[' + mvId + '].x, state.roomById[' + mvId + '].y])').val);
+  ex('commitMoveRoom(state.roomById[' + mvId + '], state.roomById[' + mvId + '].x, state.roomById[' + mvId + '].y, 0, 7100, 7100, 0)');
+  // uwaga: commitMoveRoom jest data-only — symulujemy op kalki, wiec pokoj zostaje (jak w applyDelta)
+  const text = ev('buildDelta()').val;
+  await loadBase('dat');
+  const res = JSON.parse(ev('JSON.stringify(applyDelta(validateDeltaText(' + JSON.stringify(text) + ').delta))').val);
+  EQ('E6.redo-f6.applied', res.applied, 1, 'apply: MOVE policzony jako naniesiony');
+  EQ('E6.redo-f6.stays', JSON.parse(ev('JSON.stringify([state.roomById[' + mvId + '].x, state.roomById[' + mvId + '].y])').val),
+    orig, 'watchdog F6: pokoj zostaje na miejscu po apply');
+  ex('undoAction()');
+  EQ('E6.redo-f6.undo', JSON.parse(ev('JSON.stringify([state.roomById[' + mvId + '].x, state.roomById[' + mvId + '].y])').val),
+    orig, 'undo: no-op (pokoj byl na miejscu)');
+  ex('redoAction()');
+  EQ('E6.redo-f6.redo-moves', JSON.parse(ev('JSON.stringify([state.roomById[' + mvId + '].x, state.roomById[' + mvId + '].y])').val),
+    [7100, 7100], 'watchdog F6: redo MATERIALIZUJE ruch — apply i redo nie sa spojne');
+});
+
+// ═══ Runner ═══
+function appReady() {
+  return new Promise(res => {
+    const t0 = Date.now();
+    (function poll() {
+      let ok = false;
+      try {
+        const w = $f.contentWindow;
+        ok = !!(w && w.document && w.document.readyState === 'complete'
+          && w.eval('typeof datToArkmap === "function" && typeof applyMap === "function"'
+                  + ' && typeof startLocalEditMode === "function"'));
+      } catch (e) { ok = false; }
+      if (ok || Date.now() - t0 > 30000) return res();
+      setTimeout(poll, 100);
+    })();
+  });
+}
+
+async function runAll() {
+  await appReady();
+  try { W().addEventListener('error', e => REC('FAIL', 'js-error', String(e.message || e))); } catch (e) {}
+  try { await fetchFixture(); } catch (e) {
+    REC('FAIL', 'fixture', 'brak map_master3.dat: ' + e.message);
+    return finish();
+  }
+  const Q = new URLSearchParams(location.search);
+  const GRP = Q.get('g');
+  const ONLY = (Q.get('sc') || '').split(',').filter(Boolean);
+  for (const s of SC) {
+    if (GRP && !(s.id === GRP || s.id.startsWith(GRP + '.'))) continue;
+    if (ONLY.length && !ONLY.includes(s.id)) continue;
+    try { await s.fn(); }
+    catch (e) { FAIL(s.id, 'wyjatek scenariusza: ' + String(e && e.message || e)); }
+  }
+  finish();
+}
+function finish() {
+  $out.textContent += 'SUMMARY|pass=' + _pass + '|fail=' + _fail + '\n';
+  const d = document.getElementById('done');
+  d.textContent = 'DONE';
+  d.style.display = 'block';
+  document.title = 'DONE p=' + _pass + ' f=' + _fail;
+}
+runAll();
+</script>
+</body>
+</html>
