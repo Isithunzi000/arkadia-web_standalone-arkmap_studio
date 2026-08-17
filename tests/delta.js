@@ -132,7 +132,7 @@ const deltaCode =
   extract(HTML, 'function _dispatchRedo(entry) {') + '\n' +
   blockSlice('// === ARKDELTA START ===', '// ── UI: dialog + wiring') + '\n' +
   extract(HTML, 'function _arkdeltaBaseNote(base) {') + '\n' +
-  '\n;return { pushUndo, _computeBaseInfo, _deltaStripRoom, buildDelta, validateDeltaText, applyDelta, _arkdeltaBaseNote, crc32str, stableStringify, addChecksums };';
+  '\n;return { pushUndo, _computeBaseInfo, _deltaStripRoom, buildDelta, validateDeltaText, applyDelta, classifyDelta, _arkdeltaBaseNote, crc32str, stableStringify, addChecksums };';
 
 function makeDeltaCtx() {
   const a1 = { id: 1, name: 'Area One', rooms: [
@@ -441,12 +441,120 @@ console.log('— T7: baseInfo, spec-clean, struktura UI —');
 ok(HTML.includes('<input type="file" id="fi-arkdelta" accept=".arkdelta">'), 'markup: fi-arkdelta');
 ok(HTML.includes('id="btn-load-arkdelta"'), 'markup: btn-load-arkdelta pod przyciskami zapisu');
 ok(HTML.includes('id="btn-save-arkdelta" class="etb-check" disabled'), 'markup: btn-save-arkdelta pod walidacją (disabled)');
-ok(HTML.includes('id="dlg-arkdelta"') && HTML.includes('id="arkdelta-body"') && HTML.includes('id="arkdelta-apply"'), 'markup: dialog dlg-arkdelta');
+ok(HTML.includes('id="dlg-arkdelta"') && HTML.includes('id="arkdelta-body"'), 'markup: dialog dlg-arkdelta (błędy walidacji)');
 ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo liczone w wrapperze applyMap');
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.6.0';"), 'wersja: v1.6.0');
+ok(HTML.includes("const APP_VERSION = 'v1.7.0';"), 'wersja: v1.7.0');
+
+console.log('— T8: classifyDelta + recenzja (M2) —');
+{
+  const c = makeDeltaCtx();
+  const { state, api } = c;
+  const op = (seq, type, target, payload) => ({ seq, type, target, payload, label: 'op ' + seq });
+  const delta = { meta: { format: 'arkdelta', format_version: 1 }, ops: [
+    op(1,  'ADD_ROOM',  { roomId: 'd:1', areaId: 1 }, { room: { id: 'd:1', x: 5, y: 5, z: 0, name: 'Nowy', env: 262 } }),
+    op(2,  'ADD_ROOM',  { roomId: 'd:2', areaId: 1 }, { room: { id: 'd:2', x: 1, y: 0, z: 0, name: 'Inny', env: 262 } }),
+    op(3,  'ADD_ROOM',  { roomId: 'd:3', areaId: 1 }, { room: { id: 'd:3', x: 1, y: 0, z: 0, name: 'R11', env: 258, exits: { w: 10 } } }),
+    op(4,  'ADD_ROOM',  { roomId: 'd:4', areaId: 99 }, { room: { id: 'd:4', x: 0, y: 0, z: 0 } }),
+    op(5,  'DELETE_ROOM', { roomId: 12, areaId: 1 }, { room: JSON.parse(JSON.stringify(state.roomById[12])) }),
+    op(6,  'DELETE_ROOM', { roomId: 999, areaId: 1 }, { room: { id: 999 } }),
+    op(7,  'EDIT_ROOM', { roomId: 10 }, { before: JSON.parse(JSON.stringify(state.roomById[10])), after: Object.assign(JSON.parse(JSON.stringify(state.roomById[10])), { name: 'R10X' }) }),
+    op(8,  'EDIT_ROOM', { roomId: 11 }, { before: { id: 11, x: 9, y: 9, z: 0, name: 'STARE' }, after: JSON.parse(JSON.stringify(state.roomById[11])) }),
+    op(9,  'EDIT_ROOM', { roomId: 12 }, { before: { id: 12, x: 9, y: 9, z: 0, name: 'A' }, after: { id: 12, x: 8, y: 8, z: 0, name: 'B' } }),
+    op(10, 'ADD_EXIT',  { sourceId: 10, dir: 's' }, { targetId: 12, bidirectional: false }),
+    op(11, 'ADD_EXIT',  { sourceId: 10, dir: 'e' }, { targetId: 11, bidirectional: false }),
+    op(12, 'ADD_EXIT',  { sourceId: 10, dir: 'e' }, { targetId: 12, bidirectional: false }),
+    op(13, 'ADD_EXIT',  { sourceId: 999, dir: 'n' }, { targetId: 12, bidirectional: false }),
+    op(14, 'ADD_AREA',  { areaId: 'd:5' }, { area: { id: 'd:5', name: 'Trzeci' } }),
+    op(15, 'ADD_AREA',  { areaId: 'd:6' }, { area: { id: 'd:6', name: 'Area Two' } }),
+    op(16, 'DELETE_AREA', { areaId: 99 }, {}),
+    op(17, 'MOVE_ROOM', { roomId: 12 }, { fromX: 0, fromY: 1, fromZ: 0, toX: 7, toY: 7, toZ: 0 }),
+    op(18, 'MOVE_ROOM', { roomId: 12 }, { fromX: 0, fromY: 1, fromZ: 0, toX: 0, toY: 1, toZ: 0 }),
+    op(19, 'MOVE_ROOM', { roomId: 12 }, { fromX: 0, fromY: 1, fromZ: 0, toX: 1, toY: 0, toZ: 0 }),
+    op(20, 'EDIT_ENV_COLOR', { envId: 262 }, { oldColor: null, newColor: [9, 9, 9] }),
+    op(21, 'ADD_LABEL', { areaId: 1 }, { label: { id: 'd:7', text: 'L1', x: 0, y: 0, z: 0, width: 4, height: 1.2 } }),
+    op(22, 'ADD_LABEL', { areaId: 1 }, { label: { id: 'd:8', text: 'Nowa', x: 3, y: 3, z: 0, width: 4, height: 1.2 } }),
+    op(23, 'DELETE_ROOM', { roomId: 'd:4', areaId: 99 }, { room: { id: 'd:4' } }),
+  ] };
+  const items = api.classifyDelta(delta);
+  const cls = (seq) => items.find(i => i.seq === seq).cls;
+  const note = (seq) => items.find(i => i.seq === seq).note;
+  ok(items.length === 23, 'classify: wszystkie opy sklasyfikowane');
+  ok(cls(1) === 'ok', 'classify ADD_ROOM: wolne pole → ok');
+  ok(cls(2) === 'hard' && note(2).includes('kolizja'), 'classify ADD_ROOM: pole zajęte (inna nazwa) → hard/kolizja');
+  ok(cls(3) === 'done' && note(3).includes('#11'), 'classify ADD_ROOM: to samo pole i nazwa → done (add-matching)');
+  ok(cls(4) === 'impossible' && note(4).includes('obszar nie istnieje'), 'classify ADD_ROOM: obszar nie istnieje → impossible');
+  ok(cls(5) === 'ok', 'classify DELETE_ROOM: zgodny snapshot → ok');
+  ok(cls(6) === 'impossible', 'classify DELETE_ROOM: pokój usunięty upstream → impossible');
+  ok(cls(7) === 'ok', 'classify EDIT_ROOM: before zgodne → ok');
+  ok(cls(8) === 'done', 'classify EDIT_ROOM: live == after → done (już naniesione)');
+  ok(cls(9) === 'hard', 'classify EDIT_ROOM: live != before → hard (zmieniony upstream)');
+  ok(cls(10) === 'ok', 'classify ADD_EXIT: wolny kierunek → ok');
+  ok(cls(11) === 'done', 'classify ADD_EXIT: istnieje do tego samego celu → done');
+  ok(cls(12) === 'hard' && note(12).includes('guard'), 'classify ADD_EXIT: kierunek zajęty innym → hard (guard odmówi)');
+  ok(cls(13) === 'impossible', 'classify ADD_EXIT: pokój nie istnieje → impossible');
+  ok(cls(14) === 'ok', 'classify ADD_AREA: nowa nazwa → ok');
+  ok(cls(15) === 'done' && note(15).includes('#2'), 'classify ADD_AREA: nazwa istnieje → done');
+  ok(cls(16) === 'impossible', 'classify DELETE_AREA: obszar nie istnieje → impossible');
+  ok(cls(17) === 'ok', 'classify MOVE_ROOM: wolne pole → ok');
+  ok(cls(18) === 'done', 'classify MOVE_ROOM: już na miejscu → done');
+  ok(cls(19) === 'hard' && note(19).includes('kolizja'), 'classify MOVE_ROOM: pole zajęte → hard');
+  ok(cls(20) === 'ok', 'classify EDIT_ENV_COLOR: inny kolor → ok');
+  ok(cls(21) === 'done', 'classify ADD_LABEL: identyczna etykieta → done');
+  ok(cls(22) === 'ok', 'classify ADD_LABEL: nowa → ok');
+  ok(cls(23) === 'impossible' && note(23).includes('d:4'), 'classify łańcuch: op na niewykonalnym obiekcie kalki → impossible');
+  const chk = (seq) => items.find(i => i.seq === seq).checked;
+  ok(chk(1) && chk(2) && !chk(3) && !chk(4) && !chk(15), 'classify: domyślnie zaznaczone ok+hard, odznaczone done+impossible');
+  const j3 = items.find(i => i.seq === 3).jump, j1 = items.find(i => i.seq === 1).jump;
+  ok(j3 && j3.roomId === 11, 'classify: jump done-ADD_ROOM → istniejący pokój');
+  ok(j1 && j1.areaId === 1 && j1.x === 5, 'classify: jump ok-ADD_ROOM → pozycja w obszarze');
+}
+{
+  // onlySeq: nanosi tylko zaznaczone
+  const c = makeDeltaCtx();
+  const { state, api } = c;
+  const delta = { meta: { format: 'arkdelta', format_version: 1 }, ops: [
+    { seq: 1, type: 'ADD_ROOM', target: { roomId: 'd:1', areaId: 2 }, payload: { room: { id: 'd:1', x: 8, y: 8, z: 0, name: 'Nowy', env: 262 } }, label: 'r' },
+    { seq: 2, type: 'EDIT_ROOM', target: { roomId: 10 }, payload: { before: {}, after: { id: 10, x: 0, y: 0, z: 0, name: 'R10X', env: 258, exits: { e: 11 } } }, label: 'e' },
+  ] };
+  const res = api.applyDelta(delta, new Set([2]));
+  ok(res.applied === 1 && res.skipped.length === 0, 'apply onlySeq: naniesiony tylko zaznaczony op');
+  ok(state.roomById[10].name === 'R10X', 'apply onlySeq: EDIT_ROOM wykonany');
+  ok(state.areas.get(2).rooms.length === 1, 'apply onlySeq: odznaczony ADD_ROOM pominięty milcząco');
+  ok(state.undoStack.length === 1, 'apply onlySeq: undoStack tylko z naniesionego');
+}
+{
+  // re-klasyfikacja po apply: ok → done (idempotentność przez klasyfikator)
+  const c = makeDeltaCtx();
+  const { state, api } = c;
+  const delta = { meta: { format: 'arkdelta', format_version: 1 }, ops: [
+    { seq: 1, type: 'ADD_ROOM', target: { roomId: 'd:1', areaId: 2 }, payload: { room: { id: 'd:1', x: 8, y: 8, z: 0, name: 'Nowy', env: 262 } }, label: 'r' },
+  ] };
+  const before = api.classifyDelta(delta);
+  ok(before[0].cls === 'ok', 're-klasyfikacja: przed apply → ok');
+  api.applyDelta(delta);
+  const after = api.classifyDelta(delta);
+  ok(after[0].cls === 'done', 're-klasyfikacja: po apply → done (powtórne wczytanie kalki nie dubluje)');
+}
+{
+  // EDIT_ENV_COLOR już naniesiony
+  const c = makeDeltaCtx();
+  const { state, api } = c;
+  state.map.colors.custom_env_colors[262] = [9, 9, 9];
+  const delta = { meta: {}, ops: [{ seq: 1, type: 'EDIT_ENV_COLOR', target: { envId: 262 }, payload: { oldColor: [1, 2, 3], newColor: [9, 9, 9] }, label: '' }] };
+  ok(api.classifyDelta(delta)[0].cls === 'done', 'classify EDIT_ENV_COLOR: kolor już ustawiony → done');
+}
+// struktura panelu recenzji
+ok(HTML.includes('id="delta-panel"') && HTML.includes('id="dp-body"') && HTML.includes('id="dp-apply"')
+  && HTML.includes('id="dp-rebase"') && HTML.includes('id="dp-base"'), 'markup: panel recenzji delta-panel');
+ok((HTML.match(/class="vd-btn dp-filter"/g) || []).length === 5, 'markup: 5 klawiszy filtrow');
+ok(HTML.includes("openDeltaReview(res.delta)"), 'flow: po walidacji otwiera się recenzja');
+ok(HTML.includes("document.getElementById('dp-apply').addEventListener('click', _deltaApplyReviewed)"), 'integracja: przycisk Zastosuj zaznaczone');
+ok(HTML.includes("document.getElementById('dp-rebase').addEventListener('click', saveDelta)"), 'integracja: rebase = ponowny zapis kalki');
+ok(!HTML.includes('arkdelta-apply'), 'markup: stary przycisk Zastosuj usunięty (recenzja przejmuje flow)');
+ok(HTML.includes("const ownSid = (op.type === 'ADD_ROOM'"), 'walidator: definicja sid przed skanem użyć');
 
 console.log('');
 console.log('delta: ' + pass + ' OK, ' + fail + ' FAIL');

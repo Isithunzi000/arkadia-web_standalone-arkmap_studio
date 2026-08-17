@@ -289,6 +289,22 @@
   .vd-sel { font-size:10px; padding:2px 5px; background:var(--bg); color:var(--fg); border:1px solid var(--border); border-radius:4px; }
   .vd-acc-toggle { display:flex; align-items:center; gap:4px; color:var(--dim); cursor:pointer; user-select:none; }
   .vd-sub-break { flex-basis:100%; height:0; }
+  #delta-panel { position:fixed; left:16px; bottom:16px; width:560px; max-width:calc(100vw - 32px); max-height:62vh;
+    background:#141720f5; border:1px solid var(--border); border-radius:8px; box-shadow:0 6px 28px #000b;
+    font:11px var(--font); color:var(--text); z-index:201; display:none; flex-direction:column; backdrop-filter:blur(4px); }
+  #delta-panel.visible { display:flex; }
+  .dp-badge { font-size:9px; border-radius:3px; padding:0 4px; white-space:nowrap; border:1px solid var(--border); }
+  .dp-badge.ok { color:var(--ok); border-color:#2a5a3a; }
+  .dp-badge.hard { color:#f0883e; border-color:#6b4a1f; }
+  .dp-badge.done { color:var(--dim); }
+  .dp-badge.impossible { color:#ff7b72; border-color:#5a2727; }
+  .dp-note { color:var(--dim); font-size:10px; flex-basis:100%; padding-left:20px; }
+  .dp-filter.active { color:var(--fg); border-color:var(--accent); background:var(--sel); }
+  .dp-check { margin:0 2px 0 0; cursor:pointer; }
+  .dp-row.off .vd-tf, .dp-row.off .vd-num { opacity:.45; }
+  #dp-apply { color:var(--ok); border-color:#2a5a3a; }
+  #dp-apply:disabled { opacity:.4; cursor:default; color:var(--dim); border-color:var(--border); }
+  #dp-rebase { color:var(--accent); border-color:#2a4a6a; }
   .vd-acc-toggle input { margin:0; cursor:pointer; }
   #vd-migrate:disabled, #vd-clearacc:disabled { opacity:.4; cursor:default; }
   #vd-acc-n { color:var(--ok); font-weight:600; }
@@ -2456,6 +2472,31 @@
       </div>
     </div>
 
+    <!-- NON-MODAL PANEL: RECENZJA KALKI .ARKDELTA -->
+    <div id="delta-panel">
+      <div class="vd-hdr" id="dp-hdr">
+        <span class="vd-ico">◈</span>
+        <span class="vd-title">Kalka .arkdelta</span>
+        <span class="vd-count" id="dp-count"></span>
+        <span class="vd-close" id="dp-close" title="Zamknij">✕</span>
+      </div>
+      <div class="vd-sub">
+        <span class="vd-sub-lbl" id="dp-base"></span>
+        <span class="vd-sub-break"></span>
+        <button class="vd-btn dp-filter" data-f="all">Wszystkie</button>
+        <button class="vd-btn dp-filter" data-f="ok">Do naniesienia</button>
+        <button class="vd-btn dp-filter" data-f="hard">Konflikty</button>
+        <button class="vd-btn dp-filter" data-f="done">Naniesione</button>
+        <button class="vd-btn dp-filter" data-f="impossible">Niewykonalne</button>
+      </div>
+      <div class="vd-body" id="dp-body"></div>
+      <div class="vd-ftr">
+        <button class="vd-btn" id="dp-apply">✓ Zastosuj zaznaczone</button>
+        <button class="vd-btn" id="dp-rebase" style="display:none">💾 Zapisz zaktualizowaną kalkę&hellip;</button>
+        <button class="vd-btn close" id="dp-close2">Zamknij</button>
+      </div>
+    </div>
+
     <!-- FLOATING ROOM PANEL -->
     <div id="room-panel">
       <div id="rp-header">
@@ -3206,7 +3247,6 @@
     <div class="dlg-body" id="arkdelta-body"></div>
     <div class="dlg-ftr">
       <button class="dlg-cancel" onclick="closeDialog('dlg-arkdelta')">Zamknij</button>
-      <button class="btn-primary" id="arkdelta-apply" onclick="confirmDeltaApply()">Zastosuj</button>
     </div>
   </div>
 </div>
@@ -12597,7 +12637,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.6.0';
+const APP_VERSION = 'v1.7.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -17691,9 +17731,314 @@ function validateDeltaText(text) {
   return { ok: true, delta, errors: [] };
 }
 
-// ── Apply (czysta ścieżka M1) ────────────────────────────────────────────────
-let _arkdeltaPending = null;
+// ── Klasyfikacja opow wzgledem biezacej mapy (okno recenzji) ────────────────
+// Klasy: 'ok' (do naniesienia), 'hard' (konflikt / zmienione upstream — nanosi
+// sie mimo to), 'done' (juz naniesione — auto-odznaczone), 'impossible'
+// (niewykonalne — cel usuniety upstream itd.). Klasyfikacja NIE rusza stanu.
+function _deltaRoomAt(areaId, x, y, z) {
+  const area = state.areas.get(areaId);
+  if (!area) return null;
+  for (const r of (area.rooms || [])) if (r.x === x && r.y === y && (r.z ?? 0) === (z ?? 0)) return r;
+  return null;
+}
 
+// Porownanie pokoju na zywo ze snapshotem delty (obie strony spec-clean, bez id).
+// true/false, albo null gdy snapshot zawiera sid-y (nieporownywalny).
+function _deltaRoomCmp(live, snap) {
+  let hasSid = false;
+  _deltaScanDeep(snap, () => {}, v => { if (_DELTA_SID_RE.test(v)) hasSid = true; });
+  if (hasSid) return null;
+  const l = _deltaStripRoom(JSON.parse(JSON.stringify(live)));
+  const s = _deltaStripRoom(JSON.parse(JSON.stringify(snap)));
+  delete l.id; delete s.id;
+  return stableStringify(l) === stableStringify(s);
+}
+
+function _deltaIsSuppressor(cl) {
+  return !!cl && Array.isArray(cl.points) && cl.points.length === 0;
+}
+
+function _deltaClsItem(op, cls, note, jump) {
+  return { seq: op.seq, type: op.type, label: op.label || op.type, cls, note: note || '',
+           jump: jump || null, checked: cls === 'ok' || cls === 'hard' };
+}
+
+function classifyDelta(delta) {
+  const items = [];
+  const sidCls     = new Map();  // sid -> klasa jego ADD-a
+  const sidRoomId  = new Map();  // sid -> numeric roomId (ADD_ROOM 'done')
+  const sidAreaId  = new Map();  // sid -> numeric areaId (ADD_AREA 'done')
+  const sidLabelId = new Map();  // sid -> numeric labelId (ADD_LABEL 'done')
+
+  const isSid  = v => _DELTA_SID_RE.test(String(v));
+  const resR = v => isSid(v) ? sidRoomId.get(String(v)) : v;   // undefined = kalka jeszcze nie istnieje
+  const resA = v => isSid(v) ? sidAreaId.get(String(v)) : v;
+  const resL = v => isSid(v) ? sidLabelId.get(String(v)) : v;
+  // Lancuch: odwolanie do sid, ktorego ADD jest niewykonalny.
+  const chainBad = (op) => {
+    let bad = null;
+    _deltaScanDeep(op, () => {}, v => {
+      if (_DELTA_SID_RE.test(v) && sidCls.get(v) === 'impossible' && bad === null) bad = v;
+    });
+    return bad;
+  };
+  const roomJump = (id) => (typeof id === 'number' && state.roomById[id]) ? { roomId: id } : null;
+  const posJump  = (areaId, x, y) => (typeof areaId === 'number' && state.areas.get(areaId)) ? { areaId, x, y } : null;
+  const areaJump = (areaId) => {
+    if (typeof areaId !== 'number' || !state.areas.get(areaId)) return null;
+    const r0 = (state.areas.get(areaId).rooms || [])[0];
+    return r0 ? { roomId: r0.id } : { areaId };
+  };
+
+  for (const op of delta.ops) {
+    const T = op.target, P = op.payload;
+    const chain = chainBad(op);
+    if (chain && op.type !== 'ADD_ROOM' && op.type !== 'ADD_AREA' && op.type !== 'ADD_LABEL') {
+      items.push(_deltaClsItem(op, 'impossible', 'odwołanie do niewykonalnego obiektu kalki (' + chain + ')'));
+      continue;
+    }
+    switch (op.type) {
+      // ── definicje sid ────────────────────────────────────────────────────
+      case 'ADD_AREA': {
+        const sid = String(T.areaId);
+        const name = P.area && P.area.name || '';
+        const found = [...state.areas.values()].find(a => a.name === name && name !== '');
+        if (found) { sidCls.set(sid, 'done'); sidAreaId.set(sid, found.id);
+          items.push(_deltaClsItem(op, 'done', 'obszar o tej nazwie już istnieje (#' + found.id + ')', areaJump(found.id))); }
+        else { sidCls.set(sid, 'ok'); items.push(_deltaClsItem(op, 'ok', '')); }
+        break;
+      }
+      case 'ADD_ROOM': {
+        const sid = String(T.roomId);
+        const room = P.room || {};
+        let areaId = resA(T.areaId);
+        if (isSid(T.areaId) && areaId === undefined && sidCls.get(String(T.areaId)) !== 'ok') {
+          sidCls.set(sid, 'impossible');
+          items.push(_deltaClsItem(op, 'impossible', 'obszar kalki niewykonalny'));
+          break;
+        }
+        if (areaId === undefined) { sidCls.set(sid, 'ok'); items.push(_deltaClsItem(op, 'ok', 'obszar z kalki')); break; }
+        if (!state.areas.get(areaId)) { sidCls.set(sid, 'impossible');
+          items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
+        const occ = _deltaRoomAt(areaId, room.x ?? 0, room.y ?? 0, room.z ?? 0);
+        if (occ && (occ.name || '') === (room.name || '')) {
+          sidCls.set(sid, 'done'); sidRoomId.set(sid, occ.id);
+          items.push(_deltaClsItem(op, 'done', 'już naniesione (to samo pole i nazwa → #' + occ.id + ')', roomJump(occ.id)));
+        } else if (occ) {
+          sidCls.set(sid, 'ok');
+          items.push(_deltaClsItem(op, 'hard', 'pole (' + room.x + ',' + room.y + ',' + (room.z ?? 0) + ') zajęte przez #' + occ.id + ' — kolizja', roomJump(occ.id)));
+        } else {
+          sidCls.set(sid, 'ok');
+          items.push(_deltaClsItem(op, 'ok', '', posJump(areaId, room.x ?? 0, room.y ?? 0)));
+        }
+        break;
+      }
+      case 'ADD_LABEL': {
+        const sid = String(P.label && P.label.id);
+        const lbl = P.label || {};
+        const areaId = resA(T.areaId);
+        if (areaId === undefined) { sidCls.set(sid, sidCls.get(String(T.areaId)) === 'ok' ? 'ok' : 'impossible');
+          items.push(_deltaClsItem(op, sidCls.get(sid), sidCls.get(sid) === 'ok' ? 'obszar z kalki' : 'obszar kalki niewykonalny')); break; }
+        const area = state.areas.get(areaId);
+        if (!area) { sidCls.set(sid, 'impossible'); items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
+        const found = (area.labels || []).find(l => l.text === lbl.text && l.x === lbl.x && l.y === lbl.y && (l.z ?? 0) === (lbl.z ?? 0));
+        if (found) { sidCls.set(sid, 'done'); sidLabelId.set(sid, found.id);
+          items.push(_deltaClsItem(op, 'done', 'identyczna etykieta już istnieje (#' + found.id + ')', posJump(areaId, lbl.x, lbl.y))); }
+        else { sidCls.set(sid, 'ok'); items.push(_deltaClsItem(op, 'ok', '', posJump(areaId, lbl.x, lbl.y))); }
+        break;
+      }
+      // ── pokoje ───────────────────────────────────────────────────────────
+      case 'DELETE_ROOM': {
+        const id = resR(T.roomId);
+        if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
+        const room = state.roomById[id];
+        if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje (usunięty w tej wersji mapy?)')); break; }
+        const eq = _deltaRoomCmp(room, P.room);
+        if (eq === false) items.push(_deltaClsItem(op, 'hard', 'pokój zmieniony upstream — usunięcie nanosi się mimo to', roomJump(id)));
+        else items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
+        break;
+      }
+      case 'EDIT_ROOM': case 'EDIT_EXIT': {
+        const id = resR(T.roomId);
+        if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
+        const room = state.roomById[id];
+        if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje (usunięty w tej wersji mapy?)')); break; }
+        if (_deltaRoomCmp(room, P.after) === true) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
+        if (_deltaRoomCmp(room, P.before) === false) items.push(_deltaClsItem(op, 'hard', 'pokój zmieniony upstream — naniosę wersję z kalki', roomJump(id)));
+        else items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
+        break;
+      }
+      case 'PAINT_BATCH': {
+        const changes = P.changes || [];
+        const existing = changes.filter(ch => state.roomById[ch.roomId]);
+        if (!existing.length) { items.push(_deltaClsItem(op, 'impossible', 'żaden pokój nie istnieje')); break; }
+        const allMatch = existing.every(ch => {
+          const r = state.roomById[ch.roomId];
+          return r.env === ch.afterEnv && (r.symbol || '') === (ch.afterSymbol || '');
+        });
+        const j = roomJump(existing[0].roomId);
+        if (existing.length < changes.length) items.push(_deltaClsItem(op, 'hard', 'część pokoi nie istnieje (' + (changes.length - existing.length) + ' z ' + changes.length + ')', j));
+        else if (allMatch) items.push(_deltaClsItem(op, 'done', 'już naniesione', j));
+        else items.push(_deltaClsItem(op, 'ok', '', j));
+        break;
+      }
+      case 'MOVE_ROOM': {
+        const id = resR(T.roomId);
+        if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
+        const room = state.roomById[id];
+        if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
+        if (room.x === P.toX && room.y === P.toY && (room.z ?? 0) === P.toZ) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
+        const occ = _deltaRoomAt(state.roomArea[id], P.toX, P.toY, P.toZ);
+        if (occ && occ.id !== id) items.push(_deltaClsItem(op, 'hard', 'pole docelowe zajęte przez #' + occ.id + ' — kolizja', roomJump(id)));
+        else items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
+        break;
+      }
+      case 'MOVE_ROOM_TO_AREA': {
+        const id = resR(T.roomId);
+        if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
+        if (!state.roomById[id]) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
+        const toArea = resA(P.toAreaId);
+        if (toArea === undefined) { items.push(_deltaClsItem(op, 'ok', 'obszar z kalki', roomJump(id))); break; }
+        if (!state.areas.get(toArea)) { items.push(_deltaClsItem(op, 'impossible', 'obszar docelowy nie istnieje', roomJump(id))); break; }
+        if (state.roomArea[id] === toArea) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
+        items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
+        break;
+      }
+      // ── wyjścia ──────────────────────────────────────────────────────────
+      case 'ADD_EXIT': {
+        const srcId = resR(T.sourceId), tgtId = resR(P.targetId);
+        if (srcId === undefined || tgtId === undefined) { items.push(_deltaClsItem(op, 'ok', 'dotyczy obiektów kalki')); break; }
+        const src = state.roomById[srcId];
+        if (!src || !state.roomById[tgtId]) { items.push(_deltaClsItem(op, 'impossible', 'pokój źródłowy lub docelowy nie istnieje', roomJump(srcId))); break; }
+        if (src.exits && src.exits[T.dir] === tgtId) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(srcId))); break; }
+        if (src.exits && src.exits[T.dir] !== undefined) items.push(_deltaClsItem(op, 'hard', 'kierunek zajęty — guard odmówi (op zostanie pominięty)', roomJump(srcId)));
+        else items.push(_deltaClsItem(op, 'ok', '', roomJump(srcId)));
+        break;
+      }
+      case 'DELETE_EXIT': {
+        const id = resR(T.roomId);
+        if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
+        const room = state.roomById[id];
+        if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
+        if (!room.exits || room.exits[T.dir] === undefined) { items.push(_deltaClsItem(op, 'impossible', 'wyjście nie istnieje', roomJump(id))); break; }
+        items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
+        break;
+      }
+      case 'DELETE_SPECIAL_EXIT': {
+        const id = resR(T.roomId);
+        if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
+        const room = state.roomById[id];
+        if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
+        if (!room.special_exits || room.special_exits[P.cmd] === undefined) { items.push(_deltaClsItem(op, 'impossible', 'wyjście specjalne nie istnieje', roomJump(id))); break; }
+        items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
+        break;
+      }
+      // ── obszary ──────────────────────────────────────────────────────────
+      case 'DELETE_AREA': {
+        if (!state.areas.get(T.areaId)) { items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
+        items.push(_deltaClsItem(op, 'ok', '', areaJump(T.areaId)));
+        break;
+      }
+      case 'EDIT_AREA': {
+        const area = state.areas.get(T.areaId);
+        if (!area) { items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
+        const sameUd = stableStringify(area.user_data || {}) === stableStringify(P.user_data || {});
+        if (area.name === P.name && sameUd) { items.push(_deltaClsItem(op, 'done', 'już naniesione', areaJump(area.id))); break; }
+        items.push(_deltaClsItem(op, 'ok', '', areaJump(area.id)));
+        break;
+      }
+      // ── custom lines / tłumiki ───────────────────────────────────────────
+      case 'ADD_CL': case 'ADD_SUPPRESSOR': {
+        const id = resR(T.roomId);
+        if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
+        const room = state.roomById[id];
+        if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
+        const cur = room.custom_lines && room.custom_lines[T.dir];
+        if (op.type === 'ADD_CL') {
+          if (cur && stableStringify(cur) === stableStringify(P.cl)) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
+          if (cur) { items.push(_deltaClsItem(op, 'hard', 'custom line istnieje — nadpiszę', roomJump(id))); break; }
+          items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
+        } else {
+          if (_deltaIsSuppressor(cur)) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
+          if (cur) { items.push(_deltaClsItem(op, 'hard', 'custom line istnieje — zamienię na tłumik', roomJump(id))); break; }
+          items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
+        }
+        break;
+      }
+      case 'EDIT_CL': {
+        const id = resR(T.roomId);
+        if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
+        const room = state.roomById[id];
+        const cur = room && room.custom_lines && room.custom_lines[T.dir];
+        if (!room || !cur) { items.push(_deltaClsItem(op, 'impossible', 'custom line nie istnieje', roomJump(id))); break; }
+        if (stableStringify(cur) === stableStringify(P.after)) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
+        if (stableStringify(cur) !== stableStringify(P.before)) items.push(_deltaClsItem(op, 'hard', 'custom line zmieniony upstream — naniosę wersję z kalki', roomJump(id)));
+        else items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
+        break;
+      }
+      case 'DELETE_CL': case 'DELETE_SUPPRESSOR': {
+        const id = resR(T.roomId);
+        if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
+        const room = state.roomById[id];
+        if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
+        if (!room.custom_lines || !room.custom_lines[T.dir]) { items.push(_deltaClsItem(op, 'impossible', 'custom line nie istnieje', roomJump(id))); break; }
+        items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
+        break;
+      }
+      case 'AUTO_FIX_SUPPRESSORS': {
+        const added = (P.added || []).filter(x => state.roomById[x.roomId]);
+        const removed = (P.removed || []).filter(x => state.roomById[x.roomId]);
+        const total = (P.added || []).length + (P.removed || []).length;
+        if (!added.length && !removed.length) { items.push(_deltaClsItem(op, 'impossible', 'pokoje nie istnieją')); break; }
+        const eff = added.filter(x => { const c = state.roomById[x.roomId].custom_lines; return !c || !c[x.dir]; }).length
+                  + removed.filter(x => { const c = state.roomById[x.roomId].custom_lines; return c && c[x.dir]; }).length;
+        const j = roomJump((added[0] || removed[0]).roomId);
+        if (eff === 0) items.push(_deltaClsItem(op, 'done', 'już naniesione', j));
+        else if (eff < added.length + removed.length) items.push(_deltaClsItem(op, 'hard', 'część wpisów już aktualna', j));
+        else items.push(_deltaClsItem(op, 'ok', '', j));
+        break;
+      }
+      // ── etykiety ─────────────────────────────────────────────────────────
+      case 'EDIT_LABEL': case 'DELETE_LABEL': case 'MOVE_LABEL': case 'RESIZE_LABEL': {
+        const areaId = resA(T.areaId);
+        if (areaId === undefined) { items.push(_deltaClsItem(op, 'ok', 'obszar z kalki')); break; }
+        const area = state.areas.get(areaId);
+        if (!area) { items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
+        const lid = resL(T.labelId);
+        if (lid === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki', posJump(areaId, 0, 0))); break; }
+        const lbl = (area.labels || []).find(l => l.id === lid);
+        if (!lbl) { items.push(_deltaClsItem(op, 'impossible', 'etykieta nie istnieje', areaJump(areaId))); break; }
+        const j = posJump(areaId, lbl.x, lbl.y);
+        if (op.type === 'EDIT_LABEL') {
+          const after = Object.assign({}, P.after); delete after.id;
+          const cur = Object.assign({}, lbl); delete cur.id;
+          if (stableStringify(cur) === stableStringify(after)) { items.push(_deltaClsItem(op, 'done', 'już naniesione', j)); break; }
+          items.push(_deltaClsItem(op, 'ok', '', j));
+        } else if (op.type === 'MOVE_LABEL') {
+          if (lbl.x === P.toX && lbl.y === P.toY) { items.push(_deltaClsItem(op, 'done', 'już naniesione', j)); break; }
+          items.push(_deltaClsItem(op, 'ok', '', j));
+        } else if (op.type === 'RESIZE_LABEL') {
+          if (lbl.x === P.toX && lbl.y === P.toY && lbl.width === P.toW && lbl.height === P.toH) { items.push(_deltaClsItem(op, 'done', 'już naniesione', j)); break; }
+          items.push(_deltaClsItem(op, 'ok', '', j));
+        } else items.push(_deltaClsItem(op, 'ok', '', j));
+        break;
+      }
+      // ── kolory ───────────────────────────────────────────────────────────
+      case 'EDIT_ENV_COLOR': {
+        const cur = state.map.colors && state.map.colors.custom_env_colors && state.map.colors.custom_env_colors[T.envId];
+        const same = (cur || null) === (P.newColor || null)
+          || (cur && P.newColor && cur.join() === P.newColor.join());
+        items.push(_deltaClsItem(op, same ? 'done' : 'ok', same ? 'już naniesione' : ''));
+        break;
+      }
+      default:
+        items.push(_deltaClsItem(op, 'impossible', 'nieznany typ'));
+    }
+  }
+  return items;
+}
+
+// ── Apply (czysta ścieżka M1) ────────────────────────────────────────────────
 function _deltaMaxRoomId()  { let m = 0; for (const id of Object.keys(state.roomById)) m = Math.max(m, +id); return m; }
 function _deltaMaxAreaId()  { let m = 0; for (const id of state.areas.keys()) m = Math.max(m, id); return m; }
 function _deltaMaxLabelId(area) { let m = 0; for (const l of (area.labels || [])) m = Math.max(m, l.id); return m; }
@@ -17718,7 +18063,9 @@ function _deltaTranslate(obj, sidMap) {
 }
 
 // Zwraca { applied, skipped: [{seq, reason}] }.
-function applyDelta(delta) {
+// onlySeq (Set seq, opcjonalny) — z okna recenzji: nanosi tylko zaznaczone opy;
+// odznaczone sa pomijane milczaco (nie trafiaja do skipped).
+function applyDelta(delta, onlySeq) {
   const sidMap = new Map();
   let nextRoomId = _deltaMaxRoomId() + 1;
   let nextAreaId = _deltaMaxAreaId() + 1;
@@ -17727,6 +18074,7 @@ function applyDelta(delta) {
   const skipped = [];
 
   for (const rawOp of delta.ops) {
+    if (onlySeq && !onlySeq.has(rawOp.seq)) continue;
     const op = _deltaTranslate(rawOp, sidMap);
     const skip = (reason) => skipped.push({ seq: rawOp.seq, reason });
     // Odwrotność walidacji: po tłumaczeniu nie może zostać żaden nieznany sid
@@ -17969,35 +18317,115 @@ function _arkdeltaBaseNote(base) {
   return 'Kalka z innej wersji mapy (' + srcOf(base) + ' · nakładasz na ' + srcOf(cur) + ').';
 }
 
-function openDeltaConfirm(delta) {
-  _arkdeltaPending = delta;
-  const body = document.getElementById('arkdelta-body');
-  const n = delta.ops.length;
-  body.innerHTML = '<p>' + escHtml(_arkdeltaBaseNote(delta.meta.base)) + '</p>'
-    + '<p>Operacji w kalce: <strong>' + n + '</strong></p>'
-    + '<p>Naniesione zmiany trafią do historii edycji jak zwykłe edycje.</p>';
-  document.getElementById('arkdelta-apply').style.display = '';
-  openDialog('dlg-arkdelta');
-}
-
 function openDeltaErrors(errors) {
-  _arkdeltaPending = null;
   const body = document.getElementById('arkdelta-body');
   body.innerHTML = errors.map(e => '<div class="dlg-info warn">' + escHtml(e) + '</div>').join('');
-  document.getElementById('arkdelta-apply').style.display = 'none';
   openDialog('dlg-arkdelta');
 }
 
-function confirmDeltaApply() {
-  const delta = _arkdeltaPending;
-  closeDialog('dlg-arkdelta');
-  if (!delta) return;
-  _arkdeltaPending = null;
-  const res = applyDelta(delta);
+// ── Okno recenzji kalki (nienmodalny panel jak walidacja kierunkow) ──────────
+let _deltaReview = null;  // { delta, items, filter }
+
+const _DELTA_CLS_BADGE = {
+  ok:         ['do naniesienia', 'ok'],
+  hard:       ['konflikt', 'hard'],
+  done:       ['naniesione', 'done'],
+  impossible: ['niewykonalne', 'impossible'],
+};
+
+function _deltaJump(it) {
+  const j = it.jump;
+  if (!j) return;
+  if (j.roomId !== undefined && state.roomById[j.roomId]) { jumpToRoom(j.roomId); return; }
+  if (j.areaId === undefined || !state.areas.get(j.areaId)) return;
+  if (state.areaId !== j.areaId) selectArea(j.areaId, false);
+  if (j.x !== undefined) centerViewOnMap(j.x, j.y);
+  else { const a = state.areas.get(j.areaId); const r0 = (a.rooms || [])[0]; if (r0) jumpToRoom(r0.id); }
+}
+
+function openDeltaReview(delta) {
+  _deltaReview = { delta, items: classifyDelta(delta), filter: 'all' };
+  document.getElementById('dp-base').textContent = _arkdeltaBaseNote(delta.meta.base);
+  document.getElementById('dp-rebase').style.display = 'none';
+  _renderDeltaPanel();
+  document.getElementById('delta-panel').classList.add('visible');
+}
+
+function _renderDeltaPanel() {
+  const R = _deltaReview;
+  if (!R) return;
+  const body = document.getElementById('dp-body');
+  const counts = { ok: 0, hard: 0, done: 0, impossible: 0 };
+  for (const it of R.items) counts[it.cls]++;
+  const checked = R.items.filter(i => i.checked).length;
+  const cnt = document.getElementById('dp-count');
+  cnt.textContent = counts.ok + counts.hard + ' do naniesienia'
+    + (counts.done ? ' · ' + counts.done + ' naniesionych' : '')
+    + (counts.impossible ? ' · ' + counts.impossible + ' niewykonalnych' : '');
+  cnt.classList.toggle('done', counts.ok + counts.hard === 0);
+  for (const b of document.querySelectorAll('.dp-filter')) {
+    const f = b.dataset.f;
+    b.textContent = b.dataset.label + (f === 'all' ? ' (' + R.items.length + ')' : ' (' + counts[f] + ')');
+    b.classList.toggle('active', R.filter === f);
+  }
+  body.innerHTML = '';
+  const view = R.items.filter(it => R.filter === 'all' || it.cls === R.filter);
+  if (!view.length) {
+    body.innerHTML = '<div class="vd-empty">Brak operacji w tym filtrze.</div>';
+  }
+  for (const it of view) {
+    const row = document.createElement('div');
+    row.className = 'vd-row dp-row' + (it.checked ? '' : ' off');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'dp-check';
+    cb.checked = it.checked;
+    cb.disabled = it.cls === 'impossible';
+    cb.addEventListener('click', e => e.stopPropagation());
+    cb.addEventListener('change', () => { it.checked = cb.checked; _renderDeltaPanel(); });
+    row.appendChild(cb);
+    const num = document.createElement('span');
+    num.className = 'vd-num';
+    num.textContent = it.seq;
+    row.appendChild(num);
+    const lbl = document.createElement('span');
+    lbl.className = 'vd-tf';
+    lbl.textContent = it.label;
+    row.appendChild(lbl);
+    const badge = document.createElement('span');
+    badge.className = 'dp-badge ' + _DELTA_CLS_BADGE[it.cls][1];
+    badge.textContent = _DELTA_CLS_BADGE[it.cls][0];
+    row.appendChild(badge);
+    if (it.note) {
+      const note = document.createElement('span');
+      note.className = 'dp-note';
+      note.textContent = it.note;
+      row.appendChild(note);
+    }
+    if (it.jump) {
+      row.style.cursor = 'pointer';
+      row.title = 'Kliknij — pokaż na mapie';
+      row.addEventListener('click', () => _deltaJump(it));
+    }
+    body.appendChild(row);
+  }
+  const applyBtn = document.getElementById('dp-apply');
+  applyBtn.textContent = '✓ Zastosuj zaznaczone (' + checked + ')';
+  applyBtn.disabled = checked === 0;
+}
+
+function _deltaApplyReviewed() {
+  const R = _deltaReview;
+  if (!R) return;
+  const only = new Set(R.items.filter(i => i.checked).map(i => i.seq));
+  const res = applyDelta(R.delta, only);
   let msg = '✓ Naniesiono: ' + res.applied;
   if (res.skipped.length) msg += ' · Pominięto: ' + res.skipped.length;
   toast(msg, res.skipped.length > 0);
   if (res.skipped.length) console.warn('[arkdelta] pominięte:', res.skipped);
+  if (res.applied > 0) document.getElementById('dp-rebase').style.display = '';
+  R.items = classifyDelta(R.delta);  // re-klasyfikacja: naniesione → done
+  _renderDeltaPanel();
 }
 
 const fiArkdelta       = document.getElementById('fi-arkdelta');
@@ -18015,10 +18443,34 @@ fiArkdelta.addEventListener('change', async e => {
   if (!f) return;
   const text = await f.text();
   const res = validateDeltaText(text);
-  if (res.ok) openDeltaConfirm(res.delta);
+  if (res.ok) openDeltaReview(res.delta);
   else openDeltaErrors(res.errors);
 });
 btnSaveArkdelta.addEventListener('click', saveDelta);
+
+// Panel recenzji: filtry, apply, rebase, zamkniecie, drag
+{
+  const panel = document.getElementById('delta-panel');
+  for (const b of panel.querySelectorAll('.dp-filter')) {
+    b.dataset.label = b.textContent;
+    b.addEventListener('click', () => { if (_deltaReview) { _deltaReview.filter = b.dataset.f; _renderDeltaPanel(); } });
+  }
+  document.getElementById('dp-apply').addEventListener('click', _deltaApplyReviewed);
+  document.getElementById('dp-rebase').addEventListener('click', saveDelta);
+  const closePanel = () => { panel.classList.remove('visible'); _deltaReview = null; };
+  document.getElementById('dp-close').addEventListener('click', closePanel);
+  document.getElementById('dp-close2').addEventListener('click', closePanel);
+  const hdr = document.getElementById('dp-hdr');
+  let dx = 0, dy = 0, drag = false;
+  hdr.addEventListener('mousedown', e => {
+    if (e.target.id === 'dp-close') return;
+    drag = true; const r = panel.getBoundingClientRect();
+    dx = e.clientX - r.left; dy = e.clientY - r.top;
+    panel.style.bottom = 'auto'; e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => { if (!drag) return; panel.style.left = Math.max(0, e.clientX - dx) + 'px'; panel.style.top = Math.max(0, e.clientY - dy) + 'px'; });
+  window.addEventListener('mouseup', () => { drag = false; });
+}
 
 function _arkdeltaUpdateSaveBtn() {
   if (!btnSaveArkdelta) return;
