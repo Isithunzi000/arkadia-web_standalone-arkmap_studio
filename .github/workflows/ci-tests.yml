@@ -37,5 +37,13 @@ jobs:
           set -euo pipefail
           timeout 240 bash tests/fetch-fixture.sh
 
-      - name: Regresja (wszystkie harnessy)
-        run: timeout 420 bash tests/run-all.sh
+      - name: Chromium headless (dla tests/empirical.sh, przez Playwright)
+        run: |
+          set -euo pipefail
+          npx -y playwright@1.54.2 install --with-deps chromium
+          BIN="$(find "$HOME/.cache/ms-playwright" -type f -name chrome -path '*chrome-linux*' | head -1)"
+          [ -n "$BIN" ]
+          echo "CHROMIUM_BIN=$BIN" >> "$GITHUB_ENV"
+
+      - name: Regresja (wszystkie harnessy + kampania empiryczna)
+        run: timeout 1380 bash tests/run-all.sh

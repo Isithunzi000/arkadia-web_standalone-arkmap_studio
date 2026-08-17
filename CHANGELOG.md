@@ -2,6 +2,22 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## Kampania empiryczna kalki .arkdelta (E0–E6) — 434 asercje w prawdziwej przeglądarce (bez zmian w aplikacji)
+
+- **Harness empiryczny (`tests/empirical_driver.html` + `tests/empirical.sh`):** driver ładuje PEŁNĄ aplikację w iframe (ten sam origin przez lokalny http.server) i wykonuje scenariusze przez most eval — prawdziwe commity, prawdziwe handlery DOM (file input, menu kontekstowe, przyciski panelu), zero mocków. Wyniki jako linie `R|PASS/FAIL|id|msg` w dumpowanym DOM; runner: Chromium headless (`--virtual-time-budget`), fixture `map_master3.dat` (release 0.205.0). Grupy i pokrycie:
+  - **SMOKE (12):** boot, dostępność funkcji rdzenia, załadowanie fixture.
+  - **E0 (17):** równoważność wejścia .dat vs .arkmap — identyczny crc stanu, identyczna klasyfikacja, identyczny odcisk po apply, identyczne baseCheck (format wejściowy nie robi różnicy — zmierzone, nie założone).
+  - **E1 (13):** roundtrip wszystkich 25 typów opów (27 opów przez prawdziwe commity) — delta walidna, apply 27/27, crc po apply == crc po commitach (bezstratność).
+  - **E2 (216):** pełna macierz 25 typów × 4 stany upstream (czysty / zmodyfikowany / usunięty / konflikt = 100 komórek, 90 realnych + 10 uzasadnionych N/A) — klasyfikacja + apply + post-stan per komórka.
+  - **E3 (70):** kolizje pozycji — autopozycja zweryfikowana niezależną wyrocznia spiralną (determinizm, rozłączność komórek wsadu, wolność na żywo), ręczne wskazanie przez prawdziwe zdarzenia canvas (mousedown/mouseup/contextmenu/Escape), apply z override'ami (efektywne współrzędne w deltaLog i rebazie), zajęty override → skip „pozycja zastępcza zajęta" bez mutacji.
+  - **E4 (46):** pliki adversarial przez prawdziwy `#fi-arkdelta` change: śmieci/nie-JSON/ucięty JSON/zła wersja, nadpisany op (lokalizacja `#n` w komunikacie), nadpisana suma zbiorcza, nieznany typ, nieciągłe seq, zły ops_count, klucz `__proto__`, odwołanie forward do sid, limity 8 MB / 5000 opów, pusta kalka, mismatch i nobase przez dialog. Żaden odrzucony plik nie tknie stanu mapy.
+  - **E5 (37):** UI end-to-end — zapis kalki przyciskiem (przechwyt Bloba, walidacja treści), wczytanie → panel → filtry → checkboxy → „Zastosuj zaznaczone" (tylko zaznaczone, re-klasyfikacja do done), menu kontekstowe canvasu (dodaj/usuń pokój) z liczeniem wywołań commitów (dokładnie 1×).
+  - **E6 (23):** przeploty undo/redo z apply — undo cofa apply kalki wpis po wpisie (deltaLog lustrzany), LIFO z lokalnymi commitami, nowy commit czyści redoStack.
+- **Watchdogi (asercje odwrotne):** znane odstępstwa bieżącego zachowania są skodyfikowane jako asercje opisujące stan faktyczny — padną, gdy klasyfikator/apply się poprawi, wymuszając aktualizację oczekiwań: F1 (klasyfikator per-op, bez symulacji wcześniejszych opów kalki — np. EDIT_CL po ADD_CL = impossible), F2 (ponowne apply tej samej kalki nie jest w pełni idempotentne — done-coverage 11/27, panelowa druga aplikacja dywerguje), F3 (applyDelta EDIT_CL tworzy CL mimo klasy impossible), F4/F5 (ADD_ROOM bez override na zajętej komórce nakłada się — guard działa tylko dla pozycji zastępczych), F6 (applyDelta MOVE_ROOM to ciche no-op — `commitMoveRoom` jest data-only i applyDelta nie mutuje pozycji; `applied` rośnie, deltaLog/rebase rejestrują ruch, a redo po undo ruch materializuje), F7 (przycisk „Wczytaj .arkdelta…" ma trwały `disabled` w markup — żadne miejsce w kodzie go nie odlokowuje; handler `#fi-arkdelta` change działa poprawnie).
+- **CI:** `tests/run-all.sh` odpala kampanię empiryczną po harnessach node (SKIP bez Chromium), `ci-tests.yml` instaluje Chromium headless przez Playwright i wydłuża bramkę czasową joba do 25 min.
+- Regresja lokalna: **434 OK / 0 FAIL** (SMOKE+E0–E6) + **665 OK / 0 FAIL** (13 harnessów node).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.9.0 — kalka .arkdelta: dialog version-mismatch, re-klasyfikacja po wczytaniu mapy, manual
 
 - **Dialog version-mismatch (`dlg-arkdelta-mismatch`):** wczytanie kalki zapisanej na innej wersji mapy (crc bazy != crc wczytanej mapy) otwiera modal z porównaniem wersji (wersja/revision + prefiks crc kalki vs mapy) i przypomnieniem zasad recenzji — przyciski „Kontynuuj recenzję" (otwiera panel) / „Anuluj" (kalka odrzucona, toast). Wariant „nobase" dla plikow bez informacji o bazie. Baza zgodna = prosto do panelu, zero szumu. Decyzja czysta funkcja `_deltaBaseCheck(base)` (null / mismatch / nobase).
