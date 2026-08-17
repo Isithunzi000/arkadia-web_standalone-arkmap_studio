@@ -12681,7 +12681,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.10.0';
+const APP_VERSION = 'v1.11.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -12845,6 +12845,13 @@ function updateEditUI() {
   if (saveDatBtn) {
     saveDatBtn.disabled = isEdit;
     saveDatBtn.title = isEdit ? 'Wyjdź z edycji aby eksportować' : '';
+  }
+  // btn-load-arkdelta: enabled tylko w trybie edycji (wczesniej trwaly disabled
+  // w markup — zaden kod go nie odlokowywal; handler #fi-arkdelta dzialal poprawnie)
+  const loadArkdeltaBtn = document.getElementById('btn-load-arkdelta');
+  if (loadArkdeltaBtn) {
+    loadArkdeltaBtn.disabled = !isEdit;
+    loadArkdeltaBtn.title = isEdit ? '' : 'Wejdź w tryb edycji aby wczytać kalkę';
   }
 }
 

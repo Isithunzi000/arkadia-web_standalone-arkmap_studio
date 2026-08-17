@@ -446,13 +446,14 @@ console.log('— T7: baseInfo, spec-clean, struktura UI —');
 }
 ok(HTML.includes('<input type="file" id="fi-arkdelta" accept=".arkdelta">'), 'markup: fi-arkdelta');
 ok(HTML.includes('id="btn-load-arkdelta"'), 'markup: btn-load-arkdelta pod przyciskami zapisu');
+ok(HTML.includes('loadArkdeltaBtn.disabled = !isEdit'), 'integracja: updateEditUI odlokowuje btn-load-arkdelta w trybie edycji (F7)');
 ok(HTML.includes('id="btn-save-arkdelta" class="etb-check" disabled'), 'markup: btn-save-arkdelta pod walidacją (disabled)');
 ok(HTML.includes('id="dlg-arkdelta"') && HTML.includes('id="arkdelta-body"'), 'markup: dialog dlg-arkdelta (błędy walidacji)');
 ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo liczone w wrapperze applyMap');
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.10.0';"), 'wersja: v1.10.0');
+ok(HTML.includes("const APP_VERSION = 'v1.11.0';"), 'wersja: v1.11.0');
 
 console.log('— T8: classifyDelta + recenzja (M2) —');
 {
@@ -742,7 +743,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
     && HTML.includes("bShow.textContent = 'Efekt'") && HTML.includes("bHide.textContent = 'Ukryj'"),
     'panel: przyciski Efekt/Ukryj/Autopozycja/Ręcznie');
   ok(HTML.includes('Duchy:') && HTML.includes('pozycja zastępcza'), 'panel: legenda kolorów duchów');
-  ok(HTML.includes("const APP_VERSION = 'v1.10.0';"), 'wersja v1.10.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.11.0';"), 'wersja v1.11.0');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -778,7 +779,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.10.0';"), 'wersja v1.10.0 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.11.0';"), 'wersja v1.11.0 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji
