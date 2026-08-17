@@ -2,6 +2,16 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.9.0 — kalka .arkdelta: dialog version-mismatch, re-klasyfikacja po wczytaniu mapy, manual
+
+- **Dialog version-mismatch (`dlg-arkdelta-mismatch`):** wczytanie kalki zapisanej na innej wersji mapy (crc bazy != crc wczytanej mapy) otwiera modal z porównaniem wersji (wersja/revision + prefiks crc kalki vs mapy) i przypomnieniem zasad recenzji — przyciski „Kontynuuj recenzję" (otwiera panel) / „Anuluj" (kalka odrzucona, toast). Wariant „nobase" dla plikow bez informacji o bazie. Baza zgodna = prosto do panelu, zero szumu. Decyzja czysta funkcja `_deltaBaseCheck(base)` (null / mismatch / nobase).
+- **Re-klasyfikacja panelu po wczytaniu nowej mapy (M4 polish):** wrapper `applyMap` — gdy panel recenzji jest otwarty, po wczytaniu mapy klasyfikacja jest liczona ponownie wzgledem nowej mapy (+ odswiezona notka bazy). Flow „wczytaj kalke → wczytaj nowszy upstream → zastosuj" pokazuje aktualne klasy zamiast wygaslych. Stan M3 (duchy/override'y) resetowany jak dotychczas.
+- **Manual (`docs/arkmap_manual.html`):** nowa sekcja „21. Kalka zmian .arkdelta" (czym jest, typowy scenariusz, okno recenzji per klasa, duchy, kolizje z autopozycja/recznie, rebase, bezpieczenstwo) + renumeracja sekcji 21–25 → 22–26 i wpis w TOC + podsekcja .arkdelta w „Obslugiwane formaty plikow" + 2 pytania FAQ (kalka na nowszej wersji; zajete pole docelowe).
+- **Drobne:** link „Dokumentacja uzytkownika" w dialogu O projekcie (relatywny `docs/arkmap_manual.html` — dziala na Pages i lokalnie); dopisek w specie .arkdelta (§9): pozycje zastepcze sa decyzja sesji i nigdy nie wchodza do formatu, rebase eksportuje efektywne wspolrzedne.
+- **Testy:** `tests/delta.js` — sekcja T10 (18 asercji: baseCheck 3 klasy, struktura dialogu i kolejnosc wiringu, hak applyMap, link about, manual — sekcja/TOC/numeracja ciagla 1–26/formaty/FAQ, dopisek specu) → 203 asercje w harnessie.
+- Regresja: **665 OK / 0 FAIL** (13 harnessow).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.8.0 — kalka .arkdelta: warstwa duchów (podglad efektu per op) + rozwiazywanie kolizji pozycji
 
 - **Warstwa duchów `_drawDeltaGhosts` (warstwa 7b draw()):** czysto addytywny render (save/restore, zero mutacji stanu) efektu wybranych opow kalki na tle biezacej mapy. Geometria liczona czysta funkcja `_deltaGhostGeoms(delta, items, seqs, overrides)` — deterministyczna (kolejnosc = rosnace seq), per-op (nie symulacja kumulatywna). Glify: ADD_ROOM = zarys pokoju (zielony wolne / bursztyn kolizja / niebieski pozycja zastepcza), MOVE_ROOM = szary zarys „stad" + kolorowy „dokad" + strzalka, DELETE_ROOM = czerwony przekreslony zarys, ADD_EXIT/DELETE_EXIT/DELETE_SPECIAL_EXIT = przerywana linia (zielona/czerwona; koniec na pokoju kalki podaza za override), EDIT_*/CL/tlumiki/PAINT_BATCH/AUTO_FIX = bursztynowe podswietlenie, etykiety = ramka + tekst. Filtr widocznosci: biezacy obszar + poziom Z.

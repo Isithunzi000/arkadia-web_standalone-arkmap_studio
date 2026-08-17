@@ -101,6 +101,7 @@
   <li><a href="#validate-dir">Walidacja kierunków</a></li>
   <li><a href="#context-menu">Menu kontekstowe (prawy klik)</a></li>
   <li><a href="#save">Zapisywanie mapy</a></li>
+  <li><a href="#arkdelta">Kalka zmian .arkdelta</a></li>
   <li><a href="#github">Integracja z GitHub</a></li>
   <li><a href="#keyboard">Skróty klawiaturowe — pełna lista</a></li>
   <li><a href="#mobile">Wersja mobilna</a></li>
@@ -700,7 +701,48 @@
 <div class="warn">Przy eksporcie do .dat niektóre dane specyficzne dla .arkmap (notatki, tagi) <strong>nie zostaną zapisane</strong> — format Mudlet ich nie obsługuje.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="github">21. Integracja z GitHub <span class="badge badge-edit">EDYTOR</span></h2>
+<h2 id="arkdelta">21. Kalka zmian .arkdelta <span class="badge badge-edit">EDYTOR</span></h2>
+
+<p>Kalka (.arkdelta) to <strong>delta edycyjna</strong> — plik zawierający wyłącznie Twoje operacje edycji (dodane pokoje, wyjścia, przesunięcia, malowania…), zapisany względem znanej wersji bazowej mapy. Kalkę można nałożyć na <strong>nowszą wersję mapy upstream</strong> albo przekazać innej osobie — bez wysyłania całej mapy.</p>
+
+<h3>Typowy scenariusz</h3>
+<ol>
+  <li>Wczytaj mapę upstream, włącz tryb edycji i wprowadź zmiany.</li>
+  <li>Kliknij <strong>◈ Zapisz .arkdelta…</strong> (pod przyciskami walidacji; aktywny tylko, gdy są zmiany do zapisania).</li>
+  <li>Później: wczytaj nowszą wersję mapy upstream, kliknij <strong>Wczytaj .arkdelta…</strong> i przejdź przez recenzję.</li>
+</ol>
+<div class="note">Jeśli kalka została zapisana na innej wersji mapy niż aktualnie wczytana, przed recenzją pojawi się dialog z porównaniem wersji — to normalny scenariusz, wymaga tylko świadomego „Kontynuuj recenzję".</div>
+
+<h3>Okno recenzji</h3>
+<p>Po wczytaniu kalki otwiera się niemodalny panel z listą wszystkich operacji. Każda operacja jest sklasyfikowana względem <strong>aktualnie wczytanej</strong> mapy:</p>
+<ul>
+  <li><strong>do naniesienia</strong> — cel nietknięty upstream, operacja naniesie się czysto,</li>
+  <li><strong>konflikt</strong> — cel zmienił się upstream albo pole/kierunek jest zajęty; operacja nanosi się mimo to (po Twoim zaznaczeniu),</li>
+  <li><strong>naniesione</strong> — operacja już jest w mapie (np. naniosła ją nowsza wersja upstream); domyślnie odznaczone,</li>
+  <li><strong>niewykonalne</strong> — cel nie istnieje w tej wersji mapy; operacja jest wykluczona z nakładania.</li>
+</ul>
+<p>Filtry nad listą pokazują liczniki per klasa. Kliknięcie wiersza centruje mapę na celu operacji. Checkboxy wybierają, co nanieść — przycisk <strong>✓ Zastosuj zaznaczone</strong> nanosi wszystko naraz, jako zwykłe operacje w historii undo (możesz je cofać pojedynczo).</p>
+
+<h3>Podgląd efektu (duchy)</h3>
+<p>Przyciski <strong>Efekt</strong> / <strong>Ukryj</strong> przy wierszu pokazują na mapie półprzezroczysty „duch" operacji — zarys pokoju, linię wyjścia albo podświetlenie. Duchy <strong>niczego nie zmieniają</strong> w mapie i znikają po zastosowaniu lub zamknięciu panelu. Kolory: <strong>zielony</strong> — pole wolne, <strong>bursztynowy</strong> — kolizja/zmiana upstream, <strong>niebieski</strong> — pozycja zastępcza, <strong>czerwony</strong> — usunięcie.</p>
+
+<h3>Kolizje pozycji</h3>
+<p>Gdy pole docelowe dodawanego lub przesuwanego pokoju jest zajęte, wiersz konfliktu dostaje dwa przyciski:</p>
+<ul>
+  <li><strong>Autopozycja</strong> — deterministycznie znajduje najbliższe wolne pole (spirala w tym samym obszarze i poziomie Z),</li>
+  <li><strong>Ręcznie</strong> — klikasz wolne pole na mapie; celownik pod kursorem pokazuje na zielono/czerwono, czy pole jest wolne (<kbd>Esc</kbd> lub prawy klik anuluje).</li>
+</ul>
+<p>Wybrana pozycja zastępcza jest widoczna w wierszu (✕ ją cofa). Jeśli między wyborem a zastosowaniem pole stanie się zajęte, operacja zostanie bezpiecznie pominięta z powodem „pozycja zastępcza zajęta" — nic nie zostanie nadpisane.</p>
+
+<h3>Po nałożeniu</h3>
+<p>Panel klasyfikuje operacje ponownie — naniesione przechodzą do klasy „naniesione". Przycisk <strong>💾 Zapisz zaktualizowaną kalkę…</strong> zapisuje kalkę zaktualizowaną do nowej bazy (rebase), z efektywnymi pozycjami, jeśli użyto pozycji zastępczych.</p>
+
+<h3>Bezpieczeństwo</h3>
+<div class="note">Pliki .arkdelta są walidowane fail-closed (format, wersja formatu, checksums CRC-32, integralność identyfikatorów symbolicznych) — uszkodzony plik jest odrzucany w całości z listą błędów. Nowe obiekty w kalce są anonimowe: dostają świeże numery ID przy nakładaniu. Undo/redo działa jak przy zwykłych edycjach.</div>
+<p>Specyfikacja techniczna formatu: <em>ArkDelta Format Specification</em> (docs/arkdelta_spec.html).</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="github">22. Integracja z GitHub <span class="badge badge-edit">EDYTOR</span></h2>
 
 <div class="warn"><strong>Status: funkcja ukryta i nieaktywna.</strong> Interfejs sesji GitHub jest obecnie wyłączony — edytor działa <strong>wyłącznie lokalnie</strong> (tryb „Edycja lokalna"). Poniższy opis dotyczy mechanizmu wbudowanego w aplikację, który pozostaje schowany do czasu ewentualnej aktywacji. (Samo <em>pobranie</em> mapy online — przycisk „🌐 Pobierz mapę online…" — działa niezależnie i jest dostępne.)</div>
 
@@ -718,7 +760,7 @@
 <p>Przycisk <strong>⬡ Wyślij Pull Request…</strong> otwiera dialog tworzenia PR z listą zmian i polem opisu.</p>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="keyboard">22. Skróty klawiaturowe — pełna lista</h2>
+<h2 id="keyboard">23. Skróty klawiaturowe — pełna lista</h2>
 
 <h3>Nawigacja (zawsze)</h3>
 <table>
@@ -782,7 +824,7 @@
 </ol>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="mobile">23. Wersja mobilna</h2>
+<h2 id="mobile">24. Wersja mobilna</h2>
 
 <p>Na ekranach ≤600px interfejs automatycznie dostosowuje się:</p>
 <ul>
@@ -794,7 +836,7 @@
 </ul>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="formats">24. Obsługiwane formaty plików</h2>
+<h2 id="formats">25. Obsługiwane formaty plików</h2>
 
 <h3>.arkmap</h3>
 <p>Autorski format projektu ArkMap Studio. Plik JSON z deterministyczną serializacją (posortowane klucze, inline arrays prymitywów). Zawiera:</p>
@@ -807,11 +849,20 @@
 </ul>
 <p>Pełna specyfikacja formatu: patrz osobny dokument <em>ArkMap Format Specification</em>.</p>
 
+<h3>.arkdelta (kalka zmian)</h3>
+<p>Autorski format delty edycyjnej ArkMap Studio. Plik JSON z deterministyczną serializacją i hierarchicznymi checksums CRC-32 (zbiorczy + per-operacja). Zawiera wyłącznie operacje edycji względem wersji bazowej (identyfikowanej sumą CRC). Nowe pokoje/obszary/etykiety są anonimowe (symboliczne identyfikatory <code>d:N</code>) — przy nakładaniu dostają świeże numery ID. Walidacja fail-closed: uszkodzony plik jest odrzucany w całości. Szczegóły użycia: sekcja <a href="#arkdelta">Kalka zmian .arkdelta</a>; specyfikacja: <em>ArkDelta Format Specification</em>.</p>
+
 <h3>.dat (Mudlet)</h3>
 <p>Binarny format map klienta Mudlet (QDataStream). Odczyt obsługuje wersje 17–22. Zapis zawsze w wersji 20 (standard Arkadii). Roundtrip .dat → .arkmap → .dat daje byte-identyczny wynik dla plików w wersji 20 (potwierdzone testami SHA-256). Pliki w innych wersjach (17–19, 21–22) są odczytywane poprawnie, ale zapisywane jako wersja 20.</p>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="faq">25. FAQ — pytania i odpowiedzi</h2>
+<h2 id="faq">26. FAQ — pytania i odpowiedzi</h2>
+
+<h4>Czy kalka .arkdelta zadziała na nowszej wersji mapy?</h4>
+<p>Tak — to jej główne zastosowanie. Po wczytaniu kalki na innej wersji mapy otwiera się okno recenzji: każda operacja zostaje sklasyfikowana (do naniesienia / konflikt / naniesione / niewykonalne) i nic nie nanosi się automatycznie.</p>
+
+<h4>Co jeśli pole docelowe operacji z kalki jest zajęte?</h4>
+<p>Operacja dostaje klasę „konflikt". Możesz użyć <strong>Autopozycji</strong> (najbliższe wolne pole), wybrać pole <strong>ręcznie</strong> albo odznaczyć operację przed zastosowaniem.</p>
 
 <h4>Czy muszę cokolwiek instalować?</h4>
 <p>Nie. Otwórz plik HTML w dowolnej nowoczesnej przeglądarce. Cały kod jest w jednym pliku.</p>
