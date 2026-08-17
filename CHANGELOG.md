@@ -2,6 +2,13 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## Testy — harness converters_crc (fundament pod base.crc formatu .arkdelta)
+
+- **Nowy harness `tests/converters_crc.js` (11 asercji):** determinizm konwersji `.dat → .arkmap` (dwa przebiegi `tools/dat2arkmap.mjs` z tymi samymi flagami dają bajtowo identyczny plik), round-trip `.arkmap → applyMap → _serializeMap` (re-serializacja po wczytaniu bajtowo identyczna z plikiem — `meta.checksums.file` stabilny), weryfikowalność checksumów po round-tripie, czułość CRC na zmianę treści mapy. Własność „CRC liczone po wczytaniu == CRC pliku źródłowego" jest fundamentem tożsamości bazy dla planowanego formatu `.arkdelta` (delta edycyjna nanoszona na nowsze wersje mapy).
+- **Bez zmian w aplikacji:** `arkmap_studio.html` nietknięty (brak bumpu wersji). `tests/run-all.sh`: +1 harness (12 łącznie).
+- Regresja: **462 OK / 0 FAIL** (12 harnessów).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.5.42 — „⊙ Pokaż trasę" fituje via-path (pokoje drogi przejazdów lądowych)
 
 - **Fix logiki fitu:** v1.5.40 fitowała fragment trasy w bieżącym regionie liczony ze skompresowanej ścieżki (kroki piesze + punkty wsiadania/wysiadania); v1.5.41 dodała rysowanie via-path, ale fit o nim nie wiedział. Efekt na demie 7275→6433: w Averlandzie fit obejmował **2 pokoje**, gdy fizycznie narysowana trasa to **82 pokoje** tego obszaru. Teraz `fitRouteToView` dokłada do `routeIds` pokoje `_hopViaRooms` każdego hopu — fit geometry == geometria rysowana. Skutek uboczny: obszar czysto pośredni (przejezdny dyliżans, bez waypointa) też dopasowuje widok do fragmentu drogi. Statki bez zmian (via = null).
