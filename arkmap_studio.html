@@ -12681,7 +12681,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.13.0';
+const APP_VERSION = 'v1.14.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -17814,6 +17814,23 @@ function _deltaRoomCmp(live, snap) {
   return stableStringify(l) === stableStringify(s);
 }
 
+// F2: czy EFEKT opu edycji jest juz obecny w live — porownuje wylacznie pola
+// zmieniane przez op (diff before->after); pozostale pola mogly zmienic inne opy
+// tej samej kalki (sekwencja) albo upstream. Pelna zgodnosc z after obsluguje
+// _deltaRoomCmp; tu chodzi o done-detection mimo pozniejszych opow na tym pokoju.
+function _deltaEffectApplied(live, before, after) {
+  const strip = v => { const c = _deltaStripRoom(JSON.parse(JSON.stringify(v ?? {}))); delete c.id; return c; };
+  const l = strip(live), b = strip(before), a = strip(after);
+  let changed = false, ok = true;
+  const keys = new Set([...Object.keys(b), ...Object.keys(a)]);
+  for (const k of keys) {
+    if (stableStringify(b[k]) === stableStringify(a[k])) continue;  // op tego pola nie zmienia
+    changed = true;
+    if (stableStringify(l[k]) !== stableStringify(a[k])) { ok = false; break; }
+  }
+  return changed && ok;
+}
+
 function _deltaIsSuppressor(cl) {
   return !!cl && Array.isArray(cl.points) && cl.points.length === 0;
 }
@@ -17926,6 +17943,9 @@ function classifyDelta(delta) {
         const room = state.roomById[id];
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje (usunięty w tej wersji mapy?)')); break; }
         if (_deltaRoomCmp(room, P.after) === true) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
+        // F2: done rowniez gdy ZMIENIANE pola sa zgodne z after, a rozjazd dotyczy
+        // tylko pol niezmienianych przez ten op (np. pozniejszy EDIT_EXIT tej kalki).
+        if (_deltaEffectApplied(room, P.before, P.after)) { items.push(_deltaClsItem(op, 'done', 'już naniesione (zmieniane pola zgodne)', roomJump(id))); break; }
         if (_deltaRoomCmp(room, P.before) === false) items.push(_deltaClsItem(op, 'hard', 'pokój zmieniony upstream — naniosę wersję z kalki', roomJump(id)));
         else items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
         break;

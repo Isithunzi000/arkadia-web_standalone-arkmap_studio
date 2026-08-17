@@ -564,14 +564,22 @@ scenario('E1.idempotent', async () => {
   const items2 = W().classifyDelta(_e1Delta);
   const proj = items2.map(i => i.type + ':' + i.cls);
   const doneN = proj.filter(p => p.endsWith(':done')).length;
-  A('E1.idempotent.done12', doneN === 12, 'watchdog F2: done ' + doneN + '/27 (po fixie F6 MOVE_ROOM=done) [nie-done: '
+  // Po F6+F2: done 13/27. Swiadomie NIE-done: pary sekwencyjne wewnatrz kalki
+  // (add-then-delete CL/tlumika, etykiety sid-area — to wymaga symulacji F1)
+  // oraz delete-opsy na nieobecnych celach (impossible = skip przy re-apply,
+  // czyli i tak bez mutacji).
+  A('E1.idempotent.done13', doneN === 13, 'watchdog F2: done ' + doneN + '/27 (F6: MOVE_ROOM, F2: EDIT_ROOM zmieniane-pola) [nie-done: '
     + proj.filter(p => !p.endsWith(':done')).join(', ') + ']');
+  EQ('E1.idempotent.impossible-set', items2.filter(i => i.cls === 'impossible').map(i => i.type).sort(),
+    ['DELETE_AREA', 'DELETE_CL', 'DELETE_EXIT', 'DELETE_ROOM', 'DELETE_SPECIAL_EXIT', 'DELETE_SUPPRESSOR'],
+    'delete-opsy na nieobecnych celach: impossible (re-apply = skip, bez mutacji)');
   // Sciezka panelu: drugi apply z domyslnie zaznaczonych — watchdog rozbieznosci
   const checkedSeqs = new Set(items2.filter(i => i.checked).map(i => i.seq));
   const r3 = W().applyDelta(_e1Delta, checkedSeqs, undefined);
   const crc2 = ev('_computeBaseInfo().crc').val;
-  A('E1.idempotent.panel45', r3.applied === 4 && r3.skipped.length === 5,
-    'watchdog F2: drugi apply (panel) applied=' + r3.applied + ' skipped=' + r3.skipped.length);
+  A('E1.idempotent.panel35', r3.applied === 3 && r3.skipped.length === 5,
+    'watchdog F2: drugi apply (panel) applied=' + r3.applied + ' skipped=' + r3.skipped.length
+    + ' (EDIT_ROOM juz done; reszta rozbieznosci = pary sekwencyjne — F1)');
   A('E1.idempotent.panel-diverges', crc2 !== crc1,
     'watchdog: drugi apply (panel) ROZBIEGA stan [crc1=' + crc1 + ' crc2=' + crc2 + ']');
   // Surowy drugi apply — swiezy tor (zeby undoStack nie przekroczyl capa 50)

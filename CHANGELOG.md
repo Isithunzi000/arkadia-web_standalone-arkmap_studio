@@ -2,6 +2,15 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.14.0 — fix F2 (część klasyfikatora): done-detection EDIT_ROOM/EDIT_EXIT po zmienianych polach
+
+- **Przyczyna:** klasyfikator EDIT_ROOM/EDIT_EXIT rozpoznawał „done" tylko przy pełnej zgodności live == after. Gdy późniejszy op tej samej kalki (np. EDIT_EXIT) zmienił inne pola tego pokoju, wcześniejszy op wracał jako „hard" i panelowy re-apply nadpisywał te późniejsze zmiany (rozjazd stanu przy drugim apply).
+- **Fix:** nowy helper `_deltaEffectApplied(live, before, after)` — porównuje wyłącznie pola zmieniane przez op (diff before→after); zgodność na nich = „done (zmieniane pola zgodne)". Rozjazd na polach niezmienianych nie blokuje done; rozjazd na polach zmienianych → jak dotychczas (hard/ok).
+- **Świadomie bez zmian (udokumentowane asercjami):** delete-opy na nieobecnych celach klasyfikowane „impossible" (re-apply = skip, zero mutacji — idempotentne z natury); pary sekwencyjne wewnątrz kalki (add-then-delete CL/tłumika, etykiety sid-area) — to wymaga symulacji kolejnych opów w klasyfikatorze (osobny krok).
+- **Testy (flipy w tym samym commicie):** E1.idempotent done 12→13/27 (EDIT_ROOM), panelowy drugi apply 4→3 (EDIT_ROOM już nie re-aplikowany), nowa asercja impossible-set (6 delete-opów); delta.js +2 asercje jednostkowe `_deltaEffectApplied` (done mimo rozjazdu na innych polach / nie-done przy rozjazdu na zmienianym).
+- Regresja lokalna: **667 OK / 0 FAIL** (13 harnessów node) + **436 OK / 0 FAIL** (kampania empiryczna SMOKE+E0–E6).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.13.0 — fix F3: applyDelta EDIT_CL skipuje nieistniejącą CL (zbieżność classify↔apply)
 
 - **Przyczyna:** klasyfikator oceniał edycję nieistniejącej custom line jako „impossible" (panel odznaczał op), ale surowe `applyDelta` tworzyło CL „po cichu" — rozjazd klasyfikacji i wykonania.
