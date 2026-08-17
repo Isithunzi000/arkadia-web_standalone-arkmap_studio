@@ -2,6 +2,13 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.5.43 — deltaLog: pełny log edycji bez capu 50 (fundament eksportu .arkdelta)
+
+- **`state.deltaLog`:** równoległy, niezależny log wszystkich operacji edycji, zasilany w choke-poincie `pushUndo` (+1 linia) i mirrorowany w `undoAction`/`undoToIndex`/`redoAction`/`redoAll`/`cancelRoomEdit` (po 1 linii) oraz resetowany w wrapperze `applyMap`. Motywacja: cap 50 wpisów undoStack (inline przy ~30 miejscach wywołań) silently ucinałby początek długich sesji edycyjnych — dla eksportu delty to nie do przyjęcia. Zachowanie undo/redo bez zmian: cap, UI historii, `undoToIndex` działają identycznie; deltaLog jest wyłącznie czytany przez eksport.
+- **Testy:** nowy harness `tests/delta.js` — sekcja T1 (16 asercji: mirror push/undo/redo/undoToIndex/undoAll, przepełnienie capu (60 operacji → deltaLog 60, undoStack 50), cichy pop A11', reset przy wczytaniu, cap nigdy nie dotyka deltaLog). `tests/run-all.sh`: +1 harness (13 łącznie).
+- Regresja: **478 OK / 0 FAIL** (13 harnessów).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## Testy — harness converters_crc (fundament pod base.crc formatu .arkdelta)
 
 - **Nowy harness `tests/converters_crc.js` (11 asercji):** determinizm konwersji `.dat → .arkmap` (dwa przebiegi `tools/dat2arkmap.mjs` z tymi samymi flagami dają bajtowo identyczny plik), round-trip `.arkmap → applyMap → _serializeMap` (re-serializacja po wczytaniu bajtowo identyczna z plikiem — `meta.checksums.file` stabilny), weryfikowalność checksumów po round-tripie, czułość CRC na zmianę treści mapy. Własność „CRC liczone po wczytaniu == CRC pliku źródłowego" jest fundamentem tożsamości bazy dla planowanego formatu `.arkdelta` (delta edycyjna nanoszona na nowsze wersje mapy).
