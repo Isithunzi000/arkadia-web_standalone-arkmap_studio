@@ -2,6 +2,17 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## Automatyzacja: bramka semantyczna transportów + auto-issue, sonda 2×/d, CI regresji (bez bumpu APP_VERSION)
+
+- **Bramka semantyczna w generatorze** (`tools/sync-transports.mjs`): obok walidacji schematu trzy nowe reguły fail-closed — etykieta wymagana na każdym legu; sanity etykiet (nie czysto numeryczna, min. 2 znaki); rozstrzygalność przystanków (symulacja mapy `stopLabel` z runtime — przystanek nigdy niebędący celem legu = anomalia). Werdykt: czerwony workflow, HTML nietknięty, nic nie ląduje na main.
+- **Auto-issue w `sync-transports.yml`:** porażka walidacji ⇒ workflow sam zakłada issue z diagnozą i linkiem do runu (deduplikacja po labelu `sync-transports`: kolejne runy dopisują komentarz, nie mnożą issue); po ustaniu anomalii run sam zamyka issue. Dotyczy wyłącznie porażki walidacji danych — błędy sieci/clone są przejściowe i nie generują szumu. Wywołania `gh` z `|| true`: porażka notyfikacji nigdy nie maskuje werdyktu bramki. `permissions` + `issues: write` (GITHUB_TOKEN per-run, zero nowych sekretów).
+- **Sonda transportów 2×/d:** cron `47 4` + `47 20` UTC (06:47 i 22:47 PL latem) — rozjeżdżone z sondą mapy (05:17/21:00); wieczorny slot za szczytem commitów upstream klienta (aktywność 09–02 PL; same definicje transportów: 10 commitów w historii).
+- **Nowy workflow `ci-tests.yml`:** push na main (w tym automatyczne commity sond) ⇒ pełna regresja: checkout z pełną historią (testy różnicowe robią `git show`), fixture przypięty do release 0.205.0, timeouty na fixture (240 s) i regresję (420 s), `contents: read`, concurrency bez równoległych runów. Bramka semantyczna jest ścianą, CI jest siecią.
+- **`fetch-fixture.sh`:** curl + `--retry 3 --connect-timeout 30 --max-time 180`.
+- **Testy:** nowy harness `tests/transports_sync.js` (14 asercji: happy path + idempotentność, brak/numeryczna/za krótka etykieta, osierocony przystanek, regresja schematu, invariant na realnych TRANSPORT_DEFS); `sync_map.js`: strażnik pinowania obejmuje `ci-tests.yml` (6 pinów SHA); `run-all.sh` + `tests/README.md` zaktualizowane. Weryfikacja generatora na realnym upstream (sparse clone): blok bajtowo identyczny z repo — nowe reguły przepuszczają aktualne dane (41 linii, 156 przystanków). Regresja: **406 OK / 0 FAIL** (11 harnessów).
+- **Bez bumpu APP_VERSION** — `arkmap_studio.html` nietknięte.
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## Sync mapy 2×/d + doprecyzowanie dokumentacji (bez bumpu APP_VERSION)
 
 - **Workflow `sync-map.yml`:** drugi cron `0 21 * * *` obok porannego `17 5 * * *` — sync 2× dziennie. Pory dobrane analizą 198 commitów `map_master3.dat` z Delwing/arkadia-mapa (2022–2026): aktywność upstream koncentruje się w 09–23 PL ze szczytem 20–22 PL, noc 03–08 PL jest martwa. Wieczorny run 21:00 UTC (23:00 PL latem / 22:00 zimą) domyka dzień tuż za szczytem; poranny łapie commity nocne. Średnie opóźnienie lustra commit→sync spada z ~13,6 h do ~6,9 h (symulacja na ostatnim roku; worst case 22 h → 14 h). Koszt zerowy — brama na SHA: pusty run = cisza.

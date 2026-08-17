@@ -1,12 +1,14 @@
-# Dzienny sync definicji transportów (statki/dyliżanse) z Delwing/arkadia-web-client-extension.
+# Sync definicji transportów (statki/dyliżanse) z Delwing/arkadia-web-client-extension — 2× dziennie.
 # - Ten sam SHA upstreama co w bloku TRANSPORT-DATA ⇒ cisza, zero commitów.
-# - Generator (tools/sync-transports.mjs) waliduje schemat: błąd ⇒ workflow czerwony, nic nie ląduje w main.
+# - Generator (tools/sync-transports.mjs) waliduje schemat ORAZ semantykę (etykiety
+#   przystanków): błąd ⇒ workflow czerwony, nic nie ląduje w main, auto-issue z diagnozą.
 # - Zmiana tylko danych ⇒ bez bumpa APP_VERSION.
 name: Sync transportów
 
 on:
   schedule:
-    - cron: '17 4 * * *'   # codziennie 04:17 UTC
+    - cron: '47 4 * * *'    # 04:47 UTC — rano (06:47 PL latem), przed sondą mapy (05:17)
+    - cron: '47 20 * * *'   # 20:47 UTC — wieczorem (22:47 PL latem), za szczytem commitów upstream
   workflow_dispatch:        # ręczne odpalenie z zakładki Actions
 
 # Jeden run naraz — równoległe uruchomienia (cron + dispatch) odbijałyby się
@@ -16,7 +18,8 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: write   # push na main
+  issues: write     # auto-issue przy anomalii danych upstream
 
 jobs:
   sync:
@@ -49,7 +52,8 @@ jobs:
           echo "obecny=$CUR nowy=$UP"
           if [ "$CUR" = "$UP" ]; then echo "changed=false" >> "$GITHUB_OUTPUT"; else echo "changed=true" >> "$GITHUB_OUTPUT"; fi
 
-      - name: Generuj blok (z walidacją schematu)
+      - name: Generuj blok (z walidacją schematu i semantyki)
+        id: generate
         if: steps.gate.outputs.changed == 'true'
         run: |
           set -euo pipefail
@@ -70,3 +74,34 @@ jobs:
           git add arkmap_studio.html
           git commit -m "Transporty: sync z upstream @${SHORT} (${LINES} linii, ${STOPS} przystanków)"
           timeout 120 git push origin HEAD:main
+
+      # Auto-issue: TYLKO gdy walidacja danych padnie (anomalia upstream). Błędy sieci/clone
+      # są przejściowe — kolejny run je przeliczy, issue byłoby szumem. Wywołania gh z || true:
+      # porażka notyfikacji nigdy nie maskuje pierwotnego werdyktu bramki.
+      - name: Zgłoś anomalię danych (auto-issue)
+        if: always() && steps.generate.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh label create sync-transports --force --description "Anomalia danych transportów z upstream" 2>/dev/null || true
+          NUM=$(gh issue list --label sync-transports --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          BODY="Generator tools/sync-transports.mjs odrzucił dane z Delwing/arkadia-web-client-extension (bramka semantyczna: etykiety przystanków). Dane NIE trafiły do arkmap_studio.html (fail-closed). Szczegóły w logu runu: ${RUN_URL} — kolejne runy ponawiają automatycznie; po ustaniu anomalii to issue zamknie się samo."
+          if [ -n "$NUM" ]; then
+            gh issue comment "$NUM" --body "$BODY" || true
+          else
+            gh issue create --title "Sync transportów: anomalia danych upstream" --label sync-transports --body "$BODY" || true
+          fi
+
+      - name: Zamknij issue po ustaniu anomalii
+        if: always() && steps.generate.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          NUM=$(gh issue list --label sync-transports --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "$NUM" ]; then
+            gh issue comment "$NUM" --body "Dane upstream znów przechodzą walidację — zamykam." || true
+            gh issue close "$NUM" || true
+          fi

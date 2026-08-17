@@ -135,12 +135,12 @@ console.log('— timeouty (struktura) —');
 // ── v1.5.37: pinning SHA akcji + timeouty transports + TOCTOU w UI ──────────
 console.log('— v1.5.37: pinning / transports / TOCTOU (struktura) —');
 {
-  const wfs = ['sync-map.yml', 'sync-transports.yml', 'keepalive.yml']
+  const wfs = ['sync-map.yml', 'sync-transports.yml', 'keepalive.yml', 'ci-tests.yml']
     .map(f => fs.readFileSync(path.join(ROOT, '.github', 'workflows', f), 'utf8'));
   const ALL = wfs.join('\n');
   ok(!/uses: actions\/[^\s]*@v\d/.test(ALL), 'workflow: żadna akcja nie jest referencją tagową (@vN)');
   const pins = ALL.match(/uses: actions\/(checkout|setup-node)@[0-9a-f]{40} # v4/g) || [];
-  ok(pins.length === 4, 'workflow: 4× akcja spinowana SHA z komentarzem # v4 (checkout×3, setup-node×1)');
+  ok(pins.length === 6, 'workflow: 6× akcja spinowana SHA z komentarzem # v4 (checkout×4, setup-node×2)');
   const TR = wfs[1];
   ok(TR.includes('timeout 180 git clone'), 'sync-transports: timeout 180 na clone upstream');
   ok(TR.includes('timeout 120 git push'), 'sync-transports: timeout 120 na push');

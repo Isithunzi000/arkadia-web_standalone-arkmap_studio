@@ -27,6 +27,7 @@ node tests/share_link.js        # planer: share-linki ARKMAP2 — 18 permutacji 
 node tests/planner_ui.js        # planer UX: podświetlenia przełączników, sąsiedztwo transportów (dwuklik), struktura CSS/HTML
 node tests/sync_map.js          # sync mapy online: tools/dat2arkmap.mjs na fixture (wymaga fixture)
 node tests/dir_validation.js    # walidacja kierunków 1:1 z Delwing: złote przypadki + jednostkowe (wymaga fixture)
+node tests/transports_sync.js   # sync transportów: bramka semantyczna generatora — etykiety przystanków, fail-closed
 ```
 
 albo wszystkie naraz:
