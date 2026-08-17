@@ -453,7 +453,7 @@ ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo 
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.13.0';"), 'wersja: v1.13.0');
+ok(HTML.includes("const APP_VERSION = 'v1.14.0';"), 'wersja: v1.14.0');
 
 console.log('— T8: classifyDelta + recenzja (M2) —');
 {
@@ -498,6 +498,19 @@ console.log('— T8: classifyDelta + recenzja (M2) —');
   ok(cls(7) === 'ok', 'classify EDIT_ROOM: before zgodne → ok');
   ok(cls(8) === 'done', 'classify EDIT_ROOM: live == after → done (już naniesione)');
   ok(cls(9) === 'hard', 'classify EDIT_ROOM: live != before → hard (zmieniony upstream)');
+  {
+    // F2: done-detection po ZMIENIANYCH polach — inne pola mogla zmienic inna op kalki
+    const c2 = makeDeltaCtx();
+    const orig10 = JSON.parse(JSON.stringify(c2.state.roomById[10]));
+    const after10 = Object.assign(JSON.parse(JSON.stringify(orig10)), { name: 'R10X' });
+    c2.state.roomById[10].name = 'R10X';
+    c2.state.roomById[10].exits = Object.assign({}, c2.state.roomById[10].exits, { n: 11 });
+    const d2 = { meta: { format: 'arkdelta', format_version: 1 }, ops: [
+      { seq: 1, type: 'EDIT_ROOM', target: { roomId: 10 }, payload: { before: orig10, after: after10 }, label: '' } ] };
+    ok(c2.api.classifyDelta(d2)[0].cls === 'done', 'classify EDIT_ROOM (F2): zmieniane pole zgodne z after → done mimo rozjazdu na innych polach');
+    c2.state.roomById[10].name = 'INNA';
+    ok(c2.api.classifyDelta(d2)[0].cls !== 'done', 'classify EDIT_ROOM (F2): zmieniane pole rozbiezne → nie-done');
+  }
   ok(cls(10) === 'ok', 'classify ADD_EXIT: wolny kierunek → ok');
   ok(cls(11) === 'done', 'classify ADD_EXIT: istnieje do tego samego celu → done');
   ok(cls(12) === 'hard' && note(12).includes('guard'), 'classify ADD_EXIT: kierunek zajęty innym → hard (guard odmówi)');
@@ -743,7 +756,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
     && HTML.includes("bShow.textContent = 'Efekt'") && HTML.includes("bHide.textContent = 'Ukryj'"),
     'panel: przyciski Efekt/Ukryj/Autopozycja/Ręcznie');
   ok(HTML.includes('Duchy:') && HTML.includes('pozycja zastępcza'), 'panel: legenda kolorów duchów');
-  ok(HTML.includes("const APP_VERSION = 'v1.13.0';"), 'wersja v1.13.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.14.0';"), 'wersja v1.14.0');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -779,7 +792,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.13.0';"), 'wersja v1.13.0 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.14.0';"), 'wersja v1.14.0 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji
