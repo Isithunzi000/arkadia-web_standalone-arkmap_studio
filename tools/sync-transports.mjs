@@ -8,7 +8,7 @@
 //
 // Właściwości: idempotentny (ten sam SHA + te same JSON-e = bajtowo ten sam blok),
 // deterministyczny (pliki sortowane, stabilna serializacja), bezpieczny
-// (walidacja schematu — błąd = kod wyjścia 1, HTML nietknięty).
+// (walidacja schematu i semantyki etykiet przystanków — błąd = kod wyjścia 1, HTML nietknięty).
 
 import fs from 'node:fs';
 import path from 'node:path';
