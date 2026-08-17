@@ -124,7 +124,7 @@ console.log('── T6: liczniki kotwic ──');
   const cnt = (s, sub) => s.split(sub).length - 1;
   ok(cnt(NEW, 'audyt A9') === 1, 'komentarz audyt A9 ×1, jest: ' + cnt(NEW, 'audyt A9'));
   ok(cnt(NEW, 'Szukaj chunku IEND') === 0, 'stare skanowanie usunięte');
-  ok(/const APP_VERSION = 'v1\.5\.\d+';/.test(NEW), 'APP_VERSION obecne');
+  ok(/const APP_VERSION = 'v1\.\d+\.\d+';/.test(NEW), 'APP_VERSION obecne');
   ok(cnt(OLD, 'Szukaj chunku IEND') === 1, 'snapshot c84da83 miał stare skanowanie');
   ok(cnt(NEW, 'r._need(len + 4)') === 1, 'guard A7 użyty w pętli chunków');
 }

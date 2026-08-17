@@ -1874,6 +1874,8 @@
       <button id="btn-save-arkmap" disabled>Zapisz .arkmap&hellip;</button>
       <button id="btn-save-arkmap-as" disabled style="display:none">Zapisz jako…</button>
       <button id="btn-save-dat" disabled>Eksportuj Mudlet .dat</button>
+      <input type="file" id="fi-arkdelta" accept=".arkdelta">
+      <button id="btn-load-arkdelta" disabled style="margin-top:6px">Wczytaj .arkdelta&hellip;</button>
       <button id="sb-pr-btn" class="ok" style="margin-top:6px" onclick="openDialog('dlg-compose-pr')">⬡ Wyślij Pull Request…</button>
     </div>
 
@@ -2309,6 +2311,8 @@
         <button class="etb-check" onclick="openCheckSuppressors()">⚑ Walidacja podwójnych linii</button>
         <div class="etb-sep"></div>
         <button class="etb-check" onclick="openValidateDirections()">⚑ Walidacja kierunków</button>
+        <div class="etb-sep"></div>
+        <button id="btn-save-arkdelta" class="etb-check" disabled title="Brak zmian do zapisania">◈ Zapisz .arkdelta&hellip;</button>
       </div>
     </div>
 
@@ -3188,6 +3192,24 @@
   </div>
 </div>
 
+
+<!-- ✎ DIALOG: ARKDELTA -->
+<div id="dlg-arkdelta" class="dlg-bg">
+  <div class="dlg-box narrow">
+    <div class="dlg-hdr">
+      <div class="dlg-icon">◈</div>
+      <div class="dlg-hdr-text">
+        <div class="dlg-title">Wczytaj .arkdelta</div>
+        <div class="dlg-sub">Kalka zmian mapy</div>
+      </div>
+    </div>
+    <div class="dlg-body" id="arkdelta-body"></div>
+    <div class="dlg-ftr">
+      <button class="dlg-cancel" onclick="closeDialog('dlg-arkdelta')">Zamknij</button>
+      <button class="btn-primary" id="arkdelta-apply" onclick="confirmDeltaApply()">Zastosuj</button>
+    </div>
+  </div>
+</div>
 
 <!-- ✎ DIALOG: NOWY OBSZAR -->
 <div id="dlg-new-area" class="dlg-bg">
@@ -12575,7 +12597,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.43';
+const APP_VERSION = 'v1.6.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -12596,6 +12618,7 @@ Object.assign(state, {
   undoStack:          [],
   redoStack:          [],
   deltaLog:           [],   // ARKDELTA: pelny log edycji — lustro operacji dla eksportu .arkdelta; bez capu 50 (cap dotyczy tylko undoStack)
+  baseInfo:           null, // ARKDELTA: tożsamość bazy (crc wariantu bazowego) — liczona raz przy wczytaniu mapy (_computeBaseInfo)
   // dirty = "pamięć może się różnić od ostatniego potwierdzonego zapisu" (audyt A11').
   // Ustawiana przy KAŻDEJ zmianie stosu undo (pushUndo + undo/redo), kasowana
   // WYŁĄCZNIE po potwierdzonym zapisie. Konserwatywna: undo do stanu zapisanego
@@ -13489,6 +13512,7 @@ function updateUndoRedoUI() {
     const n = state.undoStack.length;
     ccNum.textContent = plPl(n, 'zmiana', 'zmiany', 'zmian');
   }
+  _arkdeltaUpdateSaveBtn();  // ARKDELTA: zapis kalki aktywny tylko gdy są zmiany
 }
 
 // applyMap editor extensions (per checkpoint Pass 69 sekcja F)
@@ -13501,6 +13525,7 @@ applyMap = function(map) {
   state.undoStack = [];
   state.redoStack = [];
   state.deltaLog = [];  // ARKDELTA: nowa mapa = pusty log
+  state.baseInfo = _computeBaseInfo();  // ARKDELTA: tożsamość bazy nowej mapy
   state.dirty = false;  // A11': nowa mapa = czysty stan
   state.editDirty = false; state.editSnapshot = null; state.areaSnapshot = null;  // krok 3
   state.selectedLabel = null;  // krok 4
@@ -17323,6 +17348,685 @@ function submitPullRequest() {
   closeDialog('dlg-compose-pr');
   openDialog('dlg-pr-progress');
 }
+
+// === ARKDELTA START ===
+// Format .arkdelta — delta edycyjna mapy: eksport logu operacji (state.deltaLog),
+// walidacja fail-closed, czyste apply. Spec: docs/arkdelta_spec.html.
+// Zasady: undo/redo nietkniete (ops wchodza przez pushUndo jak normalne edycje),
+// determinizm przez stableStringify + CRC-32, anonimowe adds przez sid "d:N".
+
+const ARKDELTA_FORMAT = 'arkdelta';
+const ARKDELTA_FORMAT_VERSION = 1;
+const ARKDELTA_MAX_OPS = 5000;
+const ARKDELTA_MAX_BYTES = 8 * 1024 * 1024;
+const _DELTA_SID_RE = /^d:[1-9][0-9]*$/;
+
+// ── baseInfo: tożsamość bazy (crc liczone RAZ, przy wczytaniu mapy) ─────────
+function _computeBaseInfo() {
+  if (!state.map) return null;
+  const clone = JSON.parse(JSON.stringify(state.map));
+  if (clone.areas) {
+    clone.areas.sort((a, b) => a.id - b.id);
+    for (const area of clone.areas) {
+      if (area.rooms) {
+        area.rooms.sort((a, b) => a.id - b.id);
+        for (const room of area.rooms) {
+          if (room.stubs)              room.stubs.sort();
+          if (room.exit_locks)         room.exit_locks.sort();
+          if (room.special_exit_locks) room.special_exit_locks.sort();
+          delete room.area;
+        }
+      }
+      if (area.labels) area.labels.sort((a, b) => a.id - b.id);
+    }
+  }
+  addChecksums(clone);
+  const ud = (state.map.meta && state.map.meta.user_data) || {};
+  const info = { crc: clone.meta.checksums.file };
+  if (ud.version)  info.version  = ud.version;
+  if (ud.revision) info.revision = ud.revision;
+  return info;
+}
+
+// ── Eksport: pomocnicze ──────────────────────────────────────────────────────
+// Spec-clean klon pokoju: bez pola wewnętrznego area, bez pustych kontenerów.
+function _deltaStripRoom(room) {
+  const c = JSON.parse(JSON.stringify(room));
+  delete c.area;
+  _stripRoomDefaults(c);
+  return c;
+}
+
+// Budowa pliku delty z state.deltaLog (netto). Zwraca tekst kanoniczny.
+// sid "d:N" przypisywane w locie, w kolejnosci logu — define-before-use z konstrukcji
+// (edytor nie moze odwolac sie do obiektu, ktory jeszcze nie istnieje).
+// Mapy ZYWYCH obiektow: DELETE zdejmuje wpis, wiec ponowne uzycie tego samego id
+// przez edytor (add po delete — edytor liczy max+1 z aktualnego stanu) dostaje NOWY sid.
+function buildDelta() {
+  const log = state.deltaLog || [];
+  let counter = 0;
+  const liveRoom = new Map(), liveArea = new Map(), liveLabel = new Map();
+  const rId = id => (typeof id === 'number' && liveRoom.has(id)) ? liveRoom.get(id) : id;
+  const aId = id => (typeof id === 'number' && liveArea.has(id)) ? liveArea.get(id) : id;
+  const lKey = (areaId, labelId) => aId(areaId) + ':' + labelId;
+  const lId = (areaId, labelId) => liveLabel.get(lKey(areaId, labelId)) ?? labelId;
+
+  function rwRoom(room) {
+    const c = _deltaStripRoom(room);
+    if (liveRoom.has(c.id)) c.id = liveRoom.get(c.id);
+    if (c.exits)          for (const k of Object.keys(c.exits))          c.exits[k] = rId(c.exits[k]);
+    if (c.special_exits)  for (const k of Object.keys(c.special_exits))  c.special_exits[k] = rId(c.special_exits[k]);
+    return c;
+  }
+
+  // Emisja opow (jeden przebieg — sid powstaje przy ADD, wygasa przy DELETE)
+  const ops = [];
+  let seq = 0;
+  for (const e of log) {
+    let target = null, payload = null;
+    switch (e.type) {
+      case 'ADD_ROOM': {
+        const sid = 'd:' + (++counter);
+        liveRoom.set(e.roomId, sid);
+        target = { roomId: sid, areaId: aId(e.areaId) };
+        payload = { room: rwRoom(e.roomData) };
+        break;
+      }
+      case 'DELETE_ROOM':
+        target = { roomId: rId(e.roomId), areaId: aId(e.areaId) };
+        payload = { room: rwRoom(e.snapshot) };
+        liveRoom.delete(e.roomId);
+        break;
+      case 'EDIT_ROOM': case 'EDIT_EXIT':
+        target = { roomId: rId(e.roomId) };
+        payload = { before: rwRoom(e.before), after: rwRoom(e.after) };
+        break;
+      case 'PAINT_BATCH':
+        target = {};
+        payload = { changes: (e.changes || []).map(ch => ({
+          roomId: rId(ch.roomId), beforeEnv: ch.beforeEnv, beforeSymbol: ch.beforeSymbol,
+          afterEnv: ch.afterEnv, afterSymbol: ch.afterSymbol })) };
+        break;
+      case 'MOVE_ROOM':
+        target = { roomId: rId(e.roomId) };
+        payload = { fromX: e.fromX, fromY: e.fromY, fromZ: e.fromZ, toX: e.toX, toY: e.toY, toZ: e.toZ };
+        break;
+      case 'MOVE_ROOM_TO_AREA':
+        target = { roomId: rId(e.roomId) };
+        payload = { fromAreaId: aId(e.fromAreaId), toAreaId: aId(e.toAreaId) };
+        break;
+      case 'ADD_EXIT':
+        target = { sourceId: rId(e.sourceId), dir: e.dir };
+        payload = { targetId: rId(e.targetId), bidirectional: !!e.bidirectional };
+        break;
+      case 'DELETE_EXIT':
+        target = { roomId: rId(e.roomId), dir: e.dir };
+        payload = {};
+        if (e.snap && e.snap.exitId !== undefined) payload.exitId = rId(e.snap.exitId);
+        break;
+      case 'DELETE_SPECIAL_EXIT':
+        target = { roomId: rId(e.roomId) };
+        payload = { cmd: e.snap.cmd };
+        if (e.snap.targetId !== undefined) payload.targetId = rId(e.snap.targetId);
+        break;
+      case 'ADD_AREA': {
+        const sid = 'd:' + (++counter);
+        liveArea.set(e.areaId, sid);
+        const area = JSON.parse(JSON.stringify(e.areaData));
+        area.id = sid;
+        area.rooms = []; area.labels = [];
+        target = { areaId: sid };
+        payload = { area };
+        break;
+      }
+      case 'DELETE_AREA':
+        target = { areaId: aId(e.areaId) };
+        payload = { name: e.snapshot && e.snapshot.name || '' };
+        liveArea.delete(e.areaId);
+        break;
+      case 'EDIT_AREA':
+        target = { areaId: aId(e.areaId) };
+        payload = {
+          name: e.after.name, user_data: e.after.user_data || {},
+          beforeName: e.before.name, beforeUserData: e.before.user_data || {},
+        };
+        break;
+      case 'ADD_CL':
+        target = { roomId: rId(e.roomId), dir: e.dir };
+        payload = { cl: JSON.parse(JSON.stringify(e.snapshot)) };
+        break;
+      case 'EDIT_CL':
+        target = { roomId: rId(e.roomId), dir: e.dir };
+        payload = { before: JSON.parse(JSON.stringify(e.before)), after: JSON.parse(JSON.stringify(e.after)) };
+        break;
+      case 'DELETE_CL': case 'DELETE_SUPPRESSOR':
+        target = { roomId: rId(e.roomId), dir: e.dir };
+        payload = e.snapshot ? { cl: JSON.parse(JSON.stringify(e.snapshot)) } : {};
+        break;
+      case 'ADD_SUPPRESSOR':
+        target = { roomId: rId(e.roomId), dir: e.dir };
+        payload = {};
+        break;
+      case 'AUTO_FIX_SUPPRESSORS':
+        target = {};
+        payload = {
+          added:   (e.added   || []).map(x => ({ roomId: rId(x.roomId), dir: x.dir, cl: JSON.parse(JSON.stringify(x.snapshot)) })),
+          removed: (e.removed || []).map(x => ({ roomId: rId(x.roomId), dir: x.dir })),
+        };
+        break;
+      case 'ADD_LABEL': {
+        const sid = 'd:' + (++counter);
+        liveLabel.set(lKey(e.areaId, e.snapshot.id), sid);
+        const lbl = JSON.parse(JSON.stringify(e.snapshot));
+        lbl.id = sid;
+        target = { areaId: aId(e.areaId) };
+        payload = { label: lbl };
+        break;
+      }
+      case 'EDIT_LABEL': {
+        const before = JSON.parse(JSON.stringify(e.before));
+        const after  = JSON.parse(JSON.stringify(e.after));
+        before.id = lId(e.areaId, before.id);
+        after.id  = lId(e.areaId, after.id);
+        target = { areaId: aId(e.areaId), labelId: lId(e.areaId, e.labelId) };
+        payload = { before, after };
+        break;
+      }
+      case 'DELETE_LABEL': {
+        const lbl = JSON.parse(JSON.stringify(e.snapshot));
+        const sid = lId(e.areaId, lbl.id);
+        lbl.id = sid;
+        target = { areaId: aId(e.areaId), labelId: sid };
+        payload = { label: lbl };
+        liveLabel.delete(lKey(e.areaId, e.snapshot.id));
+        break;
+      }
+      case 'MOVE_LABEL':
+        target = { areaId: aId(e.areaId), labelId: lId(e.areaId, e.labelId) };
+        payload = { fromX: e.fromX, fromY: e.fromY, toX: e.toX, toY: e.toY };
+        break;
+      case 'RESIZE_LABEL':
+        target = { areaId: aId(e.areaId), labelId: lId(e.areaId, e.labelId) };
+        payload = { fromX: e.fromX, fromY: e.fromY, fromW: e.fromW, fromH: e.fromH, toX: e.toX, toY: e.toY, toW: e.toW, toH: e.toH };
+        break;
+      case 'EDIT_ENV_COLOR':
+        target = { envId: e.envId };
+        payload = { oldColor: e.oldColor, newColor: e.newColor };
+        break;
+      default:
+        continue; // nieznany typ pomijamy przy eksporcie (nie powinno się zdarzyć)
+    }
+    ops.push({ seq: ++seq, type: e.type, target, payload, label: e.label || '' });
+  }
+
+  const meta = {
+    format: ARKDELTA_FORMAT,
+    format_version: ARKDELTA_FORMAT_VERSION,
+    ops_count: ops.length,
+    base: state.baseInfo || {},
+    app_version: APP_VERSION,
+  };
+  const checksums = {
+    file: crc32str(stableStringify({ meta, ops })),
+    ops: ops.map(op => crc32str(stableStringify(op))),
+  };
+  return stableStringify({ meta, ops, checksums });
+}
+
+function _arkdeltaSuggestedName() {
+  const baseFilename = (state.filename || 'mapa').replace(/^.*·\s*/, '').trim();
+  return baseFilename.replace(/\.dat$|\.json$|\.arkmap$|\.arkdelta$/, '') + '.arkdelta';
+}
+
+function saveDelta() {
+  if (!state.deltaLog || state.deltaLog.length === 0) { toast('Brak zmian do zapisania', true); return; }
+  const text = buildDelta();
+  download(_arkdeltaSuggestedName(), text, 'application/json');
+  toast('✓ Zapisano kalkę (' + state.deltaLog.length + ' ' + (state.deltaLog.length === 1 ? 'zmiana' : 'zmian') + ')');
+}
+
+// ── Walidacja pliku (fail-closed, strict refuse z diagnostyką) ───────────────
+const _DELTA_SCHEMA = {
+  ADD_ROOM:             { target: ['roomId', 'areaId'], payload: ['room'] },
+  DELETE_ROOM:          { target: ['roomId', 'areaId'], payload: ['room'] },
+  EDIT_ROOM:            { target: ['roomId'], payload: ['before', 'after'] },
+  EDIT_EXIT:            { target: ['roomId'], payload: ['before', 'after'] },
+  PAINT_BATCH:          { target: [], payload: ['changes'] },
+  MOVE_ROOM:            { target: ['roomId'], payload: ['toX', 'toY', 'toZ'] },
+  MOVE_ROOM_TO_AREA:    { target: ['roomId'], payload: ['toAreaId'] },
+  ADD_EXIT:             { target: ['sourceId', 'dir'], payload: ['targetId'] },
+  DELETE_EXIT:          { target: ['roomId', 'dir'], payload: [] },
+  DELETE_SPECIAL_EXIT:  { target: ['roomId'], payload: ['cmd'] },
+  ADD_AREA:             { target: ['areaId'], payload: ['area'] },
+  DELETE_AREA:          { target: ['areaId'], payload: [] },
+  EDIT_AREA:            { target: ['areaId'], payload: ['name'] },
+  ADD_CL:               { target: ['roomId', 'dir'], payload: ['cl'] },
+  EDIT_CL:              { target: ['roomId', 'dir'], payload: ['before', 'after'] },
+  DELETE_CL:            { target: ['roomId', 'dir'], payload: [] },
+  DELETE_SUPPRESSOR:    { target: ['roomId', 'dir'], payload: [] },
+  ADD_SUPPRESSOR:       { target: ['roomId', 'dir'], payload: [] },
+  AUTO_FIX_SUPPRESSORS: { target: [], payload: ['added', 'removed'] },
+  ADD_LABEL:            { target: ['areaId'], payload: ['label'] },
+  EDIT_LABEL:           { target: ['areaId', 'labelId'], payload: ['before', 'after'] },
+  DELETE_LABEL:         { target: ['areaId', 'labelId'], payload: ['label'] },
+  MOVE_LABEL:           { target: ['areaId', 'labelId'], payload: ['toX', 'toY'] },
+  RESIZE_LABEL:         { target: ['areaId', 'labelId'], payload: ['toX', 'toY', 'toW', 'toH'] },
+  EDIT_ENV_COLOR:       { target: ['envId'], payload: ['newColor'] },
+};
+
+function _deltaScanDeep(val, onKey, onStr) {
+  if (Array.isArray(val)) { for (const v of val) _deltaScanDeep(v, onKey, onStr); return; }
+  if (val !== null && typeof val === 'object') {
+    for (const k of Object.keys(val)) { onKey(k); _deltaScanDeep(val[k], onKey, onStr); }
+    return;
+  }
+  if (typeof val === 'string') onStr(val);
+}
+
+// Zwraca { ok, delta?, errors: [string] }. Nigdy nie rzuca.
+function validateDeltaText(text) {
+  const errors = [];
+  if (typeof text !== 'string' || !text.length) return { ok: false, errors: ['Pusty plik.'] };
+  if (text.length > ARKDELTA_MAX_BYTES) return { ok: false, errors: ['Plik za duży (limit ' + (ARKDELTA_MAX_BYTES / 1024 / 1024) + ' MB).'] };
+  let delta = null;
+  try { delta = JSON.parse(text); }
+  catch (e) { return { ok: false, errors: ['Plik nie jest poprawnym JSON-em.'] }; }
+  if (!delta || typeof delta !== 'object' || Array.isArray(delta)) return { ok: false, errors: ['To nie jest plik .arkdelta.'] };
+  const meta = delta.meta || {};
+  if (meta.format !== ARKDELTA_FORMAT) return { ok: false, errors: ['To nie jest plik .arkdelta.'] };
+  if (meta.format_version !== ARKDELTA_FORMAT_VERSION)
+    return { ok: false, errors: ['Nieznana wersja formatu: ' + (meta.format_version ?? 'brak') + '. Zaktualizuj ArkMap Studio.'] };
+
+  // Checksumy: najpierw zbiorcze, przy niezgodności lokalizacja per op.
+  const cs = delta.checksums || {};
+  const fileCrc = crc32str(stableStringify({ meta, ops: delta.ops }));
+  if (cs.file !== fileCrc) {
+    const bad = [];
+    if (Array.isArray(delta.ops) && Array.isArray(cs.ops)) {
+      for (let i = 0; i < delta.ops.length; i++) {
+        if (cs.ops[i] !== undefined && cs.ops[i] !== crc32str(stableStringify(delta.ops[i])))
+          bad.push(delta.ops[i] && delta.ops[i].seq !== undefined ? delta.ops[i].seq : i + 1);
+      }
+    }
+    const detail = bad.length ? ' — op ' + bad.map(s => '#' + s).join(', #') + ' nie zgadza się z sumą kontrolną' : '';
+    return { ok: false, errors: ['Plik .arkdelta jest uszkodzony' + detail + '. Plik nie został wczytany.'] };
+  }
+
+  const ops = delta.ops;
+  if (!Array.isArray(ops)) return { ok: false, errors: ['Plik uszkodzony — brak listy operacji.'] };
+  if (ops.length > ARKDELTA_MAX_OPS) return { ok: false, errors: ['Za dużo operacji (limit ' + ARKDELTA_MAX_OPS + ').'] };
+  if (meta.ops_count !== ops.length) errors.push('Plik uszkodzony — ops_count (' + meta.ops_count + ') nie zgadza się z liczbą operacji (' + ops.length + ').');
+
+  const definedSid = new Set();
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i];
+    const tag = 'op #' + (op && op.seq !== undefined ? op.seq : i + 1);
+    if (!op || typeof op !== 'object') { errors.push(tag + ': niepoprawny kształt.'); continue; }
+    if (op.seq !== i + 1) { errors.push(tag + ': seq nieciągłe.'); continue; }
+    const schema = _DELTA_SCHEMA[op.type];
+    if (!schema) { errors.push(tag + ': nieznany typ operacji "' + op.type + '". Plik nie został wczytany.'); continue; }
+    if (!op.target || typeof op.target !== 'object') { errors.push(tag + ': brak target.'); continue; }
+    if (!op.payload || typeof op.payload !== 'object') { errors.push(tag + ': brak payload.'); continue; }
+    for (const k of schema.target)  if (op.target[k] === undefined)  errors.push(tag + ': brak target.' + k + '.');
+    for (const k of schema.payload) if (op.payload[k] === undefined) errors.push(tag + ': brak payload.' + k + '.');
+    if (op.target.dir !== undefined && !VALID_DIRS.has(op.target.dir)) errors.push(tag + ': nieprawidłowy kierunek "' + op.target.dir + '".');
+    // Integralność sid: definicja przed użyciem, brak duplikatów, sanitizacja kluczy.
+    let badKey = null;
+    _deltaScanDeep(op, k => { if (k === '__proto__' || k === 'constructor' || k === 'prototype') badKey = k; }, () => {});
+    if (badKey) { errors.push(tag + ': niedozwolony klucz "' + badKey + '".'); continue; }
+    // Najpierw definicja własna opu (ADD_*) — inaczej własny sid wygląda jak użycie bez definicji.
+    const ownSid = (op.type === 'ADD_ROOM' && _DELTA_SID_RE.test(String(op.target.roomId))) ? String(op.target.roomId)
+                 : (op.type === 'ADD_AREA' && _DELTA_SID_RE.test(String(op.target.areaId))) ? String(op.target.areaId)
+                 : (op.type === 'ADD_LABEL' && _DELTA_SID_RE.test(String(op.payload.label && op.payload.label.id))) ? String(op.payload.label.id)
+                 : null;
+    if (ownSid) {
+      if (definedSid.has(ownSid)) { errors.push(tag + ': zduplikowany identyfikator kalki (' + ownSid + ').'); continue; }
+      definedSid.add(ownSid);
+    }
+    const used = [];
+    _deltaScanDeep(op, () => {}, v => { if (_DELTA_SID_RE.test(v)) used.push(v); });
+    for (const sid of used) if (!definedSid.has(sid)) errors.push(tag + ': odwołanie do nieistniejącego obiektu kalki (' + sid + ').');
+  }
+  if (errors.length) return { ok: false, errors };
+  return { ok: true, delta, errors: [] };
+}
+
+// ── Apply (czysta ścieżka M1) ────────────────────────────────────────────────
+let _arkdeltaPending = null;
+
+function _deltaMaxRoomId()  { let m = 0; for (const id of Object.keys(state.roomById)) m = Math.max(m, +id); return m; }
+function _deltaMaxAreaId()  { let m = 0; for (const id of state.areas.keys()) m = Math.max(m, id); return m; }
+function _deltaMaxLabelId(area) { let m = 0; for (const l of (area.labels || [])) m = Math.max(m, l.id); return m; }
+
+function _deltaPush(entry) {
+  pushUndo(entry);
+  if (state.undoStack.length > 50) state.undoStack.shift();
+  state.redoStack = [];
+  updateUndoRedoUI();
+}
+
+// Tłumaczy sid → świeże id w głębokim klonie opu.
+function _deltaTranslate(obj, sidMap) {
+  const c = JSON.parse(JSON.stringify(obj));
+  const walk = (v) => {
+    if (Array.isArray(v)) { for (let i = 0; i < v.length; i++) v[i] = walk(v[i]); return v; }
+    if (v !== null && typeof v === 'object') { for (const k of Object.keys(v)) v[k] = walk(v[k]); return v; }
+    if (typeof v === 'string' && sidMap.has(v)) return sidMap.get(v);
+    return v;
+  };
+  return walk(c);
+}
+
+// Zwraca { applied, skipped: [{seq, reason}] }.
+function applyDelta(delta) {
+  const sidMap = new Map();
+  let nextRoomId = _deltaMaxRoomId() + 1;
+  let nextAreaId = _deltaMaxAreaId() + 1;
+  const labelNext = new Map(); // areaId -> next label id
+  let applied = 0;
+  const skipped = [];
+
+  for (const rawOp of delta.ops) {
+    const op = _deltaTranslate(rawOp, sidMap);
+    const skip = (reason) => skipped.push({ seq: rawOp.seq, reason });
+    // Odwrotność walidacji: po tłumaczeniu nie może zostać żaden nieznany sid
+    // (wyjątek: sid definiowany przez TEN op — ADD_ROOM/ADD_AREA/ADD_LABEL).
+    {
+      const ownSid = rawOp.type === 'ADD_ROOM' ? String(rawOp.target.roomId)
+                   : rawOp.type === 'ADD_AREA' ? String(rawOp.target.areaId)
+                   : rawOp.type === 'ADD_LABEL' ? String(rawOp.payload.label && rawOp.payload.label.id) : null;
+      let leftover = null;
+      _deltaScanDeep(op, () => {}, v => {
+        if (_DELTA_SID_RE.test(v) && v !== ownSid && !sidMap.has(v) && leftover === null) leftover = v;
+      });
+      if (leftover !== null) { skip('odwołanie do obiektu kalki, który nie istnieje (' + leftover + ')'); continue; }
+    }
+    try {
+      switch (op.type) {
+        case 'ADD_ROOM': {
+          const area = state.areas.get(op.target.areaId);
+          if (!area) { skip('obszar nie istnieje'); break; }
+          const freshId = nextRoomId++;
+          if (_DELTA_SID_RE.test(String(rawOp.target.roomId))) sidMap.set(rawOp.target.roomId, freshId);
+          const room = op.payload.room;
+          room.id = freshId; room.area = area.id;
+          room.x = room.x ?? 0; room.y = room.y ?? 0; room.z = room.z ?? 0;
+          area.rooms = area.rooms || []; area.rooms.push(room);
+          state.roomById[freshId] = room; state.roomArea[freshId] = area.id;
+          _deltaPush({ type: 'ADD_ROOM', roomId: freshId, roomData: JSON.parse(JSON.stringify(room)), areaId: area.id, label: op.label });
+          buildRoomsZ(); buildAreaList();
+          applied++;
+          break;
+        }
+        case 'DELETE_ROOM': {
+          if (!state.roomById[op.target.roomId]) { skip('pokój nie istnieje'); break; }
+          deleteRoom(op.target.roomId);
+          applied++;
+          break;
+        }
+        case 'EDIT_ROOM': case 'EDIT_EXIT': {
+          const room = state.roomById[op.target.roomId];
+          if (!room) { skip('pokój nie istnieje'); break; }
+          const entry = { type: op.type, roomId: room.id,
+            before: JSON.parse(JSON.stringify(room)), after: op.payload.after, label: op.label };
+          _dispatchRedo(entry);
+          _deltaPush(entry);
+          applied++;
+          break;
+        }
+        case 'PAINT_BATCH': {
+          const changes = [];
+          for (const ch of op.payload.changes) {
+            const r = state.roomById[ch.roomId];
+            if (!r) continue;
+            changes.push({ roomId: r.id, beforeEnv: r.env, beforeSymbol: r.symbol, afterEnv: ch.afterEnv, afterSymbol: ch.afterSymbol });
+            r.env = ch.afterEnv;
+            if ((ch.afterSymbol ?? '') !== '') r.symbol = ch.afterSymbol; else delete r.symbol;
+          }
+          if (!changes.length) { skip('żaden pokój nie istnieje'); break; }
+          _deltaPush({ type: 'PAINT_BATCH', changes, label: op.label });
+          applied++;
+          break;
+        }
+        case 'MOVE_ROOM': {
+          const room = state.roomById[op.target.roomId];
+          if (!room) { skip('pokój nie istnieje'); break; }
+          commitMoveRoom(room, room.x, room.y, room.z ?? 0, op.payload.toX, op.payload.toY, op.payload.toZ);
+          applied++;
+          break;
+        }
+        case 'MOVE_ROOM_TO_AREA': {
+          if (!state.roomById[op.target.roomId]) { skip('pokój nie istnieje'); break; }
+          if (!state.areas.get(op.payload.toAreaId)) { skip('obszar docelowy nie istnieje'); break; }
+          commitMoveRoomToArea(op.target.roomId, op.payload.toAreaId);
+          applied++;
+          break;
+        }
+        case 'ADD_EXIT': {
+          const src = state.roomById[op.target.sourceId], tgt = state.roomById[op.payload.targetId];
+          if (!src || !tgt) { skip('pokój źródłowy lub docelowy nie istnieje'); break; }
+          commitAddExit(op.target.sourceId, op.target.dir, op.payload.targetId, !!op.payload.bidirectional);
+          if (src.exits?.[op.target.dir] !== op.payload.targetId) { skip('kierunek zajęty (guard)'); break; }
+          applied++;
+          break;
+        }
+        case 'DELETE_EXIT': {
+          const room = state.roomById[op.target.roomId];
+          if (!room || !room.exits?.[op.target.dir]) { skip('wyjście nie istnieje'); break; }
+          commitDeleteExit(room, op.target.dir);
+          applied++;
+          break;
+        }
+        case 'DELETE_SPECIAL_EXIT': {
+          const room = state.roomById[op.target.roomId];
+          const cmd = op.payload.cmd;
+          if (!room || !room.special_exits?.[cmd]) { skip('wyjście specjalne nie istnieje'); break; }
+          const snap = { cmd, targetId: room.special_exits[cmd], lock: (room.special_exit_locks || []).includes(cmd) };
+          if (room.custom_lines?.[cmd]) snap.cl = JSON.parse(JSON.stringify(room.custom_lines[cmd]));
+          if (room.doors?.[cmd])       snap.door = room.doors[cmd];
+          if (room.exit_weights?.[cmd]) snap.exitWeight = room.exit_weights[cmd];
+          delete room.special_exits[cmd];
+          if (!Object.keys(room.special_exits).length) delete room.special_exits;
+          if (room.custom_lines) { delete room.custom_lines[cmd]; if (!Object.keys(room.custom_lines).length) delete room.custom_lines; }
+          if (room.special_exit_locks) { room.special_exit_locks = room.special_exit_locks.filter(c => c !== cmd); if (!room.special_exit_locks.length) delete room.special_exit_locks; }
+          if (room.doors)        { delete room.doors[cmd];        if (!Object.keys(room.doors).length)        delete room.doors; }
+          if (room.exit_weights) { delete room.exit_weights[cmd]; if (!Object.keys(room.exit_weights).length) delete room.exit_weights; }
+          _deltaPush({ type: 'DELETE_SPECIAL_EXIT', roomId: room.id, snap, label: op.label });
+          applied++;
+          break;
+        }
+        case 'ADD_AREA': {
+          const freshId = nextAreaId++;
+          if (_DELTA_SID_RE.test(String(rawOp.target.areaId))) sidMap.set(rawOp.target.areaId, freshId);
+          const area = op.payload.area;
+          area.id = freshId; area.rooms = []; area.labels = area.labels || [];
+          state.map.areas = state.map.areas || []; state.map.areas.push(area);
+          state.areas.set(freshId, area);
+          _deltaPush({ type: 'ADD_AREA', areaId: freshId, areaData: JSON.parse(JSON.stringify(area)), label: op.label });
+          buildAreaList();
+          applied++;
+          break;
+        }
+        case 'DELETE_AREA': {
+          if (!state.areas.get(op.target.areaId)) { skip('obszar nie istnieje'); break; }
+          commitDeleteArea(op.target.areaId);
+          applied++;
+          break;
+        }
+        case 'EDIT_AREA': {
+          const area = state.areas.get(op.target.areaId);
+          if (!area) { skip('obszar nie istnieje'); break; }
+          const before = JSON.parse(JSON.stringify(area));
+          area.name = op.payload.name;
+          area.user_data = op.payload.user_data || {};
+          const after = JSON.parse(JSON.stringify(area));
+          _deltaPush({ type: 'EDIT_AREA', areaId: area.id, before, after, label: op.label });
+          buildAreaList();
+          applied++;
+          break;
+        }
+        case 'ADD_CL': case 'ADD_SUPPRESSOR': {
+          const room = state.roomById[op.target.roomId];
+          if (!room) { skip('pokój nie istnieje'); break; }
+          if (op.type === 'ADD_CL') {
+            const entry = { type: 'ADD_CL', roomId: room.id, dir: op.target.dir, snapshot: JSON.parse(JSON.stringify(op.payload.cl)), label: op.label };
+            _dispatchRedo(entry); _deltaPush(entry);
+          } else {
+            const entry = { type: 'ADD_SUPPRESSOR', roomId: room.id, dir: op.target.dir,
+              prevCL: room.custom_lines?.[op.target.dir] ? JSON.parse(JSON.stringify(room.custom_lines[op.target.dir])) : undefined, label: op.label };
+            _dispatchRedo(entry); _deltaPush(entry);
+          }
+          applied++;
+          break;
+        }
+        case 'EDIT_CL': {
+          const room = state.roomById[op.target.roomId];
+          if (!room) { skip('pokój nie istnieje'); break; }
+          const entry = { type: 'EDIT_CL', roomId: room.id, dir: op.target.dir,
+            before: room.custom_lines?.[op.target.dir] ? JSON.parse(JSON.stringify(room.custom_lines[op.target.dir])) : null,
+            after: JSON.parse(JSON.stringify(op.payload.after)), label: op.label };
+          _dispatchRedo(entry); _deltaPush(entry);
+          applied++;
+          break;
+        }
+        case 'DELETE_CL': case 'DELETE_SUPPRESSOR': {
+          const room = state.roomById[op.target.roomId];
+          if (!room || !room.custom_lines?.[op.target.dir]) { skip('custom line nie istnieje'); break; }
+          const entry = { type: op.type, roomId: room.id, dir: op.target.dir, snapshot: JSON.parse(JSON.stringify(room.custom_lines[op.target.dir])), label: op.label };
+          _dispatchRedo(entry); _deltaPush(entry);
+          applied++;
+          break;
+        }
+        case 'AUTO_FIX_SUPPRESSORS': {
+          const entry = { type: 'AUTO_FIX_SUPPRESSORS',
+            added:   op.payload.added.filter(x => state.roomById[x.roomId]).map(x => ({ roomId: x.roomId, dir: x.dir, snapshot: x.cl })),
+            removed: op.payload.removed.filter(x => state.roomById[x.roomId]), label: op.label };
+          if (!entry.added.length && !entry.removed.length) { skip('pokoje nie istnieją'); break; }
+          _dispatchRedo(entry); _deltaPush(entry);
+          applied++;
+          break;
+        }
+        case 'ADD_LABEL': {
+          const area = state.areas.get(op.target.areaId);
+          if (!area) { skip('obszar nie istnieje'); break; }
+          const rawSid = String(rawOp.payload.label && rawOp.payload.label.id);
+          const next = labelNext.get(area.id) ?? (_deltaMaxLabelId(area) + 1);
+          labelNext.set(area.id, next + 1);
+          const lbl = op.payload.label;
+          lbl.id = next;
+          if (_DELTA_SID_RE.test(rawSid)) sidMap.set(rawSid, next);
+          const entry = { type: 'ADD_LABEL', areaId: area.id, snapshot: JSON.parse(JSON.stringify(lbl)), label: op.label };
+          _dispatchRedo(entry); _deltaPush(entry);
+          applied++;
+          break;
+        }
+        case 'EDIT_LABEL': case 'DELETE_LABEL': case 'MOVE_LABEL': case 'RESIZE_LABEL': {
+          const area = state.areas.get(op.target.areaId);
+          const lbl = area ? (area.labels || []).find(l => l.id === op.target.labelId) : null;
+          if (!lbl) { skip('etykieta nie istnieje'); break; }
+          let entry = null;
+          if (op.type === 'EDIT_LABEL') {
+            const after = JSON.parse(JSON.stringify(op.payload.after)); after.id = lbl.id;
+            entry = { type: op.type, areaId: area.id, labelId: lbl.id, before: JSON.parse(JSON.stringify(lbl)), after, label: op.label };
+          } else if (op.type === 'DELETE_LABEL') {
+            entry = { type: op.type, areaId: area.id, snapshot: JSON.parse(JSON.stringify(lbl)), label: op.label };
+          } else if (op.type === 'MOVE_LABEL') {
+            entry = { type: op.type, areaId: area.id, labelId: lbl.id, fromX: lbl.x, fromY: lbl.y, toX: op.payload.toX, toY: op.payload.toY, label: op.label };
+          } else {
+            entry = { type: op.type, areaId: area.id, labelId: lbl.id, fromX: lbl.x, fromY: lbl.y, fromW: lbl.width, fromH: lbl.height,
+              toX: op.payload.toX, toY: op.payload.toY, toW: op.payload.toW, toH: op.payload.toH, label: op.label };
+          }
+          _dispatchRedo(entry); _deltaPush(entry);
+          applied++;
+          break;
+        }
+        case 'EDIT_ENV_COLOR': {
+          const oldColor = state.map.colors?.custom_env_colors?.[op.target.envId] ?? null;
+          const entry = { type: 'EDIT_ENV_COLOR', envId: op.target.envId,
+            oldColor: oldColor ? [...oldColor] : null,
+            newColor: op.payload.newColor ? [...op.payload.newColor] : null, label: op.label };
+          _dispatchRedo(entry); _deltaPush(entry);
+          applied++;
+          break;
+        }
+        default:
+          skip('nieznany typ');
+      }
+    } catch (err) {
+      skip('błąd wykonania: ' + err.message);
+    }
+  }
+  draw();
+  return { applied, skipped };
+}
+
+// ── UI: dialog + wiring ──────────────────────────────────────────────────────
+function _arkdeltaBaseNote(base) {
+  const cur = state.baseInfo || {};
+  if (!base || !base.crc) return 'Kalka bez informacji o bazie.';
+  const srcOf = b => (b.revision ? '@' + String(b.revision).slice(0, 7) : (b.version ? 'v' + b.version : 'inna baza'));
+  if (base.crc === cur.crc) return 'Baza zgodna z wczytaną mapą (' + srcOf(base) + ').';
+  return 'Kalka z innej wersji mapy (' + srcOf(base) + ' · nakładasz na ' + srcOf(cur) + ').';
+}
+
+function openDeltaConfirm(delta) {
+  _arkdeltaPending = delta;
+  const body = document.getElementById('arkdelta-body');
+  const n = delta.ops.length;
+  body.innerHTML = '<p>' + escHtml(_arkdeltaBaseNote(delta.meta.base)) + '</p>'
+    + '<p>Operacji w kalce: <strong>' + n + '</strong></p>'
+    + '<p>Naniesione zmiany trafią do historii edycji jak zwykłe edycje.</p>';
+  document.getElementById('arkdelta-apply').style.display = '';
+  openDialog('dlg-arkdelta');
+}
+
+function openDeltaErrors(errors) {
+  _arkdeltaPending = null;
+  const body = document.getElementById('arkdelta-body');
+  body.innerHTML = errors.map(e => '<div class="dlg-info warn">' + escHtml(e) + '</div>').join('');
+  document.getElementById('arkdelta-apply').style.display = 'none';
+  openDialog('dlg-arkdelta');
+}
+
+function confirmDeltaApply() {
+  const delta = _arkdeltaPending;
+  closeDialog('dlg-arkdelta');
+  if (!delta) return;
+  _arkdeltaPending = null;
+  const res = applyDelta(delta);
+  let msg = '✓ Naniesiono: ' + res.applied;
+  if (res.skipped.length) msg += ' · Pominięto: ' + res.skipped.length;
+  toast(msg, res.skipped.length > 0);
+  if (res.skipped.length) console.warn('[arkdelta] pominięte:', res.skipped);
+}
+
+const fiArkdelta       = document.getElementById('fi-arkdelta');
+const btnLoadArkdelta  = document.getElementById('btn-load-arkdelta');
+const btnSaveArkdelta  = document.getElementById('btn-save-arkdelta');
+
+btnLoadArkdelta.addEventListener('click', () => {
+  if (!state.editMode) { toast('Wczytanie kalki wymaga trybu edycji', true); return; }
+  if (!state.map)      { toast('Najpierw wczytaj mapę', true); return; }
+  fiArkdelta.click();
+});
+fiArkdelta.addEventListener('change', async e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  const text = await f.text();
+  const res = validateDeltaText(text);
+  if (res.ok) openDeltaConfirm(res.delta);
+  else openDeltaErrors(res.errors);
+});
+btnSaveArkdelta.addEventListener('click', saveDelta);
+
+function _arkdeltaUpdateSaveBtn() {
+  if (!btnSaveArkdelta) return;
+  const hasWork = (state.deltaLog && state.deltaLog.length > 0) || state.redoStack.length > 0;
+  btnSaveArkdelta.disabled = !hasWork;
+  btnSaveArkdelta.title = hasWork ? 'Zapisz kalkę zmian (.arkdelta)' : 'Brak zmian do zapisania';
+}
+// === ARKDELTA END ===
 
 // ── KEYBOARD — EDITOR ADDITIONS ───────────────────────────────────────────
 document.addEventListener('keydown', function(e) {

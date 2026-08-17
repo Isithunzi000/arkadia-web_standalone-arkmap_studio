@@ -138,7 +138,7 @@ console.log('── T6: liczniki kotwic ──');
   console.log('  [info] _need(: ' + cnt(NEW, '_need(') + ', audyt A7: ' + cnt(NEW, 'audyt A7'));
   ok(cnt(NEW, '_need(') === 9, '_need: definicja + 7 wywołań + 1 w readQPixMap (krok 17), jest: ' + cnt(NEW, '_need('));
   ok(cnt(NEW, 'audyt A7') === 2, 'audyt A7 ×2 (ReadBuffer + wzmianka w readQPixMap z kroku 17)');
-  ok(/const APP_VERSION = 'v1\.5\.\d+';/.test(NEW), 'APP_VERSION obecne');
+  ok(/const APP_VERSION = 'v1\.\d+\.\d+';/.test(NEW), 'APP_VERSION obecne');
   ok(cnt(OLD, '_need(') === 0, 'snapshot 50f37ea nie miał _need');
 }
 
