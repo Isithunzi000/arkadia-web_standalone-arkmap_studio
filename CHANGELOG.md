@@ -2,6 +2,15 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.7.0 — okno recenzji kalki .arkdelta: klasyfikator, filtry, wybór opów, rebase
+
+- **Klasyfikator `classifyDelta`:** każdy op kalki klasyfikowany względem bieżącej mapy (bez ruszania stanu) do 4 klas: **do naniesienia** (ok), **konflikt** (hard — cel zmieniony upstream, kolizja pola, zajęty kierunek; nanosi się mimo to), **naniesione** (done — add-matching: to samo pole i nazwa / live == after / identyczna etykieta/kolor), **niewykonalne** (impossible — cel usunięty upstream, brak obszaru/pokoju/etykiety, łańcuchowo: odwołanie do niewykonalnego obiektu kalki). Porównania pokoi spec-clean (`_deltaRoomCmp`, bez id — sid-owe snapshoty nieporównywalne → klasa neutralna). sid-y rozwiązywane do numerycznych id, gdy ADD dopasowany jako „naniesione".
+- **Panel recenzji `#delta-panel`** (nienmodalny, drag — lany z panelu walidacji kierunków): notka o zgodności bazy, 5 klawiszy filtrow z licznikami (Wszystkie/Do naniesienia/Konflikty/Naniesione/Niewykonalne), wiersze z checkboxami (domyślnie: ok+konflikt zaznaczone, naniesione odznaczone, niewykonalne wyszarzone), klik w wiersz → skok na mapie (`jumpToRoom` / selectArea + centerViewOnMap), stopka „✓ Zastosuj zaznaczone (N)".
+- **Apply z wyborem:** `applyDelta(delta, onlySeq)` — nanosi tylko zaznaczone opy, odznaczone pomija milcząco; po apply re-klasyfikacja (naniesione → „naniesione") i przycisk **„💾 Zapisz zaktualizowaną kalkę…"** (rebase = ponowny zapis z nową bazą — naniesione opy są w deltaLog, więc eksport sam się aktualizuje). Stary dialog potwierdzenia zastąpiony panelem; `dlg-arkdelta` zostaje dla błędów walidacji (strict refuse bez zmian).
+- **Testy:** `tests/delta.js` — nowa sekcja T8 (42 asercje: klasyfikacja wszystkich klas per typ opu, domyślne zaznaczenia, skoki, apply z onlySeq, re-klasyfikacja po apply = idempotentność, struktura panelu/flow) → 135 asercji w harnessie.
+- Regresja: **597 OK / 0 FAIL** (13 harnessów).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## Dokumentacja — specyfikacja formatu .arkdelta
 
 - **`docs/arkdelta_spec.html` (nowy):** pełna specyfikacja formatu v1 w stylistyce specu .arkmap — overview i cele (determinizm, anonimowe dodatki, fail-closed, undo nietknięte), struktura meta/ops/checksums, tożsamość bazy (crc liczone przy wczytaniu + version/revision), serializacja kanoniczna i CRC-32 (zbiorczy + per-op z lokalizacją uszkodzeń), sid `d:N` (define-before-use, żywotność, reuse id), tabela 25 typów operacji (target/payload), łańcuch walidacji, semantyka apply (tłumaczenie sid, świeże id, commity z guardami, skip z powodem, integracja z undo, rebase = ponowny zapis), wersjonowanie, kompletny przykład.
