@@ -2,6 +2,15 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.12.0 — fix F5/F4: applyDelta ADD_ROOM nie stackuje na zajętej komórce (guard na żywo)
+
+- **Przyczyna:** żywotny guard zajętości istniał tylko na ścieżce override („pozycja zastępcza zajęta"); surowy ADD_ROOM (bez override'u) aplikował się na zajętej komórce i tworzył stos pokoi (F4/F5).
+- **Fix (`applyDelta`, case ADD_ROOM):** po normalizacji współrzędnych sprawdzane `_deltaRoomAt(area, x, y, z)` — zajęta komórka → skip „komórka docelowa zajęta", zero mutacji, sid nie rejestrowany (kaskadowe skipy opów zależnych przez istniejący mechanizm nieznanego sid). Spójne ze ścieżką override i z klasą „hard" klasyfikatora.
+- **Polityka MOVE bez zmian:** MOVE_ROOM na zajętą komórkę nadal się wykonuje (jak drag w UI) — udokumentowane asercją E3.occupied-override.f6-noop.
+- **Testy (flipy w tym samym commicie):** E2.ADD_ROOM.conflict (apply 1/0 → 0/1; post: brak stosu, zostaje tylko upstream), E3.occupied-override (nowa asercja skip2 z powodem; f5-stack: 2→1 pokój; applied 3→2, skipped 1→2). E1.idempotent bez zmian (drugi apply ADD_ROOM ląduje w zduplikowanym obszarze na wolnej komórce).
+- Regresja lokalna: **665 OK / 0 FAIL** (13 harnessów node) + **435 OK / 0 FAIL** (kampania empiryczna SMOKE+E0–E6; E3 +1 asercja).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.11.0 — fix F7: przycisk „Wczytaj .arkdelta…" odlokowany w trybie edycji
 
 - **Przyczyna:** `btn-load-arkdelta` miał trwały atrybut `disabled` w markup i żadne miejsce w kodzie go nie odlokowywało — jedyny UI-owy punkt wejścia wczytywania kalki był martwy (handler `#fi-arkdelta` change działał poprawnie, co potwierdziła grupa E4).

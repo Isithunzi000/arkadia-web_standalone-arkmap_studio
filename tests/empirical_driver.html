@@ -730,10 +730,10 @@ const E2_DESCS = [
     clean:    { exp: { cls: 'ok' } },
     mod:      null,
     del:      { prep: P => W().commitDeleteArea(P.smallArea), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
-    conflict: { prep: P => _e2UpRoom(P.smallArea, 9999, 9999, 'Upstream'), exp: { cls: 'hard', coll: true, applied: 1, skipped: 0 },
+    conflict: { prep: P => _e2UpRoom(P.smallArea, 9999, 9999, 'Upstream'), exp: { cls: 'hard', coll: true, applied: 0, skipped: 1 },
                 post: (P, id) => A(id + '.stacked', ev('_deltaRoomAt(' + P.smallArea + ', 9999, 9999, 0) !== null').val === true
-                  && ev('(function(){ const a = state.areas.get(' + P.smallArea + '); return a.rooms.filter(function(r){ return r.x === 9999 && r.y === 9999 && (r.z||0) === 0; }).length; })()').val === 2,
-                  'watchdog: surowy apply tworzy STOS 2 pokoi na zajetym polu') },
+                  && ev('(function(){ const a = state.areas.get(' + P.smallArea + '); return a.rooms.filter(function(r){ return r.x === 9999 && r.y === 9999 && (r.z||0) === 0; }).length; })()').val === 1,
+                  'fix F5: surowy apply NIE stackuje — na zajetym polu zostaje tylko upstream (skip)') },
   },
   na: { mod: 'sid — pokoj z kalki nie ma odpowiednika upstream' } },
 { type: 'DELETE_ROOM', ops: 1,
@@ -1281,10 +1281,13 @@ scenario('E3.occupied-override', async () => {
   const skip1 = res.skipped.find(s => s.seq === 1);
   A('E3.occupied-override.skip1', !!skip1, 'op1 (override na zajetej): pominieta');
   EQ('E3.occupied-override.reason', skip1 ? skip1.reason : null, 'pozycja zastępcza zajęta', 'powod skip');
-  // WATCHDOG F5: op2 ADD_ROOM bez override na zajetej (9999,9999) — applyDelta NIE ma zywotnego
-  // guardu zajetosci poza sciezka override: pokoj APPLIKUJE SIE i stackuje.
-  EQ('E3.occupied-override.f5-stack', _e3CountAt(9999, 9999), 2,
-    'watchdog F5: stack 2 pokoi na (9999,9999) — op2 (bez override) applikuje sie mimo zajetej komorki');
+  // FIX F5: op2 ADD_ROOM bez override na zajetej (9999,9999) — zywotny guard zajetosci
+  // w applyDelta (jak sciezka override): skip, zero mutacji.
+  const skip2 = res.skipped.find(s => s.seq === 2);
+  A('E3.occupied-override.skip2', !!skip2 && skip2.reason === 'komórka docelowa zajęta',
+    'fix F5: op2 (bez override) pominieta — komorka docelowa zajeta');
+  EQ('E3.occupied-override.f5-stack', _e3CountAt(9999, 9999), 1,
+    'fix F5: brak stacku na (9999,9999) — zostaje tylko pokoj upstream');
   // FIX F6: op3 MOVE_ROOM applikuje sie realnie. Cel (9998,9999) jest zajety przez
   // upstream, a MOVE (jak drag w UI) nie ma guardu zajetosci — stack UDOKUMENTOWANY.
   A('E3.occupied-override.f6-counted', !res.skipped.find(s => s.seq === 3),
@@ -1292,8 +1295,8 @@ scenario('E3.occupied-override', async () => {
   EQ('E3.occupied-override.f6-noop', _e3CountAt(9998, 9999), 2,
     'fix F6: pokoj przeniesiony na zajete (9998,9999) — stack z upstream (jak drag, udokumentowane)');
   EQ('E3.occupied-override.control', _e3CountAt(10000, 9999), 1, 'op4 (kontrolny) zastosowany');
-  EQ('E3.occupied-override.applied', res.applied, 3, 'applied = 3 (op2, op3, op4)');
-  EQ('E3.occupied-override.skipped', res.skipped.length, 1, 'skipped = 1 (tylko op1)');
+  EQ('E3.occupied-override.applied', res.applied, 2, 'applied = 2 (op3, op4)');
+  EQ('E3.occupied-override.skipped', res.skipped.length, 2, 'skipped = 2 (op1 override zajety, op2 komorka zajeta)');
 });
 
 scenario('E3.manual', async () => {
