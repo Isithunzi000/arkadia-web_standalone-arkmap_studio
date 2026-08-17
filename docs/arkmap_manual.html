@@ -75,7 +75,7 @@
 <button id="top-btn" onclick="window.scrollTo({top:0})" title="Do góry">↑</button>
 
 <h1>ARKMAP <span>STUDIO</span></h1>
-<div class="subtitle">Dokumentacja użytkownika · wersja edytora 1.5.39 · Isithunzi · 2026</div>
+<div class="subtitle">Dokumentacja użytkownika · wersja edytora 1.5.40 · Isithunzi · 2026</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <div class="toc">
@@ -186,7 +186,7 @@
 <tr><td>Zmiana poziomu Z</td><td>Kliknij numer poziomu w toolbarze po prawej stronie</td></tr>
 <tr><td>Zaznaczenie pokoju</td><td>Kliknij na pokój — pojawi się panel szczegółów</td></tr>
 <tr><td>Skok do innego obszaru</td><td>Dwuklik na strzałce wyjścia cross-area lub kwadraciku łącznika — przenosi widok do docelowego obszaru</td></tr>
-<tr><td>Skok po linii transportowej</td><td>Dwuklik na pokoju transportowym (dylizans/statek) — przenosi do następnego przystanku; przy kilku opcjach pojawia się okienko wyboru</td></tr>
+<tr><td>Skok po linii transportowej</td><td>Dwuklik na pokoju transportowym (dylizans/statek) — okienko z pełną listą przystanków linii; klikasz cel, znacznik „— tu jesteś" pokazuje bieżący przystanek</td></tr>
 <tr><td>Odznaczenie</td><td><kbd>Esc</kbd> lub kliknij puste miejsce</td></tr>
 </table>
 
@@ -328,10 +328,10 @@
 <tr><td><strong>Normalny</strong></td><td>Kara 30, czas × 0.5 — transport wybierany, gdy wyraźnie się opłaca</td></tr>
 <tr><td><strong>Agresywny</strong></td><td>Kara 10, czas × 0.1 — planer chętnie sadza na statek/dyliżans</td></tr>
 </table>
-<p>Przejazd rysowany jest w kolorze trasy, ale <strong>kropkowaną linią</strong> (na mapie — tam, gdzie oba przystanki są w bieżącym regionie; w podglądzie trasy — zawsze). Przy odcinku i w podsumowaniu widać liczbę przesiadek 🚢 i łączny czas transportów. Z włączonymi transportami działa wyłącznie algorytm Dijkstry (jak w kliencie Dargotha — heurystyka A* nie działa poprawnie przy skokach transportowych). Definicje linii pochodzą z projektu <code>Delwing/arkadia-web-client-extension</code> (licencja MIT) i są aktualizowane automatycznie.</p>
-<p><strong>Dwuklik na pokoju leżącym na linii transportowej</strong> przenosi widok do sąsiedniego przystanku. Gdy pokój leży w środku trasy (np. A–B–C) albo na kilku liniach, pojawia się lista wyboru z <strong>nazwami docelowych przystanków</strong> (np. „Karczma ‛Czarny Kon’” czy „Bialy Most”) — klikasz cel z nazwy, a nie pełną trasę linii; nazwa linii jest dokładana tylko wtedy, gdy nazwy docelowe się powtarzają, a gdy powtórka jest na tej samej linii (np. dwa doki w Blaviken) — dokładany jest kierunek dalszej jazdy („— kierunek: Daevon"). Dotyczy to też tras okrężnych statków (np. Ard Skellig – Faroe – Rozrog): przystanki zawsze pokazują się pod swoimi nazwami.</p>
+<p>Przejazd rysowany jest w kolorze trasy, ale <strong>kropkowaną linią</strong> (na mapie — kropkowaną linią, gdy oba przystanki są w bieżącym regionie; gdy widoczny jest tylko jeden koniec przejazdu — kropkowanym ringiem wokół tego przystanku z etykietą 🚢 i nazwą celu; w podglądzie trasy — zawsze). Przy odcinku i w podsumowaniu widać liczbę przesiadek 🚢 i łączny czas transportów. Z włączonymi transportami działa wyłącznie algorytm Dijkstry (jak w kliencie Dargotha — heurystyka A* nie działa poprawnie przy skokach transportowych). Definicje linii pochodzą z projektu <code>Delwing/arkadia-web-client-extension</code> (licencja MIT) i są aktualizowane automatycznie.</p>
+<p><strong>Dwuklik na pokoju leżącym na linii transportowej</strong> otwiera <strong>pełną listę przystanków</strong> każdej linii przechodzącej przez ten pokój — wybierasz z nazwy, dokąd przeskoczyć, zamiast przeskakiwać po jednym przystanku. Bieżący przystanek ma znacznik <strong>„— tu jesteś"</strong>; gdy przez pokój przechodzi kilka linii, lista jest pogrupowana nagłówkami z nazwami linii. Przystanki pokazują się pod własnymi nazwami (np. „Karczma ‛Czarny Kon’”, „Bialy Most”) — także na trasach okrężnych statków (np. Ard Skellig – Faroe – Rozrog).</p>
 
-<div class="note"><strong>Pathfinding uwzględnia:</strong> wagi pokojów (<code>weight</code>), wagi wyjść (<code>exit_weights</code>), wyjścia specjalne z wagami. Pokoje z flagą <code>locked</code> są pomijane (nie można przez nie przejść, ale można do nich dotrzeć jako cel). Zablokowane wyjścia (<code>exit_locks</code>, <code>special_exit_locks</code>) są ignorowane. Drzwi (<code>doors</code>) nie blokują pathfindingu.</div>
+<div class="note"><strong>Pathfinding uwzględnia:</strong> wagi pokojów (<code>weight</code>), wagi wyjść (<code>exit_weights</code>), wyjścia specjalne z wagami. Pokoje z flagą <code>locked</code> są pomijane podczas rozwijania ścieżki (nie można przez nie przejść), ale <strong>można zaplanować trasę prosto do nich</strong> — pokój z flagą locked dopuszczalny jest jako cel. To świadoma różnica względem Mudleta: natywne <code>getPath</code> w Mudlecie odrzuca trasę do pokoju locked (zwraca <code>false</code>), ArkMap Studio ją pokazuje, bo taki pokój da się zobaczyć/zaznaczyć na mapie. Zablokowane wyjścia (<code>exit_locks</code>, <code>special_exit_locks</code>) są ignorowane. Drzwi (<code>doors</code>) nie blokują pathfindingu.</div>
 
 <h3>Prędkość</h3>
 <p>Ustaw prędkość w sekundach na pokój (domyślnie 3s). Presety: 1s, 3s, 5s, 10s. Czas podróży wyświetlany jest w podsumowaniu trasy.</p>
@@ -347,13 +347,13 @@
 
 <h3>Dodatkowe akcje</h3>
 <ul>
-  <li><strong>⊙ Pokaż trasę</strong> — centruje widok mapy na obliczonej trasie</li>
+  <li><strong>⊙ Pokaż trasę</strong> — dopasowuje widok do fragmentu trasy w bieżącym regionie (obszar i poziom); gdy trasy tam nie ma — przenosi do obszaru i poziomu pierwszego punktu</li>
   <li><strong>⇅ Odwróć trasę</strong> — odwraca kierunek (zamień start i koniec)</li>
   <li><strong>⊗ Wyczyść</strong> — usuwa wszystkie waypointy</li>
 </ul>
 
 <h3>Miniaturowy podgląd trasy</h3>
-<p>W lewym dolnym rogu canvasa (gdy planer jest otwarty) pojawia się mały podgląd trasy z zaznaczonymi waypointami na tle obszaru.</p>
+<p>W lewym dolnym rogu canvasa (gdy planer jest otwarty) pojawia się mały podgląd trasy z zaznaczonymi waypointami na tle obszaru. Fragment trasy widoczny aktualnie w głównym oknie jest podświetlony na <strong>zielono</strong> — podgląd śledzi przesuwanie i zoomowanie mapy.</p>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="export-view">12. Eksport widoku (PNG / SVG)</h2>
