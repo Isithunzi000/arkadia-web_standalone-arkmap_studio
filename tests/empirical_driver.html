@@ -1377,20 +1377,23 @@ async function _e4ValidText(){
 
 scenario('E4.guard', async () => {
   await loadBase('dat');
-  // WATCHDOG F7: btn-load-arkdelta ma atrybut disabled w markup i ZADNE miejsce w kodzie
-  // go nie odlokowuje — jedyny UI-owy punkt wejscia wczytywania kalki jest martwy.
+  // FIX F7: btn-load-arkdelta odlokowywany w updateEditUI (disabled = !editMode).
   // Handler #fi-arkdelta change dziala (udowadniaja to wszystkie pozostale scenariusze E4,
   // ktore ustawiaja files programowo — dokladnie to, co zrobilby klik na zywy przycisk).
-  A('E4.guard.f7-disabled', ev("document.getElementById('btn-load-arkdelta').disabled").val === true,
-    'watchdog F7: przycisk "Wczytaj .arkdelta" trwale disabled (martwy punkt wejscia)');
-  const toastBefore = ev("document.getElementById('toast').textContent").val;
-  ex('state.editMode = false');
+  A('E4.guard.f7-disabled', ev("document.getElementById('btn-load-arkdelta').disabled").val === false,
+    'fix F7: przycisk "Wczytaj .arkdelta" aktywny w trybie edycji');
+  // poza trybem edycji: updateEditUI blokuje przycisk z powrotem
+  ex('state.editMode = false; updateEditUI();');
+  A('E4.guard.f7-viewmode-disabled', ev("document.getElementById('btn-load-arkdelta').disabled").val === true,
+    'poza trybem edycji: przycisk disabled (updateEditUI)');
+  // nawet gdyby ktos odlokowal DOM recznie, handler broni sie sam (toast guard)
+  ex("document.getElementById('btn-load-arkdelta').disabled = false");
   ex("document.getElementById('btn-load-arkdelta').click()");
-  A('E4.guard.f7-noop', ev("document.getElementById('toast').textContent").val === toastBefore,
-    'watchdog F7: klik na disabled nie odpala nawet guardu (brak toastu)');
+  A('E4.guard.f7-noop', ev("document.getElementById('toast').textContent").val.includes('wymaga trybu edycji'),
+    'klik poza trybem edycji: guard toast (handler broni sie sam)');
   const s = _e4Surface();
   A('E4.guard.no-ui', !s.err && !s.mis && !s.panel, 'zaden dialog ani panel sie nie otwiera');
-  ex('state.editMode = true');
+  ex('state.editMode = true; updateEditUI();');
 });
 
 scenario('E4.format', async () => {

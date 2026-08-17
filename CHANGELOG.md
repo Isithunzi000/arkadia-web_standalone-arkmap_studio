@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.11.0 — fix F7: przycisk „Wczytaj .arkdelta…" odlokowany w trybie edycji
+
+- **Przyczyna:** `btn-load-arkdelta` miał trwały atrybut `disabled` w markup i żadne miejsce w kodzie go nie odlokowywało — jedyny UI-owy punkt wejścia wczytywania kalki był martwy (handler `#fi-arkdelta` change działał poprawnie, co potwierdziła grupa E4).
+- **Fix:** `updateEditUI()` przełącza `disabled = !editMode` (+ tytuł-podpowiedź poza edycją). Handler kliku nadal broni się sam (toast „Wczytanie kalki wymaga trybu edycji") — podwójny guard.
+- **Testy:** flip watchdogów E4.guard (aktywny w edycji; disabled poza edycją przez `updateEditUI`; klik poza edycją → guard toast; zero dialogów) + nowa asercja node (wiring w `updateEditUI`).
+- Regresja lokalna: **665 OK / 0 FAIL** (13 harnessów node) + **434 OK / 0 FAIL** (kampania empiryczna SMOKE+E0–E6).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.10.0 — fix F6: applyDelta MOVE_ROOM realnie przenosi pokój (apply = undo = redo)
 
 - **Przyczyna:** `commitMoveRoom` jest data-only (sam wpis undo) — w realnym UI handler draga mutuje pozycję pokoju PRZED commitem, a `applyDelta` tego nie robił. Efekt: op MOVE_ROOM z kalki był cichym no-op — `applied` rósł, deltaLog i rebase rejestrowały ruch, ale pokój zostawał w miejscu, a `redoAction` po `undoAction` ruch materializował (apply != redo).
