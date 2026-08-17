@@ -174,6 +174,40 @@ console.log('— v1.5.39: okienko online + NOTICE (struktura) —');
     'NOTICE.md: tekst zgody MIT z copyright Delwing');
 }
 
+// ── v1.5.41: progres pobierania (gzip bug) + modal O programie (typografia) ──
+console.log('— v1.5.41: progres pobierania + modal O programie (struktura) —');
+{
+  // Bug: raw.githubusercontent gzipuje tekstowy .arkmap — content-length jest rozmiarem
+  // skompresowanym, reader liczy bajty po dekompresji → procent > 100%. Fix: total z index.json.
+  ok(HTML.includes('async function olFetchFile(url, label, expectedSize)'),
+    'progres: olFetchFile przyjmuje expectedSize (rozmiar z index.json)');
+  ok(HTML.includes('Number.isFinite(expectedSize) ? expectedSize : (contentLength ? parseInt(contentLength) : null)'),
+    'progres: expectedSize nadrzędne względem content-length (fallback zostaje)');
+  ok(HTML.includes('Math.min(100, Math.round(loaded / total * 100))'),
+    'progres: procent clampowany do 100%');
+  ok(HTML.includes("olFetchFile(olBaseUrl + 'map_master3.arkmap', 'map_master3.arkmap', olIndex?.arkmap_size)") &&
+     HTML.includes("olFetchFile(olBaseUrl + 'map_master3.dat', 'map_master3.dat', olIndex?.dat_size)"),
+    'progres: oba loadery przekazują rozmiary z olIndex');
+  ok(HTML.includes('<div id="ol-confirm-bar"><div id="ol-confirm-bar-fill"></div></div>') &&
+     /#ol-confirm-bar-fill\s*{[^}]*background:\s*var\(--accent\)/.test(HTML),
+    'progres: pasek postępu (markup + CSS)');
+  ok(HTML.includes("olConfirmBar.style.width = pct + '%';"),
+    'progres: pasek aktualizowany w pętli pobierania');
+
+  // Modal O programie: łamanie tekstu
+  ok(/#about-modal\s*{[^}]*width:\s*520px/.test(HTML), 'O programie: szerokość 520px');
+  ok(/\.about-desc strong\s*{[^}]*white-space:\s*nowrap/.test(HTML),
+    'O programie: nazwy formatów (strong) bez pękania w pół frazy');
+  ok((HTML.match(/text-wrap:\s*pretty/g) || []).length >= 3,
+    'O programie: text-wrap pretty na opisie/licencji/linkach');
+  const licA = HTML.indexOf('MIT License');
+  const licB = HTML.indexOf('Copyright © 2026 Isithunzi', licA);
+  ok(!HTML.slice(licA, licB).includes('open source.<br>'),
+    'O programie: licencja bez sztywnego <br> (naturalny flow)');
+  ok(/\.about-link\s*{[^}]*align-items:\s*flex-start/.test(HTML),
+    'O programie: ikona linku przy pierwszej linii (flex-start)');
+}
+
 // ── Posprzątanie ────────────────────────────────────────────────────────────
 fs.rmSync(TMP, { recursive: true, force: true });
 

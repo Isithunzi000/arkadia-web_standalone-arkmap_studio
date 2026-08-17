@@ -354,7 +354,7 @@ console.log('── T6: v1.5.40 — lista przystanków / hop-markery / fit / jes
   const ovA = NEW.indexOf('function wpUpdateOverview() {');
   const ovB = NEW.indexOf('// ── Markery WP', ovA);
   const OV = NEW.slice(ovA, ovB);
-  ok(OV.includes('const ptRoom = [null]') && OV.includes('ptRoom.push(path[i + 1])'), 'minimapka: ptRoom śledzi roomId per punkt');
+  ok(OV.includes('const ptRoom = [null]') && OV.includes('ptRoom.push(steps[k + 1])'), 'minimapka: ptRoom śledzi roomId per punkt (v1.5.41: pętla via-steps)');
   ok(OV.includes('rgba(0,230,170,0.95)'), 'minimapka: podświetlenie „jesteś tu" (zieleń)');
   const frA = NEW.indexOf('function fitRouteToView()');
   const frB = NEW.indexOf('// Przelicz wszystkie odcinki trasy', frA);
@@ -364,6 +364,67 @@ console.log('── T6: v1.5.40 — lista przystanków / hop-markery / fit / jes
   ok(NEW.includes('function showTransportStopChooser(lines, sx, sy)'), 'chooser: showTransportStopChooser istnieje');
   ok(NEW.includes("here.textContent = '— tu jesteś';"), 'chooser: znacznik „— tu jesteś"');
   ok(/\.tp-jump-here\s*{[^}]*#00c896/.test(NEW), 'CSS: .tp-jump-here zielony');
+}
+
+// ── T7: v1.5.41 — via-path: geometria przejazdów lądowych ──
+console.log('── T7: v1.5.41 — via-path (dyliżans przez pokoje) ──');
+{
+  function sliceH(a, b) {
+    const i = NEW.indexOf(a), j = NEW.indexOf(b);
+    if (i < 0 || j < 0 || j <= i) throw new Error('kotwice T7: ' + a);
+    return NEW.slice(i, j);
+  }
+  const dirsBlock = sliceH('const DIRS = [', '// Mudlet door int values');
+  const pfBlock = sliceH('// Binarny min-heap', 'function _recomputeAstarParams');
+
+  // Struktura: maszyneria w bloku pathfindingowym + konsumenci
+  ok(pfBlock.includes('function _hopViaRooms(hop)') && pfBlock.includes('function _computeHopVia(hop)'),
+    'via: _hopViaRooms/_computeHopVia w bloku pathfindingowym');
+  ok(pfBlock.includes('let _hopViaCache = new Map()'), 'via: cache Map per mapa');
+  ok(pfBlock.includes('/woz|dylizans|powoz/'), 'via: klasyfikacja ląd/woda po komendach wsiadania');
+  ok(NEW.includes('const via = isHop ? _hopViaRooms(legHops[i]) : null;'), 'drawRoute: hop → via-path');
+  ok(NEW.includes('const via = hop ? _hopViaRooms(hop) : null;'), 'minimapka: hop → via-path');
+  const wrA = NEW.indexOf('function wpRecalcPaths()');
+  ok(NEW.slice(wrA, wrA + 400).includes('_hopViaCache.clear()'), 'via: cache czyszczone w wpRecalcPaths (edycje mapy)');
+  const amA = NEW.indexOf('function applyMap(map)');
+  ok(NEW.slice(amA, amA + 2000).includes('_hopViaCache.clear()'), 'via: cache czyszczone w applyMap (nowa mapa)');
+
+  // Funkcjonalny: syntetyczna mini-mapa 1—2—3—4 + linia lądowa z DEFS
+  const mkRoom = (id, x, exits) => ({ id, x, y: 0, z: 0, exits });
+  const fakeState = {
+    roomById: {
+      1: mkRoom(1, 0, { e: 2 }),
+      2: mkRoom(2, 2, { w: 1, e: 3 }),
+      3: mkRoom(3, 4, { w: 2, e: 4 }),
+      4: mkRoom(4, 6, { w: 3 }),
+    },
+    roomArea: { 1: 'A', 2: 'A', 3: 'A', 4: 'A' },
+  };
+  const fakeWp = { dirMode: 'cardinal', transportMode: 'normal' }; // celowo restrykcyjne — via ma je ignorować
+  const fakeDefs = [['Testowo Wóz', ['wem', 'wsiadz do wozu', 'wlm'], 'wysiadz',
+    [[1, 2, 10, 'Przystanek B'], [2, 3, 10, 'Przystanek C'], [3, 4, 10, 'Kraniec']]]];
+  const api = new Function('state', 'wpState', 'TRANSPORT_DEFS',
+    dirsBlock + '\n' + pfBlock + '\nreturn { _hopViaRooms };')(fakeState, fakeWp, fakeDefs);
+
+  const hopLand = { name: 'Testowo Wóz', board: ['wem', 'wsiadz do wozu', 'wlm'], from: 1, to: 4,
+                    via: ['Przystanek B', 'Przystanek C'], label: 'Kraniec' };
+  const via = api._hopViaRooms(hopLand);
+  ok(Array.isArray(via) && via.length === 4 && via[0] === 1 && via[3] === 4,
+    'via: przejazd 1→4 przez przystanki pośrednie → pełna ścieżka pokoi [1,2,3,4]');
+  ok(api._hopViaRooms(hopLand) === via, 'via: cache zwraca tę samą referencję');
+  const hopShip = { name: 'Testowo Statek', board: ['wem', 'wsiadz na statek', 'wlm'], from: 1, to: 4, via: [], label: 'X' };
+  ok(api._hopViaRooms(hopShip) === null, 'via: statek (brak woz/dylizans/powoz) → null → fallback kreska/ring');
+  const hopDead = { name: 'Testowo Wóz', board: ['wsiadz do wozu'], from: 1, to: 99, via: [], label: 'X' };
+  ok(api._hopViaRooms(hopDead) === null, 'via: cel poza łańcuchem DEFS → null');
+  ok(fakeWp.dirMode === 'cardinal' && fakeWp.transportMode === 'normal',
+    'via: filtry planera przywrócone po liczeniu (brak ubocznych)');
+
+  // Realne DEFS: klasyfikacja spójna z danymi (linie lądowe ≠ wodne)
+  const DEFS = transportDefs(NEW);
+  const land = DEFS.filter(d => /woz|dylizans|powoz/.test(d[1].join(' ')));
+  const water = DEFS.filter(d => !/woz|dylizans|powoz/.test(d[1].join(' ')));
+  ok(land.length >= 10 && water.length >= 20, 'via: realne DEFS — linie lądowe i wodne rozdzielone (≥10 / ≥20)');
+  ok(land.every(d => /statek/.test(d[1].join(' ')) === false), 'via: żadna linia lądowa nie ma „statku" w komendach');
 }
 console.log(`\n═══ planner_ui.js: ${pass} OK, ${fail} FAIL ═══`);
 process.exit(fail ? 1 : 0);
