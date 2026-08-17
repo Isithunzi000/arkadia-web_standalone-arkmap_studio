@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.13.0 — fix F3: applyDelta EDIT_CL skipuje nieistniejącą CL (zbieżność classify↔apply)
+
+- **Przyczyna:** klasyfikator oceniał edycję nieistniejącej custom line jako „impossible" (panel odznaczał op), ale surowe `applyDelta` tworzyło CL „po cichu" — rozjazd klasyfikacji i wykonania.
+- **Fix (`applyDelta`, case EDIT_CL):** brak `custom_lines[dir]` → skip „custom line nie istnieje" (jak DELETE_CL / DELETE_SUPPRESSOR). Dodanie CL z kalki pozostaje w gestii ADD_CL.
+- **Testy (flip w tym samym commicie):** E2.EDIT_CL.del — apply 1/0 → 0/1, CL nie powstaje. Pozostałe komórki EDIT_CL (clean/mod/conflict) i E1 bez zmian (w E1 CL istnieje z wcześniejszego ADD_CL kalki).
+- Regresja lokalna: **665 OK / 0 FAIL** (13 harnessów node) + **435 OK / 0 FAIL** (kampania empiryczna SMOKE+E0–E6).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.12.0 — fix F5/F4: applyDelta ADD_ROOM nie stackuje na zajętej komórce (guard na żywo)
 
 - **Przyczyna:** żywotny guard zajętości istniał tylko na ścieżce override („pozycja zastępcza zajęta"); surowy ADD_ROOM (bez override'u) aplikował się na zajętej komórce i tworzył stos pokoi (F4/F5).

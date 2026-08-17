@@ -12681,7 +12681,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.12.0';
+const APP_VERSION = 'v1.13.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -18321,6 +18321,9 @@ function applyDelta(delta, onlySeq, overrides) {
         case 'EDIT_CL': {
           const room = state.roomById[op.target.roomId];
           if (!room) { skip('pokój nie istnieje'); break; }
+          // Zbieznosc classify<->apply (F3): edycja nieistniejacej CL klasyfikator
+          // ocenia jako impossible — apply rowniez skipuje zamiast tworzyc CL po cichu.
+          if (!room.custom_lines?.[op.target.dir]) { skip('custom line nie istnieje'); break; }
           const entry = { type: 'EDIT_CL', roomId: room.id, dir: op.target.dir,
             before: room.custom_lines?.[op.target.dir] ? JSON.parse(JSON.stringify(room.custom_lines[op.target.dir])) : null,
             after: JSON.parse(JSON.stringify(op.payload.after)), label: op.label };
