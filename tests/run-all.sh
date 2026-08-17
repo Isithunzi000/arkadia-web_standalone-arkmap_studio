@@ -3,7 +3,7 @@
 set -e
 cd "$(dirname "$0")/.."
 FAILED=0
-for t in tests/a12a14_undo_core.js tests/a13_delete_area.js tests/a7_readbuffer.js tests/a9_pixmap.js tests/dir_filter.js tests/transport.js tests/share_link.js tests/planner_ui.js tests/sync_map.js tests/dir_validation.js tests/transports_sync.js tests/converters_crc.js; do
+for t in tests/a12a14_undo_core.js tests/a13_delete_area.js tests/a7_readbuffer.js tests/a9_pixmap.js tests/dir_filter.js tests/transport.js tests/share_link.js tests/planner_ui.js tests/sync_map.js tests/dir_validation.js tests/transports_sync.js tests/converters_crc.js tests/delta.js; do
   echo "═══ $t ═══"
   node "$t" || FAILED=1
   echo

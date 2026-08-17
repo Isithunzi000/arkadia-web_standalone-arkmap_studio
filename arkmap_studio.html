@@ -12575,7 +12575,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.42';
+const APP_VERSION = 'v1.5.43';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -12595,6 +12595,7 @@ Object.assign(state, {
   _paintHover:        null,   // ZAD 14: id pokoju pod kursorem w trybie paint | null
   undoStack:          [],
   redoStack:          [],
+  deltaLog:           [],   // ARKDELTA: pelny log edycji — lustro operacji dla eksportu .arkdelta; bez capu 50 (cap dotyczy tylko undoStack)
   // dirty = "pamięć może się różnić od ostatniego potwierdzonego zapisu" (audyt A11').
   // Ustawiana przy KAŻDEJ zmianie stosu undo (pushUndo + undo/redo), kasowana
   // WYŁĄCZNIE po potwierdzonym zapisie. Konserwatywna: undo do stanu zapisanego
@@ -13400,6 +13401,7 @@ function _dispatchRedo(entry) {
 function undoAction() {
   if (!state.undoStack.length) return;
   const entry = state.undoStack.pop();
+  state.deltaLog.pop();  // ARKDELTA mirror
   _dispatchUndo(entry);
   state.redoStack.push(entry);
   state.dirty = true;  // A11': undo po zapisie odjeżdża od treści pliku
@@ -13412,6 +13414,7 @@ function redoAction() {
   const entry = state.redoStack.pop();
   _dispatchRedo(entry);
   state.undoStack.push(entry);
+  state.deltaLog.push(entry);  // ARKDELTA mirror
   state.dirty = true;  // A11'
   updateUndoRedoUI();
   draw();
@@ -13421,6 +13424,7 @@ function undoToIndex(targetIdx) {
   const startLen = state.undoStack.length;
   while (state.undoStack.length > targetIdx) {
     const entry = state.undoStack.pop();
+    state.deltaLog.pop();  // ARKDELTA mirror
     _dispatchUndo(entry);
     state.redoStack.push(entry);
   }
@@ -13445,6 +13449,7 @@ function redoAll() {
     const entry = state.redoStack.pop();
     _dispatchRedo(entry);
     state.undoStack.push(entry);
+    state.deltaLog.push(entry);  // ARKDELTA mirror
   }
   if (n > 0) state.dirty = true;  // A11'
   updateUndoRedoUI();
@@ -13453,10 +13458,12 @@ function redoAll() {
 }
 
 // pushUndo — choke point nowych akcji edycji (audyt A11'): push + flaga dirty.
+// ARKDELTA: kazdy wpis trafia tez do state.deltaLog (log bez capu, lustro 1:1 z aktywnym prefiksem stosu).
 // NIE używać w ścieżkach redo (redoAction/redoAll) — tam czyszczenie redoStack byłoby błędem.
 // Cap 50 i czyszczenie redoStack pozostają inline przy miejscach wywołań.
 function pushUndo(entry) {
   state.undoStack.push(entry);
+  state.deltaLog.push(entry);
   state.dirty = true;
 }
 
@@ -13493,6 +13500,7 @@ applyMap = function(map) {
   // Reset editor state (Pass 59 — 11 dodatkowych kroków)
   state.undoStack = [];
   state.redoStack = [];
+  state.deltaLog = [];  // ARKDELTA: nowa mapa = pusty log
   state.dirty = false;  // A11': nowa mapa = czysty stan
   state.editDirty = false; state.editSnapshot = null; state.areaSnapshot = null;  // krok 3
   state.selectedLabel = null;  // krok 4
@@ -15002,6 +15010,7 @@ function cancelRoomEdit() {
     if (lastUndo.type === 'ADD_ROOM' && lastUndo.roomId === state.selected) {
       // Undo the add
       state.undoStack.pop();
+      state.deltaLog.pop();  // ARKDELTA mirror (cichy pop A11')
       state.dirty = true;  // A11': cichy pop — gdy pokój był już zapisany, treść odjeżdża od pliku
       const areaId = state.roomArea[lastUndo.roomId];
       const area = state.areas.get(areaId);
