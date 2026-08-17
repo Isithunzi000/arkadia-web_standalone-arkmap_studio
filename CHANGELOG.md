@@ -2,6 +2,12 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.5.42 — „⊙ Pokaż trasę" fituje via-path (pokoje drogi przejazdów lądowych)
+
+- **Fix logiki fitu:** v1.5.40 fitowała fragment trasy w bieżącym regionie liczony ze skompresowanej ścieżki (kroki piesze + punkty wsiadania/wysiadania); v1.5.41 dodała rysowanie via-path, ale fit o nim nie wiedział. Efekt na demie 7275→6433: w Averlandzie fit obejmował **2 pokoje**, gdy fizycznie narysowana trasa to **82 pokoje** tego obszaru. Teraz `fitRouteToView` dokłada do `routeIds` pokoje `_hopViaRooms` każdego hopu — fit geometry == geometria rysowana. Skutek uboczny: obszar czysto pośredni (przejezdny dyliżans, bez waypointa) też dopasowuje widok do fragmentu drogi. Statki bez zmian (via = null).
+- **Testy:** `tests/planner_ui.js` +1 asercja strukturalna (fit uwzględnia via-path) → 112 asercji. Regresja: **451 OK / 0 FAIL** (11 harnessów).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.5.41 — dyliżans przez pokoje drogi (via-path), typografia „O programie", uczciwy progres pobierania
 
 - **Via-path przejazdów lądowych:** dyliżans/wóz/powóz (rozpoznawane po komendach wsiadania z TRANSPORT_DEFS: `woz|dylizans|powoz` — 14 linii) rysowany jest kropkowaną łamaną przez realne pokoje drogi między kolejnymi przystankami. `_hopViaRooms(hop)` odtwarza łańcuch przystanków z DEFS (hop.via trzyma tylko etykiety), liczy pieszą Dijkstrą ścieżkę między każdą parą (wszystkie kierunki, bez transportów — trasa wagonu jest fizyczna, nie zależy od filtrów planera) i skleja; cache per `linia|from>to`, czyszczony w `wpRecalcPaths` (edycje) i `applyMap` (nowa mapa). Rysowanie per-subsegment z widocznością obszar+poziom — przejazd „przechodzi" przez obszary pośrednie. Ring z etykietą przy jednym widocznym końcu zostaje. Statki (27 linii) bez via-path — prosta kreska/ring jak dotychczas; minimapka planera dostaje tę samą geometrię. Via-path czysto poglądowy: koszt hopu liczony z czasów linii bez zmian. Weryfikacja na realnych danych: 70/85 legów ma pieszą ścieżkę; linia z dema (Nuln—Blekitna Wstega) 5/5.

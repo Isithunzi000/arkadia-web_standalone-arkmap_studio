@@ -9718,6 +9718,16 @@ function fitRouteToView() {
     if (!path) continue;
     for (const id of path) routeIds.add(id);
   }
+  // v1.5.42: pokoje drogi przejazdów lądowych (via-path) też są fizyczną trasą —
+  // bez nich fit obejmował skompresowaną ścieżkę (np. 2 pokoje), gdy narysowanych jest 82.
+  for (const legHops of wpState.hops) {
+    if (!legHops) continue;
+    for (const h of legHops) {
+      if (!h) continue;
+      const via = _hopViaRooms(h);
+      if (via) for (const id of via) routeIds.add(id);
+    }
+  }
 
   const curAreaRoute = [...routeIds].filter(id => state.roomArea[id] === state.areaId);
   let targetAreaId, targetZ;
@@ -12565,7 +12575,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.5.41';
+const APP_VERSION = 'v1.5.42';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
