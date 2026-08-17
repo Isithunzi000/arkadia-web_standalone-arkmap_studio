@@ -361,6 +361,8 @@ console.log('── T6: v1.5.40 — lista przystanków / hop-markery / fit / jes
   const FR = NEW.slice(frA, frB);
   ok(FR.includes('const curAreaRoute = ') && FR.includes('routeIds'), 'fitRouteToView: fit do bieżącego regionu (routeIds/curAreaRoute)');
   ok(FR.includes('const pad = 4;'), 'fitRouteToView: pad 4 (fit do trasy, nie mapy)');
+  ok(FR.includes('const via = _hopViaRooms(h);') && FR.includes('for (const id of via) routeIds.add(id)'),
+    'fitRouteToView: fit uwzględnia via-path — pokoje drogi przejazdów lądowych (v1.5.42)');
   ok(NEW.includes('function showTransportStopChooser(lines, sx, sy)'), 'chooser: showTransportStopChooser istnieje');
   ok(NEW.includes("here.textContent = '— tu jesteś';"), 'chooser: znacznik „— tu jesteś"');
   ok(/\.tp-jump-here\s*{[^}]*#00c896/.test(NEW), 'CSS: .tp-jump-here zielony');
