@@ -12681,7 +12681,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.9.0';
+const APP_VERSION = 'v1.10.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -18213,7 +18213,14 @@ function applyDelta(delta, onlySeq, overrides) {
         case 'MOVE_ROOM': {
           const room = state.roomById[op.target.roomId];
           if (!room) { skip('pokój nie istnieje'); break; }
-          commitMoveRoom(room, room.x, room.y, room.z ?? 0, op.payload.toX, op.payload.toY, op.payload.toZ);
+          // commitMoveRoom jest data-only (sam wpis undo) — jak w handlerze drag,
+          // caller mutuje pozycje PRZED commitem. Bez tego apply byl cichym no-op.
+          const fx = room.x, fy = room.y, fz = room.z ?? 0;
+          const tx = op.payload.toX, ty = op.payload.toY, tz = op.payload.toZ ?? fz;
+          if (fx === tx && fy === ty && fz === tz) { skip('pokój już jest na tej pozycji'); break; }
+          room.x = tx; room.y = ty; room.z = tz;
+          commitMoveRoom(room, fx, fy, fz, tx, ty, tz);
+          buildRoomsZ();
           applied++;
           break;
         }
