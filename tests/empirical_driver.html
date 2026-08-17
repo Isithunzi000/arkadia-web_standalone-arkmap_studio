@@ -162,6 +162,9 @@ function buildMixedDelta() {
   const mv = ev('(function(){ const r = state.roomById[' + pick.b + '];'
     + ' return { x: r.x, y: r.y, z: r.z }; })()').val;
   const roomB = W().eval('state.roomById[' + pick.b + ']');
+  // commitMoveRoom jest data-only — jak w handlerze drag, caller mutuje pozycje PRZED
+  // commitem (inaczej stan "po commitach" nie pokrywa sie ze stanem "po apply").
+  W().eval('(function(){ const r = state.roomById[' + pick.b + ']; r.x = ' + (mv.x + 500) + '; r.y = ' + (mv.y + 500) + '; })()');
   W().commitMoveRoom(roomB, mv.x, mv.y, mv.z, mv.x + 500, mv.y + 500, mv.z);  // MOVE_ROOM
   W().deleteRoom(pick.c);                                  // DELETE_ROOM (z wyjściami)
   return ev('buildDelta()').val;
@@ -415,6 +418,9 @@ function buildE1Delta() {
   // 12-13. MOVE_ROOM + MOVE_ROOM_TO_AREA (do sid-area)
   const rd = ev('(function(){ const r = state.roomById[' + P.roomD + '];'
     + ' return { x: r.x, y: r.y, z: r.z }; })()').val;
+  // commitMoveRoom jest data-only — jak w handlerze drag, caller mutuje pozycje PRZED
+  // commitem (inaczej stan "po commitach" nie pokrywa sie ze stanem "po apply").
+  W().eval('(function(){ const r = state.roomById[' + P.roomD + ']; r.x = ' + (rd.x + 500) + '; r.y = ' + (rd.y + 500) + '; })()');
   W().commitMoveRoom(W().eval('state.roomById[' + P.roomD + ']'), rd.x, rd.y, rd.z, rd.x + 500, rd.y + 500, rd.z);
   expect('MOVE_ROOM');
   W().commitMoveRoomToArea(P.roomE, na);
@@ -558,14 +564,14 @@ scenario('E1.idempotent', async () => {
   const items2 = W().classifyDelta(_e1Delta);
   const proj = items2.map(i => i.type + ':' + i.cls);
   const doneN = proj.filter(p => p.endsWith(':done')).length;
-  A('E1.idempotent.done11', doneN === 11, 'watchdog: done ' + doneN + '/27 [nie-done: '
+  A('E1.idempotent.done12', doneN === 12, 'watchdog F2: done ' + doneN + '/27 (po fixie F6 MOVE_ROOM=done) [nie-done: '
     + proj.filter(p => !p.endsWith(':done')).join(', ') + ']');
   // Sciezka panelu: drugi apply z domyslnie zaznaczonych — watchdog rozbieznosci
   const checkedSeqs = new Set(items2.filter(i => i.checked).map(i => i.seq));
   const r3 = W().applyDelta(_e1Delta, checkedSeqs, undefined);
   const crc2 = ev('_computeBaseInfo().crc').val;
-  A('E1.idempotent.panel55', r3.applied === 5 && r3.skipped.length === 5,
-    'watchdog: drugi apply (panel) applied=' + r3.applied + ' skipped=' + r3.skipped.length);
+  A('E1.idempotent.panel45', r3.applied === 4 && r3.skipped.length === 5,
+    'watchdog F2: drugi apply (panel) applied=' + r3.applied + ' skipped=' + r3.skipped.length);
   A('E1.idempotent.panel-diverges', crc2 !== crc1,
     'watchdog: drugi apply (panel) ROZBIEGA stan [crc1=' + crc1 + ' crc2=' + crc2 + ']');
   // Surowy drugi apply — swiezy tor (zeby undoStack nie przekroczyl capa 50)
@@ -573,8 +579,8 @@ scenario('E1.idempotent', async () => {
   W().applyDelta(_e1Delta, null, undefined);
   const r4 = W().applyDelta(_e1Delta, null, undefined);
   const crc4 = ev('_computeBaseInfo().crc').val;
-  A('E1.idempotent.raw2-22', r4.applied === 22 && r4.skipped.length === 5,
-    'watchdog: surowy drugi apply applied=' + r4.applied + ' skipped=' + r4.skipped.length);
+  A('E1.idempotent.raw2-21', r4.applied === 21 && r4.skipped.length === 6,
+    'watchdog F2: surowy drugi apply applied=' + r4.applied + ' skipped=' + r4.skipped.length);
   A('E1.idempotent.raw2-diverges', crc4 !== crc1, 'watchdog: surowy drugi apply ROZBIEGA stan');
   W().undoAll();
   EQ('E1.idempotent.undo', ev('_computeBaseInfo().crc').val, ev('state.baseInfo.crc').val,
@@ -772,6 +778,8 @@ const E2_DESCS = [
   na: { conflict: 'malowanie nadpisuje bez sprawdzania before — konflikt = mod (ok)' } },
 { type: 'MOVE_ROOM', ops: 1,
   make: P => { const rd = ev('(function(){ const r = state.roomById[' + P.roomD + ']; return { x: r.x, y: r.y, z: r.z }; })()').val;
+    // commitMoveRoom jest data-only — caller mutuje pozycje PRZED commitem (jak drag).
+    W().eval('(function(){ const r = state.roomById[' + P.roomD + ']; r.x = ' + (rd.x + 500) + '; r.y = ' + (rd.y + 500) + '; })()');
     W().commitMoveRoom(W().eval('state.roomById[' + P.roomD + ']'), rd.x, rd.y, rd.z, rd.x + 500, rd.y + 500, rd.z); },
   cells: {
     clean:    { exp: { cls: 'ok' } },
@@ -1210,13 +1218,13 @@ scenario('E3.apply', async () => {
   ex('_deltaApplyReviewed()');
   EQ('E3.apply.op1', _e3CountAt(exps[0].x, exps[0].y), 1, 'op1: pokoj na pozycji zastepczej');
   EQ('E3.apply.op2', _e3CountAt(exps[1].x, exps[1].y), 1, 'op2: pokoj na pozycji zastepczej');
-  // WATCHDOG F6: applyDelta MOVE_ROOM = ciche no-op. commitMoveRoom jest data-only
-  // (w realnym UI caller mutuje pozycje PRZED commitem), a applyDelta nie mutuje —
-  // applied++ rosnie, wpis deltaLog i rebaz powstaja, ale pokoj zostaje w miejscu.
-  EQ('E3.apply.op3-f6', _e3CountAt(exps[2].x, exps[2].y), 0,
-    'watchdog F6: pokoj NIE trafia na pozycje zastepcza (MOVE w applyDelta = no-op)');
-  EQ('E3.apply.op3-f6-origin', ev('[state.roomById[' + t.mvId + '].x, state.roomById[' + t.mvId + '].y]').val, origPos,
-    'watchdog F6: pokoj zostaje na pozycji wyjsciowej');
+  // FIX F6 (regression guard): applyDelta MOVE_ROOM mutuje pozycje przed commitem
+  // (jak handler drag) — pokoj realnie trafia na pozycje zastepcza.
+  EQ('E3.apply.op3-f6', _e3CountAt(exps[2].x, exps[2].y), 1,
+    'fix F6: pokoj trafia na pozycje zastepcza (MOVE w applyDelta dziala)');
+  EQ('E3.apply.op3-f6-origin', ev('[state.roomById[' + t.mvId + '].x, state.roomById[' + t.mvId + '].y]').val,
+    [exps[2].x, exps[2].y],
+    'fix F6: pokoj opuszcza pozycje wyjsciowa na rzecz zastepczej');
   EQ('E3.apply.op4', _e3CountAt(10000, 9999), 1, 'op4 (kontrolny) na docelowej');
   EQ('E3.apply.no-stack', _e3CountAt(9999, 9999), 1, 'na (9999,9999) tylko pokoj upstream (brak stacku)');
   EQ('E3.apply.no-stack2', _e3CountAt(9998, 9999), 1, 'na (9998,9999) tylko pokoj upstream (brak stacku)');
@@ -1224,7 +1232,7 @@ scenario('E3.apply', async () => {
     + ' ? [e.type, e.toX, e.toY] : [e.type, e.roomData.x, e.roomData.y]))').val);
   EQ('E3.apply.log', log, [['ADD_ROOM', exps[0].x, exps[0].y], ['ADD_ROOM', exps[1].x, exps[1].y],
     ['MOVE_ROOM', exps[2].x, exps[2].y], ['ADD_ROOM', 10000, 9999]],
-    'watchdog F6: deltaLog REJESTRUJE efektywne wspolrzedne MOVE mimo ze pokoj nie drgnal');
+    'fix F6: deltaLog rejestruje efektywne wspolrzedne MOVE zgodnie z realnym ruchem');
   const patched = JSON.parse(ev('JSON.stringify(_deltaReview.delta.ops.map(o => o.type === "ADD_ROOM"'
     + ' ? [o.payload.room.x, o.payload.room.y] : (o.type === "MOVE_ROOM" ? [o.payload.toX, o.payload.toY] : null)))').val);
   EQ('E3.apply.rebased', patched, [[exps[0].x, exps[0].y], [exps[1].x, exps[1].y], [exps[2].x, exps[2].y], [10000, 9999]],
@@ -1258,8 +1266,9 @@ scenario('E3.rebase', async () => {
   EQ('E3.rebase.applied', res.applied, 4, 'apply na czystej: 4 zastosowane');
   EQ('E3.rebase.skipped', res.skipped.length, 0, 'apply na czystej: 0 pominiete');
   EQ('E3.rebase.pos', _e3CountAt(exps[0].x, exps[0].y), 1, 'pokoj na poprawionej pozycji');
-  EQ('E3.rebase.f6-stays', ev('[state.roomById[' + t.mvId + '].x, state.roomById[' + t.mvId + '].y]').val, orig3,
-    'watchdog F6: MOVE rowniez na trzeciej bazie nie przesuwa pokoju');
+  EQ('E3.rebase.f6-stays', ev('[state.roomById[' + t.mvId + '].x, state.roomById[' + t.mvId + '].y]').val,
+    [exps[2].x, exps[2].y],
+    'fix F6: MOVE przenosi pokoj rowniez na trzeciej, czystej bazie');
 });
 
 scenario('E3.occupied-override', async () => {
@@ -1276,12 +1285,12 @@ scenario('E3.occupied-override', async () => {
   // guardu zajetosci poza sciezka override: pokoj APPLIKUJE SIE i stackuje.
   EQ('E3.occupied-override.f5-stack', _e3CountAt(9999, 9999), 2,
     'watchdog F5: stack 2 pokoi na (9999,9999) — op2 (bez override) applikuje sie mimo zajetej komorki');
-  // WATCHDOG F6: op3 MOVE_ROOM liczony jako applied, ale pokoj nie drga (no-op, patrz E3.apply) —
-  // sprawa braku zywotnego guardu zajetosci dla MOVE staje sie przez to moot.
+  // FIX F6: op3 MOVE_ROOM applikuje sie realnie. Cel (9998,9999) jest zajety przez
+  // upstream, a MOVE (jak drag w UI) nie ma guardu zajetosci — stack UDOKUMENTOWANY.
   A('E3.occupied-override.f6-counted', !res.skipped.find(s => s.seq === 3),
-    'watchdog F6: MOVE_ROOM liczony jako applied');
-  EQ('E3.occupied-override.f6-noop', _e3CountAt(9998, 9999), 1,
-    'watchdog F6: pokoj nie przeniesiony — na (9998,9999) tylko upstream');
+    'MOVE_ROOM liczony jako applied');
+  EQ('E3.occupied-override.f6-noop', _e3CountAt(9998, 9999), 2,
+    'fix F6: pokoj przeniesiony na zajete (9998,9999) — stack z upstream (jak drag, udokumentowane)');
   EQ('E3.occupied-override.control', _e3CountAt(10000, 9999), 1, 'op4 (kontrolny) zastosowany');
   EQ('E3.occupied-override.applied', res.applied, 3, 'applied = 3 (op2, op3, op4)');
   EQ('E3.occupied-override.skipped', res.skipped.length, 1, 'skipped = 1 (tylko op1)');
@@ -1692,8 +1701,8 @@ scenario('E6.newwork-clears-redo', async () => {
 });
 
 scenario('E6.redo-f6', async () => {
-  // WATCHDOG F6 (ciag dalszy): apply MOVE_ROOM nie rusza pokoju, ale wpis undo/redo
-  // zawiera from/to — redoAction po undoAction MATERIALIZUJE ruch, ktorego apply nie zrobil.
+  // FIX F6 (regression guard): apply MOVE_ROOM realnie rusza pokojem, a undo/redo
+  // sa z nim spojne (apply = redo, undo cofa).
   await loadBase('dat');
   const mvId = ev('Object.values(state.roomById)[0].id').val;
   const orig = JSON.parse(ev('JSON.stringify([state.roomById[' + mvId + '].x, state.roomById[' + mvId + '].y])').val);
@@ -1704,13 +1713,13 @@ scenario('E6.redo-f6', async () => {
   const res = JSON.parse(ev('JSON.stringify(applyDelta(validateDeltaText(' + JSON.stringify(text) + ').delta))').val);
   EQ('E6.redo-f6.applied', res.applied, 1, 'apply: MOVE policzony jako naniesiony');
   EQ('E6.redo-f6.stays', JSON.parse(ev('JSON.stringify([state.roomById[' + mvId + '].x, state.roomById[' + mvId + '].y])').val),
-    orig, 'watchdog F6: pokoj zostaje na miejscu po apply');
+    [7100, 7100], 'fix F6: apply realnie przenosi pokoj');
   ex('undoAction()');
   EQ('E6.redo-f6.undo', JSON.parse(ev('JSON.stringify([state.roomById[' + mvId + '].x, state.roomById[' + mvId + '].y])').val),
-    orig, 'undo: no-op (pokoj byl na miejscu)');
+    orig, 'undo cofa ruch do pozycji wyjsciowej');
   ex('redoAction()');
   EQ('E6.redo-f6.redo-moves', JSON.parse(ev('JSON.stringify([state.roomById[' + mvId + '].x, state.roomById[' + mvId + '].y])').val),
-    [7100, 7100], 'watchdog F6: redo MATERIALIZUJE ruch — apply i redo nie sa spojne');
+    [7100, 7100], 'fix F6: redo przywraca ruch — apply = undo = redo (spojne)');
 });
 
 // ═══ Runner ═══

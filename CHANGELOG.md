@@ -2,6 +2,16 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.10.0 — fix F6: applyDelta MOVE_ROOM realnie przenosi pokój (apply = undo = redo)
+
+- **Przyczyna:** `commitMoveRoom` jest data-only (sam wpis undo) — w realnym UI handler draga mutuje pozycję pokoju PRZED commitem, a `applyDelta` tego nie robił. Efekt: op MOVE_ROOM z kalki był cichym no-op — `applied` rósł, deltaLog i rebase rejestrowały ruch, ale pokój zostawał w miejscu, a `redoAction` po `undoAction` ruch materializował (apply != redo).
+- **Fix (`applyDelta`, case MOVE_ROOM):** mutacja pozycji przed commitem (wzorzec 1:1 z handlera draga: zapis from, ustaw room.x/y/z, commit) + `buildRoomsZ()` po ruchu + skip „pokój już jest na tej pozycji" dla opu bez ruchu (wcześniej: no-move guard w `commitMoveRoom` milkł, a `applied` i tak rósł).
+- **Polityka zajętości MOVE bez zmian (udokumentowana):** MOVE na zajętą komórkę wykonuje się — tak jak drag w UI (toast o kolizji, brak guardu). Asercja E3.occupied-override.f6-noop dokumentuje stack.
+- **Testy (flip watchdogów F6 w tym samym commicie):** E3.apply.op3-f6/op3-f6-origin (pokój realnie na pozycji zastępczej), E3.apply.log (deltaLog zgodny z realnym ruchem), E3.rebase.f6-stays (MOVE działa też na czystej bazie), E3.occupied-override.f6-noop (stack 2 na zajętej — udokumentowany), E6.redo-f6.* (apply przenosi, undo cofa, redo przywraca — spójne). Skutki uboczne spójne z fixem: E1.idempotent done-coverage 11→12/27 (MOVE_ROOM wykrywany jako done przy re-klasyfikacji), drugi apply panelowy 5→4, surowy drugi apply 22→21 (no-move skip) — watchdogi F2 zaktualizowane do nowych liczb; kalki budowane w E1/E2 mutują pozycję przed `commitMoveRoom` (wzorzec draga), co naprawia E1.roundtrip.crc.
+- **Pinezki wersji:** `tests/delta.js` 3x → v1.10.0.
+- Regresja lokalna: **665 OK / 0 FAIL** (13 harnessów node) + **434 OK / 0 FAIL** (kampania empiryczna SMOKE+E0–E6, Chromium headless).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## Kampania empiryczna kalki .arkdelta (E0–E6) — 434 asercje w prawdziwej przeglądarce (bez zmian w aplikacji)
 
 - **Harness empiryczny (`tests/empirical_driver.html` + `tests/empirical.sh`):** driver ładuje PEŁNĄ aplikację w iframe (ten sam origin przez lokalny http.server) i wykonuje scenariusze przez most eval — prawdziwe commity, prawdziwe handlery DOM (file input, menu kontekstowe, przyciski panelu), zero mocków. Wyniki jako linie `R|PASS/FAIL|id|msg` w dumpowanym DOM; runner: Chromium headless (`--virtual-time-budget`), fixture `map_master3.dat` (release 0.205.0). Grupy i pokrycie:
