@@ -302,6 +302,10 @@
   .dp-filter.active { color:var(--fg); border-color:var(--accent); background:var(--sel); }
   .dp-check { margin:0 2px 0 0; cursor:pointer; }
   .dp-row.off .vd-tf, .dp-row.off .vd-num { opacity:.45; }
+  .dp-mini { font-size:9px; padding:0 5px; line-height:15px; }
+  .dp-mini:disabled { opacity:.4; cursor:default; }
+  .dp-ovr { color:var(--accent); flex-basis:auto; padding-left:6px; }
+  .dp-legend { font-size:9px; color:var(--dim); padding:1px 8px 3px; border-bottom:1px solid var(--border); }
   #dp-apply { color:var(--ok); border-color:#2a5a3a; }
   #dp-apply:disabled { opacity:.4; cursor:default; color:var(--dim); border-color:var(--border); }
   #dp-rebase { color:var(--accent); border-color:#2a4a6a; }
@@ -2489,6 +2493,7 @@
         <button class="vd-btn dp-filter" data-f="done">Naniesione</button>
         <button class="vd-btn dp-filter" data-f="impossible">Niewykonalne</button>
       </div>
+      <div class="dp-legend">Duchy: <span style="color:#4aff8a">■</span> wolne · <span style="color:#f0883e">■</span> kolizja/zmiana · <span style="color:#4a9eff">■</span> pozycja zastępcza · <span style="color:#ff7b72">■</span> usunięcie</div>
       <div class="vd-body" id="dp-body"></div>
       <div class="vd-ftr">
         <button class="vd-btn" id="dp-apply">✓ Zastosuj zaznaczone</button>
@@ -6554,6 +6559,7 @@ function draw() {
   if (state.view?.areaExitLabels !== false) drawCrossAreaLabels(rs);  // warstwa 5b — toggle „Wyjścia z obszarów"
   if (state.zoom > 0.3 && (state.view?.mudletLabels !== false || state.showPixmaps)) drawLabelsOnTop();  // warstwa 6 — toggle „Etykiety Mudleta"
   if (state.showSuppressors && state.zoom > 0.35) drawSuppressors(vis); // warstwa 7
+  _drawDeltaGhosts(rs);                                          // warstwa 7b (ARKDELTA M3: duchy kalki + celownik)
   if (state.editDraggingRoom) drawDragGhost();                   // warstwa 8b drag
   if (state.canvasMode === 'cl-drawing') drawCLInProgress();    // warstwa 10
   if (state.canvasMode === 'paint' && state._paintHover != null && _paintStroke === null) drawPaintHover();  // warstwa 10b (ZAD 14)
@@ -7548,6 +7554,13 @@ function drawLabelsOnTop() {
 
 // ─── MOUSE / TOUCH ────────────────────────────────────────────────────────────
 cv.addEventListener('mousedown', e => {
+  // ARKDELTA M3: tryb stawiania pozycji zastępczej — przechwyt przed wszystkim
+  // (LPM: czekamy na mouseup-klik; prawy anuluje w handlerze contextmenu)
+  if (_deltaPlacing) {
+    state.dragX = e.clientX; state.dragY = e.clientY;
+    e.preventDefault();
+    return;
+  }
   if (!state.editMode) {
     // ── VIEWER MODE: standardowy pan ────────────────────────────────────────
     state.dragging = true;
@@ -7697,6 +7710,9 @@ cv.addEventListener('mousemove', e => {
     draw(); // redraw dla preview linii do kursora
   }
 
+  // ARKDELTA M3: celownik trybu stawiania pozycji zastępczej
+  if (_deltaPlacing) { _deltaUpdateHover(evX(e), evY(e)); return; }
+
   // ── EDIT MODE: drag pokoju ───────────────────────────────────────────────
   if (state.editMode && state.editDraggingRoom && state.selected) {
     const [mx, my] = screenToMap(evX(e), evY(e));
@@ -7832,6 +7848,13 @@ cv.addEventListener('mousemove', e => {
 cv.addEventListener('mouseup', e => {
   const dx = Math.abs(e.clientX - state.dragX);
   const dy = Math.abs(e.clientY - state.dragY);
+
+  // ARKDELTA M3: klik w trybie stawiania = ustawienie pozycji zastępczej
+  if (_deltaPlacing) {
+    state.dragging = false;
+    if (e.button === 0 && dx < 5 && dy < 5) _deltaPlaceAtScreen(evX(e), evY(e));
+    return;
+  }
 
   // ZAD 14: zakończ pociągnięcie paint (klik = 1 pokój, drag = N) → jeden batch undo
   if (_paintStroke !== null) { _paintStrokeCommit(); state.dragging = false; return; }
@@ -12637,7 +12660,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.7.0';
+const APP_VERSION = 'v1.8.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -13566,6 +13589,7 @@ applyMap = function(map) {
   state.redoStack = [];
   state.deltaLog = [];  // ARKDELTA: nowa mapa = pusty log
   state.baseInfo = _computeBaseInfo();  // ARKDELTA: tożsamość bazy nowej mapy
+  _deltaGhostReset();  // ARKDELTA M3: nowa mapa = bez duchów / override'ów / trybu stawiania
   state.dirty = false;  // A11': nowa mapa = czysty stan
   state.editDirty = false; state.editSnapshot = null; state.areaSnapshot = null;  // krok 3
   state.selectedLabel = null;  // krok 4
@@ -13598,6 +13622,8 @@ function closeCtxMenu() { hideCtxMenu(); }
 // Right-click handler
 cv.addEventListener('contextmenu', function(e) {
   e.preventDefault();
+  // ARKDELTA M3: prawy klik w trybie stawiania = anuluj
+  if (_deltaPlacing) { _deltaCancelPlacing(); return; }
   if (!state.map) return;
   // Prawy klik w trybie rysowania CL → zatwierdź linię
   if (state.canvasMode === 'cl-drawing') {
@@ -17390,6 +17416,7 @@ function submitPullRequest() {
 }
 
 // === ARKDELTA START ===
+/* (marker w kanonicznym pliku bloku) */
 // Format .arkdelta — delta edycyjna mapy: eksport logu operacji (state.deltaLog),
 // walidacja fail-closed, czyste apply. Spec: docs/arkdelta_spec.html.
 // Zasady: undo/redo nietkniete (ops wchodza przez pushUndo jak normalne edycje),
@@ -17826,7 +17853,9 @@ function classifyDelta(delta) {
           items.push(_deltaClsItem(op, 'done', 'już naniesione (to samo pole i nazwa → #' + occ.id + ')', roomJump(occ.id)));
         } else if (occ) {
           sidCls.set(sid, 'ok');
-          items.push(_deltaClsItem(op, 'hard', 'pole (' + room.x + ',' + room.y + ',' + (room.z ?? 0) + ') zajęte przez #' + occ.id + ' — kolizja', roomJump(occ.id)));
+          const _it = _deltaClsItem(op, 'hard', 'pole (' + room.x + ',' + room.y + ',' + (room.z ?? 0) + ') zajęte przez #' + occ.id + ' — kolizja', roomJump(occ.id));
+          _it.coll = true;  // M3: kolizja pozycji — autopozycja / ręczna pozycja
+          items.push(_it);
         } else {
           sidCls.set(sid, 'ok');
           items.push(_deltaClsItem(op, 'ok', '', posJump(areaId, room.x ?? 0, room.y ?? 0)));
@@ -17889,7 +17918,11 @@ function classifyDelta(delta) {
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
         if (room.x === P.toX && room.y === P.toY && (room.z ?? 0) === P.toZ) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
         const occ = _deltaRoomAt(state.roomArea[id], P.toX, P.toY, P.toZ);
-        if (occ && occ.id !== id) items.push(_deltaClsItem(op, 'hard', 'pole docelowe zajęte przez #' + occ.id + ' — kolizja', roomJump(id)));
+        if (occ && occ.id !== id) {
+          const _it = _deltaClsItem(op, 'hard', 'pole docelowe zajęte przez #' + occ.id + ' — kolizja', roomJump(id));
+          _it.coll = true;  // M3: kolizja pozycji
+          items.push(_it);
+        }
         else items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
         break;
       }
@@ -18035,6 +18068,8 @@ function classifyDelta(delta) {
         items.push(_deltaClsItem(op, 'impossible', 'nieznany typ'));
     }
   }
+  // Mapy rozwiązań sid dostępne dla M3 (taken/geometria duchów) — właściwości tablicy.
+  items.sidCls = sidCls; items.sidRoomId = sidRoomId; items.sidAreaId = sidAreaId; items.sidLabelId = sidLabelId;
   return items;
 }
 
@@ -18065,7 +18100,9 @@ function _deltaTranslate(obj, sidMap) {
 // Zwraca { applied, skipped: [{seq, reason}] }.
 // onlySeq (Set seq, opcjonalny) — z okna recenzji: nanosi tylko zaznaczone opy;
 // odznaczone sa pomijane milczaco (nie trafiaja do skipped).
-function applyDelta(delta, onlySeq) {
+// overrides (Map seq -> {x,y}, opcjonalny, M3) — pozycje zastępcze dla ADD_ROOM/
+// MOVE_ROOM; re-walidowane fail-closed tuż przed commitem (zajęta = skip).
+function applyDelta(delta, onlySeq, overrides) {
   const sidMap = new Map();
   let nextRoomId = _deltaMaxRoomId() + 1;
   let nextAreaId = _deltaMaxAreaId() + 1;
@@ -18088,6 +18125,17 @@ function applyDelta(delta, onlySeq) {
         if (_DELTA_SID_RE.test(v) && v !== ownSid && !sidMap.has(v) && leftover === null) leftover = v;
       });
       if (leftover !== null) { skip('odwołanie do obiektu kalki, który nie istnieje (' + leftover + ')'); continue; }
+    }
+    // M3: override pozycji (autopozycja / ręczna) — po tłumaczeniu sid, przed commit.
+    // Fail-closed: komórka zastępcza musi być wolna NA ŻYWO; zajęta → skip, zero mutacji.
+    const ov = overrides && overrides.get(rawOp.seq);
+    if (ov && (op.type === 'ADD_ROOM' || op.type === 'MOVE_ROOM')) {
+      const oa = op.type === 'ADD_ROOM' ? op.target.areaId : state.roomArea[op.target.roomId];
+      const oz = op.type === 'ADD_ROOM' ? (op.payload.room.z ?? 0) : op.payload.toZ;
+      const occRoom = _deltaRoomAt(oa, ov.x, ov.y, oz);
+      if (occRoom && occRoom.id !== op.target.roomId) { skip('pozycja zastępcza zajęta'); continue; }
+      if (op.type === 'ADD_ROOM') { op.payload.room.x = ov.x; op.payload.room.y = ov.y; }
+      else { op.payload.toX = ov.x; op.payload.toY = ov.y; }
     }
     try {
       switch (op.type) {
@@ -18308,6 +18356,244 @@ function applyDelta(delta, onlySeq) {
   return { applied, skipped };
 }
 
+// ── M3: warstwa duchów + kolizje pozycji (stan sesyjny — NIE trafia do pliku ani deltaLog) ──
+let _deltaGhosts    = new Set();  // seq z włączonym duchem
+let _deltaOverrides = new Map();  // seq -> {x, y, how: 'auto'|'manual'}
+let _deltaPlacing   = null;       // {seq} | null — aktywny tryb ręcznego stawiania
+let _deltaHover     = null;       // {x, y, free} — celownik pod kursorem
+
+function _deltaGhostReset() {
+  _deltaGhosts = new Set();
+  _deltaOverrides = new Map();
+  _deltaPlacing = null;
+  _deltaHover = null;
+}
+
+// Zajęte komórki obszaru: świeży Set 'x:y:z' per wywołanie (zero problemu unieważniania cache).
+function _deltaBuildOcc(areaId) {
+  const occ = new Set();
+  const area = state.areas.get(areaId);
+  if (!area) return occ;
+  for (const r of (area.rooms || [])) occ.add(r.x + ':' + r.y + ':' + (r.z ?? 0));
+  return occ;
+}
+
+// Komórki zarezerwowane przez INNE zaznaczone opy kalki (ADD_ROOM/MOVE_ROOM).
+// Klucze 'areaKey:x:y:z'; areaKey = numeryczny areaId albo surowy sid obszaru.
+function _deltaTakenCells(delta, items, exceptSeq) {
+  const taken = new Set();
+  const bySeq = new Map();
+  for (const op of delta.ops) bySeq.set(op.seq, op);
+  const resA = v => _DELTA_SID_RE.test(String(v)) ? items.sidAreaId.get(String(v)) : v;
+  const resR = v => _DELTA_SID_RE.test(String(v)) ? items.sidRoomId.get(String(v)) : v;
+  for (const it of items) {
+    if (!it.checked || it.seq === exceptSeq) continue;
+    if (it.cls !== 'ok' && it.cls !== 'hard') continue;
+    const op = bySeq.get(it.seq);
+    if (!op) continue;
+    if (op.type === 'ADD_ROOM') {
+      const a = resA(op.target.areaId);
+      const aKey = (a === undefined) ? String(op.target.areaId) : a;
+      const ov = _deltaOverrides.get(op.seq);
+      const room = op.payload.room || {};
+      taken.add(aKey + ':' + (ov ? ov.x : (room.x ?? 0)) + ':' + (ov ? ov.y : (room.y ?? 0)) + ':' + (room.z ?? 0));
+    } else if (op.type === 'MOVE_ROOM') {
+      const id = resR(op.target.roomId);
+      if (typeof id !== 'number' || !state.roomById[id]) continue;
+      const ov = _deltaOverrides.get(op.seq);
+      taken.add(state.roomArea[id] + ':' + (ov ? ov.x : op.payload.toX) + ':' + (ov ? ov.y : op.payload.toY)
+        + ':' + (op.payload.toZ ?? (state.roomById[id].z ?? 0)));
+    }
+  }
+  return taken;
+}
+
+// Deterministyczna spirala Manhattan: r = 0..25; w pierścieniu rosnąco po dy, potem po dx.
+// Wolna = poza zajętymi na żywo ORAZ poza taken. selfRoomId: komórka własna pokoju
+// (MOVE_ROOM) nie liczy się jako zajęta. Zwraca {x, y} albo null.
+function _deltaFindFreeCell(areaId, x0, y0, z, taken, selfRoomId) {
+  const occ = _deltaBuildOcc(areaId);
+  if (selfRoomId !== undefined && state.roomById[selfRoomId]) {
+    const sr = state.roomById[selfRoomId];
+    occ.delete(sr.x + ':' + sr.y + ':' + (sr.z ?? 0));
+  }
+  for (let r = 0; r <= 25; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      const dxA = r - Math.abs(dy);
+      const dxs = dxA === 0 ? [0] : [-dxA, dxA];
+      for (const dx of dxs) {
+        const x = x0 + dx, y = y0 + dy;
+        if (!occ.has(x + ':' + y + ':' + z) && !taken.has(areaId + ':' + x + ':' + y + ':' + z)) return { x, y };
+      }
+    }
+  }
+  return null;
+}
+
+// Kontekst stawiania dla op: {areaId, z, roomId?} albo null (nierozwiązywalne).
+function _deltaPlaceCtx(delta, items, seq) {
+  const op = delta.ops.find(o => o.seq === seq);
+  if (!op) return null;
+  const resA = v => _DELTA_SID_RE.test(String(v)) ? items.sidAreaId.get(String(v)) : v;
+  const resR = v => _DELTA_SID_RE.test(String(v)) ? items.sidRoomId.get(String(v)) : v;
+  if (op.type === 'ADD_ROOM') {
+    const areaId = resA(op.target.areaId);
+    if (typeof areaId !== 'number' || !state.areas.get(areaId)) return null;
+    return { areaId, z: (op.payload.room || {}).z ?? 0 };
+  }
+  if (op.type === 'MOVE_ROOM') {
+    const id = resR(op.target.roomId);
+    if (typeof id !== 'number' || !state.roomById[id]) return null;
+    return { areaId: state.roomArea[id], z: op.payload.toZ ?? (state.roomById[id].z ?? 0), roomId: id };
+  }
+  return null;
+}
+
+// Czy komórka jest wolna: poza mapą na żywo (z wyłączeniem selfRoomId) i poza taken.
+function _deltaCellFree(areaId, x, y, z, delta, items, exceptSeq, selfRoomId) {
+  const occRoom = _deltaRoomAt(areaId, x, y, z);
+  if (occRoom && occRoom.id !== selfRoomId) return false;
+  const taken = _deltaTakenCells(delta, items, exceptSeq);
+  return !taken.has(areaId + ':' + x + ':' + y + ':' + z);
+}
+
+// Efektywne współrzędne: głęboka kopia opów z naniesionymi override'ami
+// (do re-klasyfikacji po apply — done-match na faktycznych pozycjach).
+function _deltaApplyOverridesToOps(ops, overrides) {
+  return ops.map(o => {
+    const ov = overrides.get(o.seq);
+    if (!ov) return o;
+    const c = JSON.parse(JSON.stringify(o));
+    if (c.type === 'ADD_ROOM' && c.payload && c.payload.room) { c.payload.room.x = ov.x; c.payload.room.y = ov.y; }
+    else if (c.type === 'MOVE_ROOM' && c.payload) { c.payload.toX = ov.x; c.payload.toY = ov.y; }
+    return c;
+  });
+}
+
+// Czysta geometria duchów: deskryptory renderu w kolejności rosnącego seq.
+// Funkcja czysta względem (delta, items, ghostSeqs, overrides, state) — niczego nie mutuje.
+// Duch pokazuje efekt JEDNEGO opu na tle bieżącej mapy (nie symulację kumulatywną).
+function _deltaGhostGeoms(delta, items, ghostSeqs, overrides) {
+  const out = [];
+  if (!delta || !items || !ghostSeqs.length) return out;
+  const bySeq = new Map();
+  for (const op of delta.ops) bySeq.set(op.seq, op);
+  const itBySeq = new Map();
+  for (const it of items) itBySeq.set(it.seq, it);
+  const isSid = v => _DELTA_SID_RE.test(String(v));
+  const resA = v => isSid(v) ? items.sidAreaId.get(String(v)) : v;
+  const resR = v => isSid(v) ? items.sidRoomId.get(String(v)) : v;
+  const resL = v => isSid(v) ? items.sidLabelId.get(String(v)) : v;
+  // sid pokoju kalki → pozycja (override > snap) + obszar (gdy rozwiązywalny numerycznie)
+  const sidPos = new Map();
+  for (const op of delta.ops) {
+    if (op.type !== 'ADD_ROOM') continue;
+    const room = op.payload.room || {};
+    const ov = overrides.get(op.seq);
+    const a = resA(op.target.areaId);
+    sidPos.set(String(op.target.roomId), {
+      x: ov ? ov.x : (room.x ?? 0), y: ov ? ov.y : (room.y ?? 0), z: room.z ?? 0,
+      areaId: (a === undefined) ? undefined : a,
+    });
+  }
+  const posOf = (v) => {
+    if (isSid(v)) { const p = sidPos.get(String(v)); return (p && p.areaId !== undefined) ? p : null; }
+    const r = state.roomById[v];
+    return r ? { x: r.x, y: r.y, z: r.z ?? 0, areaId: state.roomArea[v] } : null;
+  };
+  const hl = (seq, id) => {
+    const r = state.roomById[id];
+    if (r) out.push({ seq, kind: 'hl', areaId: state.roomArea[id], x: r.x, y: r.y, z: r.z ?? 0 });
+  };
+  for (const seq of ghostSeqs) {
+    const it = itBySeq.get(seq), op = bySeq.get(seq);
+    if (!it || !op || it.cls === 'impossible') continue;
+    const T = op.target, P = op.payload;
+    const ov = overrides.get(seq);
+    switch (op.type) {
+      case 'ADD_ROOM': {
+        const areaId = resA(T.areaId);
+        if (areaId === undefined || !state.areas.get(areaId)) break;
+        const room = P.room || {};
+        out.push({ seq, kind: 'room', cls: it.cls, resolved: !!ov, areaId,
+          x: ov ? ov.x : (room.x ?? 0), y: ov ? ov.y : (room.y ?? 0), z: room.z ?? 0 });
+        break;
+      }
+      case 'MOVE_ROOM': {
+        const id = resR(T.roomId);
+        const room = (typeof id === 'number') ? state.roomById[id] : null;
+        if (!room) break;
+        out.push({ seq, kind: 'move', cls: it.cls, resolved: !!ov, areaId: state.roomArea[id],
+          fromX: room.x, fromY: room.y, toX: ov ? ov.x : P.toX, toY: ov ? ov.y : P.toY,
+          z: P.toZ ?? (room.z ?? 0) });
+        break;
+      }
+      case 'DELETE_ROOM': {
+        const id = resR(T.roomId);
+        const room = (typeof id === 'number') ? state.roomById[id] : null;
+        if (room) out.push({ seq, kind: 'del-room', areaId: state.roomArea[id], x: room.x, y: room.y, z: room.z ?? 0 });
+        break;
+      }
+      case 'EDIT_ROOM': case 'EDIT_EXIT': case 'MOVE_ROOM_TO_AREA':
+      case 'ADD_CL': case 'EDIT_CL': case 'DELETE_CL': case 'ADD_SUPPRESSOR': case 'DELETE_SUPPRESSOR': {
+        const id = resR(T.roomId);
+        if (typeof id === 'number') hl(seq, id);
+        break;
+      }
+      case 'PAINT_BATCH': {
+        for (const ch of (P.changes || [])) hl(seq, ch.roomId);
+        break;
+      }
+      case 'AUTO_FIX_SUPPRESSORS': {
+        for (const x of (P.added || [])) hl(seq, x.roomId);
+        for (const x of (P.removed || [])) hl(seq, x.roomId);
+        break;
+      }
+      case 'ADD_EXIT': {
+        const p1 = posOf(T.sourceId), p2 = posOf(P.targetId);
+        if (p1 && p2) out.push({ seq, kind: 'exit', del: false, areaId: p1.areaId, z: p1.z, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
+        break;
+      }
+      case 'DELETE_EXIT': {
+        const id = resR(T.roomId);
+        const room = (typeof id === 'number') ? state.roomById[id] : null;
+        const tgt = room && room.exits ? state.roomById[room.exits[T.dir]] : null;
+        if (room && tgt) out.push({ seq, kind: 'exit', del: true, areaId: state.roomArea[id], z: room.z ?? 0,
+          x1: room.x, y1: room.y, x2: tgt.x, y2: tgt.y });
+        break;
+      }
+      case 'DELETE_SPECIAL_EXIT': {
+        const id = resR(T.roomId);
+        const room = (typeof id === 'number') ? state.roomById[id] : null;
+        const tgt = room && room.special_exits ? state.roomById[room.special_exits[P.cmd]] : null;
+        if (room && tgt) out.push({ seq, kind: 'exit', del: true, areaId: state.roomArea[id], z: room.z ?? 0,
+          x1: room.x, y1: room.y, x2: tgt.x, y2: tgt.y });
+        break;
+      }
+      case 'ADD_LABEL': {
+        const areaId = resA(T.areaId);
+        if (areaId === undefined || !state.areas.get(areaId)) break;
+        const lbl = P.label || {};
+        out.push({ seq, kind: 'label', del: false, areaId, text: lbl.text || '',
+          x: lbl.x ?? 0, y: lbl.y ?? 0, z: lbl.z ?? 0, w: lbl.width ?? 4, h: lbl.height ?? 1.2 });
+        break;
+      }
+      case 'EDIT_LABEL': case 'DELETE_LABEL': case 'MOVE_LABEL': case 'RESIZE_LABEL': {
+        const areaId = resA(T.areaId);
+        const area = (typeof areaId === 'number') ? state.areas.get(areaId) : null;
+        const lid = resL(T.labelId);
+        const lbl = area && (typeof lid === 'number') ? (area.labels || []).find(l => l.id === lid) : null;
+        if (lbl) out.push({ seq, kind: 'label', del: op.type === 'DELETE_LABEL', areaId, text: lbl.text || '',
+          x: lbl.x, y: lbl.y, z: lbl.z, w: lbl.width ?? 4, h: lbl.height ?? 1.2 });
+        break;
+      }
+      default:
+        break;  // ADD_AREA / DELETE_AREA / EDIT_AREA / EDIT_ENV_COLOR — bez geometrii
+    }
+  }
+  return out;
+}
+
 // ── UI: dialog + wiring ──────────────────────────────────────────────────────
 function _arkdeltaBaseNote(base) {
   const cur = state.baseInfo || {};
@@ -18343,7 +18629,176 @@ function _deltaJump(it) {
   else { const a = state.areas.get(j.areaId); const r0 = (a.rooms || [])[0]; if (r0) jumpToRoom(r0.id); }
 }
 
+// ── M3: duchy — nawigacja, przyciski, stawianie, rysowanie ──────────────────
+// Typy z geometrią na canvas (reszta nie dostaje przycisku ducha):
+const _DELTA_GHOST_TYPES = new Set([
+  'ADD_ROOM', 'MOVE_ROOM', 'DELETE_ROOM', 'EDIT_ROOM', 'EDIT_EXIT', 'MOVE_ROOM_TO_AREA',
+  'ADD_EXIT', 'DELETE_EXIT', 'DELETE_SPECIAL_EXIT',
+  'ADD_CL', 'EDIT_CL', 'DELETE_CL', 'ADD_SUPPRESSOR', 'DELETE_SUPPRESSOR',
+  'PAINT_BATCH', 'AUTO_FIX_SUPPRESSORS',
+  'ADD_LABEL', 'EDIT_LABEL', 'DELETE_LABEL', 'MOVE_LABEL', 'RESIZE_LABEL',
+]);
+
+// Pokaż ducha: nawigacja wg geometrii (override > klasyfikacja), potem render.
+function _deltaShowGhost(it) {
+  if (!_deltaReview) return;
+  _deltaGhosts.add(it.seq);
+  const gs = _deltaGhostGeoms(_deltaReview.delta, _deltaReview.items, [it.seq], _deltaOverrides);
+  const g = gs[0];
+  if (g) {
+    if (g.areaId !== undefined && g.areaId !== state.areaId && state.areas.get(g.areaId)) selectArea(g.areaId, false);
+    if (g.z !== undefined && g.z !== state.z) selectZ(g.z);
+    const cx = g.kind === 'move' ? g.toX : (g.x !== undefined ? g.x : (g.x1 + g.x2) / 2);
+    const cy = g.kind === 'move' ? g.toY : (g.y !== undefined ? g.y : (g.y1 + g.y2) / 2);
+    centerViewOnMap(cx, cy);
+  } else _deltaJump(it);
+  draw();
+}
+
+// Autopozycja: deterministyczna spirala do najbliższej wolnej komórki (ten sam area+z).
+function _deltaAutoplace(it) {
+  const R = _deltaReview; if (!R) return;
+  const op = R.delta.ops.find(o => o.seq === it.seq); if (!op) return;
+  const ctxInfo = _deltaPlaceCtx(R.delta, R.items, it.seq);
+  if (!ctxInfo) return;
+  let x0, y0;
+  if (op.type === 'ADD_ROOM') { const room = op.payload.room || {}; x0 = room.x ?? 0; y0 = room.y ?? 0; }
+  else { x0 = op.payload.toX; y0 = op.payload.toY; }
+  const taken = _deltaTakenCells(R.delta, R.items, it.seq);
+  const cell = _deltaFindFreeCell(ctxInfo.areaId, x0, y0, ctxInfo.z, taken, ctxInfo.roomId);
+  if (!cell) { toast('Brak wolnego miejsca w promieniu 25 — użyj „Ręcznie"', true); return; }
+  _deltaOverrides.set(it.seq, { x: cell.x, y: cell.y, how: 'auto' });
+  _renderDeltaPanel();
+  draw();
+}
+
+// Ręczna pozycja: wejście w tryb stawiania (klik na mapie; Esc / prawy = anuluj).
+function _deltaStartPlacing(it) {
+  _deltaPlacing = { seq: it.seq };
+  _deltaShowGhost(it);   // dodaje ducha + nawiguje do obszaru/poziomu
+  cv.style.cursor = 'crosshair';
+  toast('Kliknij wolne pole na mapie (Esc anuluje)');
+}
+
+function _deltaCancelPlacing() {
+  _deltaPlacing = null;
+  _deltaHover = null;
+  cv.style.cursor = '';
+  draw();
+}
+
+// Celownik: komórka pod kursorem + czy wolna (zielony/czerwony).
+function _deltaUpdateHover(sx, sy) {
+  if (!_deltaPlacing) return;
+  const [mx, my] = screenToMap(sx, sy);
+  const x = Math.round(mx), y = Math.round(my);
+  const R = _deltaReview;
+  const ctxInfo = R ? _deltaPlaceCtx(R.delta, R.items, _deltaPlacing.seq) : null;
+  const free = !!ctxInfo && _deltaCellFree(ctxInfo.areaId, x, y, ctxInfo.z, R.delta, R.items, _deltaPlacing.seq, ctxInfo.roomId);
+  if (!_deltaHover || _deltaHover.x !== x || _deltaHover.y !== y || _deltaHover.free !== free) {
+    _deltaHover = { x, y, free };
+    draw();
+  }
+  cv.style.cursor = 'crosshair';
+}
+
+// Klik w trybie stawiania: walidacja pustego pola (żywa mapa + taken), potem override.
+function _deltaPlaceAtScreen(sx, sy) {
+  const placing = _deltaPlacing; if (!placing) return;
+  const R = _deltaReview; if (!R) { _deltaCancelPlacing(); return; }
+  const [mx, my] = screenToMap(sx, sy);
+  const x = Math.round(mx), y = Math.round(my);
+  const ctxInfo = _deltaPlaceCtx(R.delta, R.items, placing.seq);
+  if (!ctxInfo) { _deltaCancelPlacing(); return; }
+  if (!_deltaCellFree(ctxInfo.areaId, x, y, ctxInfo.z, R.delta, R.items, placing.seq, ctxInfo.roomId)) {
+    toast('Pole zajęte — wybierz inne (Esc anuluje)', true);
+    return;
+  }
+  _deltaOverrides.set(placing.seq, { x, y, how: 'manual' });
+  _deltaCancelPlacing();
+  _renderDeltaPanel();
+  toast('Ustawiono pozycję zastępczą (' + x + ', ' + y + ')');
+}
+
+// Warstwa 7b draw(): duchy kalki + celownik. Czysto addytywna (save/restore).
+function _drawDeltaGhosts(rs) {
+  const hasGhosts = _deltaReview && _deltaGhosts.size > 0;
+  if (!hasGhosts && !_deltaPlacing) return;
+  const half = rs / 2;
+  ctx.save();
+  if (hasGhosts) {
+    const seqs = [..._deltaGhosts].sort((a, b) => a - b);
+    const geoms = _deltaGhostGeoms(_deltaReview.delta, _deltaReview.items, seqs, _deltaOverrides);
+    for (const g of geoms) {
+      if (g.areaId !== state.areaId) continue;
+      if (g.z !== undefined && g.z !== state.z) continue;
+      const col = (g.kind === 'del-room' || g.del) ? '255,123,114'
+                : g.kind === 'hl' ? '240,136,62'
+                : g.resolved ? '74,158,255'
+                : g.cls === 'hard' ? '240,136,62'
+                : '74,255,138';
+      if (g.kind === 'room' || g.kind === 'del-room' || g.kind === 'hl') {
+        const cx = wx(g.x), cy = wy(g.y);
+        ctx.strokeStyle = 'rgba(' + col + ',0.9)';
+        ctx.fillStyle = 'rgba(' + col + ',0.13)';
+        ctx.lineWidth = Math.max(1, state.zoom * 1.5);
+        ctx.setLineDash([Math.max(3, state.zoom * 4), Math.max(2, state.zoom * 3)]);
+        ctx.fillRect(cx - half, cy - half, rs, rs);
+        ctx.strokeRect(cx - half, cy - half, rs, rs);
+        if (g.kind === 'del-room') {
+          ctx.beginPath();
+          ctx.moveTo(cx - half, cy - half); ctx.lineTo(cx + half, cy + half);
+          ctx.moveTo(cx + half, cy - half); ctx.lineTo(cx - half, cy + half);
+          ctx.stroke();
+        }
+      } else if (g.kind === 'move') {
+        ctx.strokeStyle = 'rgba(210,220,232,0.55)';
+        ctx.lineWidth = Math.max(1, state.zoom);
+        ctx.setLineDash([3, 3]);
+        ctx.strokeRect(wx(g.fromX) - half, wy(g.fromY) - half, rs, rs);
+        const cx = wx(g.toX), cy = wy(g.toY);
+        ctx.strokeStyle = 'rgba(' + col + ',0.9)';
+        ctx.fillStyle = 'rgba(' + col + ',0.13)';
+        ctx.lineWidth = Math.max(1, state.zoom * 1.5);
+        ctx.setLineDash([Math.max(3, state.zoom * 4), Math.max(2, state.zoom * 3)]);
+        ctx.fillRect(cx - half, cy - half, rs, rs);
+        ctx.strokeRect(cx - half, cy - half, rs, rs);
+        ctx.beginPath(); ctx.moveTo(wx(g.fromX), wy(g.fromY)); ctx.lineTo(cx, cy); ctx.stroke();
+      } else if (g.kind === 'exit') {
+        ctx.strokeStyle = 'rgba(' + col + ',0.85)';
+        ctx.lineWidth = Math.max(1, state.zoom * 1.3);
+        ctx.setLineDash([Math.max(3, state.zoom * 4), Math.max(2, state.zoom * 3)]);
+        ctx.beginPath(); ctx.moveTo(wx(g.x1), wy(g.y1)); ctx.lineTo(wx(g.x2), wy(g.y2)); ctx.stroke();
+      } else if (g.kind === 'label') {
+        const lx = wx(g.x), ly = wy(g.y);
+        const lw = g.w * CELL * state.zoom, lh = g.h * CELL * state.zoom;
+        ctx.strokeStyle = 'rgba(' + col + ',0.9)';
+        ctx.lineWidth = Math.max(1, state.zoom);
+        ctx.setLineDash([3, 3]);
+        ctx.strokeRect(lx, ly, lw, lh);
+        if (g.text && state.zoom > 0.3) {
+          ctx.fillStyle = 'rgba(' + col + ',0.8)';
+          ctx.font = Math.max(8, 12 * state.zoom) + 'px monospace';
+          ctx.fillText(g.text, lx + 2, ly + Math.max(9, 12 * state.zoom));
+        }
+      }
+    }
+  }
+  // Celownik trybu stawiania
+  if (_deltaPlacing && _deltaHover) {
+    const col = _deltaHover.free ? '74,255,138' : '255,123,114';
+    const cx = wx(_deltaHover.x), cy = wy(_deltaHover.y);
+    ctx.strokeStyle = 'rgba(' + col + ',0.95)';
+    ctx.lineWidth = Math.max(1.5, state.zoom * 2);
+    ctx.setLineDash([Math.max(2, state.zoom * 3), Math.max(2, state.zoom * 2)]);
+    ctx.strokeRect(cx - half, cy - half, rs, rs);
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
 function openDeltaReview(delta) {
+  _deltaGhostReset();  // M3: nowa kalka = czyste duchy/override'y
   _deltaReview = { delta, items: classifyDelta(delta), filter: 'all' };
   document.getElementById('dp-base').textContent = _arkdeltaBaseNote(delta.meta.base);
   document.getElementById('dp-rebase').style.display = 'none';
@@ -18402,6 +18857,51 @@ function _renderDeltaPanel() {
       note.textContent = it.note;
       row.appendChild(note);
     }
+    // M3: duch (pokaż/ukryj) — tylko typy z geometrią, bez niewykonalnych
+    if (_DELTA_GHOST_TYPES.has(it.type) && it.cls !== 'impossible') {
+      const bShow = document.createElement('button');
+      bShow.className = 'vd-btn dp-mini';
+      bShow.textContent = 'Efekt';
+      bShow.title = 'Pokaż efekt na mapie (warstwa duchów — niczego nie zmienia)';
+      bShow.addEventListener('click', e => { e.stopPropagation(); _deltaShowGhost(it); _renderDeltaPanel(); });
+      row.appendChild(bShow);
+      const bHide = document.createElement('button');
+      bHide.className = 'vd-btn dp-mini';
+      bHide.textContent = 'Ukryj';
+      bHide.title = 'Ukryj ducha';
+      bHide.disabled = !_deltaGhosts.has(it.seq);
+      bHide.addEventListener('click', e => { e.stopPropagation(); _deltaGhosts.delete(it.seq); draw(); _renderDeltaPanel(); });
+      row.appendChild(bHide);
+    }
+    // M3: kolizja pozycji — autopozycja / ręczna / cofnięcie override'u
+    if (it.coll && it.cls === 'hard') {
+      const ov = _deltaOverrides.get(it.seq);
+      if (ov) {
+        const chip = document.createElement('span');
+        chip.className = 'dp-note dp-ovr';
+        chip.textContent = (ov.how === 'auto' ? 'autopozycja' : 'ręczna pozycja') + ' → (' + ov.x + ', ' + ov.y + ')';
+        row.appendChild(chip);
+        const bX = document.createElement('button');
+        bX.className = 'vd-btn dp-mini';
+        bX.textContent = '✕';
+        bX.title = 'Cofnij pozycję zastępczą';
+        bX.addEventListener('click', e => { e.stopPropagation(); _deltaOverrides.delete(it.seq); _renderDeltaPanel(); draw(); });
+        row.appendChild(bX);
+      } else {
+        const bAuto = document.createElement('button');
+        bAuto.className = 'vd-btn dp-mini';
+        bAuto.textContent = 'Autopozycja';
+        bAuto.title = 'Znajdź najbliższe wolne pole (deterministycznie)';
+        bAuto.addEventListener('click', e => { e.stopPropagation(); _deltaAutoplace(it); });
+        row.appendChild(bAuto);
+        const bMan = document.createElement('button');
+        bMan.className = 'vd-btn dp-mini';
+        bMan.textContent = 'Ręcznie';
+        bMan.title = 'Kliknij wolne pole na mapie (Esc anuluje)';
+        bMan.addEventListener('click', e => { e.stopPropagation(); _deltaStartPlacing(it); });
+        row.appendChild(bMan);
+      }
+    }
     if (it.jump) {
       row.style.cursor = 'pointer';
       row.title = 'Kliknij — pokaż na mapie';
@@ -18417,13 +18917,17 @@ function _renderDeltaPanel() {
 function _deltaApplyReviewed() {
   const R = _deltaReview;
   if (!R) return;
+  if (_deltaPlacing) _deltaCancelPlacing();
   const only = new Set(R.items.filter(i => i.checked).map(i => i.seq));
-  const res = applyDelta(R.delta, only);
+  const res = applyDelta(R.delta, only, _deltaOverrides);
   let msg = '✓ Naniesiono: ' + res.applied;
   if (res.skipped.length) msg += ' · Pominięto: ' + res.skipped.length;
   toast(msg, res.skipped.length > 0);
   if (res.skipped.length) console.warn('[arkdelta] pominięte:', res.skipped);
   if (res.applied > 0) document.getElementById('dp-rebase').style.display = '';
+  // Re-klasyfikacja z EFEKTYWNYMI współrzędnymi (override → done-match na faktycznej pozycji)
+  if (_deltaOverrides.size) R.delta = Object.assign({}, R.delta, { ops: _deltaApplyOverridesToOps(R.delta.ops, _deltaOverrides) });
+  _deltaGhostReset();  // po apply: czyste duchy i override'y
   R.items = classifyDelta(R.delta);  // re-klasyfikacja: naniesione → done
   _renderDeltaPanel();
 }
@@ -18457,7 +18961,7 @@ btnSaveArkdelta.addEventListener('click', saveDelta);
   }
   document.getElementById('dp-apply').addEventListener('click', _deltaApplyReviewed);
   document.getElementById('dp-rebase').addEventListener('click', saveDelta);
-  const closePanel = () => { panel.classList.remove('visible'); _deltaReview = null; };
+  const closePanel = () => { panel.classList.remove('visible'); _deltaReview = null; _deltaGhostReset(); draw(); };
   document.getElementById('dp-close').addEventListener('click', closePanel);
   document.getElementById('dp-close2').addEventListener('click', closePanel);
   const hdr = document.getElementById('dp-hdr');
@@ -18478,6 +18982,7 @@ function _arkdeltaUpdateSaveBtn() {
   btnSaveArkdelta.disabled = !hasWork;
   btnSaveArkdelta.title = hasWork ? 'Zapisz kalkę zmian (.arkdelta)' : 'Brak zmian do zapisania';
 }
+/* (marker w kanonicznym pliku bloku) */
 // === ARKDELTA END ===
 
 // ── KEYBOARD — EDITOR ADDITIONS ───────────────────────────────────────────
@@ -18526,6 +19031,8 @@ document.addEventListener('keydown', function(e) {
   }
   // Esc = 7-step chain per Pass 59
   if (e.key === 'Escape') {
+    // ARKDELTA M3: tryb stawiania pozycji zastępczej → anuluj. Stop.
+    if (_deltaPlacing) { _deltaCancelPlacing(); return; }
     // (0) Modal otwarty → zamknij. Stop.
     const openModal = document.querySelector('.dlg-bg.open');
     if (openModal) {

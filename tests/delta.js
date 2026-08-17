@@ -132,7 +132,12 @@ const deltaCode =
   extract(HTML, 'function _dispatchRedo(entry) {') + '\n' +
   blockSlice('// === ARKDELTA START ===', '// ── UI: dialog + wiring') + '\n' +
   extract(HTML, 'function _arkdeltaBaseNote(base) {') + '\n' +
-  '\n;return { pushUndo, _computeBaseInfo, _deltaStripRoom, buildDelta, validateDeltaText, applyDelta, classifyDelta, _arkdeltaBaseNote, crc32str, stableStringify, addChecksums };';
+  '\n;return { pushUndo, _computeBaseInfo, _deltaStripRoom, buildDelta, validateDeltaText, applyDelta, classifyDelta, _arkdeltaBaseNote, crc32str, stableStringify, addChecksums,'
+  + '\n  _deltaBuildOcc, _deltaTakenCells, _deltaFindFreeCell, _deltaPlaceCtx, _deltaCellFree, _deltaApplyOverridesToOps, _deltaGhostGeoms, _deltaGhostReset,'
+  + '\n  get ghosts() { return _deltaGhosts; }, set ghosts(v) { _deltaGhosts = v; },'
+  + '\n  get overrides() { return _deltaOverrides; }, set overrides(v) { _deltaOverrides = v; },'
+  + '\n  get placing() { return _deltaPlacing; }, set placing(v) { _deltaPlacing = v; },'
+  + '\n  get hover() { return _deltaHover; }, set hover(v) { _deltaHover = v; } };';
 
 function makeDeltaCtx() {
   const a1 = { id: 1, name: 'Area One', rooms: [
@@ -446,7 +451,7 @@ ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo 
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.7.0';"), 'wersja: v1.7.0');
+ok(HTML.includes("const APP_VERSION = 'v1.8.0';"), 'wersja: v1.8.0');
 
 console.log('— T8: classifyDelta + recenzja (M2) —');
 {
@@ -555,6 +560,190 @@ ok(HTML.includes("document.getElementById('dp-apply').addEventListener('click', 
 ok(HTML.includes("document.getElementById('dp-rebase').addEventListener('click', saveDelta)"), 'integracja: rebase = ponowny zapis kalki');
 ok(!HTML.includes('arkdelta-apply'), 'markup: stary przycisk Zastosuj usunięty (recenzja przejmuje flow)');
 ok(HTML.includes("const ownSid = (op.type === 'ADD_ROOM'"), 'walidator: definicja sid przed skanem użyć');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// T9 (v1.8.0): M3 — warstwa duchów + kolizje pozycji.
+// ═══════════════════════════════════════════════════════════════════════════
+// Wspólna delta kolizyjna (9 opow): 2x ADD_ROOM na zajętym (0,0), MOVE_ROOM na
+// zajęte (1,0), wolny ADD_ROOM, ADD_EXIT do sid, DELETE_ROOM istniejący i
+// nieistniejący, ADD_AREA + ADD_ROOM w obszarze kalki.
+function collisionDelta() {
+  const room = (x, y, name) => ({ x, y, z: 0, name, env: 262 });
+  return {
+    meta: { format: 'arkdelta', format_version: 1, ops_count: 9, base: { crc: 'x' } },
+    ops: [
+      { seq: 1, type: 'ADD_ROOM', target: { roomId: 'd:1', areaId: 1 }, payload: { room: room(0, 0, 'N1') }, label: 'A1' },
+      { seq: 2, type: 'ADD_ROOM', target: { roomId: 'd:2', areaId: 1 }, payload: { room: room(0, 0, 'N2') }, label: 'A2' },
+      { seq: 3, type: 'MOVE_ROOM', target: { roomId: 12 }, payload: { toX: 1, toY: 0, toZ: 0 }, label: 'M' },
+      { seq: 4, type: 'ADD_ROOM', target: { roomId: 'd:4', areaId: 1 }, payload: { room: room(10, 10, 'N3') }, label: 'A3' },
+      { seq: 5, type: 'ADD_EXIT', target: { sourceId: 10, dir: 's' }, payload: { targetId: 'd:1', bidirectional: false }, label: 'E' },
+      { seq: 6, type: 'DELETE_ROOM', target: { roomId: 11 }, payload: { room: { x: 1, y: 0, z: 0, name: 'R11', env: 258, exits: { w: 10 } } }, label: 'D' },
+      { seq: 7, type: 'DELETE_ROOM', target: { roomId: 999 }, payload: { room: { x: 0, y: 0, z: 0, name: 'GH' } }, label: 'D2' },
+      { seq: 8, type: 'ADD_AREA', target: { areaId: 'd:9' }, payload: { area: { name: 'Unikalna Nazwa XYZ', rooms: [], labels: [] } }, label: 'AA' },
+      { seq: 9, type: 'ADD_ROOM', target: { roomId: 'd:10', areaId: 'd:9' }, payload: { room: room(0, 0, 'K') }, label: 'A4' },
+    ],
+  };
+}
+
+console.log('— T9: M3 — duchy, spirala, overridey —');
+{
+  const c = makeDeltaCtx();
+  const delta = collisionDelta();
+  const items = c.api.classifyDelta(delta);
+  ok(items[0].cls === 'hard' && items[0].coll === true, 'klasyfikacja: ADD_ROOM na zajętym = hard + coll');
+  ok(items[1].cls === 'hard' && items[1].coll === true, 'klasyfikacja: drugi ADD_ROOM też hard + coll');
+  ok(items[2].cls === 'hard' && items[2].coll === true, 'klasyfikacja: MOVE_ROOM na zajęte = hard + coll');
+  ok(items[3].cls === 'ok' && !items[3].coll, 'klasyfikacja: wolny ADD_ROOM = ok bez coll');
+  ok(items.sidAreaId instanceof Map && items.sidRoomId instanceof Map, 'klasyfikacja: items niesie mapy sid');
+
+  // Spirala: determinizm i dokładny porządek pierścieni
+  const f1 = c.api._deltaFindFreeCell(1, 0, 0, 0, new Set());
+  ok(f1 && f1.x === 0 && f1.y === -1, 'spirala: r=0 zajęte, pierwsza wolna r=1 to (0,-1)');
+  ok(JSON.stringify(f1) === JSON.stringify(c.api._deltaFindFreeCell(1, 0, 0, 0, new Set()))
+    && JSON.stringify(f1) === JSON.stringify(c.api._deltaFindFreeCell(1, 0, 0, 0, new Set())),
+    'spirala: 3 przebiegi → identyczny wynik (determinizm)');
+  const f2 = c.api._deltaFindFreeCell(1, 0, 0, 0, new Set(['1:0:-1:0']));
+  ok(f2 && f2.x === -1 && f2.y === 0, 'spirala: (0,-1) w taken → następna w porządku to (-1,0)');
+
+  // Spirala: taken pokrywa r<=2 wokół (5,5) w area 2 → wynik pierwszy komórek r=3 = (5,2)
+  const taken3 = new Set();
+  for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++)
+    if (Math.abs(dx) + Math.abs(dy) <= 2) taken3.add('2:' + (5 + dx) + ':' + (5 + dy) + ':0');
+  const f3 = c.api._deltaFindFreeCell(2, 5, 5, 0, taken3);
+  ok(f3 && f3.x === 5 && f3.y === 2, 'spirala: taken r<=2 → pierwsza komórka r=3 to (5,2)');
+
+  // Spirala: pokrycie wszystkiego do r=25 → null
+  const takenAll = new Set();
+  for (let dx = -25; dx <= 25; dx++) for (let dy = -25; dy <= 25; dy++)
+    if (Math.abs(dx) + Math.abs(dy) <= 25) takenAll.add('2:' + (5 + dx) + ':' + (5 + dy) + ':0');
+  ok(c.api._deltaFindFreeCell(2, 5, 5, 0, takenAll) === null, 'spirala: R_MAX=25 wyczerpane → null');
+
+  // Spirala: selfRoomId (MOVE_ROOM) — własna komórka nie liczy się jako zajęta
+  const fSelf = c.api._deltaFindFreeCell(1, 1, 0, 0, new Set(), 11);
+  ok(fSelf && fSelf.x === 1 && fSelf.y === 0, 'spirala: selfRoomId=11 → własne pole (1,0) wolne dla r=0');
+
+  // Wsadowosc: sekwencyjne autopozycje dwóch kolizji → różne komórki
+  const t1 = c.api._deltaTakenCells(delta, items, 1);
+  ok(t1.has('1:0:0:0') && t1.has('1:1:0:0') && t1.has('1:10:10:0'), 'taken: cele innych zaznaczonych opów (ADD_ROOM x2 + MOVE_ROOM)');
+  const a1 = c.api._deltaFindFreeCell(1, 0, 0, 0, t1);
+  c.api.overrides = new Map([[1, { x: a1.x, y: a1.y, how: 'auto' }]]);
+  const t2 = c.api._deltaTakenCells(delta, items, 2);
+  ok(t2.has('1:' + a1.x + ':' + a1.y + ':0'), 'taken: override pierwszej kolizji rezerwuje komórkę');
+  const a2 = c.api._deltaFindFreeCell(1, 0, 0, 0, t2);
+  ok(a2 && !(a2.x === a1.x && a2.y === a1.y), 'wsadowość: druga autopozycja ≠ pierwsza (' + a1.x + ',' + a1.y + ' vs ' + a2.x + ',' + a2.y + ')');
+
+  // _deltaCellFree
+  ok(c.api._deltaCellFree(1, 0, 0, 0, delta, items, 99) === false, 'cellFree: zajęte na żywo → false');
+  ok(c.api._deltaCellFree(1, 9, 9, 0, delta, items, 99) === true, 'cellFree: wolne → true');
+  ok(c.api._deltaCellFree(1, a1.x, a1.y, 0, delta, items, 99) === false, 'cellFree: komórka z override → false');
+  ok(c.api._deltaCellFree(1, 0, 1, 0, delta, items, 3, 12) === true, 'cellFree: własna komórka MOVE_ROOM → true');
+
+  // _deltaPlaceCtx
+  const pctx1 = c.api._deltaPlaceCtx(delta, items, 1);
+  ok(pctx1 && pctx1.areaId === 1 && pctx1.z === 0 && pctx1.roomId === undefined, 'placeCtx ADD_ROOM: {areaId, z}');
+  const pctx3 = c.api._deltaPlaceCtx(delta, items, 3);
+  ok(pctx3 && pctx3.areaId === 1 && pctx3.roomId === 12, 'placeCtx MOVE_ROOM: + roomId');
+  ok(c.api._deltaPlaceCtx(delta, items, 9) === null, 'placeCtx: obszar kalki (sid nierozwiązany) → null');
+
+  // Geometria duchów — czystość i treść
+  const checksumBefore = c.api.stableStringify(c.state.map) + '|' + Object.keys(c.state.roomById).length;
+  c.api.ghosts = new Set([1, 3, 5, 6, 7, 9]);
+  const geoms = c.api._deltaGhostGeoms(delta, items, [1, 3, 5, 6, 7, 9], c.api.overrides);
+  const g1 = geoms.find(g => g.seq === 1), g3 = geoms.find(g => g.seq === 3);
+  const g5 = geoms.find(g => g.seq === 5), g6 = geoms.find(g => g.seq === 6);
+  ok(g1 && g1.kind === 'room' && g1.resolved === true && g1.x === a1.x && g1.y === a1.y,
+    'duch ADD_ROOM: kind room, resolved, pozycja z override');
+  ok(g3 && g3.kind === 'move' && g3.fromX === 0 && g3.fromY === 1 && g3.toX === 1 && g3.toY === 0,
+    'duch MOVE_ROOM: from (żywe) → to (snap)');
+  ok(g5 && g5.kind === 'exit' && g5.del === false && g5.x2 === a1.x && g5.y2 === a1.y,
+    'duch ADD_EXIT: linia do pokoju kalki podąża za override');
+  ok(g6 && g6.kind === 'del-room' && g6.x === 1 && g6.y === 0, 'duch DELETE_ROOM: del-room na żywej pozycji');
+  ok(!geoms.find(g => g.seq === 7), 'duch: op niewykonalny → brak geometrii');
+  ok(!geoms.find(g => g.seq === 9), 'duch: ADD_ROOM w obszarze kalki → brak geometrii (nie ma gdzie rysować)');
+  c.api._deltaGhostGeoms(delta, items, [1, 3, 5, 6], c.api.overrides);
+  c.api._deltaTakenCells(delta, items, 1);
+  c.api._deltaFindFreeCell(1, 0, 0, 0, new Set());
+  const checksumAfter = c.api.stableStringify(c.state.map) + '|' + Object.keys(c.state.roomById).length;
+  ok(checksumBefore === checksumAfter, 'duchy: zero mutacji mapy (checksum przed == po)');
+
+  // Reset stanu M3
+  c.api.placing = { seq: 1 }; c.api.hover = { x: 1, y: 1, free: true };
+  c.api._deltaGhostReset();
+  ok(c.api.ghosts.size === 0 && c.api.overrides.size === 0 && c.api.placing === null && c.api.hover === null,
+    '_deltaGhostReset: czyści duchy, overridey, placing, hover');
+}
+{
+  // Apply z override: efektywne współrzędne do mapy, undo entry i deltaLog
+  const c = makeDeltaCtx();
+  const delta = collisionDelta();
+  const items = c.api.classifyDelta(delta);
+  const ov = new Map([[1, { x: 7, y: 7, how: 'auto' }]]);
+  const res = c.api.applyDelta(delta, new Set([1]), ov);
+  ok(res.applied === 1 && res.skipped.length === 0, 'apply+override: naniesiono 1, bez skipów');
+  const added = c.state.areas.get(1).rooms.find(r => r.name === 'N1');
+  ok(added && added.x === 7 && added.y === 7, 'apply+override: pokój na pozycji zastępczej (7,7)');
+  const logEntry = c.state.deltaLog[c.state.deltaLog.length - 1];
+  ok(logEntry.type === 'ADD_ROOM' && logEntry.roomData.x === 7 && logEntry.roomData.y === 7,
+    'apply+override: deltaLog/undo entry niesie efektywne współrzędne (rebase wyeksportuje poprawione)');
+
+  // Re-klasyfikacja z efektywnymi współrzędnymi → done (idempotencja)
+  const patched = { meta: delta.meta, ops: c.api._deltaApplyOverridesToOps(delta.ops, ov) };
+  const items2 = c.api.classifyDelta(patched);
+  ok(items2[0].cls === 'done', 're-klasyfikacja po apply z override: op → done');
+
+  // _deltaApplyOverridesToOps: patch ADD_ROOM + MOVE_ROOM, oryginał nietknięty
+  const patchedOps = patched.ops;
+  ok(patchedOps[0].payload.room.x === 7 && delta.ops[0].payload.room.x === 0, 'patch ops: kopia zmieniona, oryginał nie');
+  const ovM = new Map([[3, { x: 4, y: 4, how: 'manual' }]]);
+  const pm = c.api._deltaApplyOverridesToOps(delta.ops, ovM);
+  ok(pm[2].payload.toX === 4 && pm[2].payload.toY === 4 && pm[4] === delta.ops[4],
+    'patch ops: MOVE_ROOM toX/toY; opy bez override zachowują referencję');
+}
+{
+  // MOVE_ROOM z override + re-walidacja fail-closed
+  const c = makeDeltaCtx();
+  const delta = collisionDelta();
+  c.api.classifyDelta(delta);
+  const res = c.api.applyDelta(delta, new Set([3]), new Map([[3, { x: 4, y: 4, how: 'manual' }]]));
+  ok(res.applied === 1 && c.state.roomById[12].x === 4 && c.state.roomById[12].y === 4,
+    'apply+override MOVE_ROOM: pokój na (4,4)');
+  const le = c.state.deltaLog[c.state.deltaLog.length - 1];
+  ok(le.type === 'MOVE_ROOM' && le.toX === 4 && le.toY === 4, 'apply+override MOVE_ROOM: entry z efektywnymi współrzędnymi');
+}
+{
+  // Override unieważniony przed apply → skip, zero mutacji
+  const c = makeDeltaCtx();
+  const delta = collisionDelta();
+  c.api.classifyDelta(delta);
+  const nRooms = c.state.areas.get(1).rooms.length;
+  const res = c.api.applyDelta(delta, new Set([1]), new Map([[1, { x: 1, y: 0, how: 'manual' }]]));  // (1,0) zajęte przez #11
+  ok(res.applied === 0 && res.skipped.length === 1 && res.skipped[0].reason === 'pozycja zastępcza zajęta',
+    'apply+override zajęte: skip z powodem, applied 0');
+  ok(c.state.areas.get(1).rooms.length === nRooms, 'apply+override zajęte: mapa bez zmian');
+}
+{
+  // Asercje strukturalne HTML — haki M3
+  ok(HTML.includes('_drawDeltaGhosts(rs);') && HTML.includes('warstwa 7b'),
+    'draw(): warstwa 7b duchów kalki');
+  ok(HTML.includes("if (_deltaPlacing) {\n    state.dragX = e.clientX; state.dragY = e.clientY;"),
+    'mousedown: przechwyt trybu stawiania przed pan/edit');
+  ok(HTML.includes("if (_deltaPlacing) { _deltaUpdateHover(evX(e), evY(e)); return; }"),
+    'mousemove: celownik hover');
+  ok(HTML.includes("if (e.button === 0 && dx < 5 && dy < 5) _deltaPlaceAtScreen(evX(e), evY(e));"),
+    'mouseup: klik = ustawienie pozycji zastępczej');
+  ok(HTML.includes("if (_deltaPlacing) { _deltaCancelPlacing(); return; }\n  if (!state.map) return;"),
+    'contextmenu: prawy = anuluj stawiania');
+  ok(HTML.includes("if (_deltaPlacing) { _deltaCancelPlacing(); return; }\n    // (0) Modal otwarty"),
+    'Escape: anulowanie trybu stawiania');
+  ok(HTML.includes("_deltaGhostReset();  // ARKDELTA M3: nowa mapa"),
+    'applyMap: reset stanu M3 przy nowej mapie');
+  ok(HTML.includes('Autopozycja') && HTML.includes('Ręcznie')
+    && HTML.includes("bShow.textContent = 'Efekt'") && HTML.includes("bHide.textContent = 'Ukryj'"),
+    'panel: przyciski Efekt/Ukryj/Autopozycja/Ręcznie');
+  ok(HTML.includes('Duchy:') && HTML.includes('pozycja zastępcza'), 'panel: legenda kolorów duchów');
+  ok(HTML.includes("const APP_VERSION = 'v1.8.0';"), 'wersja v1.8.0');
+  ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
+}
 
 console.log('');
 console.log('delta: ' + pass + ' OK, ' + fail + ' FAIL');
