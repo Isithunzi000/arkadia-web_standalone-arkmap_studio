@@ -2,6 +2,11 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## repo — katalog uploads/ na wrzutki spoza czatu
+
+- **Zmiana:** dodany przez wlasciciela katalog `uploads/` (z `uploads.txt`) sluzy do przekazywania plikow, ktorych nie da sie wrzucic do czatu. Paczka `map_master3.zip` (eksporty .arkmap z testow panelu kalki + zapisane kalki) zostala przejrzana i usunieta z repo — katalog i plik informacyjny zostaja na przyszlosc.
+- Repo-only: bez zmian w aplikacji, bez podbicia wersji.
+
 ## v1.25.0 — panel recenzji kalki ze zmiennym rozmiarem (M5e)
 
 - **Przyczyna:** panel miał sztywną szerokość 560px i max-wysokość 62vh — przy długich kalkach (dziesiątki opów z notatkami i diffami) lista wymagała ciągłego przewijania, a szeroki ekran pozostawał niewykorzystany.
