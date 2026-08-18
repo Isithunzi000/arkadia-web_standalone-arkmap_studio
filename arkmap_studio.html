@@ -12700,7 +12700,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.26.0';
+const APP_VERSION = 'v1.27.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -18796,6 +18796,7 @@ let _deltaHover     = null;       // {x, y, free} — celownik pod kursorem
 // nadpisuja sie wzajemnie w obrebie kalki — bug #12: powtorne "Zastosuj"
 // nanosilo je w kolko, zalewajac stos undo az do capa).
 let _deltaAppliedSeqs = new Set();
+let _deltaSkippedSeqs = new Set();  // seq-e pominiete przez guard przy Zastosuj (auto-odznaczenie + dopisek)
 
 function _deltaGhostReset() {
   _deltaGhosts = new Set();
@@ -19332,6 +19333,7 @@ function _drawDeltaGhosts(rs) {
 function openDeltaReview(delta) {
   _deltaGhostReset();  // M3: nowa kalka = czyste duchy/override'y
   _deltaAppliedSeqs = new Set();  // nowa kalka = czysta historia nanoszenia
+  _deltaSkippedSeqs = new Set();
   _deltaReview = { delta, items: classifyDelta(delta), filter: 'all' };
   document.getElementById('dp-base').textContent = _arkdeltaBaseNote(delta.meta.base);
   document.getElementById('dp-rebase').style.display = 'none';
@@ -19481,6 +19483,7 @@ function _deltaApplyReviewed() {
   const only = new Set(R.items.filter(i => i.checked && !_deltaAppliedSeqs.has(i.seq)).map(i => i.seq));
   const res = applyDelta(R.delta, only, _deltaOverrides);
   for (const s of res.appliedSeqs || []) _deltaAppliedSeqs.add(s);
+  for (const s of res.skipped || []) _deltaSkippedSeqs.add(s.seq);
   let msg = '✓ Naniesiono: ' + res.applied;
   if (res.skipped.length) msg += ' · Pominięto: ' + res.skipped.length;
   toast(msg, res.skipped.length > 0);
@@ -19495,6 +19498,18 @@ function _deltaApplyReviewed() {
   for (const it of R.items) {
     if (_deltaAppliedSeqs.has(it.seq)) {
       it.cls = 'done'; it.note = 'naniesione z tej kalki'; it.checked = false; it.coll = false; it.session = true;
+    }
+  }
+  // Warstwa sesyjna: opy pominiete przez guard przy Zastosuj traca zaznaczenie
+  // i dostaja trwaly dopisek do notatki (bez tego wisialy zaznaczone i kazde
+  // kolejne Zastosuj mielilo je bez efektu, a przycisk klamal liczba).
+  for (const it of R.items) {
+    if (_deltaSkippedSeqs.has(it.seq) && !_deltaAppliedSeqs.has(it.seq)) {
+      it.checked = false;
+      it.skippedAt = true;
+      if ((it.note || '').indexOf('pominięte przy ostatnim Zastosuj') < 0) {
+        it.note = (it.note ? it.note + ' · ' : '') + 'pominięte przy ostatnim Zastosuj';
+      }
     }
   }
   _renderDeltaPanel();
@@ -19535,7 +19550,7 @@ btnSaveArkdelta.addEventListener('click', saveDelta);
     toast('Wczytywanie kalki anulowane');
   });
   document.getElementById('dp-rebase').addEventListener('click', saveDelta);
-  const closePanel = () => { panel.classList.remove('visible'); _deltaReview = null; _deltaGhostReset(); _deltaAppliedSeqs = new Set(); draw(); };
+  const closePanel = () => { panel.classList.remove('visible'); _deltaReview = null; _deltaGhostReset(); _deltaAppliedSeqs = new Set(); _deltaSkippedSeqs = new Set(); draw(); };
   document.getElementById('dp-close').addEventListener('click', closePanel);
   document.getElementById('dp-close2').addEventListener('click', closePanel);
   const hdr = document.getElementById('dp-hdr');
