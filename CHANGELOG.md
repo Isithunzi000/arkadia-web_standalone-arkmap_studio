@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.25.0 — panel recenzji kalki ze zmiennym rozmiarem (M5e)
+
+- **Przyczyna:** panel miał sztywną szerokość 560px i max-wysokość 62vh — przy długich kalkach (dziesiątki opów z notatkami i diffami) lista wymagała ciągłego przewijania, a szeroki ekran pozostawał niewykorzystany.
+- **Fix:** uchwyt w prawym dolnym rogu (gradientowe „zadrapania", podświetlenie na hover) — przeciąganie zmienia szerokość i wysokość z clampami: min 360×220 (bez absurdów), max 92vw × 80vh; po ręcznym przesunięciu panelu dodatkowy clamp do dolnej krawędzi okna. Współistnieje z dotychczasowym przeciąganiem za nagłówek (osobne handlery, brak kolizji).
+- **Testy (w tym samym commicie):** nowy scenariusz E7.resize (3 asercje na syntetycznych MouseEventach: wzrost o +120/+60 px, clamp minimalny, clamp maksymalny).
+- Regresja lokalna: pełny `run-all.sh` PASS (13 harnessów node + kampania empiryczna SMOKE+E0–E7, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.24.0 — panel kalki: czytelne przyciski na podświetlonym wierszu + pigułka autopozycji (M5d)
 
 - **Przyczyna:** mini-przyciski wiersza („Efekt"/„Ukryj"/„Autopozycja"/„Ręcznie") dziedziczyły `background:none` i przygaszony `--dim` z `.vd-btn` — na podświetlonym wierszu zlewały się z tłem. Wynik autopozycji to był goły tekst w kolorze akcentu.
