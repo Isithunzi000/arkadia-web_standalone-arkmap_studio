@@ -1634,6 +1634,44 @@ scenario('E5.ctx-count', async () => {
   A('E5.ctx.del-dlg-closed', ev("!!document.querySelector('#dlg-delete-room-refs.open')").val === false, 'dialog zamkniety');
 });
 
+scenario('E5.del-o1', async () => {
+  await loadBase('dat');
+  // O1: dialog usuwania musi kasowac pokoj, dla ktorego zostal otwarty —
+  // nawet gdy zaznaczenie zmieni sie miedzy otwarciem a potwierdzeniem.
+  // A = pokoj bez przychodzacych wyjsc (prosty dialog), B = dowolny inny.
+  const pair = JSON.parse(ev("JSON.stringify((function(){"
+    + " const incoming = new Set();"
+    + " for (const r of Object.values(state.roomById)) {"
+    + "   for (const t of Object.values(r.exits || {})) incoming.add(t);"
+    + "   for (const t of Object.values(r.special_exits || {})) incoming.add(t);"
+    + " }"
+    + " const rooms = Object.values(state.roomById);"
+    + " const a = rooms.find(r => !incoming.has(r.id));"
+    + " const b = rooms.find(r => a && r.id !== a.id);"
+    + " return (a && b) ? [a.id, b.id] : null;"
+    + " })())").val);
+  A('E5.del-o1.pair', Array.isArray(pair) && pair.length === 2,
+    'znaleziono pare pokoi: A bez przychodzacych wyjsc + B');
+  if (!Array.isArray(pair) || pair.length !== 2) return;
+  const roomA = pair[0], roomB = pair[1];
+  ex('state.selected = ' + roomA + '; showDeleteRoomDialog(' + roomA + ')');
+  A('E5.del-o1.dlg', ev("!!document.querySelector('#dlg-delete-room.open')").val === true,
+    'prosty dialog otwarty dla pokoju A (#' + roomA + ')');
+  A('E5.del-o1.msg', (ev("document.getElementById('dlg-delete-room-msg').textContent").val || '').includes('(ID: ' + roomA + ')'),
+    'tresc dialogu wskazuje pokoj A');
+  // zmiana zaznaczenia na B miedzy otwarciem a kliknieciem "Usun pokoj"
+  ex('state.selected = ' + roomB);
+  ex("document.getElementById('dlg-delete-room-confirm').click()");
+  A('E5.del-o1.a-gone', ev('!state.roomById[' + roomA + ']').val === true,
+    'fix O1: usuniety pokoj A (ten z dialogu), NIE zaznaczenie');
+  A('E5.del-o1.b-alive', ev('!!state.roomById[' + roomB + ']').val === true,
+    'fix O1: pokoj B (aktualne zaznaczenie) nietkniety');
+  EQ('E5.del-o1.log', ev('state.deltaLog[state.deltaLog.length - 1].type').val, 'DELETE_ROOM',
+    'deltaLog +1 DELETE_ROOM');
+  A('E5.del-o1.dlg-closed', ev("!!document.querySelector('#dlg-delete-room.open')").val === false,
+    'dialog zamkniety po potwierdzeniu');
+});
+
 scenario('E5.ghost-layer', async () => {
   // stan do sanity-screenshota: panel z kolizjami + duchy + chipy autopozycji
   await e3Setup();

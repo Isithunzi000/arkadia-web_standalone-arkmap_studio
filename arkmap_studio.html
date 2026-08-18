@@ -12681,7 +12681,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.15.0';
+const APP_VERSION = 'v1.16.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -19514,23 +19514,11 @@ window.addEventListener('beforeunload', (e) => {
     }
   }
 
-  // ── Wire dlg-delete-room confirm buttons ─────────────────────────────────
-  const dlgDelRoom = document.getElementById('dlg-delete-room');
-  if (dlgDelRoom) {
-    const confirmBtn = dlgDelRoom.querySelector('.btn-err, .btn-primary');
-    if (confirmBtn) confirmBtn.onclick = () => {
-      closeDialog('dlg-delete-room');
-      deleteRoom(state.selected);
-    };
-  }
-  const dlgDelRoomRefs = document.getElementById('dlg-delete-room-refs');
-  if (dlgDelRoomRefs) {
-    const confirmBtn = dlgDelRoomRefs.querySelector('.btn-err, .btn-primary');
-    if (confirmBtn) confirmBtn.onclick = () => {
-      closeDialog('dlg-delete-room-refs');
-      deleteRoom(state.selected);
-    };
-  }
+  // ── dlg-delete-room / dlg-delete-room-refs: confirm buttons ──────────────
+  // O1: NIE wiazemy tutaj onclick pod state.selected — handler jest ustawiany
+  // przy kazdym otwarciu dialogu w showDeleteRoomDialog(roomId) jako domkniecie
+  // na roomId. Potwierdzenie zawsze usuwa pokoj, dla ktorego dialog otwarto,
+  // nawet gdy zaznaczenie zmienilo sie w miedzyczasie.
 
   // ── Wire dlg-new-area confirm button (+ uniqueness validation, Pass 48.1) ─
   const dlgNewArea = document.getElementById('dlg-new-area');
