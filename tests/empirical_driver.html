@@ -674,6 +674,28 @@ function _e2UpRoom(areaId, x, y, name) {
    + ' state.roomById[nid] = r; state.roomArea[nid] = ' + areaId + ';'
    + ' buildRoomsZ(); return nid;');
 }
+// Commit dodania pokoju Z POMINIECIEM guarda zajetosci (v1.19.0) — wylacznie do
+// konstrukcji kalki E3: celowy stack dwoch ADD_ROOM na (9999,9999). Dawniej robily
+// to dwa addRoomAtPosition na tym samym polu; od v1.19.0 addRoomAtPosition slusznie
+// blokuje zajete pola. Wpis undo/deltaLog identyczny jak w addRoomAtPosition,
+// zeby buildDelta wyeksportowalo op ADD_ROOM.
+function _e3CommitAddRoom(x, y) {
+  ex('(function(){'
+   + ' const areaId = state.areaId;'
+   + ' const area = state.areas.get(areaId);'
+   + ' const ids = Object.keys(state.roomById).map(Number).filter(id => id > 0);'
+   + ' const nid = Math.max.apply(null, ids) + 1;'
+   + ' const r = { id: nid, area: areaId, x: ' + x + ', y: ' + y + ', z: state.z,'
+   + '   name: "", env: 258, weight: 1,'
+   + '   exits: {}, special_exits: {}, custom_lines: {}, stubs: [],'
+   + '   exit_locks: [], exit_weights: {}, doors: {}, user_data: {} };'
+   + ' area.rooms.push(r);'
+   + ' state.roomById[nid] = r; state.roomArea[nid] = areaId;'
+   + ' buildRoomsZ();'
+   + ' pushUndo({ type: "ADD_ROOM", roomId: nid, roomData: JSON.parse(JSON.stringify(r)),'
+   + '   areaId: areaId, label: "Dodanie pokoju (#" + nid + ")" });'
+   + ' return nid; })()');
+}
 // Craft pojedynczej kalki (checksumy funkcjami aplikacji) — dla typow, ktorych
 // nie da sie wygenerowac jedno-opowo z czystej bazy fixture.
 function _e2Craft(opsArr) {
@@ -1091,8 +1113,8 @@ function _e3CountAt(x, y){
 // bazie, potem eksport. Izolacja: bazowa mape przywraca loadBase w e3Setup.
 async function _e3Text(){
   const areaId = ev('state.areaId').val;
-  ex('addRoomAtPosition(9999, 9999)');
-  ex('addRoomAtPosition(9999, 9999)');
+  _e3CommitAddRoom(9999, 9999);
+  _e3CommitAddRoom(9999, 9999);   // celowy stack — kalka z 2 ADD na tym samym polu (guard v1.19.0)
   const mvId = ev('state.areas.get(' + JSON.stringify(areaId) + ').rooms.find('
     + ' r => !(r.x === 9999 && r.y === 9999)).id').val;
   ex('commitMoveRoom(state.roomById[' + JSON.stringify(mvId) + '],'
@@ -1772,6 +1794,52 @@ scenario('E5.move-guard-preview', async () => {
   ex('(function(){ state.editDraggingRoom = false; state.selected = null; state.editDragCurrentX = 0; state.editDragCurrentY = 0; })()');
   A('E5.move-guard-preview.clean', ev('state.editDraggingRoom === false && state.selected === null').val === true,
     'stan po tescie posprzatany');
+});
+
+scenario('E5.add-guard', async () => {
+  await loadBase('dat');
+  // Guard zajetosci przy DODAWANIU pokoju (klik "Dodaj pokoj tutaj") — blokada zawsze,
+  // spójnie z F5 w kalkach. Kolizja samokonstruowana (niezalezna od fixture).
+  const base = JSON.parse(ev("JSON.stringify((function(){"
+    + " const rz = state.roomsZ; if (rz.length < 1) return null;"
+    + " const a = rz[0];"
+    + " return { a: a.id, ax: a.x, ay: a.y, areaX: state.areaId,"
+    + "   areas: [...state.areas.keys()].filter(k => k > 0) };"
+    + " })())").val);
+  A('E5.add-guard.setup', !!base && base.areas.length >= 2, 'pokoj A + co najmniej 2 obszary w fixture');
+  if (!base || base.areas.length < 2) return;
+  const { a, ax, ay, areaX, areas } = base;
+  const areaY = areas.find(k => k !== areaX);
+  // 1) dodanie na zajete pole = blokada, zero sladu
+  const cnt0 = ev('Object.keys(state.roomById).length').val;
+  const undo0 = ev('state.undoStack.length').val, log0 = ev('state.deltaLog.length').val;
+  ex('addRoomAtPosition(' + ax + ', ' + ay + ')');
+  A('E5.add-guard.occupied-blocked', ev('Object.keys(state.roomById).length').val === cnt0
+    && ev('state.undoStack.length').val === undo0 && ev('state.deltaLog.length').val === log0,
+    'dodanie na zajete pole: zero pokoju, zero undo, zero deltaLog');
+  A('E5.add-guard.occupied-toast', (ev("document.getElementById('toast').textContent").val || '').includes('zajęte przez pokój #' + a),
+    'toast wskazuje kolidujacy pokoj i wolna komorke');
+  // 2) dodanie na wolne pole = dziala (kontrola)
+  ex('addRoomAtPosition(' + (ax + 700) + ', ' + (ay + 700) + ')');
+  A('E5.add-guard.free-added', ev('Object.keys(state.roomById).length').val === cnt0 + 1,
+    'dodanie na wolne pole: pokoj dodany');
+  ex('undoAction()');  // cofamy kontrolne dodanie
+  // 3) przeniesienie miedzy obszarami na zajeta pozycje = dokonane + toast ostrzegawczy
+  // Konstrukcja: w obszarze Y stawiamy pokoj na wspolrzednych A, potem przenosimy A do Y.
+  ex('(function(){ state.areaId = ' + areaY + '; buildRoomsZ(); })()');
+  ex('addRoomAtPosition(' + ax + ', ' + ay + ')');
+  const cId = ev('state.selected').val;  // addRoomAtPosition zaznacza nowy pokoj
+  A('E5.add-guard.seeded', ev('(function(){ const r = state.roomById[' + cId + '];'
+    + ' return !!r && state.roomArea[' + cId + '] === ' + areaY + ' && r.x === ' + ax + ' && r.y === ' + ay + '; })()').val === true,
+    'pokoj C ustawiony w obszarze Y na wspolrzednych A');
+  ex('(function(){ state.areaId = ' + areaX + '; buildRoomsZ(); })()');
+  ex('commitMoveRoomToArea(' + a + ', ' + areaY + ')');
+  A('E5.add-guard.xarea-moved', ev('state.roomArea[' + a + ']').val === areaY,
+    'przeniesienie miedzy obszarami dokonane (nieblokujace)');
+  A('E5.add-guard.xarea-toast', (ev("document.getElementById('toast').textContent").val || '').includes('zajęta przez pokój #' + cId),
+    'toast ostrzega o kolizji z pokojem C w docelowym obszarze');
+  // reset stanu dla kolejnych scenariuszy
+  await loadBase('dat');
 });
 
 scenario('E5.ghost-layer', async () => {
