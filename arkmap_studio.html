@@ -6821,15 +6821,23 @@ function rpApplyHidden() {
 
 function drawRooms(rooms, rs) {
   // ── Drag preview: ghostowy pokój w nowej pozycji (Pass 54) ──────────────
+  // Cel zajęty → czerwona ramka z krzyżykiem (guard zajętości: podgląd podczas dragu)
   if (state.editDraggingRoom && state.selected) {
     const gx = wx(state.editDragCurrentX), gy = wy(state.editDragCurrentY);
+    const coll = _editDragCollision();
     const half = rs / 2;
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,159,74,0.7)';
-    ctx.lineWidth   = Math.max(1, state.zoom * 1.5);
+    ctx.strokeStyle = coll ? 'rgba(255,80,80,0.95)' : 'rgba(255,159,74,0.7)';
+    ctx.lineWidth   = Math.max(1, state.zoom * (coll ? 2.2 : 1.5));
     ctx.setLineDash([4, 3]);
     ctx.strokeRect(gx - half, gy - half, rs, rs);
     ctx.setLineDash([]);
+    if (coll) {
+      ctx.beginPath();
+      ctx.moveTo(gx - half, gy - half); ctx.lineTo(gx + half, gy + half);
+      ctx.moveTo(gx + half, gy - half); ctx.lineTo(gx - half, gy + half);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -12673,7 +12681,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.17.0';
+const APP_VERSION = 'v1.18.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -16174,6 +16182,16 @@ function _roomCollisionAt(x, y, z, excludeId) {
     if (r.id !== excludeId && r.x === x && r.y === y && r.z === z) return r;
   }
   return null;
+}
+
+// ── _editDragCollision() — pokój kolidujący z celem bieżącego dragu (albo null) ─
+// Używana przez podgląd w drawRooms (czerwony cel = zajęty); ta sama ocena
+// co w polityce _tryMoveRoomWithPolicy — jedno źródło prawdy (_roomCollisionAt).
+function _editDragCollision() {
+  if (!state.editDraggingRoom || !state.selected) return null;
+  const room = state.roomById[state.selected];
+  if (!room) return null;
+  return _roomCollisionAt(state.editDragCurrentX, state.editDragCurrentY, room.z, room.id);
 }
 
 // ── _tryMoveRoomWithPolicy(room, toX, toY, opts) — ruch z guardem zajętości ──

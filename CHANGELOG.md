@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.18.0 — podgląd kolizji podczas przeciągania pokoju (czerwony cel = zajęty)
+
+- **Przyczyna:** guard z v1.17.0 blokuje drop na zajęte pole, ale podczas samego przeciągania użytkownik nie widział, że celuje w zajętą komórkę — dowiadywał się dopiero z toastu po upuszczeniu.
+- **Fix:** nowy getter `_editDragCollision()` (to samo źródło prawdy co polityka ruchu: `_roomCollisionAt`), użyty w podglądzie dragu w `drawRooms` — cel zajęty = czerwona, grubsza ramka z krzyżykiem (zamiast pomarańczowej). Podgląd na żywo, w rytm mousemove.
+- **Testy (nowy scenariusz w tym samym commicie):** E5.move-guard-preview (5 asercji) — getter zwraca kolidujący pokój dla zajętego celu, null dla wolnego, null poza dragiem; stan po teście posprzątany.
+- Regresja lokalna: pełny `run-all.sh` PASS (13 harnessów node + kampania empiryczna SMOKE+E0–E6, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.17.0 — guard zajętości pola przy przenoszeniu pokoju (drag + strzałki)
 
 - **Przyczyna:** przenoszenie pokoju w edycji (drag myszką i strzałki) pozwalało po cichu położyć pokój na zajętym polu — jedyną informacją był ulotny toast po fakcie, a nałożenie zostawało na mapie.
