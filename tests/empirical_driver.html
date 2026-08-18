@@ -2040,6 +2040,41 @@ scenario('E8.skipflag', async () => {
     'dopisek w notatce wystepuje dokladnie raz (bez akumulacji)');
 });
 
+scenario('E8.confcard', async () => {
+  // v1.28.0: karta szczegolow (tabela parametr | aktualnie | w kalce) zamiast
+  // wielkiego napisu na kanwie; na kanwie zostaje zwarta odznaka ΔN.
+  await loadBase('dat');
+  const txt = await (await fetch('./fixture_demo.arkdelta')).text();
+  ex('const r = validateDeltaText(' + JSON.stringify(txt) + '); if (!r.ok) throw new Error("walidacja fixture_demo"); window.__e8cdelta = r.delta;');
+  ex('openDeltaReview(window.__e8cdelta)');
+  const cardHtml = () => ev('(function(){ const c = document.getElementById("dp-card");'
+    + ' return (c && c.style.display !== "none") ? c.textContent : null; })()').val;
+  // op10 EDIT_ROOM (diff nazwy): wiersz „nazwa" + obie wartosci + naglowki kolumn
+  ex('_deltaShowGhost(_deltaReview.items[9])');
+  const h1 = cardHtml() || '';
+  A('E8.confcard.edit', h1.indexOf('nazwa') >= 0 && h1.indexOf('E1 Zmieniona Nazwa') >= 0 && h1.indexOf('aktualnie na mapie') >= 0,
+    'karta EDIT_ROOM: tabela z wierszem nazwa + wartosci mapa/kalka [=' + h1.slice(0, 90) + ']');
+  // op33 ADD_EXIT (zajety kierunek): kierunek + aktualny i docelowy cel
+  ex('_deltaShowGhost(_deltaReview.items[32])');
+  const h2 = cardHtml() || '';
+  A('E8.confcard.exit', h2.indexOf('kierunek') >= 0 && h2.indexOf('prowadzi do') >= 0,
+    'karta ADD_EXIT: kierunek + aktualny/docelowy cel [=' + h2.slice(0, 90) + ']');
+  // op28 ADD_ROOM (kolizja): pole + okupant #13 + intencja kalki
+  ex('_deltaShowGhost(_deltaReview.items[27])');
+  const h3 = cardHtml() || '';
+  A('E8.confcard.coll', h3.indexOf('zajęte przez') >= 0 && h3.indexOf('#13') >= 0 && h3.indexOf('kałka chce') >= 0,
+    'karta kolizji: pole + zajęte przez #13 + intencja [=' + h3.slice(0, 90) + ']');
+  // op bez szczegolow (op1 ADD_AREA ok): karta zostaje ukryta
+  ex('_deltaShowGhost(_deltaReview.items[0])');
+  EQ('E8.confcard.hide-empty', cardHtml(), null, 'op bez szczegolow: karta ukryta');
+  // przycisk Ukryj w wierszu chowa karte razem z duchem
+  ex('_deltaShowGhost(_deltaReview.items[9]); _renderDeltaPanel()');
+  A('E8.confcard.reshown', (cardHtml() || '').indexOf('nazwa') >= 0, 'karta z powrotem po Efekt');
+  ex('(function(){ const row = document.querySelectorAll("#dp-body .dp-row")[9];'
+    + ' const b = [...row.querySelectorAll("button")].find(x => x.textContent === "Ukryj"); b.click(); })()');
+  EQ('E8.confcard.hide-btn', cardHtml(), null, 'Ukryj: karta znika razem z duchem');
+});
+
 // ═══ E7: diff-wizualizacja kalki (M5) ═══
 scenario('E7.diff', async () => {
   await loadBase('dat');

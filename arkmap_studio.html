@@ -323,6 +323,16 @@
     border-radius:0 0 6px 0; }
   #dp-resize:hover { background:linear-gradient(135deg, transparent 50%, var(--accent) 50%, var(--accent) 60%, transparent 60%, transparent 70%, var(--accent) 70%); }
   .dp-expl { font-size:9px; color:var(--dim); opacity:.75; padding:2px 8px 4px; border-bottom:1px solid var(--border); line-height:1.35; }
+  #dp-card { margin:4px 8px; border:1px solid #333c52; border-radius:6px; background:#1b2130; }
+  .dp-card-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:4px 8px; font-size:10px; font-weight:600; color:var(--text); border-bottom:1px solid var(--border); }
+  .dp-card-x { cursor:pointer; color:var(--dim); padding:0 2px; flex:none; }
+  .dp-card-x:hover { color:#fff; }
+  .dp-card-scroll { max-height:180px; overflow:auto; }
+  .dp-card-tbl { width:100%; border-collapse:collapse; font-size:9px; }
+  .dp-card-tbl th { text-align:left; color:var(--dim); font-weight:600; padding:3px 6px; border-bottom:1px solid var(--border); position:sticky; top:0; background:#1b2130; }
+  .dp-card-tbl td { padding:3px 6px; border-bottom:1px solid rgba(255,255,255,0.05); vertical-align:top; word-break:break-word; overflow-wrap:anywhere; }
+  .dp-card-tbl td:first-child { color:var(--dim); }
+  .dp-card-note { padding:4px 8px 6px; font-size:9px; color:var(--dim); line-height:1.35; }
   #dp-apply { color:var(--ok); border-color:#2a5a3a; }
   #dp-apply:disabled { opacity:.4; cursor:default; color:var(--dim); border-color:var(--border); }
   #dp-rebase { color:var(--accent); border-color:#2a4a6a; }
@@ -2512,6 +2522,11 @@
       </div>
       <div class="dp-expl">„Zastosuj" nanosi tylko zaznaczone. Konflikt = mapa zmieniła się od zapisu kalki — notatka przy opie mówi, co się stanie (nadpisanie wersją z kalki albo pominięcie).</div>
       <div class="dp-legend">Duchy: <span class="dp-sw" style="background:#4aff8a"></span> wolne · <span class="dp-sw" style="background:#f0883e"></span> kolizja/zmiana · <span class="dp-sw" style="background:#4a9eff"></span> pozycja zastępcza · <span class="dp-sw" style="background:#ff7b72"></span> usunięcie</div>
+      <div id="dp-card" style="display:none">
+        <div class="dp-card-head"><span id="dp-card-title"></span><span class="dp-card-x" id="dp-card-x" title="Ukryj szczegóły" onclick="_deltaCardHide()">✕</span></div>
+        <div class="dp-card-scroll"><table class="dp-card-tbl" id="dp-card-tbl"></table></div>
+        <div class="dp-card-note" id="dp-card-note"></div>
+      </div>
       <div class="vd-body" id="dp-body"></div>
       <div class="vd-ftr">
         <button class="vd-btn" id="dp-apply">✓ Zastosuj zaznaczone</button>
@@ -12700,7 +12715,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.27.0';
+const APP_VERSION = 'v1.28.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -17908,51 +17923,68 @@ function _deltaIsSuppressor(cl) {
 // M5: czytelny diff before->after dla EDIT_ROOM/EDIT_EXIT — lista krotkich
 // opisow zmian (wiersz panelu + etykieta ducha). resolve: sid -> numeryczne id
 // (z klasyfikacji), zeby cele wyjsc nie wyswietlaly sie jako "d:N".
-function _deltaRoomDiff(before, after, resolve) {
+function _deltaRoomDiffRows(before, after, resolve) {
   const strip = v => { const c = _deltaStripRoom(JSON.parse(JSON.stringify(v ?? {}))); delete c.id; return c; };
   const b = strip(before), a = strip(after);
   const res = v => { const r = resolve ? resolve(v) : v; return (typeof r === 'number') ? ('#' + r) : String(r); };
-  const out = [];
-  if ((b.name || '') !== (a.name || '')) out.push('nazwa: „' + (b.name || '') + '" → „' + (a.name || '') + '"');
-  if ((b.env ?? null) !== (a.env ?? null)) out.push('env ' + (b.env ?? '—') + ' → ' + (a.env ?? '—'));
-  if ((b.symbol || '') !== (a.symbol || '')) out.push('symbol: „' + (b.symbol || '') + '" → „' + (a.symbol || '') + '"');
-  if ((b.weight ?? null) !== (a.weight ?? null)) out.push('waga ' + (b.weight ?? '—') + ' → ' + (a.weight ?? '—') );
-  if (!!b.hidden !== !!a.hidden) out.push(a.hidden ? 'ukrycie pokoju' : 'odkrycie pokoju');
+  const rows = [];
+  const row = (p, bv, av, str) => rows.push({ p, b: bv, a: av, str });
+  if ((b.name || '') !== (a.name || '')) row('nazwa', '„' + (b.name || '') + '"', '„' + (a.name || '') + '"', 'nazwa: „' + (b.name || '') + '" → „' + (a.name || '') + '"');
+  if ((b.env ?? null) !== (a.env ?? null)) row('env', String(b.env ?? '—'), String(a.env ?? '—'), 'env ' + (b.env ?? '—') + ' → ' + (a.env ?? '—'));
+  if ((b.symbol || '') !== (a.symbol || '')) row('symbol', '„' + (b.symbol || '') + '"', '„' + (a.symbol || '') + '"', 'symbol: „' + (b.symbol || '') + '" → „' + (a.symbol || '') + '"');
+  if ((b.weight ?? null) !== (a.weight ?? null)) row('waga', String(b.weight ?? '—'), String(a.weight ?? '—'), 'waga ' + (b.weight ?? '—') + ' → ' + (a.weight ?? '—'));
+  if (!!b.hidden !== !!a.hidden) row('ukryty', b.hidden ? 'tak' : 'nie', a.hidden ? 'tak' : 'nie', a.hidden ? 'ukrycie pokoju' : 'odkrycie pokoju');
   if ((b.x ?? 0) !== (a.x ?? 0) || (b.y ?? 0) !== (a.y ?? 0) || (b.z ?? 0) !== (a.z ?? 0))
-    out.push('pozycja (' + (b.x ?? 0) + ',' + (b.y ?? 0) + ',' + (b.z ?? 0) + ') → (' + (a.x ?? 0) + ',' + (a.y ?? 0) + ',' + (a.z ?? 0) + ')');
-  const mapDiff = (bk, ak, fmtAdd, fmtDel, fmtChg) => {
+    row('pozycja', '(' + (b.x ?? 0) + ',' + (b.y ?? 0) + ',' + (b.z ?? 0) + ')', '(' + (a.x ?? 0) + ',' + (a.y ?? 0) + ',' + (a.z ?? 0) + ')',
+      'pozycja (' + (b.x ?? 0) + ',' + (b.y ?? 0) + ',' + (b.z ?? 0) + ') → (' + (a.x ?? 0) + ',' + (a.y ?? 0) + ',' + (a.z ?? 0) + ')');
+  // mapy kierunkowe: label = prefiks parametru, dispB/dispA = wartosci do tabeli, fmt* = legacy string
+  const mapDiff = (bk, ak, label, fmtAdd, fmtDel, fmtChg, disp, chgPair) => {
     const bm = b[bk] || {}, am = a[ak] || {};
     for (const k of Object.keys(am)) {
-      if (bm[k] === undefined) out.push(fmtAdd(k, am[k]));
-      else if (stableStringify(bm[k]) !== stableStringify(am[k])) out.push(fmtChg(k, bm[k], am[k]));
+      if (bm[k] === undefined) row(label + k, '—', disp(am[k]), fmtAdd(k, am[k]));
+      else if (stableStringify(bm[k]) !== stableStringify(am[k])) {
+        const pr = chgPair ? chgPair(k, bm[k], am[k]) : [disp(bm[k]), disp(am[k])];
+        row(label + k, pr[0], pr[1], fmtChg(k, bm[k], am[k]));
+      }
     }
-    for (const k of Object.keys(bm)) if (am[k] === undefined) out.push(fmtDel(k, bm[k]));
+    for (const k of Object.keys(bm)) if (am[k] === undefined) row(label + k, disp(bm[k]), '—', fmtDel(k, bm[k]));
   };
-  mapDiff('exits', 'exits',
+  mapDiff('exits', 'exits', 'wyjście ',
     (k, v) => '+wyjście ' + k + ' → ' + res(v),
     (k) => '−wyjście ' + k,
-    (k, bv, av) => 'wyjście ' + k + ': ' + res(bv) + ' → ' + res(av));
-  mapDiff('special_exits', 'special_exits',
+    (k, bv, av) => 'wyjście ' + k + ': ' + res(bv) + ' → ' + res(av),
+    v => res(v));
+  mapDiff('special_exits', 'special_exits', 'wyjście specjalne ',
     (k, v) => '+wyjście specjalne „' + k + '" → ' + res(v),
     (k) => '−wyjście specjalne „' + k + '"',
-    (k, bv, av) => 'specjalne „' + k + '": ' + res(bv) + ' → ' + res(av));
-  mapDiff('custom_lines', 'custom_lines',
+    (k, bv, av) => 'specjalne „' + k + '": ' + res(bv) + ' → ' + res(av),
+    v => res(v));
+  mapDiff('custom_lines', 'custom_lines', 'custom line ',
     (k) => '+custom line ' + k,
     (k) => '−custom line ' + k,
-    (k) => 'custom line ' + k + ': zmiana');
-  mapDiff('doors', 'doors',
+    (k) => 'custom line ' + k + ': zmiana',
+    () => 'narysowana',
+    () => ['stare punkty', 'nowe punkty']);
+  mapDiff('doors', 'doors', 'drzwi ',
     (k) => '+drzwi ' + k,
     (k) => '−drzwi ' + k,
-    (k) => 'drzwi ' + k + ': zmiana');
-  mapDiff('exit_weights', 'exit_weights',
+    (k) => 'drzwi ' + k + ': zmiana',
+    () => 'są',
+    () => ['stare', 'nowe']);
+  mapDiff('exit_weights', 'exit_weights', 'waga wyjścia ',
     (k) => '+waga wyjścia ' + k,
     (k) => '−waga wyjścia ' + k,
-    (k) => 'waga wyjścia ' + k + ': zmiana');
+    (k) => 'waga wyjścia ' + k + ': zmiana',
+    v => String(v));
   const bl = new Set(b.exit_locks || []), al = new Set(a.exit_locks || []);
-  for (const k of al) if (!bl.has(k)) out.push('+zamek ' + k);
-  for (const k of bl) if (!al.has(k)) out.push('−zamek ' + k);
-  if (stableStringify(b.user_data || {}) !== stableStringify(a.user_data || {})) out.push('dane użytkownika (user_data)');
-  return out;
+  for (const k of al) if (!bl.has(k)) row('zamek ' + k, '—', 'jest', '+zamek ' + k);
+  for (const k of bl) if (!al.has(k)) row('zamek ' + k, 'jest', '—', '−zamek ' + k);
+  if (stableStringify(b.user_data || {}) !== stableStringify(a.user_data || {})) row('user_data', 'stare', 'nowe', 'dane użytkownika (user_data)');
+  return rows;
+}
+
+function _deltaRoomDiff(before, after, resolve) {
+  return _deltaRoomDiffRows(before, after, resolve).map(r => r.str);
 }
 
 function _deltaClsItem(op, cls, note, jump) {
@@ -18473,11 +18505,31 @@ function classifyDelta(delta) {
     const op = delta.ops[i], it = items[i];
     if (!it) continue;
     if (op.type === 'EDIT_ROOM' || op.type === 'EDIT_EXIT') {
-      it.diff = _deltaRoomDiff(op.payload.before, op.payload.after, resR);
+      it.diffRows = _deltaRoomDiffRows(op.payload.before, op.payload.after, resR);
+      it.diff = it.diffRows.map(r => r.str);
     } else if (op.type === 'ADD_AREA' && it.cls === 'ok') {
       const sid = String(op.target.areaId);
       it.areaInfo = { name: (op.payload.area && op.payload.area.name) || '',
         rooms: delta.ops.filter(o => o.type === 'ADD_ROOM' && String(o.target.areaId) === sid).length };
+    }
+    // M6c: dane strukturalne karty konfliktu (tabela parametr | aktualnie | w kalce)
+    if (it.coll && (op.type === 'ADD_ROOM' || op.type === 'MOVE_ROOM')) {
+      const P = op.payload;
+      const rid = op.type === 'MOVE_ROOM' ? resR(op.target.roomId) : undefined;
+      const aid = op.type === 'ADD_ROOM' ? resA(op.target.areaId) : (rid !== undefined ? state.roomArea[rid] : undefined);
+      const cx = op.type === 'ADD_ROOM' ? (P.room.x ?? 0) : P.toX;
+      const cy = op.type === 'ADD_ROOM' ? (P.room.y ?? 0) : P.toY;
+      const cz = op.type === 'ADD_ROOM' ? (P.room.z ?? 0) : (P.toZ ?? 0);
+      const occ = aid !== undefined ? _deltaRoomAt(aid, cx, cy, cz) : null;
+      it.collInfo = { kind: op.type === 'MOVE_ROOM' ? 'move' : 'add', x: cx, y: cy, z: cz,
+        occId: (occ && occ.id !== rid) ? occ.id : null, roomId: rid,
+        name: op.type === 'ADD_ROOM' ? (P.room.name || '') : '' };
+    }
+    if (it.cls === 'hard' && op.type === 'ADD_EXIT') {
+      const srcIdE = resR(op.target.sourceId);
+      const srcE = srcIdE !== undefined ? state.roomById[srcIdE] : null;
+      const curT = srcE && srcE.exits ? srcE.exits[op.target.dir] : undefined;
+      it.exitInfo = { dir: op.target.dir, cur: curT, want: resR(op.payload.targetId), wantSid: String(op.payload.targetId) };
     }
   }
   // Mapy rozwiązań sid dostępne dla M3 (taken/geometria duchów) — właściwości tablicy.
@@ -18803,6 +18855,7 @@ function _deltaGhostReset() {
   _deltaOverrides = new Map();
   _deltaPlacing = null;
   _deltaHover = null;
+  _deltaCardHide();
 }
 
 // Zajęte komórki obszaru: świeży Set 'x:y:z' per wywołanie (zero problemu unieważniania cache).
@@ -19132,7 +19185,43 @@ function _deltaShowGhost(it) {
     const cy = g.kind === 'move' ? g.toY : (g.y !== undefined ? g.y : (g.y1 + g.y2) / 2);
     centerViewOnMap(cx, cy);
   } else _deltaJump(it);
+  _deltaCardShow(it);
   draw();
+}
+
+// ── M6c: karta szczegółów konfliktu/edycji (tabela parametr | aktualnie | w kalce) ──
+function _deltaCardHide() {
+  const c = document.getElementById('dp-card');
+  if (c) c.style.display = 'none';
+}
+
+function _deltaCardShow(it) {
+  const card = document.getElementById('dp-card');
+  if (!card) return;
+  const rows = [];
+  if (it.diffRows && it.diffRows.length) {
+    for (const r of it.diffRows) rows.push([r.p, r.b, r.a]);
+  } else if (it.exitInfo) {
+    const ei = it.exitInfo;
+    rows.push(['kierunek', ei.dir, ei.dir]);
+    rows.push(['prowadzi do', ei.cur !== undefined ? ('#' + ei.cur) : '—',
+      ei.want !== undefined ? ('#' + ei.want) : 'pokój z kalki']);
+  } else if (it.collInfo) {
+    const ci = it.collInfo;
+    const cell = '(' + ci.x + ', ' + ci.y + ', ' + ci.z + ')';
+    rows.push(['pole', cell, cell]);
+    rows.push(['zajęte przez', (ci.occId !== null && ci.occId !== undefined) ? ('#' + ci.occId) : '—', '—']);
+    rows.push(['kałka chce', '—', ci.kind === 'move' ? ('przenieść pokój #' + ci.roomId) : ('postawić nowy pokój' + (ci.name ? ' „' + ci.name + '"' : ''))]);
+  }
+  if (!rows.length) { _deltaCardHide(); return; }
+  document.getElementById('dp-card-title').textContent = it.label;
+  let h = '<tr><th>parametr</th><th>aktualnie na mapie</th><th>w kalce</th></tr>';
+  for (const r of rows) h += '<tr><td>' + escHtml(r[0]) + '</td><td>' + escHtml(r[1]) + '</td><td>' + escHtml(r[2]) + '</td></tr>';
+  document.getElementById('dp-card-tbl').innerHTML = h;
+  const n = document.getElementById('dp-card-note');
+  n.textContent = it.note || '';
+  n.style.display = it.note ? '' : 'none';
+  card.style.display = '';
 }
 
 // Autopozycja: deterministyczna spirala do najbliższej wolnej komórki (ten sam area+z).
@@ -19231,15 +19320,12 @@ function _drawDeltaGhosts(rs) {
           ctx.moveTo(cx + half, cy - half); ctx.lineTo(cx - half, cy + half);
           ctx.stroke();
         }
-        // M5: etykieta diffu — co dokladnie zmieni ten op (max 3 linie + licznik)
+        // M6c: zwarta odznaka liczby zmian — szczegoly w karcie panelu (tabela)
         if (g.diff && g.diff.length && state.zoom > 0.2) {
           ctx.setLineDash([]);
           ctx.fillStyle = 'rgba(' + col + ',0.95)';
-          ctx.font = Math.max(8, 10 * state.zoom) + 'px monospace';
-          const lines = g.diff.slice(0, 3);
-          if (g.diff.length > 3) lines.push('…(+' + (g.diff.length - 3) + ')');
-          const lh = Math.max(9, 11 * state.zoom);
-          for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], cx + half + 3, cy - half + (i + 1) * lh);
+          ctx.font = 'bold ' + Math.max(8, 10 * state.zoom) + 'px monospace';
+          ctx.fillText('Δ' + g.diff.length, cx + half + 3, cy - half + Math.max(9, 10 * state.zoom));
         }
       } else if (g.kind === 'exit-stub') {
         // M5: wyjscie do pokoju kalki w nierozwiazywalnym obszarze — znany koniec
@@ -19423,7 +19509,7 @@ function _renderDeltaPanel() {
       bHide.textContent = 'Ukryj';
       bHide.title = 'Ukryj ducha';
       bHide.disabled = !_deltaGhosts.has(it.seq);
-      bHide.addEventListener('click', e => { e.stopPropagation(); _deltaGhosts.delete(it.seq); draw(); _renderDeltaPanel(); });
+      bHide.addEventListener('click', e => { e.stopPropagation(); _deltaGhosts.delete(it.seq); _deltaCardHide(); draw(); _renderDeltaPanel(); });
       row.appendChild(bHide);
     }
     // M3: kolizja pozycji — autopozycja / ręczna / cofnięcie override'u
