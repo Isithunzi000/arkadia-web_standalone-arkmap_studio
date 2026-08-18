@@ -2,6 +2,15 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.15.0 — fix F1: klasyfikator z cieniem stanu (symulacja sekwencji opów w classifyDelta)
+
+- **Przyczyna:** `classifyDelta` oceniał każdy op wyłącznie wobec stanu sprzed kalki. Opy zależne od wcześniejszych opów tej samej kalki (sekwencje: add→edit→delete, sid-y z ADD_ROOM/ADD_AREA/ADD_LABEL) były degradowane (hard/impossible) lub klasyfikowane niespójnie z realnym wykonaniem; panelowy re-apply rozbiegał stan (crc rósł z każdym apply).
+- **Fix:** klasyfikator buduje cień stanu (głęboki klon `roomById`/`roomArea`/`areas`/`colors` z przełinkowaniem `area.rooms` do klonów) i po sklasyfikowaniu każdego opu symuluje jego surowe wykonanie na cieniu (`_sim`, z lustrzanymi guardami: zajętość komórki F5, guard wyjść A12, skip EDIT_CL F3, no-move F6). Sid-y rozwiązują cienie map (`sidShRoom/sidShArea/sidShLabel`, świeże id powyżej live max); DELETE_AREA/EDIT_AREA rozwiązują sid przez `resA`. Lokalna mapa kierunków przeciwnych `_DELTA_OPP` (klasyfikator nie zależy od globali aplikacji).
+- **Efekty:** E1.roundtrip — wszystkie 27 opów kalki klasyfikowane „ok" (dawne degradacje sekwencyjne EDIT_CL / DELETE_SUPPRESSOR / EDIT_EXIT / DELETE_AREA zniknęły); przy re-apply DELETE_AREA i DELETE_SUPPRESSOR są rozstrzygalne; **panelowy drugi apply zbiega do tego samego stanu** (crc2 == crc1 — spójny replay, nie rozjazd). Surowy apply (force, bez klasyfikacji) celowo bez zmian — poza zakresem F1.
+- **Testy (flipy w tym samym commicie):** E1.roundtrip (cls-ok27, cls-knownseq), E1.idempotent (done 13→12/27; impossible-set 6→4 typy; panel 3/5→6/5; panel-diverges→panel-converges); delta.js T8 rozszerzony o opy 24–29 (EDIT_ROOM hard, ADD_EXIT ok/hard, MOVE_ROOM ok/done/hard-kolizja — klasyfikowane na cieniu po wcześniejszych opach).
+- Regresja lokalna: pełny `run-all.sh` PASS (13 harnessów node, w tym delta.js: 212 asercji; kampania empiryczna SMOKE+E0–E6 — 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.14.0 — fix F2 (część klasyfikatora): done-detection EDIT_ROOM/EDIT_EXIT po zmienianych polach
 
 - **Przyczyna:** klasyfikator EDIT_ROOM/EDIT_EXIT rozpoznawał „done" tylko przy pełnej zgodności live == after. Gdy późniejszy op tej samej kalki (np. EDIT_EXIT) zmienił inne pola tego pokoju, wcześniejszy op wracał jako „hard" i panelowy re-apply nadpisywał te późniejsze zmiany (rozjazd stanu przy drugim apply).
