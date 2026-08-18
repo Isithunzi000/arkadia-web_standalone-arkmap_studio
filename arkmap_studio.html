@@ -12681,7 +12681,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.14.0';
+const APP_VERSION = 'v1.15.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -17847,10 +17847,231 @@ function classifyDelta(delta) {
   const sidAreaId  = new Map();  // sid -> numeric areaId (ADD_AREA 'done')
   const sidLabelId = new Map();  // sid -> numeric labelId (ADD_LABEL 'done')
 
+  // ── F1: cien stanu ────────────────────────────────────────────────────────
+  // Klasyfikacja opu N widzi efekt opow 1..N-1 z TEJ SAMEJ kalki. Cien startuje
+  // jako gleboki klon live; po sklasyfikowaniu kazdego opu symulujemy wynik
+  // SUROWEGO applyDelta (z guardami: zajeta komorka/kierunek, braki = brak zmiany).
+  // done = efekt juz obecny w sklonowanym live; impossible = apply skipuje.
+  const sh = {
+    roomById: JSON.parse(JSON.stringify(state.roomById)),
+    roomArea: JSON.parse(JSON.stringify(state.roomArea)),
+    areas: new Map(JSON.parse(JSON.stringify([...state.areas]))),
+    colors: JSON.parse(JSON.stringify((state.map && state.map.colors && state.map.colors.custom_env_colors) || {})),
+  };
+  // relink: area.rooms ma wskazywac te same obiekty co roomById (jak w live)
+  for (const [, area] of sh.areas) area.rooms = (area.rooms || []).map(r => sh.roomById[r.id] || r);
+  const sidShRoom  = new Map();  // sid -> id pokoju w cieniu (ADD_ROOM ok/hard)
+  const sidShArea  = new Map();  // sid -> id obszaru w cieniu (ADD_AREA ok)
+  const sidShLabel = new Map();  // sid -> id etykiety w cieniu (ADD_LABEL ok)
+  let shNextRoom = 1; for (const id of Object.keys(sh.roomById)) shNextRoom = Math.max(shNextRoom, +id + 1);
+  let shNextArea = 1; for (const id of sh.areas.keys()) shNextArea = Math.max(shNextArea, id + 1);
+  const shRoomAt = (areaId, x, y, z) => {
+    const area = sh.areas.get(areaId);
+    if (!area) return null;
+    for (const r of (area.rooms || [])) if (r.x === x && r.y === y && (r.z ?? 0) === (z ?? 0)) return r;
+    return null;
+  };
+  const _DELTA_OPP = { n: 's', s: 'n', e: 'w', w: 'e', ne: 'sw', sw: 'ne', nw: 'se', se: 'nw',
+                       up: 'down', down: 'up', in: 'out', out: 'in' };
+  const _simDeleteRoom = (id) => {
+    const r = sh.roomById[id]; if (!r) return;
+    const area = sh.areas.get(sh.roomArea[id]);
+    if (area) area.rooms = (area.rooms || []).filter(x => x.id !== id);
+    delete sh.roomById[id]; delete sh.roomArea[id];
+    for (const o of Object.values(sh.roomById)) {
+      if (o.exits) for (const [d, t] of Object.entries(o.exits)) if (t === id) delete o.exits[d];
+      if (o.special_exits) for (const [c, t] of Object.entries(o.special_exits)) if (t === id) delete o.special_exits[c];
+    }
+  };
+  // Symulacja efektu opu na cieniu (wywolywana tylko dla klas ok/hard).
+  const _sim = (op, cls) => {
+    if (cls !== 'ok' && cls !== 'hard') return;
+    const T = op.target, P = op.payload;
+    switch (op.type) {
+      case 'ADD_AREA': {
+        const nid = shNextArea++;
+        if (isSid(String(T.areaId))) sidShArea.set(String(T.areaId), nid);
+        const a = JSON.parse(JSON.stringify(P.area || {}));
+        a.id = nid; a.rooms = []; a.labels = [];
+        sh.areas.set(nid, a);
+        break;
+      }
+      case 'ADD_ROOM': {
+        const area = sh.areas.get(resA(T.areaId));
+        if (!area) break;                                        // apply: skip (obszar nie istnieje)
+        const r = JSON.parse(JSON.stringify(P.room || {}));
+        r.x = r.x ?? 0; r.y = r.y ?? 0; r.z = r.z ?? 0;
+        if (shRoomAt(area.id, r.x, r.y, r.z)) break;             // apply: guard F5 skipuje
+        const nid = shNextRoom++;
+        if (isSid(String(T.roomId))) sidShRoom.set(String(T.roomId), nid);
+        r.id = nid; r.area = area.id;
+        area.rooms.push(r); sh.roomById[nid] = r; sh.roomArea[nid] = area.id;
+        break;
+      }
+      case 'DELETE_ROOM': {
+        const id = resR(T.roomId);
+        if (!sh.roomById[id]) break;                             // apply: skip
+        _simDeleteRoom(id);
+        break;
+      }
+      case 'EDIT_ROOM': case 'EDIT_EXIT': {
+        const r = sh.roomById[resR(T.roomId)];
+        if (!r) break;                                           // apply: skip
+        const a = JSON.parse(JSON.stringify(P.after || {}));
+        const keepId = r.id;
+        for (const k of Object.keys(r)) delete r[k];
+        Object.assign(r, a); r.id = keepId;
+        break;
+      }
+      case 'PAINT_BATCH': {
+        for (const ch of (P.changes || [])) {
+          const r = sh.roomById[ch.roomId];
+          if (!r) continue;
+          r.env = ch.afterEnv;
+          if ((ch.afterSymbol ?? '') !== '') r.symbol = ch.afterSymbol; else delete r.symbol;
+        }
+        break;
+      }
+      case 'MOVE_ROOM': {
+        const r = sh.roomById[resR(T.roomId)];
+        if (!r) break;                                           // apply: skip
+        r.x = P.toX; r.y = P.toY; r.z = P.toZ ?? r.z;            // no-move = bez zmian
+        break;
+      }
+      case 'MOVE_ROOM_TO_AREA': {
+        const r = sh.roomById[resR(T.roomId)];
+        if (!r) break;
+        const target = sh.areas.get(resA(P.toAreaId));
+        if (!target) break;                                      // apply: skip
+        const from = sh.areas.get(sh.roomArea[r.id]);
+        if (from) from.rooms = (from.rooms || []).filter(x => x.id !== r.id);
+        target.rooms = target.rooms || []; target.rooms.push(r);
+        r.area = target.id; sh.roomArea[r.id] = target.id;
+        break;
+      }
+      case 'ADD_EXIT': {
+        const src = sh.roomById[resR(T.sourceId)], tgt = sh.roomById[resR(P.targetId)];
+        if (!src || !tgt) break;                                 // apply: skip
+        const opp = _DELTA_OPP[T.dir];
+        if (src.exits && src.exits[T.dir] !== undefined) break;  // guard A12: apply skipuje
+        if (P.bidirectional && opp && tgt.exits && tgt.exits[opp] !== undefined) break;
+        src.exits = src.exits || {}; src.exits[T.dir] = tgt.id;
+        if (P.bidirectional && opp) { tgt.exits = tgt.exits || {}; tgt.exits[opp] = src.id; }
+        break;
+      }
+      case 'DELETE_EXIT': {
+        const r = sh.roomById[resR(T.roomId)];
+        if (!r || !r.exits || r.exits[T.dir] === undefined) break;  // apply: skip
+        delete r.exits[T.dir];
+        break;
+      }
+      case 'DELETE_SPECIAL_EXIT': {
+        const r = sh.roomById[resR(T.roomId)];
+        if (!r || !r.special_exits || r.special_exits[P.cmd] === undefined) break;  // apply: skip
+        delete r.special_exits[P.cmd];
+        break;
+      }
+      case 'DELETE_AREA': {
+        const aid = resA(T.areaId);
+        const area = (aid !== undefined) ? sh.areas.get(aid) : null;
+        if (!area) break;                                        // apply: skip
+        if (aid <= 0) break;  // commitDeleteArea odmawia Default Area (liczone, nie wykonywane)
+        for (const r of [...(area.rooms || [])]) _simDeleteRoom(r.id);
+        sh.areas.delete(aid);
+        break;
+      }
+      case 'EDIT_AREA': {
+        const aid = resA(T.areaId);
+        const area = (aid !== undefined) ? sh.areas.get(aid) : null;
+        if (!area) break;
+        area.name = P.name; area.user_data = P.user_data || {};
+        break;
+      }
+      case 'ADD_CL': {
+        const r = sh.roomById[resR(T.roomId)];
+        if (!r) break;
+        r.custom_lines = r.custom_lines || {};
+        r.custom_lines[T.dir] = JSON.parse(JSON.stringify(P.cl));
+        break;
+      }
+      case 'ADD_SUPPRESSOR': {
+        const r = sh.roomById[resR(T.roomId)];
+        if (!r) break;
+        r.custom_lines = r.custom_lines || {};
+        r.custom_lines[T.dir] = { points: [], color: [255, 0, 0] };
+        break;
+      }
+      case 'EDIT_CL': {
+        const r = sh.roomById[resR(T.roomId)];
+        if (!r) break;
+        if (!r.custom_lines || !r.custom_lines[T.dir]) break;    // apply: guard F3 skipuje
+        r.custom_lines[T.dir] = JSON.parse(JSON.stringify(P.after));
+        break;
+      }
+      case 'DELETE_CL': case 'DELETE_SUPPRESSOR': {
+        const r = sh.roomById[resR(T.roomId)];
+        if (!r) break;
+        if (r.custom_lines) delete r.custom_lines[T.dir];
+        break;
+      }
+      case 'AUTO_FIX_SUPPRESSORS': {
+        for (const x of (P.added || [])) {
+          const r = sh.roomById[x.roomId]; if (!r) continue;
+          r.custom_lines = r.custom_lines || {};
+          r.custom_lines[x.dir] = JSON.parse(JSON.stringify(x.cl));
+        }
+        for (const x of (P.removed || [])) {
+          const r = sh.roomById[x.roomId]; if (!r || !r.custom_lines) continue;
+          delete r.custom_lines[x.dir];
+        }
+        break;
+      }
+      case 'ADD_LABEL': {
+        const area = sh.areas.get(resA(T.areaId));
+        if (!area) break;                                        // apply: skip
+        const lbl = JSON.parse(JSON.stringify(P.label || {}));
+        let nid = 1; for (const l of (area.labels || [])) nid = Math.max(nid, (l.id || 0) + 1);
+        if (isSid(String(lbl.id))) sidShLabel.set(String(lbl.id), nid);
+        lbl.id = nid;
+        area.labels = area.labels || []; area.labels.push(lbl);
+        break;
+      }
+      case 'EDIT_LABEL': {
+        const area = sh.areas.get(resA(T.areaId)); if (!area) break;
+        const lbl = (area.labels || []).find(l => l.id === resL(T.labelId)); if (!lbl) break;
+        const a = Object.assign({}, P.after); delete a.id;
+        Object.assign(lbl, a);
+        break;
+      }
+      case 'MOVE_LABEL': {
+        const area = sh.areas.get(resA(T.areaId)); if (!area) break;
+        const lbl = (area.labels || []).find(l => l.id === resL(T.labelId)); if (!lbl) break;
+        lbl.x = P.toX; lbl.y = P.toY;
+        break;
+      }
+      case 'RESIZE_LABEL': {
+        const area = sh.areas.get(resA(T.areaId)); if (!area) break;
+        const lbl = (area.labels || []).find(l => l.id === resL(T.labelId)); if (!lbl) break;
+        lbl.x = P.toX; lbl.y = P.toY; lbl.width = P.toW; lbl.height = P.toH;
+        break;
+      }
+      case 'DELETE_LABEL': {
+        const area = sh.areas.get(resA(T.areaId)); if (!area) break;
+        const lid = resL(T.labelId);
+        area.labels = (area.labels || []).filter(l => l.id !== lid);
+        break;
+      }
+      case 'EDIT_ENV_COLOR': {
+        sh.colors[T.envId] = P.newColor;
+        break;
+      }
+    }
+  };
+
   const isSid  = v => _DELTA_SID_RE.test(String(v));
-  const resR = v => isSid(v) ? sidRoomId.get(String(v)) : v;   // undefined = kalka jeszcze nie istnieje
-  const resA = v => isSid(v) ? sidAreaId.get(String(v)) : v;
-  const resL = v => isSid(v) ? sidLabelId.get(String(v)) : v;
+  const resR = v => isSid(v) ? (sidRoomId.get(String(v)) ?? sidShRoom.get(String(v))) : v;   // undefined = kalka jeszcze nie istnieje
+  const resA = v => isSid(v) ? (sidAreaId.get(String(v)) ?? sidShArea.get(String(v))) : v;
+  const resL = v => isSid(v) ? (sidLabelId.get(String(v)) ?? sidShLabel.get(String(v))) : v;
   // Lancuch: odwolanie do sid, ktorego ADD jest niewykonalny.
   const chainBad = (op) => {
     let bad = null;
@@ -17874,12 +18095,13 @@ function classifyDelta(delta) {
       items.push(_deltaClsItem(op, 'impossible', 'odwołanie do niewykonalnego obiektu kalki (' + chain + ')'));
       continue;
     }
+    const _beforeLen = items.length;
     switch (op.type) {
       // ── definicje sid ────────────────────────────────────────────────────
       case 'ADD_AREA': {
         const sid = String(T.areaId);
         const name = P.area && P.area.name || '';
-        const found = [...state.areas.values()].find(a => a.name === name && name !== '');
+        const found = [...sh.areas.values()].find(a => a.name === name && name !== '');
         if (found) { sidCls.set(sid, 'done'); sidAreaId.set(sid, found.id);
           items.push(_deltaClsItem(op, 'done', 'obszar o tej nazwie już istnieje (#' + found.id + ')', areaJump(found.id))); }
         else { sidCls.set(sid, 'ok'); items.push(_deltaClsItem(op, 'ok', '')); }
@@ -17895,9 +18117,9 @@ function classifyDelta(delta) {
           break;
         }
         if (areaId === undefined) { sidCls.set(sid, 'ok'); items.push(_deltaClsItem(op, 'ok', 'obszar z kalki')); break; }
-        if (!state.areas.get(areaId)) { sidCls.set(sid, 'impossible');
+        if (!sh.areas.get(areaId)) { sidCls.set(sid, 'impossible');
           items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
-        const occ = _deltaRoomAt(areaId, room.x ?? 0, room.y ?? 0, room.z ?? 0);
+        const occ = shRoomAt(areaId, room.x ?? 0, room.y ?? 0, room.z ?? 0);
         if (occ && (occ.name || '') === (room.name || '')) {
           sidCls.set(sid, 'done'); sidRoomId.set(sid, occ.id);
           items.push(_deltaClsItem(op, 'done', 'już naniesione (to samo pole i nazwa → #' + occ.id + ')', roomJump(occ.id)));
@@ -17918,7 +18140,7 @@ function classifyDelta(delta) {
         const areaId = resA(T.areaId);
         if (areaId === undefined) { sidCls.set(sid, sidCls.get(String(T.areaId)) === 'ok' ? 'ok' : 'impossible');
           items.push(_deltaClsItem(op, sidCls.get(sid), sidCls.get(sid) === 'ok' ? 'obszar z kalki' : 'obszar kalki niewykonalny')); break; }
-        const area = state.areas.get(areaId);
+        const area = sh.areas.get(areaId);
         if (!area) { sidCls.set(sid, 'impossible'); items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
         const found = (area.labels || []).find(l => l.text === lbl.text && l.x === lbl.x && l.y === lbl.y && (l.z ?? 0) === (lbl.z ?? 0));
         if (found) { sidCls.set(sid, 'done'); sidLabelId.set(sid, found.id);
@@ -17930,7 +18152,7 @@ function classifyDelta(delta) {
       case 'DELETE_ROOM': {
         const id = resR(T.roomId);
         if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
-        const room = state.roomById[id];
+        const room = sh.roomById[id];
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje (usunięty w tej wersji mapy?)')); break; }
         const eq = _deltaRoomCmp(room, P.room);
         if (eq === false) items.push(_deltaClsItem(op, 'hard', 'pokój zmieniony upstream — usunięcie nanosi się mimo to', roomJump(id)));
@@ -17940,7 +18162,7 @@ function classifyDelta(delta) {
       case 'EDIT_ROOM': case 'EDIT_EXIT': {
         const id = resR(T.roomId);
         if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
-        const room = state.roomById[id];
+        const room = sh.roomById[id];
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje (usunięty w tej wersji mapy?)')); break; }
         if (_deltaRoomCmp(room, P.after) === true) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
         // F2: done rowniez gdy ZMIENIANE pola sa zgodne z after, a rozjazd dotyczy
@@ -17952,10 +18174,10 @@ function classifyDelta(delta) {
       }
       case 'PAINT_BATCH': {
         const changes = P.changes || [];
-        const existing = changes.filter(ch => state.roomById[ch.roomId]);
+        const existing = changes.filter(ch => sh.roomById[ch.roomId]);
         if (!existing.length) { items.push(_deltaClsItem(op, 'impossible', 'żaden pokój nie istnieje')); break; }
         const allMatch = existing.every(ch => {
-          const r = state.roomById[ch.roomId];
+          const r = sh.roomById[ch.roomId];
           return r.env === ch.afterEnv && (r.symbol || '') === (ch.afterSymbol || '');
         });
         const j = roomJump(existing[0].roomId);
@@ -17967,10 +18189,10 @@ function classifyDelta(delta) {
       case 'MOVE_ROOM': {
         const id = resR(T.roomId);
         if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
-        const room = state.roomById[id];
+        const room = sh.roomById[id];
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
         if (room.x === P.toX && room.y === P.toY && (room.z ?? 0) === P.toZ) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
-        const occ = _deltaRoomAt(state.roomArea[id], P.toX, P.toY, P.toZ);
+        const occ = shRoomAt(sh.roomArea[id], P.toX, P.toY, P.toZ);
         if (occ && occ.id !== id) {
           const _it = _deltaClsItem(op, 'hard', 'pole docelowe zajęte przez #' + occ.id + ' — kolizja', roomJump(id));
           _it.coll = true;  // M3: kolizja pozycji
@@ -17982,11 +18204,11 @@ function classifyDelta(delta) {
       case 'MOVE_ROOM_TO_AREA': {
         const id = resR(T.roomId);
         if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
-        if (!state.roomById[id]) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
+        if (!sh.roomById[id]) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
         const toArea = resA(P.toAreaId);
         if (toArea === undefined) { items.push(_deltaClsItem(op, 'ok', 'obszar z kalki', roomJump(id))); break; }
-        if (!state.areas.get(toArea)) { items.push(_deltaClsItem(op, 'impossible', 'obszar docelowy nie istnieje', roomJump(id))); break; }
-        if (state.roomArea[id] === toArea) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
+        if (!sh.areas.get(toArea)) { items.push(_deltaClsItem(op, 'impossible', 'obszar docelowy nie istnieje', roomJump(id))); break; }
+        if (sh.roomArea[id] === toArea) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
         items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
         break;
       }
@@ -17994,8 +18216,8 @@ function classifyDelta(delta) {
       case 'ADD_EXIT': {
         const srcId = resR(T.sourceId), tgtId = resR(P.targetId);
         if (srcId === undefined || tgtId === undefined) { items.push(_deltaClsItem(op, 'ok', 'dotyczy obiektów kalki')); break; }
-        const src = state.roomById[srcId];
-        if (!src || !state.roomById[tgtId]) { items.push(_deltaClsItem(op, 'impossible', 'pokój źródłowy lub docelowy nie istnieje', roomJump(srcId))); break; }
+        const src = sh.roomById[srcId];
+        if (!src || !sh.roomById[tgtId]) { items.push(_deltaClsItem(op, 'impossible', 'pokój źródłowy lub docelowy nie istnieje', roomJump(srcId))); break; }
         if (src.exits && src.exits[T.dir] === tgtId) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(srcId))); break; }
         if (src.exits && src.exits[T.dir] !== undefined) items.push(_deltaClsItem(op, 'hard', 'kierunek zajęty — guard odmówi (op zostanie pominięty)', roomJump(srcId)));
         else items.push(_deltaClsItem(op, 'ok', '', roomJump(srcId)));
@@ -18004,7 +18226,7 @@ function classifyDelta(delta) {
       case 'DELETE_EXIT': {
         const id = resR(T.roomId);
         if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
-        const room = state.roomById[id];
+        const room = sh.roomById[id];
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
         if (!room.exits || room.exits[T.dir] === undefined) { items.push(_deltaClsItem(op, 'impossible', 'wyjście nie istnieje', roomJump(id))); break; }
         items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
@@ -18013,7 +18235,7 @@ function classifyDelta(delta) {
       case 'DELETE_SPECIAL_EXIT': {
         const id = resR(T.roomId);
         if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
-        const room = state.roomById[id];
+        const room = sh.roomById[id];
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
         if (!room.special_exits || room.special_exits[P.cmd] === undefined) { items.push(_deltaClsItem(op, 'impossible', 'wyjście specjalne nie istnieje', roomJump(id))); break; }
         items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
@@ -18021,12 +18243,14 @@ function classifyDelta(delta) {
       }
       // ── obszary ──────────────────────────────────────────────────────────
       case 'DELETE_AREA': {
-        if (!state.areas.get(T.areaId)) { items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
-        items.push(_deltaClsItem(op, 'ok', '', areaJump(T.areaId)));
+        const aid = resA(T.areaId);  // F1: sid-area z tej samej kalki rozwiazuje sie w cieniu
+        if (aid === undefined || !sh.areas.get(aid)) { items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
+        items.push(_deltaClsItem(op, 'ok', '', areaJump(aid)));
         break;
       }
       case 'EDIT_AREA': {
-        const area = state.areas.get(T.areaId);
+        const aidE = resA(T.areaId);
+        const area = (aidE !== undefined) ? sh.areas.get(aidE) : null;
         if (!area) { items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
         const sameUd = stableStringify(area.user_data || {}) === stableStringify(P.user_data || {});
         if (area.name === P.name && sameUd) { items.push(_deltaClsItem(op, 'done', 'już naniesione', areaJump(area.id))); break; }
@@ -18037,7 +18261,7 @@ function classifyDelta(delta) {
       case 'ADD_CL': case 'ADD_SUPPRESSOR': {
         const id = resR(T.roomId);
         if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
-        const room = state.roomById[id];
+        const room = sh.roomById[id];
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
         const cur = room.custom_lines && room.custom_lines[T.dir];
         if (op.type === 'ADD_CL') {
@@ -18054,7 +18278,7 @@ function classifyDelta(delta) {
       case 'EDIT_CL': {
         const id = resR(T.roomId);
         if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
-        const room = state.roomById[id];
+        const room = sh.roomById[id];
         const cur = room && room.custom_lines && room.custom_lines[T.dir];
         if (!room || !cur) { items.push(_deltaClsItem(op, 'impossible', 'custom line nie istnieje', roomJump(id))); break; }
         if (stableStringify(cur) === stableStringify(P.after)) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
@@ -18065,19 +18289,19 @@ function classifyDelta(delta) {
       case 'DELETE_CL': case 'DELETE_SUPPRESSOR': {
         const id = resR(T.roomId);
         if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
-        const room = state.roomById[id];
+        const room = sh.roomById[id];
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
         if (!room.custom_lines || !room.custom_lines[T.dir]) { items.push(_deltaClsItem(op, 'impossible', 'custom line nie istnieje', roomJump(id))); break; }
         items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
         break;
       }
       case 'AUTO_FIX_SUPPRESSORS': {
-        const added = (P.added || []).filter(x => state.roomById[x.roomId]);
-        const removed = (P.removed || []).filter(x => state.roomById[x.roomId]);
+        const added = (P.added || []).filter(x => sh.roomById[x.roomId]);
+        const removed = (P.removed || []).filter(x => sh.roomById[x.roomId]);
         const total = (P.added || []).length + (P.removed || []).length;
         if (!added.length && !removed.length) { items.push(_deltaClsItem(op, 'impossible', 'pokoje nie istnieją')); break; }
-        const eff = added.filter(x => { const c = state.roomById[x.roomId].custom_lines; return !c || !c[x.dir]; }).length
-                  + removed.filter(x => { const c = state.roomById[x.roomId].custom_lines; return c && c[x.dir]; }).length;
+        const eff = added.filter(x => { const c = sh.roomById[x.roomId].custom_lines; return !c || !c[x.dir]; }).length
+                  + removed.filter(x => { const c = sh.roomById[x.roomId].custom_lines; return c && c[x.dir]; }).length;
         const j = roomJump((added[0] || removed[0]).roomId);
         if (eff === 0) items.push(_deltaClsItem(op, 'done', 'już naniesione', j));
         else if (eff < added.length + removed.length) items.push(_deltaClsItem(op, 'hard', 'część wpisów już aktualna', j));
@@ -18088,7 +18312,7 @@ function classifyDelta(delta) {
       case 'EDIT_LABEL': case 'DELETE_LABEL': case 'MOVE_LABEL': case 'RESIZE_LABEL': {
         const areaId = resA(T.areaId);
         if (areaId === undefined) { items.push(_deltaClsItem(op, 'ok', 'obszar z kalki')); break; }
-        const area = state.areas.get(areaId);
+        const area = sh.areas.get(areaId);
         if (!area) { items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
         const lid = resL(T.labelId);
         if (lid === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki', posJump(areaId, 0, 0))); break; }
@@ -18111,7 +18335,7 @@ function classifyDelta(delta) {
       }
       // ── kolory ───────────────────────────────────────────────────────────
       case 'EDIT_ENV_COLOR': {
-        const cur = state.map.colors && state.map.colors.custom_env_colors && state.map.colors.custom_env_colors[T.envId];
+        const cur = sh.colors[T.envId];
         const same = (cur || null) === (P.newColor || null)
           || (cur && P.newColor && cur.join() === P.newColor.join());
         items.push(_deltaClsItem(op, same ? 'done' : 'ok', same ? 'już naniesione' : ''));
@@ -18120,6 +18344,8 @@ function classifyDelta(delta) {
       default:
         items.push(_deltaClsItem(op, 'impossible', 'nieznany typ'));
     }
+    // F1: symulacja efektu opu na cieniu — kolejne opy kalki widza jego skutek
+    if (items.length > _beforeLen) _sim(op, items[items.length - 1].cls);
   }
   // Mapy rozwiązań sid dostępne dla M3 (taken/geometria duchów) — właściwości tablicy.
   items.sidCls = sidCls; items.sidRoomId = sidRoomId; items.sidAreaId = sidAreaId; items.sidLabelId = sidLabelId;

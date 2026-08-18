@@ -535,19 +535,14 @@ scenario('E1.roundtrip', async () => {
   loadBase('dat');
   const cls = classifyText(_e1Text);
   const notOk = (cls.items || []).filter(i => i.c !== 'ok');
-  // Klasyfikator jest per-op vs stan biezacy (bez symulacji wczesniejszych opow
-  // kalki): EDIT_CL/DELETE_SUPPRESSOR po ADD_CL/ADD_SUPPRESSOR z tej samej kalki
-  // daja impossible; EDIT_EXIT po EDIT_ROOM tego samego pokoju daje hard;
-  // DELETE_AREA sid-area daje impossible (brak resA). Znane ograniczenia — E1
-  // dokumentuje je jako watchdog (jesli klasyfikator zostanie poprawiony, ten
-  // test przypomni o aktualizacji oczekiwan).
-  const KNOWN_SEQ = { EDIT_CL: 'impossible', DELETE_SUPPRESSOR: 'impossible', EDIT_EXIT: 'hard', DELETE_AREA: 'impossible' };
-  const unexpected = notOk.filter(i => KNOWN_SEQ[i.t] !== i.c);
-  const knownHit = notOk.filter(i => KNOWN_SEQ[i.t] === i.c).map(i => i.t + ':' + i.c);
-  A('E1.roundtrip.cls-ok23', cls.items && cls.items.length === 27 && unexpected.length === 0,
-    '23 ok + tylko znane seq-zalezne' + (unexpected.length ? ' [nieoczekiwane: ' + unexpected.map(i => i.t + ':' + i.c + (i.n ? '(' + i.n + ')' : '')).join(',') + ']' : ''));
-  EQ('E1.roundtrip.cls-knownseq', knownHit, ['EDIT_CL:impossible', 'DELETE_SUPPRESSOR:impossible', 'EDIT_EXIT:hard', 'DELETE_AREA:impossible'],
-    'watchdog znanych ograniczen klasyfikatora');
+  // FIX F1: klasyfikator symuluje wczesniejsze opy kalki na cieniu stanu —
+  // EDIT_CL po ADD_CL, DELETE_SUPPRESSOR po ADD_SUPPRESSOR, EDIT_EXIT po EDIT_ROOM
+  // i DELETE_AREA na sid-area sa teraz 'ok' (dawniej impossible/hard).
+  A('E1.roundtrip.cls-ok27', cls.items && cls.items.length === 27 && notOk.length === 0,
+    'fix F1: wszystkie 27 opow ok' + (notOk.length ? ' [nie-ok: ' + notOk.map(i => i.t + ':' + i.c + (i.n ? '(' + i.n + ')' : '')).join(',') + ']' : ''));
+  const PREV_SEQ = ['EDIT_CL', 'DELETE_SUPPRESSOR', 'EDIT_EXIT', 'DELETE_AREA'];
+  EQ('E1.roundtrip.cls-knownseq', (cls.items || []).filter(i => PREV_SEQ.includes(i.t) && i.c !== 'ok').map(i => i.t + ':' + i.c), [],
+    'fix F1: dawne degradacje sekwencyjne (EDIT_CL/DELETE_SUPPRESSOR/EDIT_EXIT/DELETE_AREA) sa ok');
   const r = W().applyDelta(_e1Delta, null, undefined);
   A('E1.roundtrip.applied', r.applied === 27 && r.skipped.length === 0,
     'applied=' + r.applied + ' skipped=' + r.skipped.length + (r.skipped.length ? ' ' + JSON.stringify(r.skipped) : ''));
@@ -564,24 +559,23 @@ scenario('E1.idempotent', async () => {
   const items2 = W().classifyDelta(_e1Delta);
   const proj = items2.map(i => i.type + ':' + i.cls);
   const doneN = proj.filter(p => p.endsWith(':done')).length;
-  // Po F6+F2: done 13/27. Swiadomie NIE-done: pary sekwencyjne wewnatrz kalki
-  // (add-then-delete CL/tlumika, etykiety sid-area — to wymaga symulacji F1)
-  // oraz delete-opsy na nieobecnych celach (impossible = skip przy re-apply,
-  // czyli i tak bez mutacji).
-  A('E1.idempotent.done13', doneN === 13, 'watchdog F2: done ' + doneN + '/27 (F6: MOVE_ROOM, F2: EDIT_ROOM zmieniane-pola) [nie-done: '
+  // Po F1: done 12/27. Klasyfikator z symulacja sekwencji (cien stanu) rozstrzyga
+  // pary add/delete jako ok/hard — re-apply to spojny replay (nie done), a delete-opsy
+  // na nieobecnych celach pozostaja impossible (= skip, bez mutacji).
+  A('E1.idempotent.done12', doneN === 12, 'watchdog F1: done ' + doneN + '/27 (replay sekwencyjny: pary add/delete CL/tlumika/area + labele ok; reszta done) [nie-done: '
     + proj.filter(p => !p.endsWith(':done')).join(', ') + ']');
   EQ('E1.idempotent.impossible-set', items2.filter(i => i.cls === 'impossible').map(i => i.type).sort(),
-    ['DELETE_AREA', 'DELETE_CL', 'DELETE_EXIT', 'DELETE_ROOM', 'DELETE_SPECIAL_EXIT', 'DELETE_SUPPRESSOR'],
-    'delete-opsy na nieobecnych celach: impossible (re-apply = skip, bez mutacji)');
+    ['DELETE_CL', 'DELETE_EXIT', 'DELETE_ROOM', 'DELETE_SPECIAL_EXIT'],
+    'fix F1: DELETE_AREA i DELETE_SUPPRESSOR juz rozstrzygalne (symulacja); pozostale delete-opsy impossible');
   // Sciezka panelu: drugi apply z domyslnie zaznaczonych — watchdog rozbieznosci
   const checkedSeqs = new Set(items2.filter(i => i.checked).map(i => i.seq));
   const r3 = W().applyDelta(_e1Delta, checkedSeqs, undefined);
   const crc2 = ev('_computeBaseInfo().crc').val;
-  A('E1.idempotent.panel35', r3.applied === 3 && r3.skipped.length === 5,
-    'watchdog F2: drugi apply (panel) applied=' + r3.applied + ' skipped=' + r3.skipped.length
-    + ' (EDIT_ROOM juz done; reszta rozbieznosci = pary sekwencyjne — F1)');
-  A('E1.idempotent.panel-diverges', crc2 !== crc1,
-    'watchdog: drugi apply (panel) ROZBIEGA stan [crc1=' + crc1 + ' crc2=' + crc2 + ']');
+  A('E1.idempotent.panel65', r3.applied === 6 && r3.skipped.length === 5,
+    'fix F1: drugi apply (panel) applied=' + r3.applied + ' skipped=' + r3.skipped.length
+    + ' (pary sekwencyjne ok/hard = replay; impossible = skip)');
+  A('E1.idempotent.panel-converges', crc2 === crc1,
+    'fix F1: drugi apply (panel) ZBIEGA do tego samego stanu — spojny replay [crc=' + crc1 + ' vs ' + crc2 + ']');
   // Surowy drugi apply — swiezy tor (zeby undoStack nie przekroczyl capa 50)
   loadBase('dat');
   W().applyDelta(_e1Delta, null, undefined);
@@ -589,7 +583,8 @@ scenario('E1.idempotent', async () => {
   const crc4 = ev('_computeBaseInfo().crc').val;
   A('E1.idempotent.raw2-21', r4.applied === 21 && r4.skipped.length === 6,
     'watchdog F2: surowy drugi apply applied=' + r4.applied + ' skipped=' + r4.skipped.length);
-  A('E1.idempotent.raw2-diverges', crc4 !== crc1, 'watchdog: surowy drugi apply ROZBIEGA stan');
+  A('E1.idempotent.raw2-diverges', crc4 !== crc1,
+    'watchdog: surowy drugi apply ROZBIEGA stan (raw = force bez klasyfikacji — poza zakresem F1)');
   W().undoAll();
   EQ('E1.idempotent.undo', ev('_computeBaseInfo().crc').val, ev('state.baseInfo.crc').val,
     'undoAll po 2 apply (49 wpisow, pod cap 50) wraca do bazy');

@@ -453,7 +453,7 @@ ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo 
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.14.0';"), 'wersja: v1.14.0');
+ok(HTML.includes("const APP_VERSION = 'v1.15.0';"), 'wersja: v1.15.0');
 
 console.log('— T8: classifyDelta + recenzja (M2) —');
 {
@@ -484,11 +484,18 @@ console.log('— T8: classifyDelta + recenzja (M2) —');
     op(21, 'ADD_LABEL', { areaId: 1 }, { label: { id: 'd:7', text: 'L1', x: 0, y: 0, z: 0, width: 4, height: 1.2 } }),
     op(22, 'ADD_LABEL', { areaId: 1 }, { label: { id: 'd:8', text: 'Nowa', x: 3, y: 3, z: 0, width: 4, height: 1.2 } }),
     op(23, 'DELETE_ROOM', { roomId: 'd:4', areaId: 99 }, { room: { id: 'd:4' } }),
+    // F1: pokrycie na pokojach, ktore PRZETRWAJA sekwencje (12 znika w op5)
+    op(24, 'EDIT_ROOM', { roomId: 11 }, { before: { id: 11, x: 9, y: 9, z: 0, name: 'STARE' }, after: { id: 11, x: 9, y: 9, z: 0, name: 'B' } }),
+    op(25, 'ADD_EXIT',  { sourceId: 11, dir: 'n' }, { targetId: 10, bidirectional: false }),
+    op(26, 'ADD_EXIT',  { sourceId: 10, dir: 'e' }, { targetId: 20, bidirectional: false }),
+    op(27, 'MOVE_ROOM', { roomId: 10 }, { fromX: 0, fromY: 0, fromZ: 0, toX: 7, toY: 7, toZ: 0 }),
+    op(28, 'MOVE_ROOM', { roomId: 11 }, { fromX: 9, fromY: 9, fromZ: 0, toX: 9, toY: 9, toZ: 0 }),
+    op(29, 'MOVE_ROOM', { roomId: 11 }, { fromX: 9, fromY: 9, fromZ: 0, toX: 7, toY: 7, toZ: 0 }),
   ] };
   const items = api.classifyDelta(delta);
   const cls = (seq) => items.find(i => i.seq === seq).cls;
   const note = (seq) => items.find(i => i.seq === seq).note;
-  ok(items.length === 23, 'classify: wszystkie opy sklasyfikowane');
+  ok(items.length === 29, 'classify: wszystkie opy sklasyfikowane');
   ok(cls(1) === 'ok', 'classify ADD_ROOM: wolne pole → ok');
   ok(cls(2) === 'hard' && note(2).includes('kolizja'), 'classify ADD_ROOM: pole zajęte (inna nazwa) → hard/kolizja');
   ok(cls(3) === 'done' && note(3).includes('#11'), 'classify ADD_ROOM: to samo pole i nazwa → done (add-matching)');
@@ -497,7 +504,7 @@ console.log('— T8: classifyDelta + recenzja (M2) —');
   ok(cls(6) === 'impossible', 'classify DELETE_ROOM: pokój usunięty upstream → impossible');
   ok(cls(7) === 'ok', 'classify EDIT_ROOM: before zgodne → ok');
   ok(cls(8) === 'done', 'classify EDIT_ROOM: live == after → done (już naniesione)');
-  ok(cls(9) === 'hard', 'classify EDIT_ROOM: live != before → hard (zmieniony upstream)');
+  ok(cls(9) === 'impossible', 'classify EDIT_ROOM (F1): pokój usunięty wcześniej w tej kali (op5) → impossible');
   {
     // F2: done-detection po ZMIENIANYCH polach — inne pola mogla zmienic inna op kalki
     const c2 = makeDeltaCtx();
@@ -511,16 +518,22 @@ console.log('— T8: classifyDelta + recenzja (M2) —');
     c2.state.roomById[10].name = 'INNA';
     ok(c2.api.classifyDelta(d2)[0].cls !== 'done', 'classify EDIT_ROOM (F2): zmieniane pole rozbiezne → nie-done');
   }
-  ok(cls(10) === 'ok', 'classify ADD_EXIT: wolny kierunek → ok');
+  ok(cls(10) === 'impossible', 'classify ADD_EXIT (F1): cel (12) usunięty wcześniej w kali (op5) → impossible');
   ok(cls(11) === 'done', 'classify ADD_EXIT: istnieje do tego samego celu → done');
-  ok(cls(12) === 'hard' && note(12).includes('guard'), 'classify ADD_EXIT: kierunek zajęty innym → hard (guard odmówi)');
+  ok(cls(12) === 'impossible', 'classify ADD_EXIT (F1): cel (12) usunięty wcześniej w kali → impossible');
   ok(cls(13) === 'impossible', 'classify ADD_EXIT: pokój nie istnieje → impossible');
   ok(cls(14) === 'ok', 'classify ADD_AREA: nowa nazwa → ok');
   ok(cls(15) === 'done' && note(15).includes('#2'), 'classify ADD_AREA: nazwa istnieje → done');
   ok(cls(16) === 'impossible', 'classify DELETE_AREA: obszar nie istnieje → impossible');
-  ok(cls(17) === 'ok', 'classify MOVE_ROOM: wolne pole → ok');
-  ok(cls(18) === 'done', 'classify MOVE_ROOM: już na miejscu → done');
-  ok(cls(19) === 'hard' && note(19).includes('kolizja'), 'classify MOVE_ROOM: pole zajęte → hard');
+  ok(cls(17) === 'impossible', 'classify MOVE_ROOM (F1): pokój 12 usunięty wcześniej w kali (op5) → impossible');
+  ok(cls(18) === 'impossible', 'classify MOVE_ROOM (F1): jw. → impossible');
+  ok(cls(19) === 'impossible', 'classify MOVE_ROOM (F1): jw. → impossible');
+  ok(cls(24) === 'hard', 'classify EDIT_ROOM: live != before → hard (zmieniony upstream)');
+  ok(cls(25) === 'ok', 'classify ADD_EXIT: wolny kierunek → ok');
+  ok(cls(26) === 'hard' && note(26).includes('guard'), 'classify ADD_EXIT: kierunek zajęty innym → hard (guard odmówi)');
+  ok(cls(27) === 'ok', 'classify MOVE_ROOM: wolne pole → ok');
+  ok(cls(28) === 'done', 'classify MOVE_ROOM (F1): już na miejscu wg pozycji z CIENIA (po op24) → done');
+  ok(cls(29) === 'hard' && note(29).includes('kolizja'), 'classify MOVE_ROOM (F1): pole zajęte przez pokój przesunięty wcześniej w kali (op27) → hard');
   ok(cls(20) === 'ok', 'classify EDIT_ENV_COLOR: inny kolor → ok');
   ok(cls(21) === 'done', 'classify ADD_LABEL: identyczna etykieta → done');
   ok(cls(22) === 'ok', 'classify ADD_LABEL: nowa → ok');
@@ -756,7 +769,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
     && HTML.includes("bShow.textContent = 'Efekt'") && HTML.includes("bHide.textContent = 'Ukryj'"),
     'panel: przyciski Efekt/Ukryj/Autopozycja/Ręcznie');
   ok(HTML.includes('Duchy:') && HTML.includes('pozycja zastępcza'), 'panel: legenda kolorów duchów');
-  ok(HTML.includes("const APP_VERSION = 'v1.14.0';"), 'wersja v1.14.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.15.0';"), 'wersja v1.15.0');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -792,7 +805,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.14.0';"), 'wersja v1.14.0 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.15.0';"), 'wersja v1.15.0 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji
