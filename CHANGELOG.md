@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.26.0 — MOVE_ROOM z guardem zajetosci: Zastosuj juz nie naklada pokoi (M6a)
+
+- **Przyczyna:** klasyfikator oznaczal kolizje pozycyjne ADD_ROOM i MOVE_ROOM tak samo (konflikt, do rozstrzygniecia przez Autopozycje/Recznie), ale wykonawca traktowal je roznie: ADD_ROOM mial zywotny guard zajetosci (skip, zero mutacji), a MOVE_ROOM nie — zwykle „Zastosuj" przenosilo pokoj na zajete pole i nakladalo pokoje na siebie (potwierdzone eksportami .arkmap z testow: #14 wyladowal na #13).
+- **Fix:** applyDelta MOVE_ROOM dostal ten sam fail-closed guard co ADD_ROOM (zajeta komorka docelowa → skip „komorka docelowa zajeta", zero mutacji; sciezka override autopozycji/recznej bez zmian). Notatka konfliktu MOVE_ROOM ujednolicona z ADD_ROOM: „pole docelowe (x,y,z) jest zajete przez pokoj #N — kolizja; wybierz Autopozycje / Recznie albo odznacz op".
+- **Testy (w tym samym commicie):** nowy scenariusz E8.moveguard (8 asercji: zwykly apply nie rusza #14, zero stacku na #13, op zostaje konfliktem; po autopozycji #14 laduje na pozycji zastepczej i klasa przechodzi w done). Macierz E2 MOVE_ROOM.conflict: applied=0/skipped=1 + post-check braku stacku. E3.occupied-override: op3 MOVE na zajete pole = skip (semantyka „stack jak drag" wycofana). E6.reapply/E7.texts/E7.marks: liczniki po apply (28 naniesionych, guardy 28/29/33). run-all.sh: dopiete grupy E7/E8.
+- Regresja lokalna: pelny `run-all.sh` PASS (13 harnessow node + kampania empiryczna SMOKE+E0–E8, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## repo — katalog uploads/ na wrzutki spoza czatu
 
 - **Zmiana:** dodany przez wlasciciela katalog `uploads/` (z `uploads.txt`) sluzy do przekazywania plikow, ktorych nie da sie wrzucic do czatu. Paczka `map_master3.zip` (eksporty .arkmap z testow panelu kalki + zapisane kalki) zostala przejrzana i usunieta z repo — katalog i plik informacyjny zostaja na przyszlosc.

@@ -812,8 +812,10 @@ const E2_DESCS = [
                 exp: { cls: 'ok' } },
     del:      { prep: P => W().deleteRoom(P.roomD), exp: { cls: 'impossible', applied: 0, skipped: 1 } },
     conflict: { prep: P => { const a = ev('state.roomArea[' + P.roomD + ']').val; const rd = ev('(function(){ const r = state.roomById[' + P.roomD + ']; return { x: r.x, y: r.y, z: r.z }; })()').val;
-                  _e2UpRoom(a, rd.x + 500, rd.y + 500, 'Upstream'); },
-                exp: { cls: 'hard', coll: true } },
+                  P._mvT = JSON.stringify([rd.x + 500, rd.y + 500]); _e2UpRoom(a, rd.x + 500, rd.y + 500, 'Upstream'); },
+                exp: { cls: 'hard', coll: true, applied: 0, skipped: 1 },
+                post: (P, id) => A(id + '.nostack', ev('JSON.stringify([state.roomById[' + P.roomD + '].x, state.roomById[' + P.roomD + '].y])').val !== P._mvT,
+                  'v1.26.0: surowy apply NIE stackuje — MOVE na zajete pole = skip, pokoj zostaje na miejscu') },
   } },
 { type: 'MOVE_ROOM_TO_AREA', ops: 1,
   make: P => W().commitMoveRoomToArea(P.roomE, P.areaB),
@@ -1313,15 +1315,17 @@ scenario('E3.occupied-override', async () => {
     'fix F5: op2 (bez override) pominieta — komorka docelowa zajeta');
   EQ('E3.occupied-override.f5-stack', _e3CountAt(9999, 9999), 1,
     'fix F5: brak stacku na (9999,9999) — zostaje tylko pokoj upstream');
-  // FIX F6: op3 MOVE_ROOM applikuje sie realnie. Cel (9998,9999) jest zajety przez
-  // upstream, a MOVE (jak drag w UI) nie ma guardu zajetosci — stack UDOKUMENTOWANY.
-  A('E3.occupied-override.f6-counted', !res.skipped.find(s => s.seq === 3),
-    'MOVE_ROOM liczony jako applied');
-  EQ('E3.occupied-override.f6-noop', _e3CountAt(9998, 9999), 2,
-    'fix F6: pokoj przeniesiony na zajete (9998,9999) — stack z upstream (jak drag, udokumentowane)');
+  // v1.26.0: op3 MOVE_ROOM na zajete (9998,9999) — guard zajetosci w applyDelta
+  // (symetria z ADD_ROOM): skip, zero mutacji. Dawniej (fix F6) MOVE stackowal
+  // "jak drag" — semantyka ujednolicona: kolizje rozstrzyga recenzja, nie apply.
+  const skip3 = res.skipped.find(s => s.seq === 3);
+  A('E3.occupied-override.f6-counted', !!skip3 && skip3.reason === 'komórka docelowa zajęta',
+    'v1.26.0: MOVE_ROOM na zajete pole pominiety (guard, symetria z ADD_ROOM)');
+  EQ('E3.occupied-override.f6-noop', _e3CountAt(9998, 9999), 1,
+    'v1.26.0: brak stacku na (9998,9999) — zostaje tylko pokoj upstream');
   EQ('E3.occupied-override.control', _e3CountAt(10000, 9999), 1, 'op4 (kontrolny) zastosowany');
-  EQ('E3.occupied-override.applied', res.applied, 2, 'applied = 2 (op3, op4)');
-  EQ('E3.occupied-override.skipped', res.skipped.length, 2, 'skipped = 2 (op1 override zajety, op2 komorka zajeta)');
+  EQ('E3.occupied-override.applied', res.applied, 1, 'applied = 1 (op4)');
+  EQ('E3.occupied-override.skipped', res.skipped.length, 3, 'skipped = 3 (op1 override zajety, op2/op3 komorka zajeta)');
 });
 
 scenario('E3.manual', async () => {
@@ -1963,19 +1967,49 @@ scenario('E6.reapply', async () => {
   const s2 = snap();
   ex("document.getElementById('dp-apply').click()");
   const s3 = snap();
-  // Po fixie #12: apply1 nanosi 29 opow (skipuje tylko twarde guardy 28/33);
+  // Po fixie #12: apply1 nanosi 28 opow (skipuje twarde guardy 28/29/33 —
+  // od v1.26.0 MOVE_ROOM ma guard zajetosci, symetrycznie z ADD_ROOM);
   // naniesione seq-y traca zaznaczenie na zawsze (warstwa sesyjna), wiec
   // apply2/apply3 sa no-op — zero nowych wpisow undo, klasy zamrozone.
-  EQ('E6.reapply.cls1', s1.c, { ok: 0, hard: 2, done: 30, impossible: 4 },
-    'po apply1: 29 naniesionych -> done, zostaja tylko twarde guardy 28/33');
-  EQ('E6.reapply.checked1', s1.checked, [28, 33], 'po apply1: zaznaczone tylko nierozstrzygniete konflikty');
-  EQ('E6.reapply.undo1', s1.undo, 29, 'apply1: dokladnie 29 wpisow undo');
+  EQ('E6.reapply.cls1', s1.c, { ok: 0, hard: 3, done: 29, impossible: 4 },
+    'po apply1: 28 naniesionych -> done, zostaja twarde guardy 28/29/33');
+  EQ('E6.reapply.checked1', s1.checked, [28, 29, 33], 'po apply1: zaznaczone tylko nierozstrzygniete konflikty');
+  EQ('E6.reapply.undo1', s1.undo, 28, 'apply1: dokladnie 28 wpisow undo');
   EQ('E6.reapply.undo2-noop', s2.undo - s1.undo, 0, 'apply2: ZERO nowych wpisow undo (replay uciety)');
   EQ('E6.reapply.undo3-noop', s3.undo - s2.undo, 0, 'apply3: ZERO nowych wpisow undo');
   EQ('E6.reapply.cls-frozen', s3.cls, s2.cls, 'klasy zamrozone miedzy apply2 a apply3 (brak oscylacji 24/25)');
-  EQ('E6.reapply.checked3', s3.checked, [28, 33], 'po apply3: nadal tylko konflikty czekaja na decyzje');
+  EQ('E6.reapply.checked3', s3.checked, [28, 29, 33], 'po apply3: nadal tylko konflikty czekaja na decyzje');
   EQ('E6.reapply.done-note', ev("_deltaReview.items.filter(function(i){ return i.cls === 'done' && i.note === 'naniesione z tej kalki'; }).length").val,
-    29, '29 opow oznaczonych jako naniesione z tej kalki');
+    28, '28 opow oznaczonych jako naniesione z tej kalki');
+});
+
+// ═══ E8: guard MOVE_ROOM przy apply (v1.26.0) ═══
+scenario('E8.moveguard', async () => {
+  // applyDelta MOVE_ROOM ma guard zajetosci (symetria z ADD_ROOM): zwykly
+  // Zastosuj NIE naklada pokoi; dopiero autopozycja/recznie rozwiazuje konflikt.
+  await loadBase('dat');
+  const pos14 = () => JSON.parse(ev('JSON.stringify([state.roomById[14].x, state.roomById[14].y, state.roomById[14].z ?? 0])').val);
+  const stackAt13 = () => ev('(function(){ const a = state.roomById[13];'
+    + ' return Object.values(state.roomById).filter(function(r){'
+    + ' return r.id !== 13 && state.roomArea[r.id] === state.roomArea[13]'
+    + ' && r.x === a.x && r.y === a.y && (r.z ?? 0) === (a.z ?? 0); }).length; })()').val;
+  const before14 = pos14();
+  EQ('E8.moveguard.pre', before14, [31, -18, 0], 'fixture: #14 startuje na (31,-18,0)');
+  const txt = await (await fetch('./fixture_demo.arkdelta')).text();
+  ex('const r = validateDeltaText(' + JSON.stringify(txt) + '); if (!r.ok) throw new Error("walidacja fixture_demo"); window.__e8delta = r.delta;');
+  ex('openDeltaReview(window.__e8delta)');
+  EQ('E8.moveguard.cls', ev('_deltaReview.items[28].cls').val, 'hard', 'op29 MOVE_ROOM: klasyfikacja konflikt (pole zajete)');
+  ex("document.getElementById('dp-apply').click()");
+  EQ('E8.moveguard.frozen', pos14(), before14, 'zwykly Zastosuj: op29 pominiety, #14 zostaje na miejscu');
+  EQ('E8.moveguard.no-stack', stackAt13(), 0, 'zero nalozenia: na polu #13 jest tylko #13');
+  EQ('E8.moveguard.still-hard', ev('_deltaReview.items[28].cls').val, 'hard', 'po apply: op29 nadal konflikt (czeka na decyzje)');
+  // rozstrzygniecie konfliktu: autopozycja + ponowne zaznaczenie + Zastosuj
+  ex('_deltaReview.items[28].checked = true; _deltaAutoplace(_deltaReview.items[28]);');
+  const pill = JSON.parse(ev('JSON.stringify(_deltaOverrides.get(29))').val);
+  ex("document.getElementById('dp-apply').click()");
+  EQ('E8.moveguard.moved', pos14().slice(0, 2), [pill.x, pill.y], 'po autopozycji: #14 przeniesiony na pozycje zastepcza');
+  EQ('E8.moveguard.still-no-stack', stackAt13(), 0, 'po autopozycji: nadal zero nalozenia na #13');
+  EQ('E8.moveguard.done', ev('_deltaReview.items[28].cls').val, 'done', 'po rozstrzygnieciu: op29 naniesiony (done)');
 });
 
 // ═══ E7: diff-wizualizacja kalki (M5) ═══
@@ -2042,7 +2076,7 @@ scenario('E7.texts', async () => {
     'explainer pod filtrami wyjasnia semantyke Zastosuj/konfliktow');
   ex("document.getElementById('dp-apply').click()");
   EQ('E7.texts.session-badge', ev('[...document.querySelectorAll("#dp-body .dp-badge")].filter(b => b.textContent === "naniesione ✓").length').val,
-    29, 'po apply: 29 opow z badgem "naniesione ✓" (rozroznienie zrodla done)');
+    28, 'po apply: 28 opow z badgem "naniesione ✓" (rozroznienie zrodla done)');
 });
 
 scenario('E7.marks', async () => {
@@ -2063,10 +2097,10 @@ scenario('E7.marks', async () => {
   EQ('E7.marks.legend-size', ev("getComputedStyle(document.querySelector('.dp-legend .dp-sw')).width").val, '12px',
     'probki legendy maja 12px (rozmiar checkboxa, nie glif tekstowy)');
   ex("document.getElementById('dp-apply').click()");
-  EQ('E7.marks.after-apply', ev("document.querySelectorAll('#dp-body .dp-check').length").val, 2,
-    'po apply: checkboxy tylko przy 2 nierozstrzygnietych konfliktach (28/33)');
-  EQ('E7.marks.after-done', ev('[...document.querySelectorAll("#dp-body .dp-mark.done")].length').val, 30,
-    'po apply: 30 markerow ✓ (29 sesyjnych + op31)');
+  EQ('E7.marks.after-apply', ev("document.querySelectorAll('#dp-body .dp-check').length").val, 3,
+    'po apply: checkboxy tylko przy 3 nierozstrzygnietych konfliktach (28/29/33)');
+  EQ('E7.marks.after-done', ev('[...document.querySelectorAll("#dp-body .dp-mark.done")].length').val, 29,
+    'po apply: 29 markerow ✓ (28 sesyjnych + op31)');
 });
 
 scenario('E7.contrast', async () => {

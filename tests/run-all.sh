@@ -11,7 +11,7 @@ done
 # Testy empiryczne .arkdelta (prawdziwa przegladarka headless + pelna aplikacja) — wymagany Chromium.
 if [ -n "${CHROMIUM_BIN:-}" ] || command -v chromium >/dev/null 2>&1; then
   echo "═══ tests/empirical.sh ═══"
-  ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6" ARKTEST_BUDGET=300000 ARKTEST_TIMEOUT=420 bash tests/empirical.sh || FAILED=1
+  ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8" ARKTEST_BUDGET=300000 ARKTEST_TIMEOUT=420 bash tests/empirical.sh || FAILED=1
   echo
 else
   echo "═══ tests/empirical.sh: SKIP (brak Chromium — podaj CHROMIUM_BIN albo doinstaluj chromium) ═══"
