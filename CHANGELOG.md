@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.28.0 — karta szczegolow konfliktu: tabela parametr | aktualnie | w kalka (M6c)
+
+- **Przyczyna:** diff konfliktu/edycji renderowal sie wielkim tekstem na kanwie mapy (przy duchu) — nieczytelny, zaslanial mape, bez podzialu na to co jest na mapie a co niesie kalka.
+- **Fix:** na kanwie zostala zwarta odznaka „ΔN" (liczba zmienionych parametrow), a pelne szczegoly laduja w karcie w panelu recenzji: tabela z kolumnami „parametr | aktualnie na mapie | w kalce", zawijanie dlugich wartosci, przewijanie, zamykana krzyzykiem i razem z duchem (przycisk Ukryj). Karta pokazuje tez wiersze kontekstowe: dla ADD_EXIT w zajetym kierunku — kierunek + aktualny i docelowy cel; dla kolizji pozycyjnej ADD_ROOM/MOVE_ROOM — pole, okupant (#N) i intencja kalki. Dane diffu przeszly na strukture wierszy `_deltaRoomDiffRows` ({parametr, przed, po}); `_deltaRoomDiff` zostal jako cienki wrapper zwracajacy te same stringi co wczesniej (kompatybilnosc E7.diff).
+- **Testy (w tym samym commicie):** nowy scenariusz E8.confcard (7 asercji: karta EDIT_ROOM z wierszem nazwa + wartosci mapa/kalka, karta ADD_EXIT z kierunkiem i celami, karta kolizji z okupantem #13 i intencja, op bez szczegolow nie otwiera karty, powrot karty po Efekt, Ukryj chowa karte razem z duchem). tests/delta.js: stub `_deltaCardHide` w kontekscie node (funkcja karty mieszka w warstwie UI; zachowanie testowane empirycznie).
+- Regresja lokalna: pelny `run-all.sh` PASS (13 harnessow node + kampania empiryczna SMOKE+E0–E8, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.27.0 — opy pominiete przy Zastosuj: auto-odznaczenie + trwaly dopisek (M6b)
 
 - **Przyczyna:** konflikt z twardym guardem (np. zajety kierunek, zajete pole) po „Zastosuj" zostawal zaznaczony na liscie — kolejne „Zastosuj" mielilo go bez efektu („Naniesiono: 0 · Pominieto: 1"), a przycisk i liczniki klamaly, ze jest cos do zrobienia.
