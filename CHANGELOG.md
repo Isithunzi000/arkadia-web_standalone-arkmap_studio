@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.29.0 — „Pokaz" przy opach zrobionych: podswietlenie realnego obiektu (M6d)
+
+- **Przyczyna:** op naniesiony (done) mial dalej przycisk „Efekt", ktory pokazywal DUCHA — podglad tego, co kalka chciala zrobic. Po naniesieniu to bez sensu: uzytkownik chce zobaczyc realny obiekt na mapie, nie hipotetyczny efekt.
+- **Fix:** wiersze done dostaja przycisk „Pokaz" zamiast „Efekt": skok do obiektu + stale podswietlenie REALNEGO pokoju na zywej mapie (pelna zielona ramka + znacznik ✓, bez kreskowania — odroznienie od duchow). Warstwa `_deltaRealHl` (seq -> pozycja na zywo), czyszczona razem z duchami (`_deltaGhostReset`, zamkniecie panelu, nowa kalka). „Ukryj" chowa podswietlenie. Op bez zywej geometrii (np. usuwanie) = czytelny toast zamiast pustego skoku. Opy ok/hard zachowuja „Efekt" i duchy bez zmian.
+- **Testy (w tym samym commicie):** nowy scenariusz E8.realshow (6 asercji: done → „Pokaz", hard → „Efekt", podswietlenie na zywych wspolrzednych pokoju, brak ducha, Ukryj chowa, brak geometrii = bez podswietlenia i bez wyjatku). tests/delta.js: asercja literalu przycisku zaktualizowana do wariantu M6d.
+- Regresja lokalna: pelny `run-all.sh` PASS (13 harnessow node + kampania empiryczna SMOKE+E0–E8, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.28.0 — karta szczegolow konfliktu: tabela parametr | aktualnie | w kalka (M6c)
 
 - **Przyczyna:** diff konfliktu/edycji renderowal sie wielkim tekstem na kanwie mapy (przy duchu) — nieczytelny, zaslanial mape, bez podzialu na to co jest na mapie a co niesie kalka.

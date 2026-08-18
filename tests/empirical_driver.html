@@ -2075,6 +2075,36 @@ scenario('E8.confcard', async () => {
   EQ('E8.confcard.hide-btn', cardHtml(), null, 'Ukryj: karta znika razem z duchem');
 });
 
+// ═══ E8.realshow: „Pokaż" przy opach zrobionych (M6d, v1.29.0) ═══
+scenario('E8.realshow', async () => {
+  // done → przycisk „Pokaż" (skok + podswietlenie REALNEGO obiektu, zero ducha);
+  // ok/hard → zostaje „Efekt" (duch). Ukryj chowa podswietlenie.
+  await loadBase('dat');
+  const txt = await (await fetch('./fixture_demo.arkdelta')).text();
+  ex('const r = validateDeltaText(' + JSON.stringify(txt) + '); if (!r.ok) throw new Error("walidacja fixture_demo"); window.__e8rdelta = r.delta;');
+  ex('openDeltaReview(window.__e8rdelta)');
+  ex("document.getElementById('dp-apply').click()");
+  const btnAt = (i) => ev('(function(){ const row = document.querySelectorAll("#dp-body .dp-row")[' + i + '];'
+    + ' const b = [...row.querySelectorAll("button")].find(x => x.textContent === "Pokaż" || x.textContent === "Efekt");'
+    + ' return b ? b.textContent : null; })()').val;
+  EQ('E8.realshow.done-btn', btnAt(9), 'Pokaż', 'op naniesiony (done): przycisk Pokaz');
+  EQ('E8.realshow.hard-btn', btnAt(27), 'Efekt', 'op konfliktowy (hard): zostaje Efekt');
+  // Pokaz na op10 (EDIT_ROOM #1): podswietlenie na zywych wspolrzednych, bez ducha
+  ex('(function(){ const row = document.querySelectorAll("#dp-body .dp-row")[9];'
+    + ' [...row.querySelectorAll("button")].find(x => x.textContent === "Pokaż").click(); })()');
+  A('E8.realshow.hl', ev('(function(){ const h = _deltaRealHl.get(10); const r = state.roomById[1];'
+    + ' return !!(h && r && h.x === r.x && h.y === r.y && h.z === (r.z ?? 0)); })()').val === true,
+    'Pokaz: podswietlenie na zywych wspolrzednych pokoju #1');
+  EQ('E8.realshow.no-ghost', ev('_deltaGhosts.has(10)').val, false, 'Pokaz nie wlacza ducha');
+  ex('(function(){ const row = document.querySelectorAll("#dp-body .dp-row")[9];'
+    + ' [...row.querySelectorAll("button")].find(x => x.textContent === "Ukryj").click(); })()');
+  EQ('E8.realshow.hide', ev('_deltaRealHl.has(10)').val, false, 'Ukryj chowa podswietlenie');
+  // brak zywej geometrii (np. op usuwania): bez podswietlenia, bez wyjatku
+  const sz0 = ev('_deltaRealHl.size').val;
+  ex('_deltaShowReal({ seq: 9999, jump: null })');
+  EQ('E8.realshow.nogeom', ev('_deltaRealHl.size').val, sz0, 'brak geometrii: bez podswietlenia');
+});
+
 // ═══ E7: diff-wizualizacja kalki (M5) ═══
 scenario('E7.diff', async () => {
   await loadBase('dat');

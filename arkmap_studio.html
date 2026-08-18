@@ -12715,7 +12715,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.28.0';
+const APP_VERSION = 'v1.29.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -18840,6 +18840,7 @@ function applyDelta(delta, onlySeq, overrides) {
 
 // ── M3: warstwa duchów + kolizje pozycji (stan sesyjny — NIE trafia do pliku ani deltaLog) ──
 let _deltaGhosts    = new Set();  // seq z włączonym duchem
+let _deltaRealHl    = new Map();  // seq -> {x, y, z, areaId} — podświetlenie REALNEGO obiektu (Pokaż przy done)
 let _deltaOverrides = new Map();  // seq -> {x, y, how: 'auto'|'manual'}
 let _deltaPlacing   = null;       // {seq} | null — aktywny tryb ręcznego stawiania
 let _deltaHover     = null;       // {x, y, free} — celownik pod kursorem
@@ -18852,6 +18853,7 @@ let _deltaSkippedSeqs = new Set();  // seq-e pominiete przez guard przy Zastosuj
 
 function _deltaGhostReset() {
   _deltaGhosts = new Set();
+  _deltaRealHl = new Map();
   _deltaOverrides = new Map();
   _deltaPlacing = null;
   _deltaHover = null;
@@ -19189,6 +19191,27 @@ function _deltaShowGhost(it) {
   draw();
 }
 
+// M6d: Pokaż przy opach zrobionych (done) — skok + stale podświetlenie REALNEGO
+// obiektu na żywej mapie (bez warstwy duchów; duch pokazuje efekt PRZED naniesieniem).
+// Brak żywej geometrii (np. op usuwania) = bez podświetlenia, tylko toast.
+function _deltaShowReal(it) {
+  if (!_deltaReview) return;
+  const j = it.jump || {};
+  let hl = null;
+  if (j.roomId !== undefined && state.roomById[j.roomId]) {
+    const r = state.roomById[j.roomId];
+    hl = { x: r.x, y: r.y, z: r.z ?? 0, areaId: state.roomArea[r.id] };
+  } else if (j.areaId !== undefined && j.x !== undefined && state.areas.get(j.areaId)) {
+    hl = { x: j.x, y: j.y, z: j.z ?? state.z, areaId: j.areaId };
+  }
+  if (!hl) { toast('Brak obiektu na mapie (op usuwania — nie ma czego pokazać)'); return; }
+  if (hl.areaId !== state.areaId && state.areas.get(hl.areaId)) selectArea(hl.areaId, false);
+  if (hl.z !== undefined && hl.z !== state.z) selectZ(hl.z);
+  centerViewOnMap(hl.x, hl.y);
+  _deltaRealHl.set(it.seq, hl);
+  draw();
+}
+
 // ── M6c: karta szczegółów konfliktu/edycji (tabela parametr | aktualnie | w kalce) ──
 function _deltaCardHide() {
   const c = document.getElementById('dp-card');
@@ -19292,9 +19315,30 @@ function _deltaPlaceAtScreen(sx, sy) {
 // Warstwa 7b draw(): duchy kalki + celownik. Czysto addytywna (save/restore).
 function _drawDeltaGhosts(rs) {
   const hasGhosts = _deltaReview && _deltaGhosts.size > 0;
-  if (!hasGhosts && !_deltaPlacing) return;
+  const hasReal   = _deltaReview && _deltaRealHl.size > 0;
+  if (!hasGhosts && !hasReal && !_deltaPlacing) return;
   const half = rs / 2;
   ctx.save();
+  // M6d: podświetlenie realnych obiektów (Pokaż przy done) — pełna zielona ramka + ✓,
+  // bez kreskowania (odróżnienie od duchów = „to już JEST na mapie").
+  if (hasReal) {
+    for (const [, h] of _deltaRealHl) {
+      if (h.areaId !== state.areaId) continue;
+      if (h.z !== undefined && h.z !== state.z) continue;
+      const cx = wx(h.x), cy = wy(h.y);
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(63,185,80,0.95)';
+      ctx.fillStyle = 'rgba(63,185,80,0.15)';
+      ctx.lineWidth = Math.max(2, state.zoom * 2);
+      ctx.fillRect(cx - half, cy - half, rs, rs);
+      ctx.strokeRect(cx - half, cy - half, rs, rs);
+      if (state.zoom > 0.2) {
+        ctx.fillStyle = 'rgba(63,185,80,0.95)';
+        ctx.font = 'bold ' + Math.max(8, 10 * state.zoom) + 'px monospace';
+        ctx.fillText('✓', cx + half + 3, cy - half + Math.max(9, 10 * state.zoom));
+      }
+    }
+  }
   if (hasGhosts) {
     const seqs = [..._deltaGhosts].sort((a, b) => a - b);
     const geoms = _deltaGhostGeoms(_deltaReview.delta, _deltaReview.items, seqs, _deltaOverrides);
@@ -19500,16 +19544,20 @@ function _renderDeltaPanel() {
     if (_DELTA_GHOST_TYPES.has(it.type) && it.cls !== 'impossible') {
       const bShow = document.createElement('button');
       bShow.className = 'vd-btn dp-mini';
-      bShow.textContent = 'Efekt';
-      bShow.title = 'Pokaż efekt na mapie (warstwa duchów — niczego nie zmienia)';
-      bShow.addEventListener('click', e => { e.stopPropagation(); _deltaShowGhost(it); _renderDeltaPanel(); });
+      // M6d: op zrobiony (done) → „Pokaż" = skok + podświetlenie REALNEGO obiektu;
+      // ok/hard → „Efekt" = duch (podgląd tego, co kałka chce zrobić).
+      const isDone = it.cls === 'done';
+      bShow.textContent = isDone ? 'Pokaż' : 'Efekt';
+      bShow.title = isDone ? 'Pokaż naniesiony obiekt na mapie (podświetlenie realnego pokoju)'
+                           : 'Pokaż efekt na mapie (warstwa duchów — niczego nie zmienia)';
+      bShow.addEventListener('click', e => { e.stopPropagation(); if (isDone) _deltaShowReal(it); else _deltaShowGhost(it); _renderDeltaPanel(); });
       row.appendChild(bShow);
       const bHide = document.createElement('button');
       bHide.className = 'vd-btn dp-mini';
       bHide.textContent = 'Ukryj';
-      bHide.title = 'Ukryj ducha';
-      bHide.disabled = !_deltaGhosts.has(it.seq);
-      bHide.addEventListener('click', e => { e.stopPropagation(); _deltaGhosts.delete(it.seq); _deltaCardHide(); draw(); _renderDeltaPanel(); });
+      bHide.title = isDone ? 'Ukryj podświetlenie' : 'Ukryj ducha';
+      bHide.disabled = !(isDone ? _deltaRealHl.has(it.seq) : _deltaGhosts.has(it.seq));
+      bHide.addEventListener('click', e => { e.stopPropagation(); _deltaGhosts.delete(it.seq); _deltaRealHl.delete(it.seq); _deltaCardHide(); draw(); _renderDeltaPanel(); });
       row.appendChild(bHide);
     }
     // M3: kolizja pozycji — autopozycja / ręczna / cofnięcie override'u
