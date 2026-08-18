@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.24.0 — panel kalki: czytelne przyciski na podświetlonym wierszu + pigułka autopozycji (M5d)
+
+- **Przyczyna:** mini-przyciski wiersza („Efekt"/„Ukryj"/„Autopozycja"/„Ręcznie") dziedziczyły `background:none` i przygaszony `--dim` z `.vd-btn` — na podświetlonym wierszu zlewały się z tłem. Wynik autopozycji to był goły tekst w kolorze akcentu.
+- **Fix:** `.dp-row .dp-mini` z własnym tłem i jaśniejszą ramką (wzmocnione na hoverze wiersza i przycisku), hover wiersza minimalnie mocniejszy, chip pozycji zastępczej jako pigułka (ramka + tło akcentu + pogrubienie).
+- **Testy (w tym samym commicie):** nowy scenariusz E7.contrast (3 asercje na stylach obliczonych: własne tło i jasny tekst przycisku, pigułka autopozycji po `_deltaAutoplace`).
+- Regresja lokalna: pełny `run-all.sh` PASS (13 harnessów node + kampania empiryczna SMOKE+E0–E7, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.23.0 — panel kalki: checkbox tylko tam, gdzie jest decyzja + czytelna legenda (M5c)
 
 - **Przyczyna:** wiersze „niewykonalne" miały wyszarzony checkbox (martwy element sugerujący możliwość zaznaczenia), a „naniesione" — aktywny, choć klikanie nic nie dawało. Próbki kolorów w legendzie duchów to był glif „■" w tekście — mikry i ledwo widoczny.

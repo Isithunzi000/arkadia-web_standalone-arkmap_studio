@@ -305,7 +305,13 @@
   .dp-row.off .vd-tf, .dp-row.off .vd-num { opacity:.45; }
   .dp-mini { font-size:9px; padding:0 5px; line-height:15px; }
   .dp-mini:disabled { opacity:.4; cursor:default; }
-  .dp-ovr { color:var(--accent); flex-basis:auto; padding-left:6px; }
+  /* M5d: mini-przyciski z wlasnym tlem — inaczej zanikaja na podswietlonym wierszu */
+  .dp-row .dp-mini { background:#1b2130; color:var(--text); border-color:#333c52; }
+  .dp-row:hover .dp-mini:not(:disabled) { background:#273046; border-color:#4a5570; color:#fff; }
+  .dp-row .dp-mini:not(:disabled):hover { background:#31405e; border-color:var(--accent); color:#fff; }
+  .dp-row:hover { background:#4a9eff2e; border-color:#3a4358; }
+  /* wynik autopozycji/recznej jako pigulka, nie golysz tekst */
+  .dp-ovr { color:var(--accent); flex-basis:auto; padding:0 6px; margin-left:6px; border:1px solid #4a9eff55; background:#4a9eff18; border-radius:8px; font-weight:600; }
   .dp-legend { font-size:9px; color:var(--dim); padding:1px 8px 3px; border-bottom:1px solid var(--border); }
   .dp-legend .dp-sw { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-2px; margin:0 3px 0 1px; border:1px solid rgba(255,255,255,0.25); }
   .dp-mark { display:inline-block; width:13px; text-align:center; font-size:11px; flex:none; }
@@ -12688,7 +12694,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.23.0';
+const APP_VERSION = 'v1.24.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
