@@ -12700,7 +12700,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.25.0';
+const APP_VERSION = 'v1.26.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -18314,7 +18314,7 @@ function classifyDelta(delta) {
         if (room.x === P.toX && room.y === P.toY && (room.z ?? 0) === P.toZ) { items.push(_deltaClsItem(op, 'done', 'już na mapie', roomJump(id))); break; }
         const occ = shRoomAt(sh.roomArea[id], P.toX, P.toY, P.toZ);
         if (occ && occ.id !== id) {
-          const _it = _deltaClsItem(op, 'hard', 'pole docelowe jest zajęte przez pokój #' + occ.id + ' — kolizja; Zastosuj nałoży pokoje na siebie (albo wybierz Autopozycję / Ręcznie)', roomJump(id));
+          const _it = _deltaClsItem(op, 'hard', 'pole docelowe (' + P.toX + ',' + P.toY + ',' + (P.toZ ?? 0) + ') jest zajęte przez pokój #' + occ.id + ' — kolizja; wybierz Autopozycję / Ręcznie albo odznacz op', roomJump(id));
           _it.coll = true;  // M3: kolizja pozycji
           items.push(_it);
         }
@@ -18608,6 +18608,10 @@ function applyDelta(delta, onlySeq, overrides) {
           const fx = room.x, fy = room.y, fz = room.z ?? 0;
           const tx = op.payload.toX, ty = op.payload.toY, tz = op.payload.toZ ?? fz;
           if (fx === tx && fy === ty && fz === tz) { skip('pokój już jest na tej pozycji'); break; }
+          // Guard zajetosci na zywo (symetria z ADD_ROOM): bez rozstrzygniecia kolizji
+          // (autopozycja / recznie) Zastosuj pomija op zamiast nakladac pokoje na siebie.
+          const occM = _deltaRoomAt(state.roomArea[room.id], tx, ty, tz);
+          if (occM && occM.id !== room.id) { skip('komórka docelowa zajęta'); break; }
           room.x = tx; room.y = ty; room.z = tz;
           commitMoveRoom(room, fx, fy, fz, tx, ty, tz);
           buildRoomsZ();
