@@ -2125,6 +2125,36 @@ scenario('E8.naming', async () => {
     'fixture: label op36 bez „tłumik", z „pusta custom line"');
 });
 
+// ═══ E8.remainder: „Zapisz resztę kalki (N)" (M7, v1.31.0) ═══
+scenario('E8.remainder', async () => {
+  await loadBase('dat');
+  const txt = await (await fetch('./fixture_demo.arkdelta')).text();
+  ex('const r = validateDeltaText(' + JSON.stringify(txt) + '); if (!r.ok) throw new Error("walidacja fixture_demo"); window.__e8md = r.delta;');
+  ex('openDeltaReview(window.__e8md)');
+  // przed apply: reszta = 36 - 1 done-wejsciowy (op31)
+  EQ('E8.remainder.initial', ev('_deltaRemainderOps().length').val, 35, 'przed apply: reszta = 35 (36 - 1 done-wejsciowy)');
+  EQ('E8.remainder.btn0', ev('(function(){ const b = document.getElementById("dp-remainder"); return b.textContent + "|" + b.style.display; })()').val,
+    '📤 Zapisz resztę kalki (35)…|', 'przycisk widoczny z liczba 35');
+  ex("document.getElementById('dp-apply').click()");
+  // po apply: reszta = 3 konflikty (28,29,33) + 4 niewykonalne (32,34,35,36)
+  EQ('E8.remainder.after', ev('_deltaRemainderOps().map(o => o.seq).join(",")').val,
+    '28,29,32,33,34,35,36', 'po apply: reszta = konflikty + niewykonalne (7 opow)');
+  EQ('E8.remainder.btn1', ev('document.getElementById("dp-remainder").textContent').val,
+    '📤 Zapisz resztę kalki (7)…', 'przycisk aktualizuje liczbe po apply');
+  // serializacja: oryginalne labelki + meta base kalki, checksumy przechodza walidacje
+  A('E8.remainder.roundtrip', ev('(function(){ const t = _deltaSerializeOps(_deltaRemainderOps(), _deltaReview.delta.meta.base);'
+    + ' const r = validateDeltaText(t);'
+    + ' if (!r.ok) return "ERR:" + (r.errors || []).join("; ");'
+    + ' const seqs = r.delta.ops.map(o => o.seq).join(",");'
+    + ' return (r.delta.ops.length === 7 && r.delta.meta.ops_count === 7 && seqs === "1,2,3,4,5,6,7"'
+    + '   && r.delta.ops.some(o => (o.label || "").indexOf("pustej custom line") >= 0)) ? "OK" : "ZLE:" + seqs; })()').val,
+    'OK', 'reszta: walidacja przechodzi, seq 1..7, oryginalne labelki, meta kalki');
+  // pusta reszta: przycisk chowa sie
+  ex('for (const it of _deltaReview.items) it.cls = "done"; _renderDeltaPanel();');
+  EQ('E8.remainder.hide', ev('document.getElementById("dp-remainder").style.display').val,
+    'none', 'pusta reszta: przycisk ukryty');
+});
+
 // ═══ E7: diff-wizualizacja kalki (M5) ═══
 scenario('E7.diff', async () => {
   await loadBase('dat');

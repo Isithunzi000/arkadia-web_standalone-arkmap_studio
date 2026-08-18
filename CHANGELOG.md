@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.31.0 — dwa przyciski zapisu: naniesione zmiany + reszta kalki (M7)
+
+- **Przyczyna:** „Zapisz zaktualizowana kalke" zapisywal SESJE (deltaLog = to, co naniesiono recznie i z panelu), a nie nienaniesiona reszte kalki — uzytkownik zapisywal plik myslac, ze ma w nim konflikty do pozniejszego rozstrzygniecia, a one znikaly (wykryte na eksportach z testow recznych).
+- **Fix:** rozszczepienie na dwa przyciski z jednoznacznymi nazwami. „Zapisz naniesione zmiany" = dotychczasowe saveDelta (sesja, tooltip wyjasnia). Nowy „Zapisz reszte kalki (N)" = opy kalki jeszcze NIE naniesione (konflikty, niewykonalne, odznaczone) z oryginalnymi payloadami/labelkami i oryginalnym meta.base kalki; override'y pozycji rozstrzygniete przez uzytkownika sa zachowane. Serializacja `_deltaSerializeOps` przenumerowuje seq do ciaglych 1..N (walidator odrzuca nieciagle) i liczy checksumy na nowo; plik przechodzi validateDeltaText. Przycisk pokazuje liczbe N na zywo i chowa sie, gdy reszta pusta. Opy „done" z wejscia (mapa miala to przed kalka) nie wchodza do reszty.
+- **Testy (w tym samym commicie):** nowy scenariusz E8.remainder (6 asercji: 35 przed apply, 7 po apply = 3 konflikty + 4 niewykonalne, liczba na przycisku, roundtrip serializacji przez validateDeltaText z seq 1..7 i oryginalnymi labelkami, ukrycie przy pustej reszcie). Watchdog zlapal prawdziwy bug projektowy: seq nieciagle w reszcie (walidator fail-closed) → przenumerowanie.
+- Regresja lokalna: pelny `run-all.sh` PASS (13 harnessow node + kampania empiryczna SMOKE+E0–E8, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.30.0 — naming: „pusta custom line" zamiast „tlumika", filtr „Zrobione"
 
 - **Przyczyna:** „tlumik"/„suppressor" to zargon aplikacji — w Mudletcie taki termin nie istnieje; mechanika to pusta custom line (0 punktow) w przeciwnym kierunku, ktora wycisza rysowanie domyslnej linii wyjscia. Uzytkownik czytal „tlumik" i nie wiedzial, co to jest. Filtr „Bez roboty" byl niejednoznaczny (brzmial jak „nic nie trzeba", a nie „efekt juz jest").
