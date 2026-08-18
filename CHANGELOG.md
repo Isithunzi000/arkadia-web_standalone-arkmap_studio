@@ -2,6 +2,18 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.17.0 — guard zajętości pola przy przenoszeniu pokoju (drag + strzałki)
+
+- **Przyczyna:** przenoszenie pokoju w edycji (drag myszką i strzałki) pozwalało po cichu położyć pokój na zajętym polu — jedyną informacją był ulotny toast po fakcie, a nałożenie zostawało na mapie.
+- **Fix:** nowy helper `_roomCollisionAt(x, y, z, excludeId)` (na `roomsZ` — z natury zawężone do bieżącego obszaru i poziomu) i wspólna polityka `_tryMoveRoomWithPolicy(room, toX, toY, opts)` zwracająca `'moved' | 'forced' | 'blocked' | 'noop'`. Obie ścieżki ruchu przepięte na politykę:
+  - **Drag:** drop na zajęte pole = **blokada** — pokój wraca na start, zero śladu (brak wpisu undo/deltaLog, crc bez zmian), panel pozycji wraca do współrzędnych źródłowych; toast z podpowiedzią „przytrzymaj Shift, aby wymusić". **Shift przy upuszczeniu = wymuszenie** (nałożenie dozwolone, toast informacyjny zostaje).
+  - **Strzałki:** blokada zawsze — Shift pozostaje krokiem ×5 (nie może być jednocześnie wymuszeniem); wymuszenie dostępne tylko myszką. Toast bez podpowiedzi o Shift.
+  - Wyrównanie warunku `z` w strzałkach (stara pętla nie sprawdzała poziomu) — **kosmetyka, zero zmiany zachowania**: `roomsZ` i tak zawiera wyłącznie pokoje z bieżącego `state.z`.
+- **Świadomie bez zmian:** kałki (.arkdelta) — panel oznacza kolizję MOVE jako konflikt przed naniesieniem, surowy apply to tryb force; poza zakresem tego kroku.
+- **Testy (nowy scenariusz w tym samym commicie):** E5.move-guard (20 asercji) — kolizja samokonstruowana (niezależna od zawartości fixture): kontrakt helpera (hit / excludeId / wolna komórka), noop bez śladu, moved+undo, blocked z zerowym śladem (undo/deltaLog/crc), forced+undo, semantyka strzałek (blocked + toast bez Shifta), crc końcowy = baza.
+- Regresja lokalna: pełny `run-all.sh` PASS (13 harnessów node + kampania empiryczna SMOKE+E0–E6, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.16.0 — fix O1: dialog usuwania pokoju — jedno źródło prawdy dla handlera confirm
 
 - **Przyczyna:** przyciski „Usuń pokój" obu dialogów (`dlg-delete-room`, `dlg-delete-room-refs`) miały dwa nakładające się wiringi: inicjalizacyjny (`deleteRoom(state.selected)`) i właściwy, ustawiany przy każdym otwarciu w `showDeleteRoomDialog(roomId)` (domknięcie na roomId). Dziś wygrywał właściwy (późniejszy zapis), ale inicjalizacyjny był latentną pułapką: jakakolwiek przyszła ścieżka otwierająca dialog bez rebinding spowodowałaby usunięcie aktualnie zaznaczonego pokoju zamiast tego z dialogu (utrata danych).

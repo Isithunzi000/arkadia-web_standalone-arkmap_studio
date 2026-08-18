@@ -1672,6 +1672,77 @@ scenario('E5.del-o1', async () => {
     'dialog zamkniety po potwierdzeniu');
 });
 
+scenario('E5.move-guard', async () => {
+  await loadBase('dat');
+  // Guard zajetosci pola przy przenoszeniu (drag + strzalki) — kolizja SAMOKONSTRUOWANA
+  // (nie zakladamy, ze fixture ma nalozone pokoje): dwa pokoje z roomsZ + wolna komorka.
+  const setup = JSON.parse(ev("JSON.stringify((function(){"
+    + " const rz = state.roomsZ;"
+    + " if (rz.length < 2) return null;"
+    + " const a = rz[0], b = rz[1];"
+    + " let fx = null, fy = null;"
+    + " outer: for (let x = a.x + 50; x < a.x + 400; x += 7) {"
+    + "   for (let y = a.y + 50; y < a.y + 400; y += 7) {"
+    + "     if (!_roomCollisionAt(x, y, a.z, -1)) { fx = x; fy = y; break outer; }"
+    + "   }"
+    + " }"
+    + " if (fx === null) return null;"
+    + " return { a: a.id, b: b.id, ax: a.x, ay: a.y, bx: b.x, by: b.y, z: a.z, fx, fy };"
+    + " })())").val);
+  A('E5.move-guard.setup', !!setup, 'dwa pokoje z biezacego poziomu + wolna komorka znalezione');
+  if (!setup) return;
+  const { a, b, ax, ay, bx, by, z, fx, fy } = setup;
+  // Helper _roomCollisionAt: kontrakt
+  EQ('E5.move-guard.hit', ev('(_roomCollisionAt(' + ax + ',' + ay + ',' + z + ',-1) || {}).id ?? null').val, a,
+    'helper: zajete pole zwraca pokoj A');
+  A('E5.move-guard.hit-excl', ev('(function(){ const c = _roomCollisionAt(' + ax + ',' + ay + ',' + z + ',' + a + '); return c === null || c.id !== ' + a + '; })()').val === true,
+    'helper: wykluczenie excludeId nigdy nie zwraca wylaczonego pokoju');
+  A('E5.move-guard.hit-free', ev('_roomCollisionAt(' + fx + ',' + fy + ',' + z + ',-1) === null').val === true,
+    'helper: wolna komorka zwraca null');
+  // noop: ruch na to samo pole = nic
+  const undo0 = ev('state.undoStack.length').val, log0 = ev('state.deltaLog.length').val;
+  const crc0 = ev('_computeBaseInfo().crc').val;
+  EQ('E5.move-guard.noop', ev('(function(){ const A = state.roomById[' + a + ']; return _tryMoveRoomWithPolicy(A, ' + ax + ', ' + ay + '); })()').val, 'noop',
+    'polityka: ruch na wlasne pole = noop');
+  // moved: ruch na wolne pole = moved + wpis undo; undo cofa
+  EQ('E5.move-guard.moved', ev('(function(){ const A = state.roomById[' + a + ']; return _tryMoveRoomWithPolicy(A, ' + fx + ', ' + fy + '); })()').val, 'moved',
+    'polityka: ruch na wolne pole = moved');
+  EQ('E5.move-guard.moved-pos', ev('JSON.stringify([state.roomById[' + a + '].x, state.roomById[' + a + '].y])').val, JSON.stringify([fx, fy]),
+    'pokoj A na wolnej komorce');
+  EQ('E5.move-guard.moved-undo', ev('state.undoStack.length').val, undo0 + 1, 'moved: wpis undo +1');
+  ex('undoAction()');
+  EQ('E5.move-guard.moved-undo-pos', ev('JSON.stringify([state.roomById[' + a + '].x, state.roomById[' + a + '].y])').val, JSON.stringify([ax, ay]),
+    'undo: A wrocilo na start');
+  // blocked: B na pole A bez force = ZERO mutacji (idempotentne)
+  const undo1 = ev('state.undoStack.length').val, log1 = ev('state.deltaLog.length').val;
+  const crc1 = ev('_computeBaseInfo().crc').val;
+  EQ('E5.move-guard.blocked', ev('(function(){ const B = state.roomById[' + b + ']; return _tryMoveRoomWithPolicy(B, ' + ax + ', ' + ay + '); })()').val, 'blocked',
+    'polityka: ruch na zajete pole bez force = blocked');
+  EQ('E5.move-guard.blocked-pos', ev('JSON.stringify([state.roomById[' + b + '].x, state.roomById[' + b + '].y])').val, JSON.stringify([bx, by]),
+    'blocked: pokoj B nie ruszyl sie');
+  A('E5.move-guard.blocked-noop', ev('state.undoStack.length').val === undo1 && ev('state.deltaLog.length').val === log1
+    && ev('_computeBaseInfo().crc').val === crc1,
+    'blocked: zero sladu (undo/deltaLog/crc bez zmian)');
+  A('E5.move-guard.blocked-toast', (ev("document.getElementById('toast').textContent").val || '').includes('Shift'),
+    'blocked: toast z podpowiedzia o Shift (sciezka dragu)');
+  // forced: B na pole A z force = przeniesiony + toast kolizji; undo cofa
+  EQ('E5.move-guard.forced', ev('(function(){ const B = state.roomById[' + b + ']; return _tryMoveRoomWithPolicy(B, ' + ax + ', ' + ay + ', { force: true }); })()').val, 'forced',
+    'polityka: ruch na zajete pole z force = forced');
+  EQ('E5.move-guard.forced-pos', ev('JSON.stringify([state.roomById[' + b + '].x, state.roomById[' + b + '].y])').val, JSON.stringify([ax, ay]),
+    'forced: pokoj B nalozony na pole A');
+  A('E5.move-guard.forced-toast', (ev("document.getElementById('toast').textContent").val || '').includes('koliduje'),
+    'forced: toast informuje o kolizji');
+  EQ('E5.move-guard.forced-undo', ev('state.undoStack.length').val, undo1 + 1, 'forced: wpis undo +1');
+  ex('undoAction()');
+  // strzalki: shiftHint false — blocked i toast BEZ podpowiedzi o Shift
+  EQ('E5.move-guard.arrows', ev('(function(){ const B = state.roomById[' + b + ']; return _tryMoveRoomWithPolicy(B, ' + ax + ', ' + ay + ', { shiftHint: false }); })()').val, 'blocked',
+    'polityka strzalek: zawsze blocked (Shift = krok x5, nie wymuszenie)');
+  A('E5.move-guard.arrows-toast', (ev("document.getElementById('toast').textContent").val || '').indexOf('Shift') === -1,
+    'strzalki: toast bez podpowiedzi o Shift');
+  // stan koncowy = baza (wszystkie ruchy cofniete, blocked bez sladu)
+  EQ('E5.move-guard.final', ev('_computeBaseInfo().crc').val, crc0, 'po wszystkim: crc z powrotem do bazy');
+});
+
 scenario('E5.ghost-layer', async () => {
   // stan do sanity-screenshota: panel z kolizjami + duchy + chipy autopozycji
   await e3Setup();
