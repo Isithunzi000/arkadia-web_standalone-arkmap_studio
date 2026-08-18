@@ -2530,7 +2530,8 @@
       <div class="vd-body" id="dp-body"></div>
       <div class="vd-ftr">
         <button class="vd-btn" id="dp-apply">✓ Zastosuj zaznaczone</button>
-        <button class="vd-btn" id="dp-rebase" style="display:none" title="Zapisuje zmiany naniesione w tej sesji (nie nienaniesione opy kalki)">💾 Zapisz zaktualizowaną kalkę&hellip;</button>
+        <button class="vd-btn" id="dp-rebase" style="display:none" title="Zapisuje zmiany naniesione w tej sesji (nie nienaniesione opy kalki)">💾 Zapisz naniesione zmiany&hellip;</button>
+        <button class="vd-btn" id="dp-remainder" style="display:none" title="Zapisuje opy kalki, których nie naniesiono (konflikty, niewykonalne, odznaczone) — z oryginalnymi payloadami">📤 Zapisz resztę kalki&hellip;</button>
         <button class="vd-btn close" id="dp-close2">Zamknij</button>
       </div>
       <div id="dp-resize" title="Przeciągnij, aby zmienić rozmiar panelu"></div>
@@ -12715,7 +12716,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.30.0';
+const APP_VERSION = 'v1.31.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -17770,6 +17771,45 @@ function saveDelta() {
   toast('✓ Zapisano kalkę (' + state.deltaLog.length + ' ' + (state.deltaLog.length === 1 ? 'zmiana' : 'zmian') + ')');
 }
 
+// Serializacja kalki z zadanych opow (meta + checksumy liczone na nowo).
+// Opy sa przenumerowywane do ciaglych seq 1..N (kopie — oryginaly bez zmian).
+function _deltaSerializeOps(ops, base) {
+  ops = ops.map((o, i) => Object.assign({}, o, { seq: i + 1 }));
+  const meta = {
+    format: ARKDELTA_FORMAT,
+    format_version: ARKDELTA_FORMAT_VERSION,
+    ops_count: ops.length,
+    base: base || {},
+    app_version: APP_VERSION,
+  };
+  const checksums = {
+    file: crc32str(stableStringify({ meta, ops })),
+    ops: ops.map(op => crc32str(stableStringify(op))),
+  };
+  return stableStringify({ meta, ops, checksums });
+}
+
+// Opy kalki jeszcze NIE naniesione w tej sesji: konflikty, niewykonalne,
+// odznaczone — z oryginalnymi payloadami i labelkami (z naniesionymi
+// override'ami pozycji, jesli uzytkownik rozstrzygnal kolizje). Opy „done"
+// z wejscia (mapa miala to przed kalka) to nie reszta — nie ma czego nanosic.
+function _deltaRemainderOps() {
+  const R = _deltaReview;
+  if (!R) return [];
+  const rest = new Set(R.items
+    .filter(it => !_deltaAppliedSeqs.has(it.seq) && (it.cls === 'ok' || it.cls === 'hard' || it.cls === 'impossible'))
+    .map(it => it.seq));
+  return R.delta.ops.filter(o => rest.has(o.seq));
+}
+
+function saveDeltaRemainder() {
+  const ops = _deltaRemainderOps();
+  if (!ops.length) { toast('Brak reszty — cała kałka naniesiona.', true); return; }
+  const base = (_deltaReview.delta.meta && _deltaReview.delta.meta.base) || state.baseInfo || {};
+  download(_arkdeltaSuggestedName().replace(/\.arkdelta$/, '-reszta.arkdelta'), _deltaSerializeOps(ops, base), 'application/json');
+  toast('✓ Zapisano resztę kalki (' + ops.length + ' ' + (ops.length === 1 ? 'op' : 'opów') + ')');
+}
+
 // ── Walidacja pliku (fail-closed, strict refuse z diagnostyką) ───────────────
 const _DELTA_SCHEMA = {
   ADD_ROOM:             { target: ['roomId', 'areaId'], payload: ['room'] },
@@ -19605,6 +19645,13 @@ function _renderDeltaPanel() {
   const applyBtn = document.getElementById('dp-apply');
   applyBtn.textContent = '✓ Zastosuj zaznaczone (' + checked + ')';
   applyBtn.disabled = checked === 0;
+  // M7: przycisk reszty kalki — widoczny tylko, gdy sa nienaniesione opy
+  const remBtn = document.getElementById('dp-remainder');
+  if (remBtn) {
+    const remN = _deltaRemainderOps().length;
+    remBtn.style.display = remN > 0 ? '' : 'none';
+    remBtn.textContent = '📤 Zapisz resztę kalki (' + remN + ')…';
+  }
 }
 
 function _deltaApplyReviewed() {
@@ -19684,6 +19731,7 @@ btnSaveArkdelta.addEventListener('click', saveDelta);
     toast('Wczytywanie kalki anulowane');
   });
   document.getElementById('dp-rebase').addEventListener('click', saveDelta);
+  document.getElementById('dp-remainder').addEventListener('click', saveDeltaRemainder);
   const closePanel = () => { panel.classList.remove('visible'); _deltaReview = null; _deltaGhostReset(); _deltaAppliedSeqs = new Set(); _deltaSkippedSeqs = new Set(); draw(); };
   document.getElementById('dp-close').addEventListener('click', closePanel);
   document.getElementById('dp-close2').addEventListener('click', closePanel);
