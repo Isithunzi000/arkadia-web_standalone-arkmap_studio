@@ -7890,16 +7890,14 @@ cv.addEventListener('mouseup', e => {
       const fromX = state.editSnapshot?.x ?? room.x;
       const fromY = state.editSnapshot?.y ?? room.y;
       const fromZ = room.z;
-      if (toX !== fromX || toY !== fromY) {
-        room.x = toX; room.y = toY;
-        commitMoveRoom(room, fromX, fromY, fromZ, toX, toY, fromZ);
-        // Collision check (Pass 54)
-        for (const r of state.roomsZ) {
-          if (r.id !== room.id && r.x === toX && r.y === toY && r.z === fromZ) {
-            toast(`⚠ Pokój #${room.id} koliduje z #${r.id} na pozycji (${toX}, ${toY}, ${fromZ})`);
-            break;
-          }
-        }
+      // Guard zajętości pola: drop na zajęte pole blokowany, Shift wymusza.
+      // Blocked = pokój nie ruszył się (zero mutacji), panel wraca do pozycji źródłowej.
+      const moveRes = _tryMoveRoomWithPolicy(room, toX, toY, { force: !!e.shiftKey, fromX, fromY, fromZ });
+      if (moveRes === 'blocked') {
+        const rpx = document.getElementById('rp-x');
+        const rpy = document.getElementById('rp-y');
+        if (rpx) rpx.value = room.x;
+        if (rpy) rpy.value = room.y;
       }
     }
     state.editDraggingRoom = false;
@@ -11192,15 +11190,9 @@ document.addEventListener('keydown', e => {
       if (e.key === 'ArrowRight') toX += delta;
       if (e.key === 'ArrowUp')    toY += delta;
       if (e.key === 'ArrowDown')  toY -= delta;
-      room.x = toX; room.y = toY;
-      commitMoveRoom(room, fromX, fromY, fromZ, toX, toY, fromZ);
-      // Collision check
-      for (const r of state.roomsZ) {
-        if (r.id !== room.id && r.x === toX && r.y === toY) {
-          toast(`⚠ Pokój #${room.id} koliduje z #${r.id} na pozycji (${toX}, ${toY})`);
-          break;
-        }
-      }
+      // Guard zajętości pola: strzałki zawsze blokują (Shift = krok x5, nie wymuszenie;
+      // wymuszenie tylko myszką). Blocked = zero mutacji.
+      _tryMoveRoomWithPolicy(room, toX, toY, { shiftHint: false });
       draw();
       return;
     }
@@ -12681,7 +12673,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.16.0';
+const APP_VERSION = 'v1.17.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -16172,6 +16164,37 @@ function commitDeleteExit(room, dir) {
   state.redoStack = [];
   updateUndoRedoUI();
   _syncEditSnapshot();
+}
+
+// ── _roomCollisionAt(x, y, z, excludeId) — pokój zajmujący pole (guard ruchu) ─
+// roomsZ jest juz zawężone do bieżącego obszaru i poziomu (buildRoomsZ);
+// warunek r.z === z zostaje defensywnie, gdyby semantyka roomsZ się zmieniła.
+function _roomCollisionAt(x, y, z, excludeId) {
+  for (const r of state.roomsZ) {
+    if (r.id !== excludeId && r.x === x && r.y === y && r.z === z) return r;
+  }
+  return null;
+}
+
+// ── _tryMoveRoomWithPolicy(room, toX, toY, opts) — ruch z guardem zajętości ──
+// Zwraca 'moved' | 'forced' | 'blocked' | 'noop'.
+// 'blocked' = ZERO mutacji (brak undo, brak deltaLog, stan bez zmian) — idempotentne.
+// force=true (drag z Shift) dopuszcza nałożenie; shiftHint=false (strzałki) —
+// toast bez podpowiedzi o Shift (tam Shift = krok x5, nie wymuszenie).
+function _tryMoveRoomWithPolicy(room, toX, toY, opts) {
+  if (!room) return 'noop';
+  const o = opts || {};
+  const fromX = o.fromX ?? room.x, fromY = o.fromY ?? room.y, fromZ = o.fromZ ?? room.z;
+  if (toX === fromX && toY === fromY) return 'noop';
+  const hit = _roomCollisionAt(toX, toY, fromZ, room.id);
+  if (hit && !o.force) {
+    toast(`⚠ Pole (${toX}, ${toY}) zajęte przez pokój #${hit.id}` + (o.shiftHint !== false ? ' — przytrzymaj Shift, aby wymusić' : ''));
+    return 'blocked';
+  }
+  room.x = toX; room.y = toY;
+  commitMoveRoom(room, fromX, fromY, fromZ, toX, toY, fromZ);
+  if (hit) toast(`⚠ Pokój #${room.id} koliduje z #${hit.id} na pozycji (${toX}, ${toY}, ${fromZ})`);
+  return hit ? 'forced' : 'moved';
 }
 
 // ── commitMoveRoom(room, fromX, fromY, fromZ, toX, toY, toZ) — drag z undo ───
