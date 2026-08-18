@@ -20,7 +20,7 @@ permissions:
 jobs:
   regression:
     runs-on: ubuntu-latest
-    timeout-minutes: 25   # harnessy node + kampania empiryczna w prawdziwej przegladarce
+    timeout-minutes: 40   # zapas na miss cache playwright i wolniejszy runner; krok regresji ma wlasny timeout 1380 s
     steps:
       - name: Checkout repo (pełna historia — testy różnicowe robią git show)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -36,6 +36,13 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240 bash tests/fetch-fixture.sh
+
+      - name: Cache Chromium (Playwright) — flake pobierania nie zabija runu
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-ms-playwright-1.54.2
+          restore-keys: ${{ runner.os }}-ms-playwright-
 
       - name: Chromium headless (dla tests/empirical.sh, przez Playwright)
         run: |
