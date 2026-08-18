@@ -307,6 +307,10 @@
   .dp-mini:disabled { opacity:.4; cursor:default; }
   .dp-ovr { color:var(--accent); flex-basis:auto; padding-left:6px; }
   .dp-legend { font-size:9px; color:var(--dim); padding:1px 8px 3px; border-bottom:1px solid var(--border); }
+  .dp-legend .dp-sw { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-2px; margin:0 3px 0 1px; border:1px solid rgba(255,255,255,0.25); }
+  .dp-mark { display:inline-block; width:13px; text-align:center; font-size:11px; flex:none; }
+  .dp-mark.impossible { color:#ff7b72; }
+  .dp-mark.done { color:var(--ok); }
   .dp-expl { font-size:9px; color:var(--dim); opacity:.75; padding:2px 8px 4px; border-bottom:1px solid var(--border); line-height:1.35; }
   #dp-apply { color:var(--ok); border-color:#2a5a3a; }
   #dp-apply:disabled { opacity:.4; cursor:default; color:var(--dim); border-color:var(--border); }
@@ -2496,7 +2500,7 @@
         <button class="vd-btn dp-filter" data-f="impossible">Niewykonalne</button>
       </div>
       <div class="dp-expl">„Zastosuj" nanosi tylko zaznaczone. Konflikt = mapa zmieniła się od zapisu kalki — notatka przy opie mówi, co się stanie (nadpisanie wersją z kalki albo pominięcie).</div>
-      <div class="dp-legend">Duchy: <span style="color:#4aff8a">■</span> wolne · <span style="color:#f0883e">■</span> kolizja/zmiana · <span style="color:#4a9eff">■</span> pozycja zastępcza · <span style="color:#ff7b72">■</span> usunięcie</div>
+      <div class="dp-legend">Duchy: <span class="dp-sw" style="background:#4aff8a"></span> wolne · <span class="dp-sw" style="background:#f0883e"></span> kolizja/zmiana · <span class="dp-sw" style="background:#4a9eff"></span> pozycja zastępcza · <span class="dp-sw" style="background:#ff7b72"></span> usunięcie</div>
       <div class="vd-body" id="dp-body"></div>
       <div class="vd-ftr">
         <button class="vd-btn" id="dp-apply">✓ Zastosuj zaznaczone</button>
@@ -12684,7 +12688,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.22.0';
+const APP_VERSION = 'v1.23.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -19344,14 +19348,23 @@ function _renderDeltaPanel() {
   for (const it of view) {
     const row = document.createElement('div');
     row.className = 'vd-row dp-row' + (it.checked ? '' : ' off');
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.className = 'dp-check';
-    cb.checked = it.checked;
-    cb.disabled = it.cls === 'impossible';
-    cb.addEventListener('click', e => e.stopPropagation());
-    cb.addEventListener('change', () => { it.checked = cb.checked; _renderDeltaPanel(); });
-    row.appendChild(cb);
+    // Checkbox tylko dla klas DECYZYJNYCH (ok/hard). impossible/done: nic do
+    // zaznaczania — statyczny marker zamiast martwego checkboxa (#6/#7).
+    if (it.cls === 'impossible' || it.cls === 'done') {
+      const mark = document.createElement('span');
+      mark.className = 'dp-mark ' + it.cls;
+      mark.textContent = it.cls === 'impossible' ? '⊘' : '✓';
+      mark.title = it.cls === 'impossible' ? 'Niewykonalne — nic do zaznaczania' : 'Bez roboty — efekt już jest na mapie';
+      row.appendChild(mark);
+    } else {
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'dp-check';
+      cb.checked = it.checked;
+      cb.addEventListener('click', e => e.stopPropagation());
+      cb.addEventListener('change', () => { it.checked = cb.checked; _renderDeltaPanel(); });
+      row.appendChild(cb);
+    }
     const num = document.createElement('span');
     num.className = 'vd-num';
     num.textContent = it.seq;
