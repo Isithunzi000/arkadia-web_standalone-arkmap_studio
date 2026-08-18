@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.16.0 — fix O1: dialog usuwania pokoju — jedno źródło prawdy dla handlera confirm
+
+- **Przyczyna:** przyciski „Usuń pokój" obu dialogów (`dlg-delete-room`, `dlg-delete-room-refs`) miały dwa nakładające się wiringi: inicjalizacyjny (`deleteRoom(state.selected)`) i właściwy, ustawiany przy każdym otwarciu w `showDeleteRoomDialog(roomId)` (domknięcie na roomId). Dziś wygrywał właściwy (późniejszy zapis), ale inicjalizacyjny był latentną pułapką: jakakolwiek przyszła ścieżka otwierająca dialog bez rebinding spowodowałaby usunięcie aktualnie zaznaczonego pokoju zamiast tego z dialogu (utrata danych).
+- **Fix:** usunięty wiring inicjalizacyjny obu dialogów; jedynym źródłem handlera confirm jest `showDeleteRoomDialog` (domknięcie na roomId). Zachowanie runtime bez zmian — fix strukturalny + watchdog.
+- **Testy (nowy scenariusz w tym samym commicie):** E5.del-o1 (7 asercji) — otwarcie dialogu dla pokoju A, zmiana zaznaczenia na B, klik „Usuń pokój" → usuwany jest A, B nietknięty, deltaLog +1 DELETE_ROOM, dialog zamknięty.
+- Regresja lokalna: pełny `run-all.sh` PASS (13 harnessów node + kampania empiryczna SMOKE+E0–E6, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.15.0 — fix F1: klasyfikator z cieniem stanu (symulacja sekwencji opów w classifyDelta)
 
 - **Przyczyna:** `classifyDelta` oceniał każdy op wyłącznie wobec stanu sprzed kalki. Opy zależne od wcześniejszych opów tej samej kalki (sekwencje: add→edit→delete, sid-y z ADD_ROOM/ADD_AREA/ADD_LABEL) były degradowane (hard/impossible) lub klasyfikowane niespójnie z realnym wykonaniem; panelowy re-apply rozbiegał stan (crc rósł z każdym apply).
