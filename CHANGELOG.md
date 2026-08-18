@@ -2,6 +2,19 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.21.0 — diff-wizualizacja kalki: edycje i wyjścia wreszcie widać (M5)
+
+- **Przyczyna:** duchy EDIT_ROOM/EDIT_EXIT to było gołe podświetlenie kwadratu pokoju — zero informacji, CO się zmienia. Duchy wyjść nie rysowały się wcale, gdy drugi koniec był pokojem kalki w nowym obszarze (sid bez rozwiązania → brak geometrii), a gdy się rysowały, były cienką przerywaną linią bez kierunku — nierozróżnialną od prawdziwego wyjścia. Klik w wiersz „Dodanie obszaru" nie robił nic.
+- **Fix:**
+  - `_deltaRoomDiff(before, after, resolve)` — czytelna lista zmian (nazwa/env/symbol/waga/ukrycie/pozycja, wyjścia ±/zamiana, wyjścia specjalne, custom lines, drzwi, zamki, wagi wyjść, user_data); sid-y celów tłumaczone na numeryczne id z klasyfikacji.
+  - Wiersz panelu: linia diffu pod etykietą opu edycji — widać zmianę bez włączania ducha.
+  - Duch edycji: podświetlenie + etykieta z diffem przy pokoju (max 3 linie + licznik).
+  - Duch wyjścia: grubsza linia, grot strzałki na końcu, podpis kierunku (`+n` / `−n`) w połowie. Fallback: cel w nierozwiązywalnym obszarze kalki → stub-strzałka w kierunku wyjścia na znanym końcu; źródło nierozwiązywalne → podświetlenie celu.
+  - ok-ADD_AREA: klik w wiersz pokazuje toast z nazwą i liczbą pokoi w kalce (obszar powstaje dopiero po Zastosuj; done-ADD_AREA jak dawniej skacze do obszaru).
+- **Testy (w tym samym commicie):** nowy scenariusz E7.diff (9 asercji: diff opów EDIT_ROOM/EDIT_EXIT z demo-kalki, linie diffu w panelu, duch hl+diff, pełny duch wyjścia z kierunkiem, geometria dla celu z kalki, stub dla nierozwiązywalnego obszaru, areaInfo + toast dla ADD_AREA).
+- Regresja lokalna: pełny `run-all.sh` PASS (13 harnessów node + kampania empiryczna SMOKE+E0–E7, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.20.0 — fix buga #12: powtórne „Zastosuj" z panelu recenzji zalewało stos undo
 
 - **Przyczyna (3 silniki, potwierdzone empirycznie na fixture + demo-kalce 36-op):** po „Zastosuj" panel re-klasyfikował opy z cienia sekwencyjnego, który maskuje stan done dla opów nadpisujących się wzajemnie w obrębie kalki — 13 opów wracało jako zaznaczone, a 6 z nich nanosiło się przy każdym kolejnym kliku (+6 wpisów undo na klik, aż do capa 50, wypychając prawdziwą historię edycji): (1) opy CL/etykiet nadpisywane przez późniejsze opy tej samej kalki (cień odtwarza je od zera — wcześniejsze wiecznie „ok"), w tym ADD_LABEL dokładający duplikat etykiety przy każdym replayu; (2) para ADD_AREA+DELETE_AREA tego samego obszaru oscylowała (co klik tworzyła i kasowała obszar); (3) twarde guardy (zajęta komórka/kierunek) zostawały zaznaczone wiecznie (skip bez szkody).
