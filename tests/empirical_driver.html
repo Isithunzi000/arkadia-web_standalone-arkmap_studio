@@ -2019,6 +2019,32 @@ scenario('E7.diff', async () => {
     'klik w wiersz ADD_AREA: toast informacyjny');
 });
 
+scenario('E7.texts', async () => {
+  // M5b: notatki mowia po ludzku, co sie stanie; done rozroznia zrodlo.
+  await loadBase('dat');
+  const txt = await (await fetch('./fixture_demo.arkdelta')).text();
+  ex('const r = validateDeltaText(' + JSON.stringify(txt) + '); if (!r.ok) throw new Error("walidacja fixture_demo"); window.__e7tdelta = r.delta;');
+  ex('openDeltaReview(window.__e7tdelta)');
+  const note = i => ev('_deltaReview.items[' + i + '].note').val || '';
+  A('E7.texts.coll', note(27).indexOf('kolizja') >= 0 && note(27).indexOf('Autopozycję') >= 0,
+    'op28 ADD_ROOM hard: notatka z kolizja wskazuje Autopozycje/Odznacz [=' + note(27) + ']');
+  A('E7.texts.guard', note(32).indexOf('pominie ten op') >= 0,
+    'op33 ADD_EXIT hard: notatka mowi, ze Zastosuj pominie op [=' + note(32) + ']');
+  A('E7.texts.edit-hard', note(29).indexOf('nadpisze go wersją z kalki') >= 0,
+    'op30 EDIT_ROOM hard: notatka mowi o nadpisaniu wersja z kalki [=' + note(29) + ']');
+  EQ('E7.texts.done-badge', ev('(function(){ const r = document.querySelectorAll("#dp-body .dp-row")[30];'
+    + ' const b = r && r.querySelector(".dp-badge"); return b ? b.textContent : null; })()').val,
+    'już na mapie', 'op31 done: badge "już na mapie" (mapa miala to przed kalka)');
+  EQ('E7.texts.filter-label', ev('(function(){ const b = document.querySelector(".dp-filter[data-f=done]");'
+    + ' return b ? b.textContent.replace(/\\s*\\(\\d+\\)\\s*$/, "") : null; })()').val,
+    'Bez roboty', 'filtr done przemianowany na "Bez roboty"');
+  A('E7.texts.expl', (ev('(function(){ const d = document.querySelector(".dp-expl"); return d ? d.textContent : ""; })()').val || '').indexOf('Konflikt = mapa') >= 0,
+    'explainer pod filtrami wyjasnia semantyke Zastosuj/konfliktow');
+  ex("document.getElementById('dp-apply').click()");
+  EQ('E7.texts.session-badge', ev('[...document.querySelectorAll("#dp-body .dp-badge")].filter(b => b.textContent === "naniesione ✓").length').val,
+    29, 'po apply: 29 opow z badgem "naniesione ✓" (rozroznienie zrodla done)');
+});
+
 // ═══ Runner ═══
 function appReady() {
   return new Promise(res => {

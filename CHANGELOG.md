@@ -2,6 +2,19 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.22.0 — teksty panelu kalki po ludzku: co się stanie, gdy zaznaczę i zastosuję (M5b)
+
+- **Przyczyna:** notatki klasyfikacji były pisane językiem silnika („pokój zmieniony upstream — naniosę wersję z kalki", „guard odmówi"), a klasa „naniesione" zlewała dwa różne stany: mapa miała to przed kalką vs panel przed chwilą naniösł — użytkownik nie wiedział, co jest juz załatwione i co zrobi „Zastosuj".
+- **Fix:**
+  - Wszystkie notatki konfliktów mówią wprost o skutku: „Zastosuj nadpisze go wersją z kalki", „Zastosuj pominie ten op (mapa bez zmian)", „Zastosuj nałoży pokoje na siebie (albo wybierz Autopozycję / Ręcznie)", „Zastosuj usunie go mimo to" itd.
+  - „już naniesione" → „już na mapie" (w tym wariantach: „to samo pole i nazwa → pokój #N", „zmieniane pola zgodne", „obszar/etykieta już jest na mapie").
+  - Badge done rozróżnia źródło: „już na mapie" (było przed kalką) vs „naniesione ✓" (panel naniósł w tej sesji — flaga `it.session` z warstwy `_deltaAppliedSeqs`).
+  - Filtr „Naniesione" → „Bez roboty" (grupuje oba źródła done).
+  - Explainer pod filtrami: „Zastosuj" nanosi tylko zaznaczone; konflikt = mapa zmieniła się od zapisu kalki, notatka mówi co się stanie.
+- **Testy (w tym samym commicie):** nowy scenariusz E7.texts (7 asercji: treści notatek konfliktów, badge „już na mapie", przemianowany filtr, explainer, 29× badge „naniesione ✓" po apply). Flip konstrukcyjny w tests/delta.js: asercja ADD_EXIT hard trzymała się starego tekstu „guard" → nowy „pominie ten op" (wykryte przez harness — system zadziałał).
+- Regresja lokalna: pełny `run-all.sh` PASS (13 harnessów node + kampania empiryczna SMOKE+E0–E7, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.21.0 — diff-wizualizacja kalki: edycje i wyjścia wreszcie widać (M5)
 
 - **Przyczyna:** duchy EDIT_ROOM/EDIT_EXIT to było gołe podświetlenie kwadratu pokoju — zero informacji, CO się zmienia. Duchy wyjść nie rysowały się wcale, gdy drugi koniec był pokojem kalki w nowym obszarze (sid bez rozwiązania → brak geometrii), a gdy się rysowały, były cienką przerywaną linią bez kierunku — nierozróżnialną od prawdziwego wyjścia. Klik w wiersz „Dodanie obszaru" nie robił nic.
