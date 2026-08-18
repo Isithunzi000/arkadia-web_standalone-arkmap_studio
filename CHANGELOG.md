@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.30.0 — naming: „pusta custom line" zamiast „tlumika", filtr „Zrobione"
+
+- **Przyczyna:** „tlumik"/„suppressor" to zargon aplikacji — w Mudletcie taki termin nie istnieje; mechanika to pusta custom line (0 punktow) w przeciwnym kierunku, ktora wycisza rysowanie domyslnej linii wyjscia. Uzytkownik czytal „tlumik" i nie wiedzial, co to jest. Filtr „Bez roboty" byl niejednoznaczny (brzmial jak „nic nie trzeba", a nie „efekt juz jest").
+- **Fix:** user-facing „tlumik"/„suppressor" → „pusta custom line" (notatka konfliktu ADD_SUPPRESSOR + statyczne placeholdery dialogow walidatora; dynamiczne tresci i etykiety warstw mowily juz „puste custom lines"/„podwojne linie"). Filtr done: „Bez roboty" → „Zrobione" (+ tooltip markera ✓). Tooltip „Zapisz zaktualizowana kalke": „Zapisuje zmiany naniesione w tej sesji (nie nienaniesione opy kalki)". Fixture tests/fixture_demo.arkdelta: label op36 bez „tlumika" (checksumy przeliczone funkcjami aplikacji). Nazwy wewnetrzne (funkcje, typy opow, klasy CSS) bez zmian — to identyfikatory, nie UI.
+- **Testy (w tym samym commicie):** nowy scenariusz E8.naming (4 asercje: ADD_SUPPRESSOR na zajetym kierunku = hard z notatka o pustej custom line, tooltip dp-rebase, label op36 w fixture). E7.texts.filter-label: „Zrobione".
+- Regresja lokalna: pelny `run-all.sh` PASS (13 harnessow node + kampania empiryczna SMOKE+E0–E8, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.29.0 — „Pokaz" przy opach zrobionych: podswietlenie realnego obiektu (M6d)
 
 - **Przyczyna:** op naniesiony (done) mial dalej przycisk „Efekt", ktory pokazywal DUCHA — podglad tego, co kalka chciala zrobic. Po naniesieniu to bez sensu: uzytkownik chce zobaczyc realny obiekt na mapie, nie hipotetyczny efekt.

@@ -2105,6 +2105,26 @@ scenario('E8.realshow', async () => {
   EQ('E8.realshow.nogeom', ev('_deltaRealHl.size').val, sz0, 'brak geometrii: bez podswietlenia');
 });
 
+// ═══ E8.naming: „pusta custom line" zamiast „tłumika" + tooltip dp-rebase (v1.30.0) ═══
+scenario('E8.naming', async () => {
+  await loadBase('dat');
+  // ADD_SUPPRESSOR na kierunku z istniejaca custom line => hard z nowa notatka
+  const d = _e4Craft([
+    { type: 'ADD_CL', target: { roomId: 12, dir: 'n' }, payload: { cl: { points: [[0.5, 0.5]], color: [255, 0, 0] } } },
+    { type: 'ADD_SUPPRESSOR', target: { roomId: 12, dir: 'n' }, payload: {} },
+  ]);
+  ex('const r = validateDeltaText(' + JSON.stringify(d) + '); if (!r.ok) throw new Error("walidacja craft: " + r.error); window.__e8nd = r.delta;');
+  ex('openDeltaReview(window.__e8nd)');
+  A('E8.naming.supp-cls', ev('_deltaReview.items[1].cls').val === 'hard', 'ADD_SUPPRESSOR na zajetym kierunku = hard');
+  A('E8.naming.supp-note', (ev('_deltaReview.items[1].note').val || '').indexOf('pustą custom line') >= 0,
+    'notatka hard mowi o pustej custom line (nie „tłumik") [=' + ev('_deltaReview.items[1].note').val + ']');
+  A('E8.naming.rebase-tip', (ev('document.getElementById("dp-rebase").title').val || '').indexOf('nie nienaniesione opy kalki') >= 0,
+    'dp-rebase: tooltip wyjasnia, ze zapisuje zmiany sesji (nie reszte kalki)');
+  const txt = await (await fetch('./fixture_demo.arkdelta')).text();
+  A('E8.naming.fixture-label', txt.indexOf('tłumik') < 0 && txt.indexOf('tlumik') < 0 && txt.indexOf('pustej custom line') >= 0,
+    'fixture: label op36 bez „tłumik", z „pusta custom line"');
+});
+
 // ═══ E7: diff-wizualizacja kalki (M5) ═══
 scenario('E7.diff', async () => {
   await loadBase('dat');
@@ -2164,7 +2184,7 @@ scenario('E7.texts', async () => {
     'już na mapie', 'op31 done: badge "już na mapie" (mapa miala to przed kalka)');
   EQ('E7.texts.filter-label', ev('(function(){ const b = document.querySelector(".dp-filter[data-f=done]");'
     + ' return b ? b.textContent.replace(/\\s*\\(\\d+\\)\\s*$/, "") : null; })()').val,
-    'Bez roboty', 'filtr done przemianowany na "Bez roboty"');
+    'Zrobione', 'filtr done przemianowany na "Zrobione" (v1.30.0)');
   A('E7.texts.expl', (ev('(function(){ const d = document.querySelector(".dp-expl"); return d ? d.textContent : ""; })()').val || '').indexOf('Konflikt = mapa') >= 0,
     'explainer pod filtrami wyjasnia semantyke Zastosuj/konfliktow');
   ex("document.getElementById('dp-apply').click()");

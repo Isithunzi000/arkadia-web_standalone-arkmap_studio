@@ -1,6 +1,6 @@
 {
   "checksums": {
-    "file": "4915e540",
+    "file": "e274951c",
     "ops": [
       "aa190da8",
       "60b121da",
@@ -37,7 +37,7 @@
       "1603e7d5",
       "9d28068d",
       "f58c617e",
-      "8371a7ba"
+      "80fc0727"
     ]
   },
   "meta": {
@@ -780,7 +780,7 @@
       "type": "EDIT_CL"
     },
     {
-      "label": "DEMO: usuniecie nieistniejacego tlumika -> impossible",
+      "label": "DEMO: usuniecie nieistniejacej pustej custom line -> impossible",
       "payload": {
         "cl": {
           "color": [255, 0, 0],

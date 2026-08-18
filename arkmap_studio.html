@@ -2517,7 +2517,7 @@
         <button class="vd-btn dp-filter" data-f="all">Wszystkie</button>
         <button class="vd-btn dp-filter" data-f="ok">Do naniesienia</button>
         <button class="vd-btn dp-filter" data-f="hard">Konflikty</button>
-        <button class="vd-btn dp-filter" data-f="done">Bez roboty</button>
+        <button class="vd-btn dp-filter" data-f="done">Zrobione</button>
         <button class="vd-btn dp-filter" data-f="impossible">Niewykonalne</button>
       </div>
       <div class="dp-expl">„Zastosuj" nanosi tylko zaznaczone. Konflikt = mapa zmieniła się od zapisu kalki — notatka przy opie mówi, co się stanie (nadpisanie wersją z kalki albo pominięcie).</div>
@@ -2530,7 +2530,7 @@
       <div class="vd-body" id="dp-body"></div>
       <div class="vd-ftr">
         <button class="vd-btn" id="dp-apply">✓ Zastosuj zaznaczone</button>
-        <button class="vd-btn" id="dp-rebase" style="display:none">💾 Zapisz zaktualizowaną kalkę&hellip;</button>
+        <button class="vd-btn" id="dp-rebase" style="display:none" title="Zapisuje zmiany naniesione w tej sesji (nie nienaniesione opy kalki)">💾 Zapisz zaktualizowaną kalkę&hellip;</button>
         <button class="vd-btn close" id="dp-close2">Zamknij</button>
       </div>
       <div id="dp-resize" title="Przeciągnij, aby zmienić rozmiar panelu"></div>
@@ -3608,7 +3608,7 @@
   </div>
 </div>
 
-<!-- ✎ DIALOG: WALIDATOR SUPPRESSORÓW — wywołany przy eksporcie -->
+<!-- ✎ DIALOG: WALIDATOR PODWÓJNYCH LINII — wywołany przy eksporcie -->
 <div id="dlg-suppressors" class="dlg-bg">
   <div class="dlg-box wide">
     <div class="dlg-hdr">
@@ -3619,11 +3619,11 @@
       </div>
     </div>
     <div class="dlg-body">
-      <p>Znaleziono <strong>3 brakujące suppressory</strong>. Bez nich Mudlet rysuje podwójne linie (custom + domyślna).</p>
+      <p>Znaleziono <strong>3 podwójne linie</strong> — Mudlet rysuje custom line i domyślną nałożone na siebie.</p>
       <div class="supp-list">
-        <div class="supp-item">⚠ <span>Room 9842</span> (dir=e → room 9843): brak suppressora w room 9843 dir=w</div>
-        <div class="supp-item">⚠ <span>Room 12847</span> (dir=n → room 12840): brak suppressora w room 12840 dir=s</div>
-        <div class="supp-item">⚠ <span>Room 15201</span> (dir=ne → room 15220): brak suppressora w room 15220 dir=sw</div>
+        <div class="supp-item">⚠ <span>Pokój #9842</span> (dir=e → #9843): podwójna linia, domknięcie pustą custom line w #9843 dir=w</div>
+        <div class="supp-item">⚠ <span>Pokój #12847</span> (dir=n → #12840): podwójna linia, domknięcie pustą custom line w #12840 dir=s</div>
+        <div class="supp-item">⚠ <span>Pokój #15201</span> (dir=ne → #15220): podwójna linia, domknięcie pustą custom line w #15220 dir=sw</div>
       </div>
       <div class="dlg-info">Auto-naprawa: redundantne proste custom lines zostaną usunięte, a przy realnych krzywych po stronie docelowej dodana zostanie pusta custom line, która ukrywa zdublowaną domyślną linię. Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
     </div>
@@ -3635,7 +3635,7 @@
   </div>
 </div>
 
-<!-- ✎ DIALOG: WALIDATOR SUPPRESSORÓW — wywołany ręcznie (Sprawdź spójność) -->
+<!-- ✎ DIALOG: WALIDATOR PODWÓJNYCH LINII — wywołany ręcznie (Sprawdź spójność) -->
 <div id="dlg-suppressors-manual" class="dlg-bg">
   <div class="dlg-box wide">
     <div class="dlg-hdr">
@@ -3646,11 +3646,11 @@
       </div>
     </div>
     <div class="dlg-body">
-      <p>Znaleziono <strong>3 brakujące suppressory</strong>. Bez nich Mudlet rysuje podwójne linie (custom + domyślna).</p>
+      <p>Znaleziono <strong>3 podwójne linie</strong> — Mudlet rysuje custom line i domyślną nałożone na siebie.</p>
       <div class="supp-list">
-        <div class="supp-item">⚠ <span>Room 9842</span> (dir=e → room 9843): brak suppressora w room 9843 dir=w</div>
-        <div class="supp-item">⚠ <span>Room 12847</span> (dir=n → room 12840): brak suppressora w room 12840 dir=s</div>
-        <div class="supp-item">⚠ <span>Room 15201</span> (dir=ne → room 15220): brak suppressora w room 15220 dir=sw</div>
+        <div class="supp-item">⚠ <span>Pokój #9842</span> (dir=e → #9843): podwójna linia, domknięcie pustą custom line w #9843 dir=w</div>
+        <div class="supp-item">⚠ <span>Pokój #12847</span> (dir=n → #12840): podwójna linia, domknięcie pustą custom line w #12840 dir=s</div>
+        <div class="supp-item">⚠ <span>Pokój #15201</span> (dir=ne → #15220): podwójna linia, domknięcie pustą custom line w #15220 dir=sw</div>
       </div>
       <div class="dlg-info">Auto-naprawa: redundantne proste custom lines zostaną usunięte, a przy realnych krzywych po stronie docelowej dodana zostanie pusta custom line, która ukrywa zdublowaną domyślną linię. Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
     </div>
@@ -3672,7 +3672,7 @@
       </div>
     </div>
     <div class="dlg-body">
-      <p>Sprawdzono <strong>26 992 pokoi</strong>. Wszystkie custom lines mają odpowiednie suppressory po stronie docelowej.</p>
+      <p>Sprawdzono <strong>26 992 pokoi</strong>. Żadna custom line nie tworzy podwójnej linii po stronie docelowej.</p>
     </div>
     <div class="dlg-ftr">
       <button class="btn-primary dlg-cancel" onclick="closeDialog('dlg-suppressors-ok')">Zamknij</button>
@@ -12715,7 +12715,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.29.0';
+const APP_VERSION = 'v1.30.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -18422,7 +18422,7 @@ function classifyDelta(delta) {
           items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
         } else {
           if (_deltaIsSuppressor(cur)) { items.push(_deltaClsItem(op, 'done', 'już na mapie', roomJump(id))); break; }
-          if (cur) { items.push(_deltaClsItem(op, 'hard', 'custom line w tym kierunku już istnieje — Zastosuj zamieni ją na tłumik', roomJump(id))); break; }
+          if (cur) { items.push(_deltaClsItem(op, 'hard', 'custom line w tym kierunku już istnieje — Zastosuj zamieni ją na pustą custom line (wycisza domyślną linię)', roomJump(id))); break; }
           items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
         }
         break;
@@ -19502,7 +19502,7 @@ function _renderDeltaPanel() {
       const mark = document.createElement('span');
       mark.className = 'dp-mark ' + it.cls;
       mark.textContent = it.cls === 'impossible' ? '⊘' : '✓';
-      mark.title = it.cls === 'impossible' ? 'Niewykonalne — nic do zaznaczania' : 'Bez roboty — efekt już jest na mapie';
+      mark.title = it.cls === 'impossible' ? 'Niewykonalne — nic do zaznaczania' : 'Zrobione — efekt już jest na mapie';
       row.appendChild(mark);
     } else {
       const cb = document.createElement('input');
