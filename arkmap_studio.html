@@ -12681,7 +12681,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.19.0';
+const APP_VERSION = 'v1.20.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -18438,6 +18438,7 @@ function applyDelta(delta, onlySeq, overrides) {
   let nextAreaId = _deltaMaxAreaId() + 1;
   const labelNext = new Map(); // areaId -> next label id
   let applied = 0;
+  const appliedSeqs = [];  // seq-e realnie naniesione (panel: warstwa "naniesione z tej kalki")
   const skipped = [];
 
   for (const rawOp of delta.ops) {
@@ -18484,13 +18485,13 @@ function applyDelta(delta, onlySeq, overrides) {
           state.roomById[freshId] = room; state.roomArea[freshId] = area.id;
           _deltaPush({ type: 'ADD_ROOM', roomId: freshId, roomData: JSON.parse(JSON.stringify(room)), areaId: area.id, label: op.label });
           buildRoomsZ(); buildAreaList();
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'DELETE_ROOM': {
           if (!state.roomById[op.target.roomId]) { skip('pokój nie istnieje'); break; }
           deleteRoom(op.target.roomId);
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'EDIT_ROOM': case 'EDIT_EXIT': {
@@ -18500,7 +18501,7 @@ function applyDelta(delta, onlySeq, overrides) {
             before: JSON.parse(JSON.stringify(room)), after: op.payload.after, label: op.label };
           _dispatchRedo(entry);
           _deltaPush(entry);
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'PAINT_BATCH': {
@@ -18514,7 +18515,7 @@ function applyDelta(delta, onlySeq, overrides) {
           }
           if (!changes.length) { skip('żaden pokój nie istnieje'); break; }
           _deltaPush({ type: 'PAINT_BATCH', changes, label: op.label });
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'MOVE_ROOM': {
@@ -18528,14 +18529,14 @@ function applyDelta(delta, onlySeq, overrides) {
           room.x = tx; room.y = ty; room.z = tz;
           commitMoveRoom(room, fx, fy, fz, tx, ty, tz);
           buildRoomsZ();
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'MOVE_ROOM_TO_AREA': {
           if (!state.roomById[op.target.roomId]) { skip('pokój nie istnieje'); break; }
           if (!state.areas.get(op.payload.toAreaId)) { skip('obszar docelowy nie istnieje'); break; }
           commitMoveRoomToArea(op.target.roomId, op.payload.toAreaId);
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'ADD_EXIT': {
@@ -18543,14 +18544,14 @@ function applyDelta(delta, onlySeq, overrides) {
           if (!src || !tgt) { skip('pokój źródłowy lub docelowy nie istnieje'); break; }
           commitAddExit(op.target.sourceId, op.target.dir, op.payload.targetId, !!op.payload.bidirectional);
           if (src.exits?.[op.target.dir] !== op.payload.targetId) { skip('kierunek zajęty (guard)'); break; }
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'DELETE_EXIT': {
           const room = state.roomById[op.target.roomId];
           if (!room || !room.exits?.[op.target.dir]) { skip('wyjście nie istnieje'); break; }
           commitDeleteExit(room, op.target.dir);
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'DELETE_SPECIAL_EXIT': {
@@ -18568,7 +18569,7 @@ function applyDelta(delta, onlySeq, overrides) {
           if (room.doors)        { delete room.doors[cmd];        if (!Object.keys(room.doors).length)        delete room.doors; }
           if (room.exit_weights) { delete room.exit_weights[cmd]; if (!Object.keys(room.exit_weights).length) delete room.exit_weights; }
           _deltaPush({ type: 'DELETE_SPECIAL_EXIT', roomId: room.id, snap, label: op.label });
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'ADD_AREA': {
@@ -18580,13 +18581,13 @@ function applyDelta(delta, onlySeq, overrides) {
           state.areas.set(freshId, area);
           _deltaPush({ type: 'ADD_AREA', areaId: freshId, areaData: JSON.parse(JSON.stringify(area)), label: op.label });
           buildAreaList();
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'DELETE_AREA': {
           if (!state.areas.get(op.target.areaId)) { skip('obszar nie istnieje'); break; }
           commitDeleteArea(op.target.areaId);
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'EDIT_AREA': {
@@ -18598,7 +18599,7 @@ function applyDelta(delta, onlySeq, overrides) {
           const after = JSON.parse(JSON.stringify(area));
           _deltaPush({ type: 'EDIT_AREA', areaId: area.id, before, after, label: op.label });
           buildAreaList();
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'ADD_CL': case 'ADD_SUPPRESSOR': {
@@ -18612,7 +18613,7 @@ function applyDelta(delta, onlySeq, overrides) {
               prevCL: room.custom_lines?.[op.target.dir] ? JSON.parse(JSON.stringify(room.custom_lines[op.target.dir])) : undefined, label: op.label };
             _dispatchRedo(entry); _deltaPush(entry);
           }
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'EDIT_CL': {
@@ -18625,7 +18626,7 @@ function applyDelta(delta, onlySeq, overrides) {
             before: room.custom_lines?.[op.target.dir] ? JSON.parse(JSON.stringify(room.custom_lines[op.target.dir])) : null,
             after: JSON.parse(JSON.stringify(op.payload.after)), label: op.label };
           _dispatchRedo(entry); _deltaPush(entry);
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'DELETE_CL': case 'DELETE_SUPPRESSOR': {
@@ -18633,7 +18634,7 @@ function applyDelta(delta, onlySeq, overrides) {
           if (!room || !room.custom_lines?.[op.target.dir]) { skip('custom line nie istnieje'); break; }
           const entry = { type: op.type, roomId: room.id, dir: op.target.dir, snapshot: JSON.parse(JSON.stringify(room.custom_lines[op.target.dir])), label: op.label };
           _dispatchRedo(entry); _deltaPush(entry);
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'AUTO_FIX_SUPPRESSORS': {
@@ -18642,7 +18643,7 @@ function applyDelta(delta, onlySeq, overrides) {
             removed: op.payload.removed.filter(x => state.roomById[x.roomId]), label: op.label };
           if (!entry.added.length && !entry.removed.length) { skip('pokoje nie istnieją'); break; }
           _dispatchRedo(entry); _deltaPush(entry);
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'ADD_LABEL': {
@@ -18656,7 +18657,7 @@ function applyDelta(delta, onlySeq, overrides) {
           if (_DELTA_SID_RE.test(rawSid)) sidMap.set(rawSid, next);
           const entry = { type: 'ADD_LABEL', areaId: area.id, snapshot: JSON.parse(JSON.stringify(lbl)), label: op.label };
           _dispatchRedo(entry); _deltaPush(entry);
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'EDIT_LABEL': case 'DELETE_LABEL': case 'MOVE_LABEL': case 'RESIZE_LABEL': {
@@ -18676,7 +18677,7 @@ function applyDelta(delta, onlySeq, overrides) {
               toX: op.payload.toX, toY: op.payload.toY, toW: op.payload.toW, toH: op.payload.toH, label: op.label };
           }
           _dispatchRedo(entry); _deltaPush(entry);
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'EDIT_ENV_COLOR': {
@@ -18685,7 +18686,7 @@ function applyDelta(delta, onlySeq, overrides) {
             oldColor: oldColor ? [...oldColor] : null,
             newColor: op.payload.newColor ? [...op.payload.newColor] : null, label: op.label };
           _dispatchRedo(entry); _deltaPush(entry);
-          applied++;
+          applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         default:
@@ -18696,7 +18697,7 @@ function applyDelta(delta, onlySeq, overrides) {
     }
   }
   draw();
-  return { applied, skipped };
+  return { applied, appliedSeqs, skipped };
 }
 
 // ── M3: warstwa duchów + kolizje pozycji (stan sesyjny — NIE trafia do pliku ani deltaLog) ──
@@ -18704,6 +18705,11 @@ let _deltaGhosts    = new Set();  // seq z włączonym duchem
 let _deltaOverrides = new Map();  // seq -> {x, y, how: 'auto'|'manual'}
 let _deltaPlacing   = null;       // {seq} | null — aktywny tryb ręcznego stawiania
 let _deltaHover     = null;       // {x, y, free} — celownik pod kursorem
+// seq-e naniesione z panelu w TEJ sesji recenzji. Panel ufa wlasnemu apply
+// bardziej niz re-klasyfikacji (cien sekwencyjny maskuje done dla opow, ktore
+// nadpisuja sie wzajemnie w obrebie kalki — bug #12: powtorne "Zastosuj"
+// nanosilo je w kolko, zalewajac stos undo az do capa).
+let _deltaAppliedSeqs = new Set();
 
 function _deltaGhostReset() {
   _deltaGhosts = new Set();
@@ -19174,6 +19180,7 @@ function _drawDeltaGhosts(rs) {
 
 function openDeltaReview(delta) {
   _deltaGhostReset();  // M3: nowa kalka = czyste duchy/override'y
+  _deltaAppliedSeqs = new Set();  // nowa kalka = czysta historia nanoszenia
   _deltaReview = { delta, items: classifyDelta(delta), filter: 'all' };
   document.getElementById('dp-base').textContent = _arkdeltaBaseNote(delta.meta.base);
   document.getElementById('dp-rebase').style.display = 'none';
@@ -19293,8 +19300,12 @@ function _deltaApplyReviewed() {
   const R = _deltaReview;
   if (!R) return;
   if (_deltaPlacing) _deltaCancelPlacing();
-  const only = new Set(R.items.filter(i => i.checked).map(i => i.seq));
+  // Naniesione w tej sesji NIGDY nie wracaja do puli zaznaczonych (bug #12:
+  // re-klasyfikacja z cienia sekwencyjnego przywracala je jako ok/hard i kazde
+  // kolejne "Zastosuj" nanosilo je ponownie, zalewajac stos undo).
+  const only = new Set(R.items.filter(i => i.checked && !_deltaAppliedSeqs.has(i.seq)).map(i => i.seq));
   const res = applyDelta(R.delta, only, _deltaOverrides);
+  for (const s of res.appliedSeqs || []) _deltaAppliedSeqs.add(s);
   let msg = '✓ Naniesiono: ' + res.applied;
   if (res.skipped.length) msg += ' · Pominięto: ' + res.skipped.length;
   toast(msg, res.skipped.length > 0);
@@ -19304,6 +19315,13 @@ function _deltaApplyReviewed() {
   if (_deltaOverrides.size) R.delta = Object.assign({}, R.delta, { ops: _deltaApplyOverridesToOps(R.delta.ops, _deltaOverrides) });
   _deltaGhostReset();  // po apply: czyste duchy i override'y
   R.items = classifyDelta(R.delta);  // re-klasyfikacja: naniesione → done
+  // Warstwa sesyjna: seq-e naniesione z panelu sa done PRAWEM PANELU, niezaleznie
+  // od tego, co wyliczy cien (maskowanie done przez pozniejsze opy kalki).
+  for (const it of R.items) {
+    if (_deltaAppliedSeqs.has(it.seq)) {
+      it.cls = 'done'; it.note = 'naniesione z tej kalki'; it.checked = false; it.coll = false;
+    }
+  }
   _renderDeltaPanel();
 }
 
@@ -19342,7 +19360,7 @@ btnSaveArkdelta.addEventListener('click', saveDelta);
     toast('Wczytywanie kalki anulowane');
   });
   document.getElementById('dp-rebase').addEventListener('click', saveDelta);
-  const closePanel = () => { panel.classList.remove('visible'); _deltaReview = null; _deltaGhostReset(); draw(); };
+  const closePanel = () => { panel.classList.remove('visible'); _deltaReview = null; _deltaGhostReset(); _deltaAppliedSeqs = new Set(); draw(); };
   document.getElementById('dp-close').addEventListener('click', closePanel);
   document.getElementById('dp-close2').addEventListener('click', closePanel);
   const hdr = document.getElementById('dp-hdr');

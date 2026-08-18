@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.20.0 — fix buga #12: powtórne „Zastosuj" z panelu recenzji zalewało stos undo
+
+- **Przyczyna (3 silniki, potwierdzone empirycznie na fixture + demo-kalce 36-op):** po „Zastosuj" panel re-klasyfikował opy z cienia sekwencyjnego, który maskuje stan done dla opów nadpisujących się wzajemnie w obrębie kalki — 13 opów wracało jako zaznaczone, a 6 z nich nanosiło się przy każdym kolejnym kliku (+6 wpisów undo na klik, aż do capa 50, wypychając prawdziwą historię edycji): (1) opy CL/etykiet nadpisywane przez późniejsze opy tej samej kalki (cień odtwarza je od zera — wcześniejsze wiecznie „ok"), w tym ADD_LABEL dokładający duplikat etykiety przy każdym replayu; (2) para ADD_AREA+DELETE_AREA tego samego obszaru oscylowała (co klik tworzyła i kasowała obszar); (3) twarde guardy (zajęta komórka/kierunek) zostawały zaznaczone wiecznie (skip bez szkody).
+- **Fix:** warstwa sesyjna `_deltaAppliedSeqs` — `applyDelta` zwraca listę realnie naniesionych seq (`appliedSeqs`); panel oznacza je po re-klasyfikacji jako done z notatką „naniesione z tej kalki", odznacza na zawsze i wyklucza z puli `only` przy kolejnych apply. Panel ufa własnemu apply bardziej niż ponownemu wyliczeniu z cienia. Zestaw czyszczony przy otwarciu nowej kalki i zamknięciu panelu.
+- **Testy (w tym samym commicie):** nowy scenariusz E6.reapply (watchdog) — fixture + `tests/fixture_demo.arkdelta` (36 opów, wszystkie klasy), trzy kliki „Zastosuj" przez realny przycisk panelu: apply1 nanosi dokładnie 29 (skipuje tylko twarde guardy 28/33), apply2/apply3 = ZERO nowych wpisów undo, klasy zamrożone, zaznaczone zostają tylko nierozstrzygnięte konflikty, 29 opów z notatką „naniesione z tej kalki".
+- Regresja lokalna: pełny `run-all.sh` PASS (13 harnessów node + kampania empiryczna SMOKE+E0–E6, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.19.0 — guard zajętości pola przy dodawaniu pokoju + kolizja przy przeniesieniu między obszarami
 
 - **Przyczyna:** `addRoomAtPosition` (klik „Dodaj pokój tutaj") nie miał żadnego guarda — cicho stawiał nowy pokój na zajętym polu (ta sama klasa cichego stacku co F5 w kałkach). `commitMoveRoomToArea` mógł wylądować na zajętej pozycji w docelowym obszarze bez żadnej informacji.

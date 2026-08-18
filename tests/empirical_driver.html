@@ -1939,6 +1939,45 @@ scenario('E6.redo-f6', async () => {
     [7100, 7100], 'fix F6: redo przywraca ruch — apply = undo = redo (spojne)');
 });
 
+scenario('E6.reapply', async () => {
+  // Bug #12 (powtorne "Zastosuj" z panelu recenzji): kazde kolejne klikniecie
+  // musi byc no-op wzgledem stanu — naniesione seq-y traca zaznaczenie NA ZAWSZE,
+  // stos undo rosnie tylko przy pierwszym skutecznym apply, klasy sie stabilizuja.
+  await loadBase('dat');
+  const txt = await (await fetch('./fixture_demo.arkdelta')).text();
+  ex('const r = validateDeltaText(' + JSON.stringify(txt) + ');'
+   + ' if (!r.ok) throw new Error("walidacja fixture_demo: " + (r.errors || []).join("; "));'
+   + ' window.__e6delta = r.delta;');
+  ex('openDeltaReview(window.__e6delta)');
+  const snap = () => ev('(function(){ const c = { ok:0, hard:0, done:0, impossible:0 };'
+    + ' for (const it of _deltaReview.items) c[it.cls]++;'
+    + ' return { c: c, undo: state.undoStack.length,'
+    + ' checked: _deltaReview.items.filter(function(i){ return i.checked; }).map(function(i){ return i.seq; }),'
+    + ' cls: _deltaReview.items.map(function(i){ return i.seq + ":" + i.cls; }).join(",") }; })()').val;
+  const s0 = snap();
+  EQ('E6.reapply.cls0', s0.c, { ok: 27, hard: 4, done: 1, impossible: 4 }, 'klasyfikacja startowa demo-kalki na fixture');
+  EQ('E6.reapply.checked0', s0.checked.length, 31, 'start: zaznaczone wszystkie ok+hard');
+  ex("document.getElementById('dp-apply').click()");
+  const s1 = snap();
+  ex("document.getElementById('dp-apply').click()");
+  const s2 = snap();
+  ex("document.getElementById('dp-apply').click()");
+  const s3 = snap();
+  // Po fixie #12: apply1 nanosi 29 opow (skipuje tylko twarde guardy 28/33);
+  // naniesione seq-y traca zaznaczenie na zawsze (warstwa sesyjna), wiec
+  // apply2/apply3 sa no-op — zero nowych wpisow undo, klasy zamrozone.
+  EQ('E6.reapply.cls1', s1.c, { ok: 0, hard: 2, done: 30, impossible: 4 },
+    'po apply1: 29 naniesionych -> done, zostaja tylko twarde guardy 28/33');
+  EQ('E6.reapply.checked1', s1.checked, [28, 33], 'po apply1: zaznaczone tylko nierozstrzygniete konflikty');
+  EQ('E6.reapply.undo1', s1.undo, 29, 'apply1: dokladnie 29 wpisow undo');
+  EQ('E6.reapply.undo2-noop', s2.undo - s1.undo, 0, 'apply2: ZERO nowych wpisow undo (replay uciety)');
+  EQ('E6.reapply.undo3-noop', s3.undo - s2.undo, 0, 'apply3: ZERO nowych wpisow undo');
+  EQ('E6.reapply.cls-frozen', s3.cls, s2.cls, 'klasy zamrozone miedzy apply2 a apply3 (brak oscylacji 24/25)');
+  EQ('E6.reapply.checked3', s3.checked, [28, 33], 'po apply3: nadal tylko konflikty czekaja na decyzje');
+  EQ('E6.reapply.done-note', ev("_deltaReview.items.filter(function(i){ return i.cls === 'done' && i.note === 'naniesione z tej kalki'; }).length").val,
+    29, '29 opow oznaczonych jako naniesione z tej kalki');
+});
+
 // ═══ Runner ═══
 function appReady() {
   return new Promise(res => {
