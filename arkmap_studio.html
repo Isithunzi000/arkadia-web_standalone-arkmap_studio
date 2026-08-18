@@ -12681,7 +12681,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.18.0';
+const APP_VERSION = 'v1.19.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -16115,7 +16115,12 @@ function commitMoveRoomToArea(roomId, targetAreaId) {
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
-  toast(`✓ Przeniesiono pokój do obszaru "${toArea.name}"`);
+  // Kolizja na docelowej pozycji: informacja nieblokująca (przeniesienie się dokonało —
+  // użytkownik wybrał obszar jawnie; blokowanie całego przeniesienia przez jedną komórkę
+  // byłoby gorszym UX). Sprawdzane wprost po toArea.rooms — niezależne od nawigacji.
+  const occT = (toArea.rooms || []).find(r => r.id !== roomId && r.x === room.x && r.y === room.y && r.z === room.z);
+  if (occT) toast(`⚠ Przeniesiono do obszaru "${toArea.name}", ale pozycja (${room.x}, ${room.y}, ${room.z}) jest zajęta przez pokój #${occT.id}`);
+  else toast(`✓ Przeniesiono pokój do obszaru "${toArea.name}"`);
 }
 
 // ── commitAddExit(sourceId, dir, targetId, bidirectional) — dodaj wyjście ─────
@@ -16468,6 +16473,11 @@ function addRoomAtPosition(mx, my) {
   const newId  = allIds.length > 0 ? Math.max(...allIds) + 1 : 1;
   const newX = Math.round(mx);
   const newY = Math.round(my);
+  // Guard zajętości pola (spójnie z F5 w kałkach): dodawanie wymaga wolnej komórki —
+  // zero mutacji, zero undo, tylko toast. W przeciwieństwie do przenoszenia nie ma
+  // wymuszenia Shift: kliknij wolną komórkę albo przenieś istniejący pokój.
+  const occ = _roomCollisionAt(newX, newY, state.z, -1);
+  if (occ) { toast(`⚠ Pole (${newX}, ${newY}) zajęte przez pokój #${occ.id} — wybierz wolną komórkę`); return; }
   const newRoom = {
     id: newId, area: areaId, x: newX, y: newY, z: state.z,
     name: '', env: 258, weight: 1,

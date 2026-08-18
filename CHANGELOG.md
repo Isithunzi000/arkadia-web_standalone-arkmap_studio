@@ -2,6 +2,16 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.19.0 — guard zajętości pola przy dodawaniu pokoju + kolizja przy przeniesieniu między obszarami
+
+- **Przyczyna:** `addRoomAtPosition` (klik „Dodaj pokój tutaj") nie miał żadnego guarda — cicho stawiał nowy pokój na zajętym polu (ta sama klasa cichego stacku co F5 w kałkach). `commitMoveRoomToArea` mógł wylądować na zajętej pozycji w docelowym obszarze bez żadnej informacji.
+- **Fix:**
+  - `addRoomAtPosition`: blokada zawsze (przez `_roomCollisionAt`) — zero mutacji, zero undo, toast wskazujący kolidujący pokój. Świadomie **bez wymuszenia Shift** (spójnie z F5: dodawanie wymaga wolnej komórki; nałożenie można uzyskać przeniesieniem z Shiftem — v1.17.0).
+  - `commitMoveRoomToArea`: po przeniesieniu sprawdzana kolizja na docelowej pozycji (wprost po `toArea.rooms`, niezależnie od nawigacji) — toast ostrzegawczy zamiast czystego sukcesu. Celowo **nieblokujące**: użytkownik jawnie wybrał obszar docelowy, a blokowanie całego przeniesienia przez jedną komórkę byłoby gorszym UX.
+- **Testy (w tym samym commicie):** nowy scenariusz E5.add-guard (7 asercji: blokada na zajętym z zerowym śladem, kontrolne dodanie na wolnym, konstrukcja kolizji międzyobszarowej + toast). Flip konstrukcyjny: `_e3Text` (builder kalki E3) opierał się na cichym stacku — dwa `addRoomAtPosition(9999,9999)`; zastąpione dedykowanym `_e3CommitAddRoom` (wpis undo/deltaLog identyczny jak w `addRoomAtPosition`, guard pomijany jawnie). Wykryte przez istniejące watchdogi E3 (21 asercji) — system zadziałał zgodnie z założeniem.
+- Regresja lokalna: pełny `run-all.sh` PASS (13 harnessów node + kampania empiryczna SMOKE+E0–E6, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.18.0 — podgląd kolizji podczas przeciągania pokoju (czerwony cel = zajęty)
 
 - **Przyczyna:** guard z v1.17.0 blokuje drop na zajęte pole, ale podczas samego przeciągania użytkownik nie widział, że celuje w zajętą komórkę — dowiadywał się dopiero z toastu po upuszczeniu.
