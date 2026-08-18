@@ -2,6 +2,13 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## repo — CI: cache Chromium + sufit joba 40 min (flake instalacji zabil run regresji)
+
+- **Przyczyna:** run regresji na commicie v1.32.0 zostal zabity timeoutem joba (25 min) — krok `playwright install --with-deps chromium` zacial sie na pobieraniu przegladarki (flake sieciowy runnera) i regresja nigdy nie wystartowala; run wyszedl „cancelled" mimo zdrowego kodu (lokalna regresja przed pushem byla zielona).
+- **Fix:** krok `actions/cache` (SHA-pin z komentarzem wersji, konwencja repo) na `~/.cache/ms-playwright`, klucz spiety z wersja playwright — na cache-hicie instalacja Chromium schodzi z minut do sekund, a flake pobierania przestaje istniec. Sufit joba `timeout-minutes` 25 → 40 jako zapas na miss cache i wolniejszy runner; krok regresji zachowuje wlasny `timeout 1380`.
+- **Testy (w tym samym commicie):** nowy harness `tests/ci_workflow.js` (17 asercji fail-closed: sufit joba, krok cache z SHA-pin, spojnosc wersji playwright klucz↔install, brak referencji tagowych akcji, timeout regresji, concurrency, podpiecie do run-all.sh). Harness dopiety do `run-all.sh` (14 harnessow node); `tests/README.md` zaktualizowany.
+- Repo-only: bez zmian w aplikacji, bez podbicia wersji.
+
 ## v1.32.0 — eksport .dat dostepny w trybie edycji + ostrzezenie o brudnym formularzu
 
 - **Przyczyna:** przycisk „Eksportuj Mudlet .dat" byl wylaczany w trybie edycji („Wyjdź z edycji aby eksportować") — czysta decyzja UI, zadnej technicznej przeszkody (eksport czyta zywy state.map, zmiany z edycji sa w nim natychmiast po commicie).
