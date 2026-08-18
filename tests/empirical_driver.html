@@ -1973,14 +1973,16 @@ scenario('E6.reapply', async () => {
   // apply2/apply3 sa no-op — zero nowych wpisow undo, klasy zamrozone.
   EQ('E6.reapply.cls1', s1.c, { ok: 0, hard: 3, done: 29, impossible: 4 },
     'po apply1: 28 naniesionych -> done, zostaja twarde guardy 28/29/33');
-  EQ('E6.reapply.checked1', s1.checked, [28, 29, 33], 'po apply1: zaznaczone tylko nierozstrzygniete konflikty');
+  EQ('E6.reapply.checked1', s1.checked, [], 'po apply1: pominiete guardy auto-odznaczone (v1.27.0), zero zaznaczonych');
   EQ('E6.reapply.undo1', s1.undo, 28, 'apply1: dokladnie 28 wpisow undo');
   EQ('E6.reapply.undo2-noop', s2.undo - s1.undo, 0, 'apply2: ZERO nowych wpisow undo (replay uciety)');
   EQ('E6.reapply.undo3-noop', s3.undo - s2.undo, 0, 'apply3: ZERO nowych wpisow undo');
   EQ('E6.reapply.cls-frozen', s3.cls, s2.cls, 'klasy zamrozone miedzy apply2 a apply3 (brak oscylacji 24/25)');
-  EQ('E6.reapply.checked3', s3.checked, [28, 29, 33], 'po apply3: nadal tylko konflikty czekaja na decyzje');
+  EQ('E6.reapply.checked3', s3.checked, [], 'po apply3: nadal zero zaznaczonych (konflikty czekaja odznaczone)');
   EQ('E6.reapply.done-note', ev("_deltaReview.items.filter(function(i){ return i.cls === 'done' && i.note === 'naniesione z tej kalki'; }).length").val,
     28, '28 opow oznaczonych jako naniesione z tej kalki');
+  EQ('E6.reapply.skip-note', ev("_deltaReview.items.filter(function(i){ return i.note && i.note.indexOf('pominięte przy ostatnim Zastosuj') >= 0; }).length").val,
+    3, '3 opy (28/29/33) z trwalym dopiskiem „pominięte przy ostatnim Zastosuj"');
 });
 
 // ═══ E8: guard MOVE_ROOM przy apply (v1.26.0) ═══
@@ -2010,6 +2012,32 @@ scenario('E8.moveguard', async () => {
   EQ('E8.moveguard.moved', pos14().slice(0, 2), [pill.x, pill.y], 'po autopozycji: #14 przeniesiony na pozycje zastepcza');
   EQ('E8.moveguard.still-no-stack', stackAt13(), 0, 'po autopozycji: nadal zero nalozenia na #13');
   EQ('E8.moveguard.done', ev('_deltaReview.items[28].cls').val, 'done', 'po rozstrzygnieciu: op29 naniesiony (done)');
+});
+
+scenario('E8.skipflag', async () => {
+  // v1.27.0: opy pominiete przez guard przy Zastosuj traca zaznaczenie (auto),
+  // dostaja trwaly dopisek do notatki; przycisk apply pokazuje (0) i sie wylacza.
+  await loadBase('dat');
+  const txt = await (await fetch('./fixture_demo.arkdelta')).text();
+  ex('const r = validateDeltaText(' + JSON.stringify(txt) + '); if (!r.ok) throw new Error("walidacja fixture_demo"); window.__e8sdelta = r.delta;');
+  ex('openDeltaReview(window.__e8sdelta)');
+  ex("document.getElementById('dp-apply').click()");
+  const st = () => ev('(function(){ const out = []; for (const it of _deltaReview.items)'
+    + ' if ([28, 29, 33].indexOf(it.seq) >= 0) out.push(it.seq + ":" + (it.checked ? "1" : "0")'
+    + ' + ":" + (it.note && it.note.indexOf("pominięte przy ostatnim Zastosuj") >= 0 ? "N" : "-"));'
+    + ' return out.join(","); })()').val;
+  EQ('E8.skipflag.flags', st(), '28:0:N,29:0:N,33:0:N', 'pominiete guardy: odznaczone + dopisek w notatce');
+  EQ('E8.skipflag.btn', ev('(function(){ const b = document.getElementById("dp-apply"); return b.textContent + "|" + b.disabled; })()').val,
+    '✓ Zastosuj zaznaczone (0)|true', 'przycisk apply: (0) i wylaczony');
+  ex("document.getElementById('dp-apply').click()");  // no-op (wylaczony)
+  ex("document.getElementById('dp-apply').click()");
+  EQ('E8.skipflag.persist', st(), '28:0:N,29:0:N,33:0:N', 'dopisek trwaly — kolejne apply go nie gubi');
+  // ponowne zaznaczenie konfliktu i apply: znowu skip, notatka bez duplikatu dopisku
+  ex('_deltaReview.items[32].checked = true; _renderDeltaPanel();');  // op33 (ADD_EXIT, zajety kierunek) + render odblokowuje przycisk
+  ex("document.getElementById('dp-apply').click()");
+  EQ('E8.skipflag.reapply', st(), '28:0:N,29:0:N,33:0:N', 'ponowne zaznaczenie + apply: znowu odznaczone');
+  EQ('E8.skipflag.single', (ev('_deltaReview.items[32].note').val || '').split('pominięte przy ostatnim Zastosuj').length - 1, 1,
+    'dopisek w notatce wystepuje dokladnie raz (bez akumulacji)');
 });
 
 // ═══ E7: diff-wizualizacja kalki (M5) ═══

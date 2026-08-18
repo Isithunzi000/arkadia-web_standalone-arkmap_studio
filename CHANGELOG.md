@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.27.0 — opy pominiete przy Zastosuj: auto-odznaczenie + trwaly dopisek (M6b)
+
+- **Przyczyna:** konflikt z twardym guardem (np. zajety kierunek, zajete pole) po „Zastosuj" zostawal zaznaczony na liscie — kolejne „Zastosuj" mielilo go bez efektu („Naniesiono: 0 · Pominieto: 1"), a przycisk i liczniki klamaly, ze jest cos do zrobienia.
+- **Fix:** warstwa sesyjna `_deltaSkippedSeqs` (jak `_deltaAppliedSeqs` dla naniesionych): opy skipniete przez guard przy Zastosuj traca zaznaczenie i dostaja trwaly dopisek do notatki „pominięte przy ostatnim Zastosuj". Zostaja w Konfliktach (konflikt jest nadal aktywny), ale nie wspinaja sie w kolejne Zastosuj — uzytkownik moze je swiadomie odznaczyc/zaznaczyc/rozstrzygnac. Przycisk spada do „Zastosuj zaznaczone (0)" i wylacza sie. Czyszczenie przy otwarciu nowej kalki i zamknieciu panelu.
+- **Testy (w tym samym commicie):** nowy scenariusz E8.skipflag (6 asercji: flagi odznaczenia + dopisek, przycisk (0)/disabled, trwalosc dopisku przy kolejnych apply, ponowne zaznaczenie → znowu skip → dopisek bez duplikatu). E6.reapply: checked1/checked3 = [] + asercja trwalosci dopisku (3 opy).
+- Regresja lokalna: pelny `run-all.sh` PASS (13 harnessow node + kampania empiryczna SMOKE+E0–E8, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.26.0 — MOVE_ROOM z guardem zajetosci: Zastosuj juz nie naklada pokoi (M6a)
 
 - **Przyczyna:** klasyfikator oznaczal kolizje pozycyjne ADD_ROOM i MOVE_ROOM tak samo (konflikt, do rozstrzygniecia przez Autopozycje/Recznie), ale wykonawca traktowal je roznie: ADD_ROOM mial zywotny guard zajetosci (skip, zero mutacji), a MOVE_ROOM nie — zwykle „Zastosuj" przenosilo pokoj na zajete pole i nakladalo pokoje na siebie (potwierdzone eksportami .arkmap z testow: #14 wyladowal na #13).
