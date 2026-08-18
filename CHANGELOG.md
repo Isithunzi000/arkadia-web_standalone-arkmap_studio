@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.23.0 — panel kalki: checkbox tylko tam, gdzie jest decyzja + czytelna legenda (M5c)
+
+- **Przyczyna:** wiersze „niewykonalne" miały wyszarzony checkbox (martwy element sugerujący możliwość zaznaczenia), a „naniesione" — aktywny, choć klikanie nic nie dawało. Próbki kolorów w legendzie duchów to był glif „■" w tekście — mikry i ledwo widoczny.
+- **Fix:** checkbox renderowany tylko przy klasach decyzyjnych (do naniesienia / konflikt). Przy „niewykonalne" statyczny marker ⊘, przy „bez roboty" marker ✓ (z podpowiedzią w title). Legenda: glify zastąpione próbkami 12×12 px (rozmiar checkboxa) z zaokrągleniem i obramowaniem.
+- **Testy (w tym samym commicie):** nowy scenariusz E7.marks (8 asercji: liczba checkboxów = tylko ok/hard, zero wyszarzonych, markery ⊘/✓, 4 próbki legendy o realnym rozmiarze 12px, stan po apply: checkboxy tylko przy 2 konfliktach, 30 markerów ✓).
+- Regresja lokalna: pełny `run-all.sh` PASS (13 harnessów node + kampania empiryczna SMOKE+E0–E7, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.22.0 — teksty panelu kalki po ludzku: co się stanie, gdy zaznaczę i zastosuję (M5b)
 
 - **Przyczyna:** notatki klasyfikacji były pisane językiem silnika („pokój zmieniony upstream — naniosę wersję z kalki", „guard odmówi"), a klasa „naniesione" zlewała dwa różne stany: mapa miała to przed kalką vs panel przed chwilą naniösł — użytkownik nie wiedział, co jest juz załatwione i co zrobi „Zastosuj".
