@@ -1743,6 +1743,37 @@ scenario('E5.move-guard', async () => {
   EQ('E5.move-guard.final', ev('_computeBaseInfo().crc').val, crc0, 'po wszystkim: crc z powrotem do bazy');
 });
 
+scenario('E5.move-guard-preview', async () => {
+  await loadBase('dat');
+  // Podglad kolizji podczas dragu: _editDragCollision() — to samo zrodlo prawdy
+  // co polityka ruchu (czerwony cel w drawRooms).
+  const setup = JSON.parse(ev("JSON.stringify((function(){"
+    + " const rz = state.roomsZ; if (rz.length < 2) return null;"
+    + " const a = rz[0], b = rz[1];"
+    + " return { a: a.id, b: b.id, ax: a.x, ay: a.y, bx: b.x, by: b.y };"
+    + " })())").val);
+  A('E5.move-guard-preview.setup', !!setup, 'dwa pokoje z biezacego poziomu');
+  if (!setup) return;
+  const { a, b, ax, ay, bx, by } = setup;
+  // stan dragu: przeciagany B, cel = pole A (zajete)
+  ex('(function(){ state.editDraggingRoom = true; state.selected = ' + b + ';'
+    + ' state.editDragCurrentX = ' + ax + '; state.editDragCurrentY = ' + ay + '; })()');
+  EQ('E5.move-guard-preview.occupied', ev('(_editDragCollision() || {}).id ?? null').val, a,
+    'cel zajety: getter zwraca pokoj A (drawRooms rysuje czerwony krzyzyk)');
+  // cel = wolna komorka
+  ex('(function(){ state.editDragCurrentX = ' + (ax + 500) + '; state.editDragCurrentY = ' + (ay + 500) + '; })()');
+  A('E5.move-guard-preview.free', ev('_editDragCollision() === null').val === true,
+    'cel wolny: getter zwraca null (ramka pomaranczowa)');
+  // brak dragu = null (podglad nieaktywny)
+  ex('state.editDraggingRoom = false');
+  A('E5.move-guard-preview.inactive', ev('_editDragCollision() === null').val === true,
+    'bez dragu: getter zwraca null');
+  // sprzatanie stanu testowego
+  ex('(function(){ state.editDraggingRoom = false; state.selected = null; state.editDragCurrentX = 0; state.editDragCurrentY = 0; })()');
+  A('E5.move-guard-preview.clean', ev('state.editDraggingRoom === false && state.selected === null').val === true,
+    'stan po tescie posprzatany');
+});
+
 scenario('E5.ghost-layer', async () => {
   // stan do sanity-screenshota: panel z kolizjami + duchy + chipy autopozycji
   await e3Setup();
