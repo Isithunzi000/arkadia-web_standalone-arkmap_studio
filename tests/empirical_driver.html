@@ -1978,6 +1978,47 @@ scenario('E6.reapply', async () => {
     29, '29 opow oznaczonych jako naniesione z tej kalki');
 });
 
+// ═══ E7: diff-wizualizacja kalki (M5) ═══
+scenario('E7.diff', async () => {
+  await loadBase('dat');
+  const txt = await (await fetch('./fixture_demo.arkdelta')).text();
+  ex('const r = validateDeltaText(' + JSON.stringify(txt) + '); if (!r.ok) throw new Error("walidacja fixture_demo"); window.__e7delta = r.delta;');
+  ex('openDeltaReview(window.__e7delta)');
+  const d10 = ev('_deltaReview.items[9].diff').val;
+  A('E7.diff.op10', Array.isArray(d10) && d10.some(s => s.indexOf('nazwa:') === 0 && s.indexOf('E1 Zmieniona Nazwa') >= 0),
+    'op10 EDIT_ROOM: diff zawiera zmiane nazwy [diff=' + JSON.stringify(d10) + ']');
+  const d11 = ev('_deltaReview.items[10].diff').val;
+  A('E7.diff.op11', Array.isArray(d11) && d11.length > 0 && d11.some(s => s.indexOf('nw') >= 0),
+    'op11 EDIT_EXIT: diff zawiera zmiane w kierunku nw [diff=' + JSON.stringify(d11) + ']');
+  EQ('E7.diff.rows', ev("document.querySelectorAll('#dp-body .dp-diff').length").val >= 2, true,
+    'panel renderuje linie diffu w wierszach edycji');
+  const g10 = ev('(function(){ const gs = _deltaGhostGeoms(_deltaReview.delta, _deltaReview.items, [10], _deltaOverrides);'
+    + ' return gs[0] ? { kind: gs[0].kind, hasDiff: !!(gs[0].diff && gs[0].diff.length) } : null; })()').val;
+  EQ('E7.diff.ghost', g10, { kind: 'hl', hasDiff: true }, 'duch EDIT_ROOM: podswietlenie + etykieta diffu');
+  const g4 = ev('(function(){ const gs = _deltaGhostGeoms(_deltaReview.delta, _deltaReview.items, [4], _deltaOverrides);'
+    + ' return gs[0] ? { kind: gs[0].kind, dir: gs[0].dir || null } : null; })()').val;
+  EQ('E7.exit.full', g4, { kind: 'exit', dir: 'n' }, 'duch ADD_EXIT (oba konce na mapie): linia z kierunkiem');
+  const g3 = ev('(function(){ const gs = _deltaGhostGeoms(_deltaReview.delta, _deltaReview.items, [3], _deltaOverrides);'
+    + ' return gs[0] ? gs[0].kind : null; })()').val;
+  A('E7.exit.op3', g3 === 'exit' || g3 === 'exit-stub', 'op3 (cel z kalki): geometria ducha istnieje [kind=' + g3 + ']');
+  // stub: wyjscie do pokoju kalki w NOWYM obszarze (sid bez numerycznego rozwiazania)
+  ex('window.__e7s = { meta: { format: "arkdelta", format_version: 1, base: {} }, ops: ['
+   + '{ seq: 1, type: "ADD_AREA", target: { areaId: "d:1" }, payload: { area: { name: "E7 Stub Area" } }, label: "a" },'
+   + '{ seq: 2, type: "ADD_ROOM", target: { areaId: "d:1", roomId: "d:2" }, payload: { room: { x: 9100, y: 9100, z: 0, env: 1 } }, label: "r" },'
+   + '{ seq: 3, type: "ADD_EXIT", target: { dir: "n", sourceId: 1 }, payload: { targetId: "d:2", bidirectional: false }, label: "e" }'
+   + '] };');
+  const gstub = ev('(function(){ const items = classifyDelta(window.__e7s);'
+    + ' const gs = _deltaGhostGeoms(window.__e7s, items, [3], new Map());'
+    + ' return gs[0] ? { kind: gs[0].kind, dir: gs[0].dir || null } : null; })()').val;
+  EQ('E7.exit.stub', gstub, { kind: 'exit-stub', dir: 'n' }, 'ADD_EXIT do pokoju w nowym obszarze: stub-strzalka na zrodle');
+  // ok-ADD_AREA: klik = toast informacyjny (obszaru jeszcze nie ma na mapie)
+  const ai = ev('_deltaReview.items[0].areaInfo').val;
+  A('E7.area.info', !!ai && typeof ai.rooms === 'number', 'op1 ADD_AREA: areaInfo [=' + JSON.stringify(ai) + ']');
+  ex('(function(){ document.querySelectorAll("#dp-body .dp-row")[0].click(); })()');
+  A('E7.area.toast', (ev("document.getElementById('toast').textContent").val || '').indexOf('Nowy obszar') >= 0,
+    'klik w wiersz ADD_AREA: toast informacyjny');
+});
+
 // ═══ Runner ═══
 function appReady() {
   return new Promise(res => {

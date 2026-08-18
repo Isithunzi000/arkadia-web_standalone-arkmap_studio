@@ -299,6 +299,7 @@
   .dp-badge.done { color:var(--dim); }
   .dp-badge.impossible { color:#ff7b72; border-color:#5a2727; }
   .dp-note { color:var(--dim); font-size:10px; flex-basis:100%; padding-left:20px; }
+  .dp-diff { color:var(--text); opacity:.85; font-style:italic; }
   .dp-filter.active { color:var(--fg); border-color:var(--accent); background:var(--sel); }
   .dp-check { margin:0 2px 0 0; cursor:pointer; }
   .dp-row.off .vd-tf, .dp-row.off .vd-num { opacity:.45; }
@@ -12681,7 +12682,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.20.0';
+const APP_VERSION = 'v1.21.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -17886,6 +17887,56 @@ function _deltaIsSuppressor(cl) {
   return !!cl && Array.isArray(cl.points) && cl.points.length === 0;
 }
 
+// M5: czytelny diff before->after dla EDIT_ROOM/EDIT_EXIT — lista krotkich
+// opisow zmian (wiersz panelu + etykieta ducha). resolve: sid -> numeryczne id
+// (z klasyfikacji), zeby cele wyjsc nie wyswietlaly sie jako "d:N".
+function _deltaRoomDiff(before, after, resolve) {
+  const strip = v => { const c = _deltaStripRoom(JSON.parse(JSON.stringify(v ?? {}))); delete c.id; return c; };
+  const b = strip(before), a = strip(after);
+  const res = v => { const r = resolve ? resolve(v) : v; return (typeof r === 'number') ? ('#' + r) : String(r); };
+  const out = [];
+  if ((b.name || '') !== (a.name || '')) out.push('nazwa: „' + (b.name || '') + '" → „' + (a.name || '') + '"');
+  if ((b.env ?? null) !== (a.env ?? null)) out.push('env ' + (b.env ?? '—') + ' → ' + (a.env ?? '—'));
+  if ((b.symbol || '') !== (a.symbol || '')) out.push('symbol: „' + (b.symbol || '') + '" → „' + (a.symbol || '') + '"');
+  if ((b.weight ?? null) !== (a.weight ?? null)) out.push('waga ' + (b.weight ?? '—') + ' → ' + (a.weight ?? '—') );
+  if (!!b.hidden !== !!a.hidden) out.push(a.hidden ? 'ukrycie pokoju' : 'odkrycie pokoju');
+  if ((b.x ?? 0) !== (a.x ?? 0) || (b.y ?? 0) !== (a.y ?? 0) || (b.z ?? 0) !== (a.z ?? 0))
+    out.push('pozycja (' + (b.x ?? 0) + ',' + (b.y ?? 0) + ',' + (b.z ?? 0) + ') → (' + (a.x ?? 0) + ',' + (a.y ?? 0) + ',' + (a.z ?? 0) + ')');
+  const mapDiff = (bk, ak, fmtAdd, fmtDel, fmtChg) => {
+    const bm = b[bk] || {}, am = a[ak] || {};
+    for (const k of Object.keys(am)) {
+      if (bm[k] === undefined) out.push(fmtAdd(k, am[k]));
+      else if (stableStringify(bm[k]) !== stableStringify(am[k])) out.push(fmtChg(k, bm[k], am[k]));
+    }
+    for (const k of Object.keys(bm)) if (am[k] === undefined) out.push(fmtDel(k, bm[k]));
+  };
+  mapDiff('exits', 'exits',
+    (k, v) => '+wyjście ' + k + ' → ' + res(v),
+    (k) => '−wyjście ' + k,
+    (k, bv, av) => 'wyjście ' + k + ': ' + res(bv) + ' → ' + res(av));
+  mapDiff('special_exits', 'special_exits',
+    (k, v) => '+wyjście specjalne „' + k + '" → ' + res(v),
+    (k) => '−wyjście specjalne „' + k + '"',
+    (k, bv, av) => 'specjalne „' + k + '": ' + res(bv) + ' → ' + res(av));
+  mapDiff('custom_lines', 'custom_lines',
+    (k) => '+custom line ' + k,
+    (k) => '−custom line ' + k,
+    (k) => 'custom line ' + k + ': zmiana');
+  mapDiff('doors', 'doors',
+    (k) => '+drzwi ' + k,
+    (k) => '−drzwi ' + k,
+    (k) => 'drzwi ' + k + ': zmiana');
+  mapDiff('exit_weights', 'exit_weights',
+    (k) => '+waga wyjścia ' + k,
+    (k) => '−waga wyjścia ' + k,
+    (k) => 'waga wyjścia ' + k + ': zmiana');
+  const bl = new Set(b.exit_locks || []), al = new Set(a.exit_locks || []);
+  for (const k of al) if (!bl.has(k)) out.push('+zamek ' + k);
+  for (const k of bl) if (!al.has(k)) out.push('−zamek ' + k);
+  if (stableStringify(b.user_data || {}) !== stableStringify(a.user_data || {})) out.push('dane użytkownika (user_data)');
+  return out;
+}
+
 function _deltaClsItem(op, cls, note, jump) {
   return { seq: op.seq, type: op.type, label: op.label || op.type, cls, note: note || '',
            jump: jump || null, checked: cls === 'ok' || cls === 'hard' };
@@ -18398,6 +18449,19 @@ function classifyDelta(delta) {
     // F1: symulacja efektu opu na cieniu — kolejne opy kalki widza jego skutek
     if (items.length > _beforeLen) _sim(op, items[items.length - 1].cls);
   }
+  // M5: diff before->after (wiersz panelu + etykieta ducha) dla edycji pokoi/wyjść;
+  // areaInfo dla ok-ADD_AREA (klik = informacja — obszar jeszcze nie istnieje).
+  for (let i = 0; i < delta.ops.length; i++) {
+    const op = delta.ops[i], it = items[i];
+    if (!it) continue;
+    if (op.type === 'EDIT_ROOM' || op.type === 'EDIT_EXIT') {
+      it.diff = _deltaRoomDiff(op.payload.before, op.payload.after, resR);
+    } else if (op.type === 'ADD_AREA' && it.cls === 'ok') {
+      const sid = String(op.target.areaId);
+      it.areaInfo = { name: (op.payload.area && op.payload.area.name) || '',
+        rooms: delta.ops.filter(o => o.type === 'ADD_ROOM' && String(o.target.areaId) === sid).length };
+    }
+  }
   // Mapy rozwiązań sid dostępne dla M3 (taken/geometria duchów) — właściwości tablicy.
   items.sidCls = sidCls; items.sidRoomId = sidRoomId; items.sidAreaId = sidAreaId; items.sidLabelId = sidLabelId;
   return items;
@@ -18883,7 +18947,15 @@ function _deltaGhostGeoms(delta, items, ghostSeqs, overrides) {
         if (room) out.push({ seq, kind: 'del-room', areaId: state.roomArea[id], x: room.x, y: room.y, z: room.z ?? 0 });
         break;
       }
-      case 'EDIT_ROOM': case 'EDIT_EXIT': case 'MOVE_ROOM_TO_AREA':
+      case 'EDIT_ROOM': case 'EDIT_EXIT': {
+        const id = resR(T.roomId);
+        const r = (typeof id === 'number') ? state.roomById[id] : null;
+        // M5: duch edycji = podswietlenie pokoju + etykieta z diffem (co sie zmieni)
+        if (r) out.push({ seq, kind: 'hl', areaId: state.roomArea[id], x: r.x, y: r.y, z: r.z ?? 0,
+          diff: (it.diff && it.diff.length) ? it.diff : null });
+        break;
+      }
+      case 'MOVE_ROOM_TO_AREA':
       case 'ADD_CL': case 'EDIT_CL': case 'DELETE_CL': case 'ADD_SUPPRESSOR': case 'DELETE_SUPPRESSOR': {
         const id = resR(T.roomId);
         if (typeof id === 'number') hl(seq, id);
@@ -18900,14 +18972,18 @@ function _deltaGhostGeoms(delta, items, ghostSeqs, overrides) {
       }
       case 'ADD_EXIT': {
         const p1 = posOf(T.sourceId), p2 = posOf(P.targetId);
-        if (p1 && p2) out.push({ seq, kind: 'exit', del: false, areaId: p1.areaId, z: p1.z, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
+        // M5: gdy jeden koniec nierozwiazywalny (pokoj kalki w nowym obszarze),
+        // rysujemy przynajmniej znany koniec: stub-strzalka w kierunku / podswietlenie celu.
+        if (p1 && p2) out.push({ seq, kind: 'exit', del: false, dir: T.dir, areaId: p1.areaId, z: p1.z, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
+        else if (p1) out.push({ seq, kind: 'exit-stub', del: false, dir: T.dir, areaId: p1.areaId, z: p1.z, x: p1.x, y: p1.y });
+        else if (p2) out.push({ seq, kind: 'hl', areaId: p2.areaId, x: p2.x, y: p2.y, z: p2.z });
         break;
       }
       case 'DELETE_EXIT': {
         const id = resR(T.roomId);
         const room = (typeof id === 'number') ? state.roomById[id] : null;
         const tgt = room && room.exits ? state.roomById[room.exits[T.dir]] : null;
-        if (room && tgt) out.push({ seq, kind: 'exit', del: true, areaId: state.roomArea[id], z: room.z ?? 0,
+        if (room && tgt) out.push({ seq, kind: 'exit', del: true, dir: T.dir, areaId: state.roomArea[id], z: room.z ?? 0,
           x1: room.x, y1: room.y, x2: tgt.x, y2: tgt.y });
         break;
       }
@@ -18915,7 +18991,7 @@ function _deltaGhostGeoms(delta, items, ghostSeqs, overrides) {
         const id = resR(T.roomId);
         const room = (typeof id === 'number') ? state.roomById[id] : null;
         const tgt = room && room.special_exits ? state.roomById[room.special_exits[P.cmd]] : null;
-        if (room && tgt) out.push({ seq, kind: 'exit', del: true, areaId: state.roomArea[id], z: room.z ?? 0,
+        if (room && tgt) out.push({ seq, kind: 'exit', del: true, dir: P.cmd, areaId: state.roomArea[id], z: room.z ?? 0,
           x1: room.x, y1: room.y, x2: tgt.x, y2: tgt.y });
         break;
       }
@@ -19132,6 +19208,44 @@ function _drawDeltaGhosts(rs) {
           ctx.moveTo(cx + half, cy - half); ctx.lineTo(cx - half, cy + half);
           ctx.stroke();
         }
+        // M5: etykieta diffu — co dokladnie zmieni ten op (max 3 linie + licznik)
+        if (g.diff && g.diff.length && state.zoom > 0.2) {
+          ctx.setLineDash([]);
+          ctx.fillStyle = 'rgba(' + col + ',0.95)';
+          ctx.font = Math.max(8, 10 * state.zoom) + 'px monospace';
+          const lines = g.diff.slice(0, 3);
+          if (g.diff.length > 3) lines.push('…(+' + (g.diff.length - 3) + ')');
+          const lh = Math.max(9, 11 * state.zoom);
+          for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], cx + half + 3, cy - half + (i + 1) * lh);
+        }
+      } else if (g.kind === 'exit-stub') {
+        // M5: wyjscie do pokoju kalki w nierozwiazywalnym obszarze — znany koniec
+        // + strzalka-wstega w kierunku wyjscia.
+        const cx = wx(g.x), cy = wy(g.y);
+        ctx.strokeStyle = 'rgba(' + col + ',0.9)';
+        ctx.fillStyle = 'rgba(' + col + ',0.13)';
+        ctx.lineWidth = Math.max(1, state.zoom * 1.5);
+        ctx.setLineDash([Math.max(3, state.zoom * 4), Math.max(2, state.zoom * 3)]);
+        ctx.fillRect(cx - half, cy - half, rs, rs);
+        ctx.strokeRect(cx - half, cy - half, rs, rs);
+        const v = DIR_VEC[g.dir] || [0, 0];
+        if (v[0] || v[1]) {
+          const ex = cx + v[0] * rs * 1.4, ey = cy + v[1] * rs * 1.4;
+          ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
+          const ang = Math.atan2(ey - cy, ex - cx), al = Math.max(4, state.zoom * 6);
+          ctx.beginPath();
+          ctx.moveTo(ex, ey);
+          ctx.lineTo(ex - al * Math.cos(ang - 0.45), ey - al * Math.sin(ang - 0.45));
+          ctx.moveTo(ex, ey);
+          ctx.lineTo(ex - al * Math.cos(ang + 0.45), ey - al * Math.sin(ang + 0.45));
+          ctx.stroke();
+        }
+        if (state.zoom > 0.2) {
+          ctx.setLineDash([]);
+          ctx.fillStyle = 'rgba(' + col + ',0.95)';
+          ctx.font = Math.max(8, 10 * state.zoom) + 'px monospace';
+          ctx.fillText((g.del ? '−' : '+') + g.dir + ' (pokój z kalki)', cx + half + 3, cy);
+        }
       } else if (g.kind === 'move') {
         ctx.strokeStyle = 'rgba(210,220,232,0.55)';
         ctx.lineWidth = Math.max(1, state.zoom);
@@ -19146,10 +19260,25 @@ function _drawDeltaGhosts(rs) {
         ctx.strokeRect(cx - half, cy - half, rs, rs);
         ctx.beginPath(); ctx.moveTo(wx(g.fromX), wy(g.fromY)); ctx.lineTo(cx, cy); ctx.stroke();
       } else if (g.kind === 'exit') {
+        // M5: grubsza linia + grot strzalki na koncu + podpis kierunku w polowie
+        const X1 = wx(g.x1), Y1 = wy(g.y1), X2 = wx(g.x2), Y2 = wy(g.y2);
         ctx.strokeStyle = 'rgba(' + col + ',0.85)';
-        ctx.lineWidth = Math.max(1, state.zoom * 1.3);
+        ctx.lineWidth = Math.max(1.2, state.zoom * 1.8);
         ctx.setLineDash([Math.max(3, state.zoom * 4), Math.max(2, state.zoom * 3)]);
-        ctx.beginPath(); ctx.moveTo(wx(g.x1), wy(g.y1)); ctx.lineTo(wx(g.x2), wy(g.y2)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(X1, Y1); ctx.lineTo(X2, Y2); ctx.stroke();
+        const ang = Math.atan2(Y2 - Y1, X2 - X1), al = Math.max(4, state.zoom * 6);
+        ctx.beginPath();
+        ctx.moveTo(X2, Y2);
+        ctx.lineTo(X2 - al * Math.cos(ang - 0.45), Y2 - al * Math.sin(ang - 0.45));
+        ctx.moveTo(X2, Y2);
+        ctx.lineTo(X2 - al * Math.cos(ang + 0.45), Y2 - al * Math.sin(ang + 0.45));
+        ctx.stroke();
+        if (g.dir && state.zoom > 0.2) {
+          ctx.setLineDash([]);
+          ctx.fillStyle = 'rgba(' + col + ',0.95)';
+          ctx.font = 'bold ' + Math.max(8, 11 * state.zoom) + 'px monospace';
+          ctx.fillText((g.del ? '−' : '+') + g.dir, (X1 + X2) / 2 + 3, (Y1 + Y2) / 2 - 3);
+        }
       } else if (g.kind === 'label') {
         const lx = wx(g.x), ly = wy(g.y);
         const lw = g.w * CELL * state.zoom, lh = g.h * CELL * state.zoom;
@@ -19239,6 +19368,13 @@ function _renderDeltaPanel() {
       note.textContent = it.note;
       row.appendChild(note);
     }
+    // M5: diff edycji — wiersz sam mowi, co sie zmieni (bez wlaczania ducha)
+    if (it.diff && it.diff.length) {
+      const d = document.createElement('span');
+      d.className = 'dp-note dp-diff';
+      d.textContent = it.diff.join(' · ');
+      row.appendChild(d);
+    }
     // M3: duch (pokaż/ukryj) — tylko typy z geometrią, bez niewykonalnych
     if (_DELTA_GHOST_TYPES.has(it.type) && it.cls !== 'impossible') {
       const bShow = document.createElement('button');
@@ -19288,6 +19424,12 @@ function _renderDeltaPanel() {
       row.style.cursor = 'pointer';
       row.title = 'Kliknij — pokaż na mapie';
       row.addEventListener('click', () => _deltaJump(it));
+    } else if (it.areaInfo) {
+      // M5: ok-ADD_AREA — obszaru jeszcze nie ma na mapie, klik = informacja
+      row.style.cursor = 'pointer';
+      row.title = 'Kliknij — informacja o nowym obszarze';
+      row.addEventListener('click', () => toast('Nowy obszar „' + it.areaInfo.name + '" — powstanie po Zastosuj'
+        + (it.areaInfo.rooms ? ' (pokoi w kalce: ' + it.areaInfo.rooms + ')' : '')));
     }
     body.appendChild(row);
   }
