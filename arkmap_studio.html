@@ -317,6 +317,11 @@
   .dp-mark { display:inline-block; width:13px; text-align:center; font-size:11px; flex:none; }
   .dp-mark.impossible { color:#ff7b72; }
   .dp-mark.done { color:var(--ok); }
+  /* M5e: uchwyt zmiany rozmiaru panelu (prawy dolny rog) */
+  #dp-resize { position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize;
+    background:linear-gradient(135deg, transparent 50%, #333c52 50%, #333c52 60%, transparent 60%, transparent 70%, #333c52 70%);
+    border-radius:0 0 6px 0; }
+  #dp-resize:hover { background:linear-gradient(135deg, transparent 50%, var(--accent) 50%, var(--accent) 60%, transparent 60%, transparent 70%, var(--accent) 70%); }
   .dp-expl { font-size:9px; color:var(--dim); opacity:.75; padding:2px 8px 4px; border-bottom:1px solid var(--border); line-height:1.35; }
   #dp-apply { color:var(--ok); border-color:#2a5a3a; }
   #dp-apply:disabled { opacity:.4; cursor:default; color:var(--dim); border-color:var(--border); }
@@ -2513,6 +2518,7 @@
         <button class="vd-btn" id="dp-rebase" style="display:none">💾 Zapisz zaktualizowaną kalkę&hellip;</button>
         <button class="vd-btn close" id="dp-close2">Zamknij</button>
       </div>
+      <div id="dp-resize" title="Przeciągnij, aby zmienić rozmiar panelu"></div>
     </div>
 
     <!-- FLOATING ROOM PANEL -->
@@ -12694,7 +12700,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.24.0';
+const APP_VERSION = 'v1.25.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -19538,6 +19544,24 @@ btnSaveArkdelta.addEventListener('click', saveDelta);
   });
   window.addEventListener('mousemove', e => { if (!drag) return; panel.style.left = Math.max(0, e.clientX - dx) + 'px'; panel.style.top = Math.max(0, e.clientY - dy) + 'px'; });
   window.addEventListener('mouseup', () => { drag = false; });
+  // M5e: zmiana rozmiaru panelu — uchwyt w rogu, min 360x220, max 92vw x 80vh
+  // (po przesunieciu panelu dodatkowo clamp do dolnej krawedzi okna).
+  const rz = document.getElementById('dp-resize');
+  let rsz = false, rw = 0, rh = 0, rx = 0, ry = 0;
+  rz.addEventListener('mousedown', e => {
+    rsz = true; const r = panel.getBoundingClientRect();
+    rw = r.width; rh = r.height; rx = e.clientX; ry = e.clientY;
+    e.preventDefault(); e.stopPropagation();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!rsz) return;
+    const w = Math.min(Math.max(rw + e.clientX - rx, 360), Math.round(window.innerWidth * 0.92));
+    let maxH = Math.round(window.innerHeight * 0.8);
+    if (panel.style.top) maxH = Math.min(maxH, window.innerHeight - panel.getBoundingClientRect().top - 8);
+    const h = Math.min(Math.max(rh + e.clientY - ry, 220), maxH);
+    panel.style.width = w + 'px'; panel.style.height = h + 'px'; panel.style.maxHeight = 'none';
+  });
+  window.addEventListener('mouseup', () => { rsz = false; });
 }
 
 function _arkdeltaUpdateSaveBtn() {
