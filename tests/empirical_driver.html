@@ -2069,6 +2069,26 @@ scenario('E7.marks', async () => {
     'po apply: 30 markerow ✓ (29 sesyjnych + op31)');
 });
 
+scenario('E7.contrast', async () => {
+  // M5d: przyciski wiersza czytelne na podswietleniu, wynik autopozycji = pigulka.
+  await loadBase('dat');
+  const txt = await (await fetch('./fixture_demo.arkdelta')).text();
+  ex('const r = validateDeltaText(' + JSON.stringify(txt) + '); if (!r.ok) throw new Error("walidacja fixture_demo"); window.__e7cdelta = r.delta;');
+  ex('openDeltaReview(window.__e7cdelta)');
+  const bg = ev('(function(){ const b = [...document.querySelectorAll("#dp-body .dp-mini")].find(x => x.textContent === "Efekt");'
+    + ' return b ? getComputedStyle(b).backgroundColor : null; })()').val;
+  A('E7.contrast.mini-bg', !!bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent',
+    'przycisk Efekt ma wlasne tlo (nie zanika na hoverze wiersza) [=' + bg + ']');
+  const col = ev('(function(){ const b = [...document.querySelectorAll("#dp-body .dp-mini")].find(x => x.textContent === "Efekt");'
+    + ' return b ? getComputedStyle(b).color : null; })()').val;
+  EQ('E7.contrast.mini-fg', col, 'rgb(232, 238, 248)', 'przycisk Efekt: jasny tekst (--text), nie przygaszony --dim');
+  ex('_deltaAutoplace(_deltaReview.items[27])');  // op28: twarda kolizja -> autopozycja
+  const pill = ev('(function(){ const c = document.querySelector("#dp-body .dp-ovr"); if (!c) return null;'
+    + ' const s = getComputedStyle(c); return { br: s.borderRadius, bw: s.borderTopWidth, bg: s.backgroundColor, fw: s.fontWeight }; })()').val;
+  A('E7.contrast.pill', !!pill && pill.br === '8px' && pill.bw === '1px' && pill.bg !== 'rgba(0, 0, 0, 0)' && (pill.fw === '600' || pill.fw === 'bold'),
+    'chip autopozycji jako pigulka: ramka+tlo+pogrubienie [=' + JSON.stringify(pill) + ']');
+});
+
 // ═══ Runner ═══
 function appReady() {
   return new Promise(res => {
