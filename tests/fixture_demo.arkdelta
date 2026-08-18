@@ -1,0 +1,798 @@
+{
+  "checksums": {
+    "file": "4915e540",
+    "ops": [
+      "aa190da8",
+      "60b121da",
+      "2a33a82d",
+      "922188c6",
+      "a7217d08",
+      "4d6d0ad6",
+      "fc8bbaff",
+      "48748a64",
+      "2bde6795",
+      "ac541430",
+      "b28ad1cf",
+      "bc882250",
+      "1b0326c9",
+      "8bb455a9",
+      "3ce0056f",
+      "aa8ec883",
+      "cad255f6",
+      "80550da7",
+      "ea217106",
+      "6d48cd19",
+      "6b9f65b5",
+      "7c0624fe",
+      "bfd5c5c5",
+      "d1ab6b2e",
+      "985f8f0c",
+      "94f06349",
+      "2aed0a7a",
+      "6db77518",
+      "857b3739",
+      "18392ae2",
+      "11f76919",
+      "b69740a9",
+      "1603e7d5",
+      "9d28068d",
+      "f58c617e",
+      "8371a7ba"
+    ]
+  },
+  "meta": {
+    "app_version": "demo",
+    "base": {
+      "crc": "690530b8",
+      "revision": "5ed22affd9f1f27886199437c20d527971e9af53",
+      "version": "0.205.0"
+    },
+    "format": "arkdelta",
+    "format_version": 1,
+    "ops_count": 36
+  },
+  "ops": [
+    {
+      "label": "Dodanie obszaru \"E1 Test Area\" (#64)",
+      "payload": {
+        "area": {
+          "id": "d:1",
+          "labels": [],
+          "name": "E1 Test Area",
+          "rooms": [],
+          "user_data": {}
+        }
+      },
+      "seq": 1,
+      "target": {
+        "areaId": "d:1"
+      },
+      "type": "ADD_AREA"
+    },
+    {
+      "label": "Dodanie pokoju \"\" (#27210)",
+      "payload": {
+        "room": {
+          "env": 258,
+          "id": "d:2",
+          "x": 50,
+          "y": 50,
+          "z": 0
+        }
+      },
+      "seq": 2,
+      "target": {
+        "areaId": "d:1",
+        "roomId": "d:2"
+      },
+      "type": "ADD_ROOM"
+    },
+    {
+      "label": "Dodanie wyjścia n → #27210 (z #2)",
+      "payload": {
+        "bidirectional": false,
+        "targetId": "d:2"
+      },
+      "seq": 3,
+      "target": {
+        "dir": "n",
+        "sourceId": 2
+      },
+      "type": "ADD_EXIT"
+    },
+    {
+      "label": "Dodanie wyjścia n → #1 (z #3)",
+      "payload": {
+        "bidirectional": false,
+        "targetId": 1
+      },
+      "seq": 4,
+      "target": {
+        "dir": "n",
+        "sourceId": 3
+      },
+      "type": "ADD_EXIT"
+    },
+    {
+      "label": "Dodano CL dir=w w pokoju \"10\" (#10)",
+      "payload": {
+        "cl": {
+          "arrow": true,
+          "color": [255, 0, 0],
+          "points": [
+            [28.333333333333332, -22.5],
+            [27.666666666666668, -22.5]
+          ]
+        }
+      },
+      "seq": 5,
+      "target": {
+        "dir": "w",
+        "roomId": 10
+      },
+      "type": "ADD_CL"
+    },
+    {
+      "label": "Edycja CL dir=w w pokoju \"10\" (#10)",
+      "payload": {
+        "after": {
+          "arrow": true,
+          "color": [255, 0, 0],
+          "points": [
+            [28.333333333333332, -22.9],
+            [27.666666666666668, -22.9]
+          ]
+        },
+        "before": {
+          "arrow": true,
+          "color": [255, 0, 0],
+          "points": [
+            [28.333333333333332, -22.5],
+            [27.666666666666668, -22.5]
+          ]
+        }
+      },
+      "seq": 6,
+      "target": {
+        "dir": "w",
+        "roomId": 10
+      },
+      "type": "EDIT_CL"
+    },
+    {
+      "label": "Dodanie pustej custom line dir=n w pokoju \"12\" (#12)",
+      "payload": {},
+      "seq": 7,
+      "target": {
+        "dir": "n",
+        "roomId": 12
+      },
+      "type": "ADD_SUPPRESSOR"
+    },
+    {
+      "label": "Usunięcie pustej custom line dir=n w pokoju \"12\" (#12)",
+      "payload": {
+        "cl": {
+          "color": [255, 0, 0],
+          "points": []
+        }
+      },
+      "seq": 8,
+      "target": {
+        "dir": "n",
+        "roomId": 12
+      },
+      "type": "DELETE_SUPPRESSOR"
+    },
+    {
+      "label": "Usunięcie CL dir=e w pokoju \"21\" (#21)",
+      "payload": {
+        "cl": {
+          "color": [191, 191, 191],
+          "points": [
+            [33, -8],
+            [33, -7],
+            [40, -7],
+            [40, -8],
+            [43, -8]
+          ]
+        }
+      },
+      "seq": 9,
+      "target": {
+        "dir": "e",
+        "roomId": 21
+      },
+      "type": "DELETE_CL"
+    },
+    {
+      "label": "Edycja pokoju \"E1 Zmieniona Nazwa\" (#1)",
+      "payload": {
+        "after": {
+          "env": 257,
+          "exits": {
+            "nw": 2,
+            "se": 745
+          },
+          "hash": "45:28:0:Wyzima",
+          "id": 1,
+          "name": "E1 Zmieniona Nazwa",
+          "user_data": {
+            "drinkable": "",
+            "internal_id": "i1fd75c220"
+          },
+          "x": 45,
+          "y": -28,
+          "z": 0
+        },
+        "before": {
+          "env": 257,
+          "exits": {
+            "nw": 2,
+            "se": 745
+          },
+          "hash": "45:28:0:Wyzima",
+          "id": 1,
+          "name": "1",
+          "user_data": {
+            "drinkable": "",
+            "internal_id": "i1fd75c220"
+          },
+          "x": 45,
+          "y": -28,
+          "z": 0
+        }
+      },
+      "seq": 10,
+      "target": {
+        "roomId": 1
+      },
+      "type": "EDIT_ROOM"
+    },
+    {
+      "label": "Edycja wyjścia nw w pokoju \"E1 Zmieniona Nazwa\" (#1)",
+      "payload": {
+        "after": {
+          "env": 257,
+          "exit_weights": {
+            "nw": 9
+          },
+          "exits": {
+            "nw": 2,
+            "se": 745
+          },
+          "hash": "45:28:0:Wyzima",
+          "id": 1,
+          "name": "E1 Zmieniona Nazwa",
+          "user_data": {
+            "drinkable": "",
+            "internal_id": "i1fd75c220"
+          },
+          "x": 45,
+          "y": -28,
+          "z": 0
+        },
+        "before": {
+          "env": 257,
+          "exits": {
+            "nw": 2,
+            "se": 745
+          },
+          "hash": "45:28:0:Wyzima",
+          "id": 1,
+          "name": "E1 Zmieniona Nazwa",
+          "user_data": {
+            "drinkable": "",
+            "internal_id": "i1fd75c220"
+          },
+          "x": 45,
+          "y": -28,
+          "z": 0
+        }
+      },
+      "seq": 11,
+      "target": {
+        "roomId": 1
+      },
+      "type": "EDIT_EXIT"
+    },
+    {
+      "label": "Przesunięcie pokoju \"4\" (#4)",
+      "payload": {
+        "fromX": 39,
+        "fromY": -26,
+        "fromZ": 0,
+        "toX": 539,
+        "toY": 474,
+        "toZ": 0
+      },
+      "seq": 12,
+      "target": {
+        "roomId": 4
+      },
+      "type": "MOVE_ROOM"
+    },
+    {
+      "label": "Przeniesienie pokoju \"5\" (#5) do obszaru \"E1 Test Area\"",
+      "payload": {
+        "fromAreaId": 1,
+        "toAreaId": "d:1"
+      },
+      "seq": 13,
+      "target": {
+        "roomId": 5
+      },
+      "type": "MOVE_ROOM_TO_AREA"
+    },
+    {
+      "label": "Usunięcie wyjścia n z #6",
+      "payload": {
+        "exitId": 7
+      },
+      "seq": 14,
+      "target": {
+        "dir": "n",
+        "roomId": 6
+      },
+      "type": "DELETE_EXIT"
+    },
+    {
+      "label": "Usunięcie wyjścia specjalnego „schody\" z #53",
+      "payload": {
+        "cmd": "schody",
+        "targetId": 10082
+      },
+      "seq": 15,
+      "target": {
+        "roomId": 53
+      },
+      "type": "DELETE_SPECIAL_EXIT"
+    },
+    {
+      "label": "Malowanie „\" — 2 pokoi",
+      "payload": {
+        "changes": [
+          {
+            "afterEnv": 7,
+            "beforeEnv": -1,
+            "roomId": 7
+          },
+          {
+            "afterEnv": 7,
+            "beforeEnv": -1,
+            "roomId": 8
+          }
+        ]
+      },
+      "seq": 16,
+      "target": {},
+      "type": "PAINT_BATCH"
+    },
+    {
+      "label": "Zmiana koloru env 2 → rgb(11,22,33)",
+      "payload": {
+        "newColor": [11, 22, 33],
+        "oldColor": null
+      },
+      "seq": 17,
+      "target": {
+        "envId": 2
+      },
+      "type": "EDIT_ENV_COLOR"
+    },
+    {
+      "label": "Dodanie etykiety \"E1 etykieta\" (#1)",
+      "payload": {
+        "label": {
+          "bg_color": [13, 15, 18, 178],
+          "fg_color": [200, 200, 100],
+          "height": 1.5,
+          "id": "d:3",
+          "text": "E1 etykieta",
+          "width": 5,
+          "x": 10.5,
+          "y": 20.5,
+          "z": 0
+        }
+      },
+      "seq": 18,
+      "target": {
+        "areaId": "d:1"
+      },
+      "type": "ADD_LABEL"
+    },
+    {
+      "label": "Edycja etykiety \"E1 etykieta zmieniona\" (#1)",
+      "payload": {
+        "after": {
+          "bg_color": [13, 15, 18, 178],
+          "fg_color": [200, 200, 100],
+          "height": 1.5,
+          "id": "d:3",
+          "text": "E1 etykieta zmieniona",
+          "width": 5,
+          "x": 10.5,
+          "y": 20.5,
+          "z": 0
+        },
+        "before": {
+          "bg_color": [13, 15, 18, 178],
+          "fg_color": [200, 200, 100],
+          "height": 1.5,
+          "id": "d:3",
+          "text": "E1 etykieta",
+          "width": 5,
+          "x": 10.5,
+          "y": 20.5,
+          "z": 0
+        }
+      },
+      "seq": 19,
+      "target": {
+        "areaId": "d:1",
+        "labelId": "d:3"
+      },
+      "type": "EDIT_LABEL"
+    },
+    {
+      "label": "Przesunięcie etykiety \"E1 etykieta zmieniona\" (#1)",
+      "payload": {
+        "fromX": 10.5,
+        "fromY": 20.5,
+        "toX": 13.5,
+        "toY": 22.5
+      },
+      "seq": 20,
+      "target": {
+        "areaId": "d:1",
+        "labelId": "d:3"
+      },
+      "type": "MOVE_LABEL"
+    },
+    {
+      "label": "Resize etykiety \"E1 etykieta zmieniona\" (#1)",
+      "payload": {
+        "fromH": 1.5,
+        "fromW": 5,
+        "fromX": 13.5,
+        "fromY": 22.5,
+        "toH": 2.5,
+        "toW": 7,
+        "toX": 13.5,
+        "toY": 22.5
+      },
+      "seq": 21,
+      "target": {
+        "areaId": "d:1",
+        "labelId": "d:3"
+      },
+      "type": "RESIZE_LABEL"
+    },
+    {
+      "label": "Usunięcie etykiety \"E1 etykieta zmieniona\" (#1)",
+      "payload": {
+        "label": {
+          "bg_color": [13, 15, 18, 178],
+          "fg_color": [200, 200, 100],
+          "height": 2.5,
+          "id": "d:3",
+          "text": "E1 etykieta zmieniona",
+          "width": 7,
+          "x": 13.5,
+          "y": 22.5,
+          "z": 0
+        }
+      },
+      "seq": 22,
+      "target": {
+        "areaId": "d:1",
+        "labelId": "d:3"
+      },
+      "type": "DELETE_LABEL"
+    },
+    {
+      "label": "Usunięcie pokoju \"9\" (#9)",
+      "payload": {
+        "room": {
+          "env": -1,
+          "exits": {
+            "e": 8,
+            "n": 3795,
+            "w": 10
+          },
+          "hash": "31:22:0:Wyzima",
+          "id": 9,
+          "name": "9",
+          "user_data": {
+            "internal_id": "i6faae5dc6"
+          },
+          "x": 31,
+          "y": -22,
+          "z": 0
+        }
+      },
+      "seq": 23,
+      "target": {
+        "areaId": 1,
+        "roomId": 9
+      },
+      "type": "DELETE_ROOM"
+    },
+    {
+      "label": "Dodanie obszaru \"E1 Test Area B\" (#65)",
+      "payload": {
+        "area": {
+          "id": "d:4",
+          "labels": [],
+          "name": "E1 Test Area B",
+          "rooms": [],
+          "user_data": {}
+        }
+      },
+      "seq": 24,
+      "target": {
+        "areaId": "d:4"
+      },
+      "type": "ADD_AREA"
+    },
+    {
+      "label": "Usunięcie obszaru \"E1 Test Area B\" (#65)",
+      "payload": {
+        "name": "E1 Test Area B"
+      },
+      "seq": 25,
+      "target": {
+        "areaId": "d:4"
+      },
+      "type": "DELETE_AREA"
+    },
+    {
+      "label": "Edycja obszaru \"E1 Obszar -1\" (#-1)",
+      "payload": {
+        "beforeName": "Default Area",
+        "beforeUserData": {
+          "system.fallback_map2DZoom": "25"
+        },
+        "name": "E1 Obszar -1",
+        "user_data": {}
+      },
+      "seq": 26,
+      "target": {
+        "areaId": -1
+      },
+      "type": "EDIT_AREA"
+    },
+    {
+      "label": "Naprawa podwójnych linii (0 usun., 1 dod.)",
+      "payload": {
+        "added": [
+          {
+            "cl": {
+              "color": [255, 0, 0],
+              "points": []
+            },
+            "dir": "e",
+            "roomId": 11
+          }
+        ],
+        "removed": []
+      },
+      "seq": 27,
+      "target": {},
+      "type": "AUTO_FIX_SUPPRESSORS"
+    },
+    {
+      "label": "DEMO: dodanie pokoju na zajete pole -> hard (kolizja)",
+      "payload": {
+        "room": {
+          "env": 258,
+          "id": "d:demo1",
+          "x": 33,
+          "y": -20,
+          "z": 0
+        }
+      },
+      "seq": 28,
+      "target": {
+        "areaId": 1,
+        "roomId": "d:demo1"
+      },
+      "type": "ADD_ROOM"
+    },
+    {
+      "label": "DEMO: przeniesienie pokoju na zajete pole -> hard (kolizja)",
+      "payload": {
+        "fromX": 31,
+        "fromY": -18,
+        "fromZ": 0,
+        "toX": 33,
+        "toY": -20,
+        "toZ": 0
+      },
+      "seq": 29,
+      "target": {
+        "roomId": 14
+      },
+      "type": "MOVE_ROOM"
+    },
+    {
+      "label": "DEMO: edycja pokoju, before nie zgadza sie z mapa -> hard",
+      "payload": {
+        "after": {
+          "env": 258,
+          "exits": {
+            "e": 16,
+            "s": 14
+          },
+          "id": 15,
+          "name": "DEMO zmieniona nazwa",
+          "user_data": {
+            "internal_id": "i65b24ad52"
+          },
+          "x": 31,
+          "y": -16,
+          "z": 0
+        },
+        "before": {
+          "env": 258,
+          "exits": {
+            "e": 16,
+            "s": 14
+          },
+          "id": 15,
+          "name": "ZLA NAZWA (celowo)",
+          "user_data": {
+            "internal_id": "i65b24ad52"
+          },
+          "x": 31,
+          "y": -16,
+          "z": 0
+        }
+      },
+      "seq": 30,
+      "target": {
+        "roomId": 15
+      },
+      "type": "EDIT_ROOM"
+    },
+    {
+      "label": "DEMO: edycja juz naniesiona na mape -> done",
+      "payload": {
+        "after": {
+          "env": 800,
+          "exits": {
+            "n": 17,
+            "w": 15
+          },
+          "id": 16,
+          "name": "16",
+          "user_data": {
+            "drinkable": "",
+            "internal_id": "i90e68544d",
+            "team_follow_link": "przez kladke*n"
+          },
+          "x": 33,
+          "y": -16,
+          "z": 0
+        },
+        "before": {
+          "env": 800,
+          "exits": {
+            "n": 17,
+            "w": 15
+          },
+          "id": 16,
+          "name": "16",
+          "user_data": {
+            "drinkable": "",
+            "internal_id": "i90e68544d",
+            "team_follow_link": "przez kladke*n"
+          },
+          "x": 33,
+          "y": -16,
+          "z": 0
+        }
+      },
+      "seq": 31,
+      "target": {
+        "roomId": 16
+      },
+      "type": "EDIT_ROOM"
+    },
+    {
+      "label": "DEMO: usuniecie nieistniejacego pokoju -> impossible",
+      "payload": {
+        "room": {
+          "env": -1,
+          "exits": {
+            "e": 8,
+            "n": 3795,
+            "w": 10
+          },
+          "hash": "31:22:0:Wyzima",
+          "id": 9,
+          "name": "9",
+          "user_data": {
+            "internal_id": "i6faae5dc6"
+          },
+          "x": 31,
+          "y": -22,
+          "z": 0
+        }
+      },
+      "seq": 32,
+      "target": {
+        "areaId": 1,
+        "roomId": 99999999
+      },
+      "type": "DELETE_ROOM"
+    },
+    {
+      "label": "DEMO: dodanie wyjscia w zajetym kierunku -> hard",
+      "payload": {
+        "bidirectional": false,
+        "targetId": 13
+      },
+      "seq": 33,
+      "target": {
+        "dir": "ne",
+        "sourceId": 13
+      },
+      "type": "ADD_EXIT"
+    },
+    {
+      "label": "DEMO: usuniecie nieistniejacego wyjscia -> impossible",
+      "payload": {
+        "exitId": 13
+      },
+      "seq": 34,
+      "target": {
+        "dir": "n",
+        "roomId": 13
+      },
+      "type": "DELETE_EXIT"
+    },
+    {
+      "label": "DEMO: edycja nieistniejacej custom line -> impossible",
+      "payload": {
+        "after": {
+          "arrow": true,
+          "color": [255, 0, 0],
+          "points": [
+            [28.333333333333332, -22.9],
+            [27.666666666666668, -22.9]
+          ]
+        },
+        "before": {
+          "arrow": true,
+          "color": [255, 0, 0],
+          "points": [
+            [28.333333333333332, -22.5],
+            [27.666666666666668, -22.5]
+          ]
+        }
+      },
+      "seq": 35,
+      "target": {
+        "dir": "n",
+        "roomId": 13
+      },
+      "type": "EDIT_CL"
+    },
+    {
+      "label": "DEMO: usuniecie nieistniejacego tlumika -> impossible",
+      "payload": {
+        "cl": {
+          "color": [255, 0, 0],
+          "points": []
+        }
+      },
+      "seq": 36,
+      "target": {
+        "dir": "n",
+        "roomId": 13
+      },
+      "type": "DELETE_SUPPRESSOR"
+    }
+  ]
+}
