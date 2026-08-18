@@ -1752,7 +1752,6 @@
   .cs-desc { font-size: 11px; color: var(--dim); }
 
   /* 4. Sidebar edit mode */
-  #app.edit-mode #btn-save-dat { opacity: 0.4; cursor: not-allowed; }
   #app.edit-mode #btn-save-arkmap-as { display: block !important; }
   #btn-save-arkmap:not(:disabled),
   #btn-save-arkmap-as:not(:disabled) { border-color: var(--ok); color: var(--ok); }
@@ -9138,6 +9137,24 @@ function _performArkmapSave(onSaved) {
   }
 }
 
+// Liczba pól otwartego formularza pokoju różniących się od snapshotu
+// (niezapisane zmiany — nie wchodzą do eksportu .dat, bo eksport czyta stan mapy).
+function _editDirtyCount() {
+  if (!state.editMode || !state.editDirty || !state.selected) return 0;
+  const s = state.editSnapshot || {};
+  const gv = id => { const el = document.getElementById(id); return el ? el.value : null; };
+  let n = 0;
+  const name = gv('rp-name');   if (name !== null && name.trim() !== (s.name ?? '')) n++;
+  const env  = gv('rp-env');    if (env !== null && (parseInt(env) || 1) !== (s.env ?? 1)) n++;
+  const sym  = gv('rp-symbol'); if (sym !== null && sym.trim() !== (s.symbol ?? '')) n++;
+  const wgt  = gv('rp-weight'); if (wgt !== null && wgt.trim() !== '' && parseInt(wgt) !== (s.weight ?? 1)) n++;
+  const xx   = gv('rp-x');      if (xx !== null && parseInt(xx) !== (s.x ?? 0)) n++;
+  const yy   = gv('rp-y');      if (yy !== null && parseInt(yy) !== (s.y ?? 0)) n++;
+  const zz   = gv('rp-z');      if (zz !== null && parseInt(zz) !== (s.z ?? 0)) n++;
+  const not  = gv('rp-notes');  if (not !== null && not.trim() !== (s.notes ?? '')) n++;
+  return n;
+}
+
 function _performDatExport() {
   if (!state.map) return;
   _prepareArkmapForSave();
@@ -9146,7 +9163,16 @@ function _performDatExport() {
     const bytes = arkmapToDat(state.map);
     const cleanFn = (state.filename || 'mapa').replace(/^.*·\s*/, '').trim();
     const suggestedName = cleanFn.replace(/\.dat$|\.json$|\.arkmap$/, '') + '.dat';
-    saveWithDialog(suggestedName, 'application/octet-stream', () => bytes);
+    // Eksport w trybie edycji: formularz z niezapisanymi zmianami NIE wchodzi do pliku
+    // (eksport czyta state.map) — po zapisie czytelne ostrzeżenie z liczbą pól.
+    const dirtyN = _editDirtyCount();
+    const dirtyRoom = state.selected;
+    saveWithDialog(suggestedName, 'application/octet-stream', () => bytes).then(ok => {
+      if (ok && dirtyN > 0) {
+        toast('⚠ Wyeksportowano .dat bez ' + dirtyN + ' niezapisan' + (dirtyN === 1 ? 'ej zmiany' : 'ych zmian')
+          + ' z formularza pokoju #' + dirtyRoom + ' — zapisz formularz i wyeksportuj ponownie', true);
+      }
+    });
   } catch (e) {
     toast('✗ Eksport .dat — błąd: ' + e.message, true);
     console.error(e);
@@ -12716,7 +12742,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.31.0';
+const APP_VERSION = 'v1.32.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -12875,11 +12901,13 @@ function updateEditUI() {
   if (toggleLabel) toggleLabel.textContent = isEdit ? 'Wyjdź' : 'Edycja';
   const modeLabel = document.getElementById('msb-mode-label');
   if (modeLabel) modeLabel.textContent = state.githubSession ? 'SESJA GITHUB' : 'EDYCJA LOKALNA';
-  // btn-save-dat: disabled in edit mode
+  // btn-save-dat: dostępny także w trybie edycji (eksport z aktualnego stanu mapy).
+  // Niezapisane zmiany z otwartego formularza pokoju NIE wchodzą do pliku —
+  // ostrzeżenie z liczbą pól pokazuje _performDatExport (toast).
   const saveDatBtn = document.getElementById('btn-save-dat');
   if (saveDatBtn) {
-    saveDatBtn.disabled = isEdit;
-    saveDatBtn.title = isEdit ? 'Wyjdź z edycji aby eksportować' : '';
+    saveDatBtn.disabled = false;
+    saveDatBtn.title = isEdit ? 'Eksport .dat z trybu edycji — niezapisane zmiany z otwartego formularza pokoju nie wejdą do pliku' : '';
   }
   // btn-load-arkdelta: enabled tylko w trybie edycji (wczesniej trwaly disabled
   // w markup — zaden kod go nie odlokowywal; handler #fi-arkdelta dzialal poprawnie)
