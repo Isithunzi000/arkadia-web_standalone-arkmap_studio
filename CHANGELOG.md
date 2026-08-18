@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.32.0 — eksport .dat dostepny w trybie edycji + ostrzezenie o brudnym formularzu
+
+- **Przyczyna:** przycisk „Eksportuj Mudlet .dat" byl wylaczany w trybie edycji („Wyjdź z edycji aby eksportować") — czysta decyzja UI, zadnej technicznej przeszkody (eksport czyta zywy state.map, zmiany z edycji sa w nim natychmiast po commicie).
+- **Fix:** eksport .dat odblokowany w trybie edycji (tooltip wyjasnia zasade). Jedyna rzecz, ktora NIE wchodzi do pliku, to niezapisane zmiany z otwartego formularza pokoju — po eksporcie z brudnym formularzem toast: „Wyeksportowano .dat bez N niezapisanych zmian z formularza pokoju #id — zapisz formularz i wyeksportuj ponownie". Licznik `_editDirtyCount` porownuje 8 pol formularza (nazwa/env/symbol/waga/x/y/z/notatki) ze snapshotem edycji. CSS „not-allowed" usuniety.
+- **Testy (w tym samym commicie):** nowy scenariusz E8.editexport (5 asercji: przycisk odblokowany + tooltip, licznik 2 zbrudzonych pol, toast ostrzegawczy z liczba, licznik 0 po commicie). Scenariusz wymusza sciezke fallback pobierania (headless Chromium ma showSaveFilePicker — dialog czekalby wiecznie).
+- Regresja lokalna: pelny `run-all.sh` PASS (13 harnessow node + kampania empiryczna SMOKE+E0–E8, 0 FAIL).
+- Commit: wpis w tym samym commicie co zmiany (hash w `git log`).
+
 ## v1.31.0 — dwa przyciski zapisu: naniesione zmiany + reszta kalki (M7)
 
 - **Przyczyna:** „Zapisz zaktualizowana kalke" zapisywal SESJE (deltaLog = to, co naniesiono recznie i z panelu), a nie nienaniesiona reszte kalki — uzytkownik zapisywal plik myslac, ze ma w nim konflikty do pozniejszego rozstrzygniecia, a one znikaly (wykryte na eksportach z testow recznych).

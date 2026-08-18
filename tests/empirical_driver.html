@@ -2155,6 +2155,34 @@ scenario('E8.remainder', async () => {
     'none', 'pusta reszta: przycisk ukryty');
 });
 
+// ═══ E8.editexport: eksport .dat w trybie edycji + ostrzezenie o brudnym formularzu (v1.32.0) ═══
+scenario('E8.editexport', async () => {
+  await loadBase('dat');
+  ex('state.editMode = true; updateEditUI();');
+  EQ('E8.editexport.enabled', ev('document.getElementById("btn-save-dat").disabled').val, false,
+    'btn-save-dat odblokowany w trybie edycji');
+  A('E8.editexport.tip', (ev('document.getElementById("btn-save-dat").title').val || '').indexOf('niezapisane zmiany') >= 0,
+    'tooltip: niezapisane zmiany formularza nie wejda do pliku');
+  // otworz formularz pokoju #1, zbrudz 2 pola (nazwa + notatki)
+  ex('state.selected = 1; showRoomInfo(state.roomById[1]);');
+  ex('(function(){ const n = document.getElementById("rp-name"); n.value = "Zmieniona Nazwa X"; n.dispatchEvent(new Event("input"));'
+    + ' const t = document.getElementById("rp-notes"); t.value = "notatka testowa"; t.dispatchEvent(new Event("input")); })()');
+  EQ('E8.editexport.dirty2', ev('_editDirtyCount()').val, 2, 'licznik: 2 zbrudzone pola (nazwa + notatki) [dbg='
+    + ev('(function(){ const n = document.getElementById("rp-name"); const t = document.getElementById("rp-notes");'
+    + ' return JSON.stringify({ dirty: state.editDirty, sel: state.selected, em: state.editMode,'
+    + ' name: n && n.value, notes: t && t.value, snapName: state.editSnapshot && state.editSnapshot.name,'
+    + ' fn: typeof setEditDirty }); })()').val + ']');
+  // headless ma showSaveFilePicker — otwarty dialog wyboru pliku czekalby wiecznie;
+  // wymuszamy sciezke fallback (<a download>)
+  ex('window.showSaveFilePicker = undefined; _performDatExport()');
+  await new Promise(r => setTimeout(r, 500));
+  A('E8.editexport.warn', (ev('document.getElementById("toast").textContent').val || '').indexOf('bez 2 niezapisanych zmian') >= 0,
+    'toast: eksport bez 2 niezapisanych zmian z formularza #1 [=' + (ev('document.getElementById("toast").textContent').val || '').slice(0, 80) + ']');
+  // porzadek: commit formularza + wyjscie z edycji
+  ex('commitRoomEdit(); state.editMode = false; state.selected = null; updateEditUI(); document.getElementById("room-panel").classList.remove("visible");');
+  EQ('E8.editexport.clean', ev('_editDirtyCount()').val, 0, 'po commicie: licznik 0');
+});
+
 // ═══ E7: diff-wizualizacja kalki (M5) ═══
 scenario('E7.diff', async () => {
   await loadBase('dat');
