@@ -453,7 +453,7 @@ ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo 
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.21.0';"), 'wersja: v1.21.0');
+ok(HTML.includes("const APP_VERSION = 'v1.22.0';"), 'wersja: v1.22.0');
 
 console.log('— T8: classifyDelta + recenzja (M2) —');
 {
@@ -530,7 +530,7 @@ console.log('— T8: classifyDelta + recenzja (M2) —');
   ok(cls(19) === 'impossible', 'classify MOVE_ROOM (F1): jw. → impossible');
   ok(cls(24) === 'hard', 'classify EDIT_ROOM: live != before → hard (zmieniony upstream)');
   ok(cls(25) === 'ok', 'classify ADD_EXIT: wolny kierunek → ok');
-  ok(cls(26) === 'hard' && note(26).includes('guard'), 'classify ADD_EXIT: kierunek zajęty innym → hard (guard odmówi)');
+  ok(cls(26) === 'hard' && note(26).includes('pominie ten op'), 'classify ADD_EXIT: kierunek zajęty innym → hard (Zastosuj pominie op)');
   ok(cls(27) === 'ok', 'classify MOVE_ROOM: wolne pole → ok');
   ok(cls(28) === 'done', 'classify MOVE_ROOM (F1): już na miejscu wg pozycji z CIENIA (po op24) → done');
   ok(cls(29) === 'hard' && note(29).includes('kolizja'), 'classify MOVE_ROOM (F1): pole zajęte przez pokój przesunięty wcześniej w kali (op27) → hard');
@@ -769,7 +769,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
     && HTML.includes("bShow.textContent = 'Efekt'") && HTML.includes("bHide.textContent = 'Ukryj'"),
     'panel: przyciski Efekt/Ukryj/Autopozycja/Ręcznie');
   ok(HTML.includes('Duchy:') && HTML.includes('pozycja zastępcza'), 'panel: legenda kolorów duchów');
-  ok(HTML.includes("const APP_VERSION = 'v1.21.0';"), 'wersja v1.21.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.22.0';"), 'wersja v1.22.0');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -805,7 +805,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.21.0';"), 'wersja v1.21.0 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.22.0';"), 'wersja v1.22.0 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji

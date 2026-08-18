@@ -307,6 +307,7 @@
   .dp-mini:disabled { opacity:.4; cursor:default; }
   .dp-ovr { color:var(--accent); flex-basis:auto; padding-left:6px; }
   .dp-legend { font-size:9px; color:var(--dim); padding:1px 8px 3px; border-bottom:1px solid var(--border); }
+  .dp-expl { font-size:9px; color:var(--dim); opacity:.75; padding:2px 8px 4px; border-bottom:1px solid var(--border); line-height:1.35; }
   #dp-apply { color:var(--ok); border-color:#2a5a3a; }
   #dp-apply:disabled { opacity:.4; cursor:default; color:var(--dim); border-color:var(--border); }
   #dp-rebase { color:var(--accent); border-color:#2a4a6a; }
@@ -2491,9 +2492,10 @@
         <button class="vd-btn dp-filter" data-f="all">Wszystkie</button>
         <button class="vd-btn dp-filter" data-f="ok">Do naniesienia</button>
         <button class="vd-btn dp-filter" data-f="hard">Konflikty</button>
-        <button class="vd-btn dp-filter" data-f="done">Naniesione</button>
+        <button class="vd-btn dp-filter" data-f="done">Bez roboty</button>
         <button class="vd-btn dp-filter" data-f="impossible">Niewykonalne</button>
       </div>
+      <div class="dp-expl">„Zastosuj" nanosi tylko zaznaczone. Konflikt = mapa zmieniła się od zapisu kalki — notatka przy opie mówi, co się stanie (nadpisanie wersją z kalki albo pominięcie).</div>
       <div class="dp-legend">Duchy: <span style="color:#4aff8a">■</span> wolne · <span style="color:#f0883e">■</span> kolizja/zmiana · <span style="color:#4a9eff">■</span> pozycja zastępcza · <span style="color:#ff7b72">■</span> usunięcie</div>
       <div class="vd-body" id="dp-body"></div>
       <div class="vd-ftr">
@@ -12682,7 +12684,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.21.0';
+const APP_VERSION = 'v1.22.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -18205,7 +18207,7 @@ function classifyDelta(delta) {
         const name = P.area && P.area.name || '';
         const found = [...sh.areas.values()].find(a => a.name === name && name !== '');
         if (found) { sidCls.set(sid, 'done'); sidAreaId.set(sid, found.id);
-          items.push(_deltaClsItem(op, 'done', 'obszar o tej nazwie już istnieje (#' + found.id + ')', areaJump(found.id))); }
+          items.push(_deltaClsItem(op, 'done', 'obszar o tej nazwie już jest na mapie (#' + found.id + ')', areaJump(found.id))); }
         else { sidCls.set(sid, 'ok'); items.push(_deltaClsItem(op, 'ok', '')); }
         break;
       }
@@ -18224,10 +18226,10 @@ function classifyDelta(delta) {
         const occ = shRoomAt(areaId, room.x ?? 0, room.y ?? 0, room.z ?? 0);
         if (occ && (occ.name || '') === (room.name || '')) {
           sidCls.set(sid, 'done'); sidRoomId.set(sid, occ.id);
-          items.push(_deltaClsItem(op, 'done', 'już naniesione (to samo pole i nazwa → #' + occ.id + ')', roomJump(occ.id)));
+          items.push(_deltaClsItem(op, 'done', 'już na mapie (to samo pole i nazwa → pokój #' + occ.id + ')', roomJump(occ.id)));
         } else if (occ) {
           sidCls.set(sid, 'ok');
-          const _it = _deltaClsItem(op, 'hard', 'pole (' + room.x + ',' + room.y + ',' + (room.z ?? 0) + ') zajęte przez #' + occ.id + ' — kolizja', roomJump(occ.id));
+          const _it = _deltaClsItem(op, 'hard', 'pole (' + room.x + ',' + room.y + ',' + (room.z ?? 0) + ') jest zajęte przez pokój #' + occ.id + ' — kolizja; wybierz Autopozycję / Ręcznie albo odznacz op', roomJump(occ.id));
           _it.coll = true;  // M3: kolizja pozycji — autopozycja / ręczna pozycja
           items.push(_it);
         } else {
@@ -18246,7 +18248,7 @@ function classifyDelta(delta) {
         if (!area) { sidCls.set(sid, 'impossible'); items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
         const found = (area.labels || []).find(l => l.text === lbl.text && l.x === lbl.x && l.y === lbl.y && (l.z ?? 0) === (lbl.z ?? 0));
         if (found) { sidCls.set(sid, 'done'); sidLabelId.set(sid, found.id);
-          items.push(_deltaClsItem(op, 'done', 'identyczna etykieta już istnieje (#' + found.id + ')', posJump(areaId, lbl.x, lbl.y))); }
+          items.push(_deltaClsItem(op, 'done', 'identyczna etykieta już jest na mapie (#' + found.id + ')', posJump(areaId, lbl.x, lbl.y))); }
         else { sidCls.set(sid, 'ok'); items.push(_deltaClsItem(op, 'ok', '', posJump(areaId, lbl.x, lbl.y))); }
         break;
       }
@@ -18257,7 +18259,7 @@ function classifyDelta(delta) {
         const room = sh.roomById[id];
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje (usunięty w tej wersji mapy?)')); break; }
         const eq = _deltaRoomCmp(room, P.room);
-        if (eq === false) items.push(_deltaClsItem(op, 'hard', 'pokój zmieniony upstream — usunięcie nanosi się mimo to', roomJump(id)));
+        if (eq === false) items.push(_deltaClsItem(op, 'hard', 'pokój zmienił się na mapie od zapisu kalki — Zastosuj usunie go mimo to', roomJump(id)));
         else items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
         break;
       }
@@ -18266,11 +18268,11 @@ function classifyDelta(delta) {
         if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
         const room = sh.roomById[id];
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje (usunięty w tej wersji mapy?)')); break; }
-        if (_deltaRoomCmp(room, P.after) === true) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
+        if (_deltaRoomCmp(room, P.after) === true) { items.push(_deltaClsItem(op, 'done', 'już na mapie', roomJump(id))); break; }
         // F2: done rowniez gdy ZMIENIANE pola sa zgodne z after, a rozjazd dotyczy
         // tylko pol niezmienianych przez ten op (np. pozniejszy EDIT_EXIT tej kalki).
-        if (_deltaEffectApplied(room, P.before, P.after)) { items.push(_deltaClsItem(op, 'done', 'już naniesione (zmieniane pola zgodne)', roomJump(id))); break; }
-        if (_deltaRoomCmp(room, P.before) === false) items.push(_deltaClsItem(op, 'hard', 'pokój zmieniony upstream — naniosę wersję z kalki', roomJump(id)));
+        if (_deltaEffectApplied(room, P.before, P.after)) { items.push(_deltaClsItem(op, 'done', 'już na mapie (zmieniane pola zgodne)', roomJump(id))); break; }
+        if (_deltaRoomCmp(room, P.before) === false) items.push(_deltaClsItem(op, 'hard', 'pokój zmienił się na mapie od zapisu kalki — Zastosuj nadpisze go wersją z kalki', roomJump(id)));
         else items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
         break;
       }
@@ -18284,7 +18286,7 @@ function classifyDelta(delta) {
         });
         const j = roomJump(existing[0].roomId);
         if (existing.length < changes.length) items.push(_deltaClsItem(op, 'hard', 'część pokoi nie istnieje (' + (changes.length - existing.length) + ' z ' + changes.length + ')', j));
-        else if (allMatch) items.push(_deltaClsItem(op, 'done', 'już naniesione', j));
+        else if (allMatch) items.push(_deltaClsItem(op, 'done', 'już na mapie', j));
         else items.push(_deltaClsItem(op, 'ok', '', j));
         break;
       }
@@ -18293,10 +18295,10 @@ function classifyDelta(delta) {
         if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
         const room = sh.roomById[id];
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
-        if (room.x === P.toX && room.y === P.toY && (room.z ?? 0) === P.toZ) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
+        if (room.x === P.toX && room.y === P.toY && (room.z ?? 0) === P.toZ) { items.push(_deltaClsItem(op, 'done', 'już na mapie', roomJump(id))); break; }
         const occ = shRoomAt(sh.roomArea[id], P.toX, P.toY, P.toZ);
         if (occ && occ.id !== id) {
-          const _it = _deltaClsItem(op, 'hard', 'pole docelowe zajęte przez #' + occ.id + ' — kolizja', roomJump(id));
+          const _it = _deltaClsItem(op, 'hard', 'pole docelowe jest zajęte przez pokój #' + occ.id + ' — kolizja; Zastosuj nałoży pokoje na siebie (albo wybierz Autopozycję / Ręcznie)', roomJump(id));
           _it.coll = true;  // M3: kolizja pozycji
           items.push(_it);
         }
@@ -18310,7 +18312,7 @@ function classifyDelta(delta) {
         const toArea = resA(P.toAreaId);
         if (toArea === undefined) { items.push(_deltaClsItem(op, 'ok', 'obszar z kalki', roomJump(id))); break; }
         if (!sh.areas.get(toArea)) { items.push(_deltaClsItem(op, 'impossible', 'obszar docelowy nie istnieje', roomJump(id))); break; }
-        if (sh.roomArea[id] === toArea) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
+        if (sh.roomArea[id] === toArea) { items.push(_deltaClsItem(op, 'done', 'już na mapie', roomJump(id))); break; }
         items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
         break;
       }
@@ -18320,8 +18322,8 @@ function classifyDelta(delta) {
         if (srcId === undefined || tgtId === undefined) { items.push(_deltaClsItem(op, 'ok', 'dotyczy obiektów kalki')); break; }
         const src = sh.roomById[srcId];
         if (!src || !sh.roomById[tgtId]) { items.push(_deltaClsItem(op, 'impossible', 'pokój źródłowy lub docelowy nie istnieje', roomJump(srcId))); break; }
-        if (src.exits && src.exits[T.dir] === tgtId) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(srcId))); break; }
-        if (src.exits && src.exits[T.dir] !== undefined) items.push(_deltaClsItem(op, 'hard', 'kierunek zajęty — guard odmówi (op zostanie pominięty)', roomJump(srcId)));
+        if (src.exits && src.exits[T.dir] === tgtId) { items.push(_deltaClsItem(op, 'done', 'już na mapie', roomJump(srcId))); break; }
+        if (src.exits && src.exits[T.dir] !== undefined) items.push(_deltaClsItem(op, 'hard', 'kierunek jest już zajęty — Zastosuj pominie ten op (mapa bez zmian)', roomJump(srcId)));
         else items.push(_deltaClsItem(op, 'ok', '', roomJump(srcId)));
         break;
       }
@@ -18355,7 +18357,7 @@ function classifyDelta(delta) {
         const area = (aidE !== undefined) ? sh.areas.get(aidE) : null;
         if (!area) { items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
         const sameUd = stableStringify(area.user_data || {}) === stableStringify(P.user_data || {});
-        if (area.name === P.name && sameUd) { items.push(_deltaClsItem(op, 'done', 'już naniesione', areaJump(area.id))); break; }
+        if (area.name === P.name && sameUd) { items.push(_deltaClsItem(op, 'done', 'już na mapie', areaJump(area.id))); break; }
         items.push(_deltaClsItem(op, 'ok', '', areaJump(area.id)));
         break;
       }
@@ -18367,12 +18369,12 @@ function classifyDelta(delta) {
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
         const cur = room.custom_lines && room.custom_lines[T.dir];
         if (op.type === 'ADD_CL') {
-          if (cur && stableStringify(cur) === stableStringify(P.cl)) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
-          if (cur) { items.push(_deltaClsItem(op, 'hard', 'custom line istnieje — nadpiszę', roomJump(id))); break; }
+          if (cur && stableStringify(cur) === stableStringify(P.cl)) { items.push(_deltaClsItem(op, 'done', 'już na mapie', roomJump(id))); break; }
+          if (cur) { items.push(_deltaClsItem(op, 'hard', 'custom line w tym kierunku już istnieje — Zastosuj nadpisze ją wersją z kalki', roomJump(id))); break; }
           items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
         } else {
-          if (_deltaIsSuppressor(cur)) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
-          if (cur) { items.push(_deltaClsItem(op, 'hard', 'custom line istnieje — zamienię na tłumik', roomJump(id))); break; }
+          if (_deltaIsSuppressor(cur)) { items.push(_deltaClsItem(op, 'done', 'już na mapie', roomJump(id))); break; }
+          if (cur) { items.push(_deltaClsItem(op, 'hard', 'custom line w tym kierunku już istnieje — Zastosuj zamieni ją na tłumik', roomJump(id))); break; }
           items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
         }
         break;
@@ -18383,8 +18385,8 @@ function classifyDelta(delta) {
         const room = sh.roomById[id];
         const cur = room && room.custom_lines && room.custom_lines[T.dir];
         if (!room || !cur) { items.push(_deltaClsItem(op, 'impossible', 'custom line nie istnieje', roomJump(id))); break; }
-        if (stableStringify(cur) === stableStringify(P.after)) { items.push(_deltaClsItem(op, 'done', 'już naniesione', roomJump(id))); break; }
-        if (stableStringify(cur) !== stableStringify(P.before)) items.push(_deltaClsItem(op, 'hard', 'custom line zmieniony upstream — naniosę wersję z kalki', roomJump(id)));
+        if (stableStringify(cur) === stableStringify(P.after)) { items.push(_deltaClsItem(op, 'done', 'już na mapie', roomJump(id))); break; }
+        if (stableStringify(cur) !== stableStringify(P.before)) items.push(_deltaClsItem(op, 'hard', 'ta custom line zmieniła się na mapie od zapisu kalki — Zastosuj nadpisze ją wersją z kalki', roomJump(id)));
         else items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
         break;
       }
@@ -18405,7 +18407,7 @@ function classifyDelta(delta) {
         const eff = added.filter(x => { const c = sh.roomById[x.roomId].custom_lines; return !c || !c[x.dir]; }).length
                   + removed.filter(x => { const c = sh.roomById[x.roomId].custom_lines; return c && c[x.dir]; }).length;
         const j = roomJump((added[0] || removed[0]).roomId);
-        if (eff === 0) items.push(_deltaClsItem(op, 'done', 'już naniesione', j));
+        if (eff === 0) items.push(_deltaClsItem(op, 'done', 'już na mapie', j));
         else if (eff < added.length + removed.length) items.push(_deltaClsItem(op, 'hard', 'część wpisów już aktualna', j));
         else items.push(_deltaClsItem(op, 'ok', '', j));
         break;
@@ -18424,13 +18426,13 @@ function classifyDelta(delta) {
         if (op.type === 'EDIT_LABEL') {
           const after = Object.assign({}, P.after); delete after.id;
           const cur = Object.assign({}, lbl); delete cur.id;
-          if (stableStringify(cur) === stableStringify(after)) { items.push(_deltaClsItem(op, 'done', 'już naniesione', j)); break; }
+          if (stableStringify(cur) === stableStringify(after)) { items.push(_deltaClsItem(op, 'done', 'już na mapie', j)); break; }
           items.push(_deltaClsItem(op, 'ok', '', j));
         } else if (op.type === 'MOVE_LABEL') {
-          if (lbl.x === P.toX && lbl.y === P.toY) { items.push(_deltaClsItem(op, 'done', 'już naniesione', j)); break; }
+          if (lbl.x === P.toX && lbl.y === P.toY) { items.push(_deltaClsItem(op, 'done', 'już na mapie', j)); break; }
           items.push(_deltaClsItem(op, 'ok', '', j));
         } else if (op.type === 'RESIZE_LABEL') {
-          if (lbl.x === P.toX && lbl.y === P.toY && lbl.width === P.toW && lbl.height === P.toH) { items.push(_deltaClsItem(op, 'done', 'już naniesione', j)); break; }
+          if (lbl.x === P.toX && lbl.y === P.toY && lbl.width === P.toW && lbl.height === P.toH) { items.push(_deltaClsItem(op, 'done', 'już na mapie', j)); break; }
           items.push(_deltaClsItem(op, 'ok', '', j));
         } else items.push(_deltaClsItem(op, 'ok', '', j));
         break;
@@ -18440,7 +18442,7 @@ function classifyDelta(delta) {
         const cur = sh.colors[T.envId];
         const same = (cur || null) === (P.newColor || null)
           || (cur && P.newColor && cur.join() === P.newColor.join());
-        items.push(_deltaClsItem(op, same ? 'done' : 'ok', same ? 'już naniesione' : ''));
+        items.push(_deltaClsItem(op, same ? 'done' : 'ok', same ? 'już na mapie' : ''));
         break;
       }
       default:
@@ -19072,7 +19074,7 @@ let _deltaReview = null;  // { delta, items, filter }
 const _DELTA_CLS_BADGE = {
   ok:         ['do naniesienia', 'ok'],
   hard:       ['konflikt', 'hard'],
-  done:       ['naniesione', 'done'],
+  done:       ['już na mapie', 'done'],
   impossible: ['niewykonalne', 'impossible'],
 };
 
@@ -19360,7 +19362,9 @@ function _renderDeltaPanel() {
     row.appendChild(lbl);
     const badge = document.createElement('span');
     badge.className = 'dp-badge ' + _DELTA_CLS_BADGE[it.cls][1];
-    badge.textContent = _DELTA_CLS_BADGE[it.cls][0];
+    // done ma dwa zrodla: mapa miala to przed kalka ("już na mapie")
+    // albo panel przed chwila naniost ("naniesione z kalki") — badge to rozroznia.
+    badge.textContent = (it.cls === 'done' && it.session) ? 'naniesione ✓' : _DELTA_CLS_BADGE[it.cls][0];
     row.appendChild(badge);
     if (it.note) {
       const note = document.createElement('span');
@@ -19461,7 +19465,7 @@ function _deltaApplyReviewed() {
   // od tego, co wyliczy cien (maskowanie done przez pozniejsze opy kalki).
   for (const it of R.items) {
     if (_deltaAppliedSeqs.has(it.seq)) {
-      it.cls = 'done'; it.note = 'naniesione z tej kalki'; it.checked = false; it.coll = false;
+      it.cls = 'done'; it.note = 'naniesione z tej kalki'; it.checked = false; it.coll = false; it.session = true;
     }
   }
   _renderDeltaPanel();
