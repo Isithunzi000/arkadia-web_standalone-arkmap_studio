@@ -119,7 +119,7 @@ console.log('— timeouty (struktura) —');
 {
   const WF = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'sync-map.yml'), 'utf8');
   ok(WF.includes('--connect-timeout 30 --max-time 180'), 'workflow: curl z --connect-timeout/--max-time');
-  ok((WF.match(/timeout 90 git ls-remote/g) || []).length === 2, 'workflow: timeout 90 na obu ls-remote');
+  ok((WF.match(/timeout 90 git ls-remote/g) || []).length === 1, 'workflow: timeout 90 na ls-remote (deref tagu)');
   ok(WF.includes('timeout 90 git fetch'), 'workflow: timeout na fetch gałęzi mapa');
   ok(WF.includes('timeout 120 git push'), 'workflow: timeout na force-push');
   ok(WF.includes('timeout-minutes: 10'), 'workflow: siatka job-level 10 min');
@@ -130,6 +130,32 @@ console.log('— timeouty (struktura) —');
   ok(OL.includes('ctrl.abort(), 180000'), 'UI: timeout 180 s na pobieranie plików');
   ok((OL.match(/finally \{ clearTimeout\(timer\); \}/g) || []).length === 2, 'UI: clearTimeout w finally ×2 (bez wycieku timerów)');
   ok((OL.match(/e\.name === 'AbortError'/g) || []).length === 4, 'UI: AbortError → 3 czytelne komunikaty + rethrow w resolve SHA');
+}
+
+// ── Model Delwinga: mirror assetu release, wersja z tagu (struktura) ───────
+console.log('— model Delwinga (struktura) —');
+{
+  const WF = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'sync-map.yml'), 'utf8');
+  ok(WF.includes('api.github.com/repos/Delwing/arkadia-mapa/releases/latest'),
+    'brama: gate na releases/latest (źródło prawdy o wersji = tag)');
+  ok(WF.includes('releases/download/') && WF.includes('steps.gate.outputs.tag'),
+    'pobranie: asset release przypięty do tagu (nie /latest/download — brak wyścigu)');
+  ok(!WF.includes('raw.githubusercontent.com/Delwing/arkadia-mapa'),
+    'pobranie: surowy master NIE jest źródłem (stempel w masterze bywa stary)');
+  ok(WF.includes('stempel w pliku') && WF.includes('!= tag release'),
+    'weryfikacja: stempel wersji w .dat == tag (fail-closed)');
+  ok(WF.includes('regresja wersji upstream') && WF.includes('sort -V'),
+    'guard: regresja wersji (tag starszy niż publikowany) → fail-closed');
+  ok(WF.includes('brak releases/latest upstream') && WF.includes('brak assetu map_master3.dat'),
+    'fail-closed: brak release / brak assetu = jawny błąd, zero publikacji');
+  ok(/workflow_dispatch:\s*\n\s*inputs:\s*\n\s*force:/.test(WF) && WF.includes('type: boolean'),
+    'workflow_dispatch: input force (boolean) — ręczna przebudowa mirrora');
+  ok(WF.includes('if (!idx.version || !idx.revision)'),
+    'index.json: wersja/revision wymagane (nigdy null) — fail-closed');
+  ok(!WF.includes('process.argv[1] || null'),
+    'index.json: brak fallbacku version:null (to on ukrywał wersję w okienku online)');
+  ok(WF.includes('refs/tags/$TAG') && WF.includes('refs/tags/$TAG^{}'),
+    'deref tagu: ls-remote z ^{} (annotated tag → commit, lightweight → commit)');
 }
 
 // ── v1.5.37: pinning SHA akcji + timeouty transports + TOCTOU w UI ──────────
