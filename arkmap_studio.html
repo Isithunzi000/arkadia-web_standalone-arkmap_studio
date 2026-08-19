@@ -4286,6 +4286,11 @@ function validateLabel(label, path, errors) {
     errors.push(err(`${path}.show_on_top`, 'must be boolean'));
   if (label.pixmap !== undefined && label.pixmap !== null && typeof label.pixmap !== 'string')
     errors.push(err(`${path}.pixmap`, 'must be string or null'));
+  // audyt T4/S3: poprawnosc base64 i rozmiar — kontrolowany blad przy imporcie zamiast wywalenia w atob przy eksporcie
+  if (typeof label.pixmap === 'string' && label.pixmap.length) {
+    if (label.pixmap.length > 4194304) errors.push(err(`${path}.pixmap`, 'too large (limit 4 MB base64)'));
+    else { try { atob(label.pixmap); } catch (e) { errors.push(err(`${path}.pixmap`, 'must be valid base64')); } }
+  }
 }
 
 function validateUserData(ud, path, errors) {
@@ -4476,12 +4481,14 @@ function validateArea(area, path, errors, warnings = []) {
     errors.push(err(`${path}.zone_area_ref`, 'must be integer'));
   if (area.user_data    !== undefined) validateUserData(area.user_data, `${path}.user_data`, errors);
 
-  for (let i = 0; i < (area.labels || []).length; i++) {
+  // audyt T4/S2: obiekt zamiast tablicy przechodzil cicho (petla po undefined.length)
+  if (area.labels !== undefined && !Array.isArray(area.labels)) errors.push(err(`${path}.labels`, 'must be an array'));
+  for (let i = 0; i < (Array.isArray(area.labels) ? area.labels : []).length; i++) {
     validateLabel(area.labels[i], `${path}.labels[${i}]`, errors);
   }
   // Check label ID uniqueness within area
   const labelIds = new Set();
-  for (const lbl of (area.labels || [])) {
+  for (const lbl of (Array.isArray(area.labels) ? area.labels : [])) {  // audyt T4/S2
     if (lbl && Number.isInteger(lbl.id)) {
       if (labelIds.has(lbl.id)) errors.push(err(`${path}.labels`, `duplicate label id ${lbl.id}`));
       labelIds.add(lbl.id);
@@ -5094,7 +5101,7 @@ function writeQMapSLP(w, o) {
 function readQMMUS(r) {
   const n = r.readUInt32(), o = {};
   for (let i = 0; i < n; i++) {
-    const k = r.readUInt32(), v = readQString(r);
+    const k = r.readInt32(), v = readQString(r);  // audyt T4/W2: klucz = id pokoi (int32, ze znakiem)
     if (!o[k]) o[k] = [];
     o[k].push(v);
   }
@@ -5109,7 +5116,7 @@ function writeQMMUS(w, o) {
     for (const v of arr) { pairs.push([parseInt(k), v]); total++; }
   }
   w.writeUInt32(total);
-  for (const [k, v] of pairs) { w.writeUInt32(k); writeQString(w, v); }
+  for (const [k, v] of pairs) { w.writeInt32(k); writeQString(w, v); }  // audyt T4/W2
 }
 
 // QMultiMap<QInt, QPair<QInt,QInt>> — mAreaExits
@@ -5185,7 +5192,7 @@ const MUDLET_DAT_MAX_SUPPORTED_VERSION = 22;  // maximum które umiemy czytać
 // readMudletArea(r, version)
 // ─────────────────────────────────────────────────────────────────────────────
 function readMudletArea(r, version) {
-  const rooms     = readQListU(r);
+  const rooms     = readQListI(r);  // audyt T4/W1: lista id pokoi = int32 (ze znakiem)
   const zLevels   = readQListI(r);
   const mAreaExits = readQMMIPP(r);
   const gridMode  = !!r.readInt8();
@@ -5233,7 +5240,7 @@ function readMudletArea(r, version) {
 // writeMudletArea — zawsze pisze w formacie v20
 // ─────────────────────────────────────────────────────────────────────────────
 function writeMudletArea(w, a) {
-  writeQListU(w,  a.rooms      ?? []);
+  writeQListI(w,  a.rooms      ?? []);  // audyt T4/W1: lista id pokoi = int32 (ze znakiem)
   writeQListI(w,  a.zLevels    ?? []);
   writeQMMIPP(w,  a.mAreaExits ?? {});
   w.writeInt8(a.gridMode ? 1 : 0);
@@ -5927,7 +5934,10 @@ function buildRoom(room, areaId) {
 
   out.stubs = (room.stubs || []).map(s => DIR_BY_SHORT[s]?.idx).filter(Boolean).sort((a,b) => a - b);
   out.exitWeights = {};
-  for (const [key, w] of Object.entries(room.exit_weights || {})) out.exitWeights[key] = w;
+  for (const [key, w] of Object.entries(room.exit_weights || {})) {
+    const nk = DIR_BY_LONG[key] ? DIR_BY_LONG[key].short : key;  // audyt T4: symetria z konwerterem — long-name nie trafia do .dat
+    out.exitWeights[nk] = w;
+  }
   out.exitLocks = (room.exit_locks || []).map(s => DIR_BY_SHORT[s]?.idx).filter(Boolean).sort((a,b) => a - b);
 
   const specialLockSet = new Set(room.special_exit_locks || []);
@@ -5938,7 +5948,7 @@ function buildRoom(room, areaId) {
     out.rawSpecialExits[targetId].push(prefix + cmd);
   }
   out.mSpecialExits = room.special_exits ?? {};
-  out.mSpecialExitLocks = (room.special_exit_locks || []).map(cmd => room.special_exits?.[cmd]).filter(v => v !== undefined);
+  out.mSpecialExitLocks = [...(room.special_exit_locks || [])];  // audyt T4/C-locks: semantyka v21 = lista KOMEND (stringow); sciezka rekonstrukcji writera robi lockSet.has(cmd) — wczesniej szukala stringow wsrod roomId (mina latentna)
 
   out.customLines = {}; out.customLinesArrow = {};
   out.customLinesColor = {}; out.customLinesStyle = {};
@@ -6170,7 +6180,7 @@ async function loadArkmap(text, filename) {
 function applyMap(map) {
   // v1.4.59: każde wczytanie mapy (plik .arkmap / plik .dat / online) zeruje akceptacje PRZEGLĄDARKI
   // (globalne, trwałe w localStorage). To, co siedzi w meta wczytywanego pliku, zostaje NIETKNIĘTE.
-  localStorage.removeItem('arkmap_accepted_dir_issues');
+  try { localStorage.removeItem('arkmap_accepted_dir_issues'); } catch(e) {}  // audyt T4/S6
   try { _vdLast = null; } catch(_) {}  // unieważnij cache walidatora — nie pokazuj rozjazdów poprzedniej mapy
   // v1.4.60: zamknij okna pokazujące dane STAREJ mapy (osierocone po wczytaniu nowej).
   // Lista obszarów NIE jest tu — sama się odświeża przez buildAreaList() niżej.
@@ -8395,13 +8405,14 @@ function commitCLDrawing() {
   const dir     = state.clDir;
   const isNew   = state.clIsNew;
   const points  = [...state.clPoints];
+  const hadContainer = !!room.custom_lines;  // audyt T4/S7
   room.custom_lines = room.custom_lines || {};
   const prevCL  = room.custom_lines[dir] ? { ...room.custom_lines[dir], points: [...(room.custom_lines[dir].points || [])] } : null;
 
   if (isNew) {
     const newCL = { points, color: [255, 0, 0], arrow: true };
     room.custom_lines[dir] = { ...newCL, points: [...points] };
-    pushUndo({ type: 'ADD_CL', roomId: room.id, dir, snapshot: JSON.parse(JSON.stringify(newCL)), label: `Dodano CL dir=${dir} w pokoju "${room.name||'#'+room.id}" (#${room.id})` });
+    pushUndo({ type: 'ADD_CL', roomId: room.id, dir, snapshot: JSON.parse(JSON.stringify(newCL)), hadContainer, label: `Dodano CL dir=${dir} w pokoju "${room.name||'#'+room.id}" (#${room.id})` });  // audyt T4/S7
   } else {
     const origPoints = state.clOriginalPoints ? [...state.clOriginalPoints] : [];
     const beforeFull = JSON.parse(JSON.stringify(room.custom_lines[dir]));
@@ -9753,7 +9764,9 @@ function dijkstraPath(fromId, toId) {
 
     const exitLockSet = new Set(room.exit_locks || []);
     const specLockSet = new Set(room.special_exit_locks || []);
-    const allExits = Object.assign({}, room.exits || {}, room.special_exits || {});
+    const allExits = {};  // audyt T4/W8: jawny merge — priorytet SE>exits przy kolizji kluczy (efekt identyczny jak Object.assign)
+    Object.assign(allExits, room.exits || {});
+    Object.assign(allExits, room.special_exits || {});
     for (const [dir, nid] of Object.entries(allExits).sort((a, b) => a[1] - b[1])) {
       if (!nid || visited.has(nid)) continue;
       if (exitLockSet.has(dir) || specLockSet.has(dir)) continue; // locked exit — pathfinder skips
@@ -9795,7 +9808,9 @@ function dijkstraPath(fromId, toId) {
 function _recomputeAstarParams() {
   let _maxDist = 1, _minW = Infinity;
   for (const room of Object.values(state.roomById)) {
-    const allExits = Object.assign({}, room.exits || {}, room.special_exits || {});
+    const allExits = {};  // audyt T4/W8: jawny merge — priorytet SE>exits przy kolizji kluczy (efekt identyczny jak Object.assign)
+    Object.assign(allExits, room.exits || {});
+    Object.assign(allExits, room.special_exits || {});
     for (const [dir, nid] of Object.entries(allExits)) {
       const nbr = state.roomById[nid];
       if (!nbr) continue;
@@ -9853,7 +9868,9 @@ function astarPath(fromId, toId) {
 
     const exitLockSet = new Set(room.exit_locks || []);
     const specLockSet = new Set(room.special_exit_locks || []);
-    const allExits = Object.assign({}, room.exits || {}, room.special_exits || {});
+    const allExits = {};  // audyt T4/W8: jawny merge — priorytet SE>exits przy kolizji kluczy (efekt identyczny jak Object.assign)
+    Object.assign(allExits, room.exits || {});
+    Object.assign(allExits, room.special_exits || {});
     for (const [dir, nid] of Object.entries(allExits).sort((a, b) => a[1] - b[1])) {
       if (!nid || visited.has(nid)) continue;
       if (exitLockSet.has(dir) || specLockSet.has(dir)) continue; // locked exit — pathfinder skips
@@ -10717,6 +10734,7 @@ document.getElementById('wp-show-btn').addEventListener('click', fitRouteToView)
 function wpEncodeRoute() {
   const ids = wpState.waypoints.map(w => w.roomId).filter(id => id !== null);
   if (ids.length < 2) return '';
+  if (ids.some(id => !Number.isInteger(id) || id <= 0)) return '';  // audyt T4/W6: fail-closed — nigdy nie produkuj kodu, ktorego wlasny dekoder odrzuci
   // Format ARKMAP2:<algo><dir><trans>:base64 — algo: d/a, dir: k=cardinal p=vertical w=all, trans: p=off n=normal g=aggressive
   const algoCode = wpState.algorithm === 'astar' ? 'a' : 'd';
   const dirCode = { cardinal: 'k', vertical: 'p', all: 'w' }[wpState.dirMode] || 'w';
@@ -10998,6 +11016,7 @@ document.querySelectorAll('.wp-sp').forEach(btn => {
   const hdr   = document.getElementById('wp-panel-header');
   let dx=0, dy=0, on=false;
   hdr.addEventListener('mousedown', e => {
+    if (wpLocked) return;  // audyt T4/S5: LOCK blokuje tez ten handler (drugi i resize mialy, ten nie)
     if (e.target.closest('button,input,select')) return;
     // position:fixed offsetLeft=0 (offsetParent=null) — use getBoundingClientRect
     const r = panel.getBoundingClientRect();
@@ -11645,7 +11664,7 @@ document.addEventListener('click', (e) => {
   try {
     const token = localStorage.getItem('gh_token');
     if (!token) return;
-    localStorage.removeItem('gh_token');
+    try { localStorage.removeItem('gh_token'); } catch(e) {}  // audyt T4/S6
     console.info('[ArkMap] Usunięto nieużywany token GitHub z localStorage (sesja GitHub nieaktywna).');
   } catch(e) {}
 })();
@@ -11766,7 +11785,7 @@ function resetAllDefaults() {
     const k = localStorage.key(i);
     if (k && (k.startsWith('arkmap') || k === 'draw-tools-panel') && k !== 'arkmap_accepted_dir_issues') keysToRemove.push(k);
   }
-  keysToRemove.forEach(k => localStorage.removeItem(k));
+  keysToRemove.forEach(k => { try { localStorage.removeItem(k); } catch(e) {} });  // audyt T4/S6
   // Reset room panel
   const rp = document.getElementById('room-panel');
   if (rp) { rp.style.cssText = ''; rp.classList.remove('visible'); }
@@ -12770,7 +12789,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.38.0';
+const APP_VERSION = 'v1.39.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -13246,6 +13265,7 @@ function _dispatchUndo(entry) {
     case 'ADD_CL': {
       const r = rm(entry.roomId); if (!r) break;
       if (r.custom_lines) delete r.custom_lines[entry.dir];
+      if (r.custom_lines && !Object.keys(r.custom_lines).length && entry.hadContainer === false) delete r.custom_lines;  // audyt T4/S7: kanon — pustych kontenerow nie trzymamy
       break;
     }
     case 'EDIT_CL': {
@@ -13257,6 +13277,7 @@ function _dispatchUndo(entry) {
       const r = rm(entry.roomId); if (!r) break;
       if (entry.prevCL) { r.custom_lines = r.custom_lines || {}; r.custom_lines[entry.dir] = JSON.parse(JSON.stringify(entry.prevCL)); }
       else if (r.custom_lines) delete r.custom_lines[entry.dir];
+      if (r.custom_lines && !Object.keys(r.custom_lines).length && entry.hadContainer === false && !entry.prevCL) delete r.custom_lines;  // audyt T4/S7
       break;
     }
     case 'DELETE_CL': case 'DELETE_SUPPRESSOR': {
@@ -13296,9 +13317,10 @@ function _dispatchUndo(entry) {
       break;
     }
     case 'AUTO_FIX_SUPPRESSORS': {
-      for (const { roomId, dir } of (entry.added || [])) {     // cofnij dodane suppressory
+      for (const { roomId, dir, hadContainer } of (entry.added || [])) {     // cofnij dodane suppressory
         const r = rm(roomId); if (!r) continue;
         if (r.custom_lines) delete r.custom_lines[dir];
+        if (r.custom_lines && !Object.keys(r.custom_lines).length && hadContainer === false) delete r.custom_lines;  // audyt T4/S7
       }
       for (const { roomId, dir, snapshot } of (entry.removed || [])) {  // przywróć usunięte CL
         const r = rm(roomId); if (!r) continue;
@@ -14225,7 +14247,7 @@ function _acceptSave(arr){
   if (_acceptStore()==='file'){
     if (state.map){ state.map.meta = state.map.meta || {}; if (arr.length) state.map.meta.accepted_dir_issues = arr; else delete state.map.meta.accepted_dir_issues; state.dirty = true; }
   } else {
-    if (arr.length) localStorage.setItem('arkmap_accepted_dir_issues', JSON.stringify(arr)); else localStorage.removeItem('arkmap_accepted_dir_issues');
+    if (arr.length) { try { localStorage.setItem('arkmap_accepted_dir_issues', JSON.stringify(arr)); } catch(e) {} } else { try { localStorage.removeItem('arkmap_accepted_dir_issues'); } catch(e) {} }  // audyt T4/S6
   }
 }
 function _issueKeys(type, it){
@@ -14264,7 +14286,7 @@ function _vdMigrate(){
   const merged = Array.from(new Set([...(state.map.meta.accepted_dir_issues||[]), ...browserArr]));
   state.map.meta.accepted_dir_issues = merged;
   state.dirty = true;   // audyt A19: meta zmienione → plik do zapisu
-  localStorage.removeItem('arkmap_accepted_dir_issues');
+  try { localStorage.removeItem('arkmap_accepted_dir_issues'); } catch(e) {}  // audyt T4/S6
   localStorage.setItem('arkmap_accept_store','file');
   const sel = document.getElementById('vd-store'); if (sel) sel.value = 'file';
   toast('✓ Przeniesiono '+browserArr.length+' akceptacji do .arkmap — zapisz plik, by zachować');
@@ -14274,7 +14296,7 @@ function _vdClearAccepts(){
   let bc=0; try { bc = JSON.parse(localStorage.getItem('arkmap_accepted_dir_issues')||'[]').length; } catch(_){ }
   if (!bc){ toast('Brak akceptacji przeglądarki do wyczyszczenia'); return; }
   if (!confirm('Wyczyścić wszystkie akceptacje tej przeglądarki ('+bc+')?\n\nZatwierdzenia zapisane w pliku .arkmap NIE zostaną ruszone.')) return;
-  localStorage.removeItem('arkmap_accepted_dir_issues');
+  try { localStorage.removeItem('arkmap_accepted_dir_issues'); } catch(e) {}  // audyt T4/S6
   _renderVdPanel();
   draw();
   toast('✓ Wyczyszczono akceptacje przeglądarki ('+bc+')');
@@ -16974,13 +16996,14 @@ function commitSuppressor(dir) {
   const room   = state.clRoom;
   const name   = room.name || '#' + room.id;
   const roomId = room.id;
+  const hadContainer = !!room.custom_lines;  // audyt T4/S7
   room.custom_lines = room.custom_lines || {};
   const prevCL = room.custom_lines[dir] ? JSON.parse(JSON.stringify(room.custom_lines[dir])) : null;
   const newCL  = { points: [], color: [255, 0, 0] };
   const doFn   = () => { room.custom_lines[dir] = JSON.parse(JSON.stringify(newCL)); draw(); };
   const undoFn = () => { if (prevCL) room.custom_lines[dir] = JSON.parse(JSON.stringify(prevCL)); else delete room.custom_lines[dir]; draw(); };
   doFn();
-  pushUndo({ type: 'ADD_SUPPRESSOR', roomId, dir, prevCL: prevCL || undefined, label: `Dodanie pustej custom line dir=${dir} w pokoju "${name}" (#${roomId})` });
+  pushUndo({ type: 'ADD_SUPPRESSOR', roomId, dir, prevCL: prevCL || undefined, hadContainer, label: `Dodanie pustej custom line dir=${dir} w pokoju "${name}" (#${roomId})` });  // audyt T4/S7
   state.redoStack = [];
   updateUndoRedoUI();
   _syncEditSnapshot();
@@ -17000,7 +17023,7 @@ function checkSuppressors() {
       if (dir === 'up' || dir === 'down' || dir === 'in' || dir === 'out') continue; // inner-exit → trójkąt, nie linia; suppressor nigdy niepotrzebny
       const targetId = A.exits?.[dir];            // tylko exits[], nie special_exits
       if (targetId === undefined) continue;        // orphan CL — skip
-      if (targetId === -1) continue;               // stub — skip
+      // audyt T4/Q5: martwy guard `targetId === -1` usuniety — model nie trzyma -1 (stuby sa w room.stubs)
       const B = state.roomById[targetId];
       if (!B) continue;                            // target nie istnieje — skip
       if (state.roomArea[A.id] !== state.roomArea[B.id]) continue; // cross-area — skip
@@ -17066,9 +17089,10 @@ function autoFixSuppressors(missing) {
       // Realny reshape → SUPPRESSOR po stronie B (zachowaj krzywą A)
       if (B.custom_lines?.[oppDir]?.points?.length > 0) continue; // nie nadpisuj CL z punktami
       const newCL = { points: [], color: cl.color ?? [255, 0, 0] };
+      const hadC = !B.custom_lines;  // audyt T4/S7
       B.custom_lines = B.custom_lines || {};
       B.custom_lines[oppDir] = JSON.parse(JSON.stringify(newCL));
-      added.push({ roomId: roomB, dir: oppDir, snapshot: JSON.parse(JSON.stringify(newCL)) });
+      added.push({ roomId: roomB, dir: oppDir, snapshot: JSON.parse(JSON.stringify(newCL)), hadContainer: hadC });
     }
   }
   const nDel = removed.length, nAdd = added.length, n = nDel + nAdd;
@@ -17862,7 +17886,10 @@ function _deltaRemainderOps() {
   const rest = new Set(R.items
     .filter(it => !_deltaAppliedSeqs.has(it.seq) && (it.cls === 'ok' || it.cls === 'hard' || it.cls === 'impossible'))
     .map(it => it.seq));
-  return R.delta.ops.filter(o => rest.has(o.seq));
+  // audyt T4/C-K5: reszta = ORYGINALNE opy + wylacznie reczne przesuniecia (how:'manual').
+  // Autopozycje (how:'auto') sa sesyjne — program wymysli je na nowo przy otwarciu reszty (decyzja P2).
+  const manual = new Map([..._deltaOverrides].filter(kv => kv[1] && kv[1].how === 'manual'));
+  return _deltaApplyOverridesToOps((R.originalOps || R.delta.ops).filter(o => rest.has(o.seq)), manual);
 }
 
 function saveDeltaRemainder() {
@@ -17902,10 +17929,13 @@ const _DELTA_SCHEMA = {
   EDIT_ENV_COLOR:       { target: ['envId'], payload: ['newColor'] },
 };
 
-function _deltaScanDeep(val, onKey, onStr) {
-  if (Array.isArray(val)) { for (const v of val) _deltaScanDeep(v, onKey, onStr); return; }
+const _DELTA_MAX_DEPTH = 60;  // audyt T4/S8: limit rekursji skanera kalki — kontrolowany blad zamiast RangeError (kontrakt "Nigdy nie rzuca" validateDeltaText)
+function _deltaScanDeep(val, onKey, onStr, depth) {
+  depth = depth || 0;
+  if (depth > _DELTA_MAX_DEPTH) throw new Error('delta-scan-depth');  // lapie validateDeltaText
+  if (Array.isArray(val)) { for (const v of val) _deltaScanDeep(v, onKey, onStr, depth + 1); return; }
   if (val !== null && typeof val === 'object') {
-    for (const k of Object.keys(val)) { onKey(k); _deltaScanDeep(val[k], onKey, onStr); }
+    for (const k of Object.keys(val)) { onKey(k); _deltaScanDeep(val[k], onKey, onStr, depth + 1); }
     return;
   }
   if (typeof val === 'string') onStr(val);
@@ -17919,7 +17949,53 @@ const _DELTA_FIELD_PL = {
   before: 'stan przed', after: 'stan po', cl: 'custom line', name: 'nazwa',
   changes: 'lista zmian', newColor: 'nowy kolor', exitId: 'wyjście', cmd: 'komenda',
   targetId: 'cel', area: 'dane obszaru',
+  toX: 'nowa pozycja X', toY: 'nowa pozycja Y', toZ: 'nowy poziom',  // audyt T4/K6
+  toW: 'nowa szerokość', toH: 'nowa wysokość', toAreaId: 'docelowy obszar',
+  added: 'dodane wpisy', removed: 'usunięte wpisy',
 };
+
+// audyt T4/K6: walidacja TYPOW pol kalki (schemat wyzej sprawdza tylko obecnosc).
+// sid-aware: pola referencyjne akceptuja dodatni int albo identyfikator kalki 'd:N'.
+function _deltaIsRef(v) { return (Number.isInteger(v) && Math.abs(v) < 2147483648) || (typeof v === 'string' && _DELTA_SID_RE.test(v)); }
+function _deltaIsCoord(v) { return Number.isFinite(v) && Math.abs(v) < 2147483648; }
+function _deltaValidateOpTypes(op) {
+  const bad = [];
+  const T = op.target || {}, P = op.payload || {};
+  const pl = k => _DELTA_FIELD_PL[k] || k;
+  const refT = k => { if (T[k] !== undefined && !_deltaIsRef(T[k])) bad.push(pl(k)); };
+  const refP = k => { if (P[k] !== undefined && !_deltaIsRef(P[k])) bad.push(pl(k)); };
+  const coordP = k => { if (P[k] !== undefined && !_deltaIsCoord(P[k])) bad.push(pl(k)); };
+  const objP = k => { if (P[k] !== undefined && (typeof P[k] !== 'object' || P[k] === null || Array.isArray(P[k]))) bad.push(pl(k)); };
+  const arrP = k => { if (P[k] !== undefined && !Array.isArray(P[k])) bad.push(pl(k)); };
+  const strP = k => { if (P[k] !== undefined && typeof P[k] !== 'string') bad.push(pl(k)); };
+  switch (op.type) {
+    case 'ADD_ROOM': case 'DELETE_ROOM': refT('roomId'); refT('areaId'); objP('room'); break;
+    case 'EDIT_ROOM': case 'EDIT_EXIT': refT('roomId'); objP('before'); objP('after'); break;
+    case 'MOVE_ROOM': refT('roomId'); coordP('toX'); coordP('toY'); coordP('toZ'); break;
+    case 'MOVE_ROOM_TO_AREA': refT('roomId'); refP('toAreaId'); break;
+    case 'ADD_EXIT': refT('sourceId'); refP('targetId'); break;
+    case 'DELETE_EXIT': refT('roomId'); break;
+    case 'DELETE_SPECIAL_EXIT': refT('roomId'); strP('cmd'); break;
+    case 'ADD_AREA': refT('areaId'); objP('area'); break;
+    case 'DELETE_AREA': refT('areaId'); break;
+    case 'EDIT_AREA': refT('areaId'); strP('name'); break;
+    case 'ADD_CL': refT('roomId'); objP('cl'); break;
+    case 'EDIT_CL': refT('roomId'); objP('before'); objP('after'); break;
+    case 'DELETE_CL': case 'DELETE_SUPPRESSOR': case 'ADD_SUPPRESSOR': refT('roomId'); break;
+    case 'PAINT_BATCH': arrP('changes'); break;
+    case 'AUTO_FIX_SUPPRESSORS': arrP('added'); arrP('removed'); break;
+    case 'ADD_LABEL': refT('areaId'); objP('label'); break;
+    case 'EDIT_LABEL': refT('areaId'); refT('labelId'); objP('before'); objP('after'); break;
+    case 'DELETE_LABEL': refT('areaId'); refT('labelId'); objP('label'); break;
+    case 'MOVE_LABEL': refT('areaId'); refT('labelId'); coordP('toX'); coordP('toY'); break;
+    case 'RESIZE_LABEL': refT('areaId'); refT('labelId'); coordP('toX'); coordP('toY'); coordP('toW'); coordP('toH'); break;
+    case 'EDIT_ENV_COLOR':
+      if (T.envId !== undefined && !(Number.isInteger(T.envId) && T.envId >= 0) && !(typeof T.envId === 'string' && T.envId.length)) bad.push(pl('envId'));
+      if (P.newColor !== undefined && !(Array.isArray(P.newColor) && P.newColor.length >= 3 && P.newColor.every(c => Number.isInteger(c) && c >= 0 && c <= 255))) bad.push(pl('newColor'));
+      break;
+  }
+  return bad;
+}
 
 function validateDeltaText(text) {
   const errors = [];
@@ -17967,10 +18043,12 @@ function validateDeltaText(text) {
     if (!op.payload || typeof op.payload !== 'object') { errors.push(tag + ': niekompletne dane (brak treści).'); continue; }
     for (const k of schema.target)  if (op.target[k] === undefined)  errors.push(tag + ': niekompletne dane (brak: ' + (_DELTA_FIELD_PL[k] || k) + ').');
     for (const k of schema.payload) if (op.payload[k] === undefined) errors.push(tag + ': niekompletne dane (brak: ' + (_DELTA_FIELD_PL[k] || k) + ').');
+    for (const f of _deltaValidateOpTypes(op)) errors.push(tag + ': nieprawidłowe dane (pole: ' + f + ').');  // audyt T4/K6
     if (op.target.dir !== undefined && !VALID_DIRS.has(op.target.dir)) errors.push(tag + ': nieprawidłowy kierunek "' + op.target.dir + '".');
     // Integralność sid: definicja przed użyciem, brak duplikatów, sanitizacja kluczy.
     let badKey = null;
-    _deltaScanDeep(op, k => { if (k === '__proto__' || k === 'constructor' || k === 'prototype') badKey = k; }, () => {});
+    try { _deltaScanDeep(op, k => { if (k === '__proto__' || k === 'constructor' || k === 'prototype') badKey = k; }, () => {}); }
+    catch (e) { errors.push(tag + ': zbyt głęboko zagnieżdżona struktura.'); continue; }  // audyt T4/S8
     if (badKey) { errors.push(tag + ': niedozwolony klucz "' + badKey + '".'); continue; }
     // Najpierw definicja własna opu (ADD_*) — inaczej własny sid wygląda jak użycie bez definicji.
     const ownSid = (op.type === 'ADD_ROOM' && _DELTA_SID_RE.test(String(op.target.roomId))) ? String(op.target.roomId)
@@ -17981,8 +18059,11 @@ function validateDeltaText(text) {
       if (definedSid.has(ownSid)) { errors.push(tag + ': zduplikowany identyfikator kalki (' + ownSid + ').'); continue; }
       definedSid.add(ownSid);
     }
+    else if (op.type === 'ADD_ROOM' || op.type === 'ADD_AREA' || op.type === 'ADD_LABEL')
+      errors.push(tag + ': nowy obiekt musi mieć identyfikator kalki (np. d:1), nie zwykły numer.');  // audyt T4/K7
     const used = [];
-    _deltaScanDeep(op, () => {}, v => { if (_DELTA_SID_RE.test(v)) used.push(v); });
+    try { _deltaScanDeep(op, () => {}, v => { if (_DELTA_SID_RE.test(v)) used.push(v); }); }
+    catch (e) { errors.push(tag + ': zbyt głęboko zagnieżdżona struktura.'); continue; }  // audyt T4/S8
     for (const sid of used) if (!definedSid.has(sid)) errors.push(tag + ': odwołanie do nieistniejącego obiektu kalki (' + sid + ').');
   }
   if (errors.length) return { ok: false, errors };
@@ -19636,7 +19717,7 @@ function openDeltaReview(delta) {
   _deltaGhostReset();  // M3: nowa kalka = czyste duchy/override'y
   _deltaAppliedSeqs = new Set();  // nowa kalka = czysta historia nanoszenia
   _deltaSkippedSeqs = new Set();
-  _deltaReview = { delta, items: classifyDelta(delta), filter: 'all' };
+  _deltaReview = { delta, originalOps: JSON.parse(JSON.stringify(delta.ops)), items: classifyDelta(delta), filter: 'all' };  // audyt T4/C-K5: reszta kalki skladana z ORYGINALU
   document.getElementById('dp-base').textContent = _arkdeltaBaseNote(delta.meta.base);
   document.getElementById('dp-rebase').style.display = 'none';
   _renderDeltaPanel();
