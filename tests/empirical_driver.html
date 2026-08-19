@@ -2019,6 +2019,82 @@ scenario('E5.warnrefresh', async () => {
 });
 
 
+// ═══ E9: Tier 3 — cap sesji W17, granica sesji W18 v2, CRC v2 eksport, hidden round-trip ═══
+
+scenario('E9.capsession', async () => {
+  await loadBase('dat');
+  ex('for (let i = 0; i < 51; i++) addRoomAtPosition(6000 + i, 6000 + i);');
+  EQ('E9.capsession.undo50', ev('state.undoStack.length').val, 50, 'undoStack cap 50 po 51 opach (W17)');
+  EQ('E9.capsession.log51', ev('state.deltaLog.length').val, 51, 'deltaLog pelny — kalka kompletna wzgledem bazy');
+  const n = JSON.parse(ev('(function(){ const d = JSON.parse(buildDelta());'
+    + ' return JSON.stringify({ n: d.ops.length, base: !!d.meta.base.crc }); })()').val);
+  EQ('E9.capsession.ops', n.n, 51, 'eksport kalki: 51 opow (najstarszy obecny)');
+  A('E9.capsession.base', n.base, 'kalka niesie sygnature bazy');
+  ex('undoAction()');
+  EQ('E9.capsession.undo1', ev('state.undoStack.length').val, 49, 'undo cofa ostatni op');
+  EQ('E9.capsession.log50', ev('state.deltaLog.length').val, 50, 'deltaLog: ogon LIFO spojny z undo');
+});
+
+scenario('E9.exitreset', async () => {
+  await loadBase('dat');
+  ex('addRoomAtPosition(7001, 7001)');
+  EQ('E9.exitreset.pre', ev('state.deltaLog.length').val, 1, 'sesja 1: 1 op w dzienniku');
+  const crc1 = ev('_computeBaseInfo().crc').val;
+  ex('toggleEditMode()');
+  A('E9.exitreset.dlg', ev("document.getElementById('dlg-unsaved-local').classList.contains('open')").val === true,
+    'wyjscie z brudna sesja: dialog niezapisanych');
+  ex("document.querySelector('#dlg-unsaved-local .dlg-abandon').click()");
+  EQ('E9.exitreset.undo0', ev('state.undoStack.length').val, 0, 'wyjscie: cofanie zabite (W18)');
+  EQ('E9.exitreset.log1', ev('state.deltaLog.length').val, 1, 'wyjscie: dziennik kalki PRZEZYWA (W18 v2)');
+  ex('toggleEditMode()');
+  ex('undoAction()');
+  EQ('E9.exitreset.noop', ev('_computeBaseInfo().crc').val, crc1, 'Ctrl+Z po re-wejsciu: zero mutacji mapy');
+  ex('addRoomAtPosition(7002, 7002)');
+  const n = JSON.parse(ev('(function(){ const d = JSON.parse(buildDelta());'
+    + ' return JSON.stringify({ n: d.ops.length }); })()').val);
+  EQ('E9.exitreset.ops2', n.n, 2, 'kalka po re-wejsciu kompletna: sesja1+sesja2 (W18 v2)');
+});
+
+scenario('E9.crc-v2-export', async () => {
+  await loadBase('dat');
+  ex('_prepareArkmapForSave()');
+  EQ('E9.crc-v2-export.alg', ev('state.map.meta.checksums.alg').val, 'v2', 'eksport .arkmap zapisuje alg v2');
+  A('E9.crc-v2-export.ok', ev('verifyChecksums(state.map).ok').val === true, 'verify swiezego eksportu: ok');
+  const r = JSON.parse(ev('(function(){ const a = state.map.areas.find(a => (a.labels || []).length);'
+    + ' if (!a) return JSON.stringify({ skip: true });'
+    + ' a.labels[0].text = a.labels[0].text + " X";'
+    + ' const v = verifyChecksums(state.map); return JSON.stringify({ ok: v.ok, bad: v.badAreas.length }); })()').val);
+  A('E9.crc-v2-export.label', r.skip || (r.ok === false && r.bad >= 1),
+    'mutacja etykiety po zapisie sum → badAreas (W3 widzi etykiety)');
+  const r2 = JSON.parse(ev('(function(){ const ks = Object.keys(state.map.meta.checksums.rooms);'
+    + ' delete state.map.meta.checksums.rooms[ks[0]];'
+    + ' const v = verifyChecksums(state.map); return JSON.stringify({ ok: v.ok, miss: v.missingRooms.length }); })()').val);
+  A('E9.crc-v2-export.missing', r2.ok === false && r2.miss >= 1, 'pokoj bez sumy → missingRooms + ok:false');
+});
+
+scenario('E9.hidden-roundtrip', async () => {
+  await loadBase('dat');
+  const mk = '(function(id, extra){ const raw = Object.assign({ _roomId: id, x: 0, y: 0, z: 0, environment: 258,'
+    + ' weight: 1, name: "H", isLocked: false,'
+    + ' n: -1, ne: -1, nw: -1, e: -1, w: -1, s: -1, se: -1, sw: -1, up: -1, down: -1, in: -1, out: -1,'
+    + ' doors: {}, stubs: [], exitLocks: [], exitWeights: {}, rawSpecialExits: {},'
+    + ' customLines: {}, customLinesArrow: {}, customLinesColor: {}, customLinesStyle: {}, userData: {} }, extra);'
+    + ' return raw; })';
+  const r = JSON.parse(ev('(function(){ const room = _datConvertRoom(' + mk + '(900001, { hidden: true }), {});'
+    + ' const out = buildRoom(room, 5);'
+    + ' return JSON.stringify({ model: room.hidden === true, raw: out.hidden === true }); })()').val);
+  A('E9.hidden-roundtrip.model', r.model, 'raw.hidden (v22+) → room.hidden (W4)');
+  A('E9.hidden-roundtrip.raw', r.raw, 'room.hidden → out.hidden → writeMudletRoom zapisze system.hidden (W4)');
+  const r2 = JSON.parse(ev('(function(){ const room = _datConvertRoom(' + mk
+    + '(900002, { userData: { "system.hidden": "1" } }), {});'
+    + ' return JSON.stringify({ model: room.hidden === true }); })()').val);
+  A('E9.hidden-roundtrip.readback', r2.model, 'userData system.hidden (v20) → room.hidden (read-back)');
+  const s = JSON.parse(ev('(function(){ const room = _datConvertRoom(' + mk
+    + '(900003, { symbolColor: { spec: 1, r: 10, g: 20, b: 30 } }), {});'
+    + ' return JSON.stringify({ fb: room.user_data && room.user_data["system.fallback_symbol_color"] }); })()').val);
+  EQ('E9.hidden-roundtrip.fallback', s.fb, '#0a141e', 'symbolColor v21+ → fallback hex (Q2)');
+});
+
 // ═══ E6: przeploty undo/redo z apply kalki ═══
 scenario('E6.undo-apply', async () => {
   await loadBase('dat');

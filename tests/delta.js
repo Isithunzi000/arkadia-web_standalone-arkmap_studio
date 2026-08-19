@@ -98,9 +98,11 @@ console.log('— T1: deltaLog — lustro operacji bez capu —');
   ok(HTML.includes("state.deltaLog = [];  // ARKDELTA: nowa mapa = pusty log"),
     'wrapper applyMap: reset deltaLog przy wczytaniu mapy');
   ok(HTML.includes("deltaLog:           [],"), 'state: deklaracja deltaLog');
+  // audyt T3/W17: cap scentralizowany w pushUndo (choke point); deltaLog nigdy nie scinany
   const capLines = HTML.split('\n').filter(l => l.includes('undoStack.shift()'));
-  ok(capLines.length === 31 && capLines.every(l => !l.includes('deltaLog')),
-    'cap 50 (31 miejsc inline: 30 edycyjnych + _deltaPush) nigdy nie dotyka deltaLog');
+  ok(capLines.length === 1 && capLines[0].includes('audyt T3/W17'),
+    'cap 50 dokladnie 1x — w pushUndo (choke point), zero inline');
+  ok(!HTML.includes('deltaLog.shift()'), 'deltaLog.shift nigdy (kalka zawsze kompletna wzgledem bazy)');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -455,7 +457,7 @@ ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo 
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.37.0';"), 'wersja: v1.37.0');
+ok(HTML.includes("const APP_VERSION = 'v1.38.0';"), 'wersja: v1.38.0');
 
 // — W3 (v1.35.0): etykiety kalki zachowane przez 6 niskopoziomowych sciezek commit —
 {
@@ -817,7 +819,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
   ok(HTML.includes('const _DELTA_TYPE_PL = {') && HTML.includes("MOVE_ROOM: 'przesunięcie pokoju'")
     && HTML.includes("AUTO_FIX_SUPPRESSORS: 'automatyczna naprawa podwójnych linii'"),
     'W1 karta: typy opów po polsku (_DELTA_TYPE_PL)');
-  ok(HTML.includes("const APP_VERSION = 'v1.37.0';"), 'wersja v1.37.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.38.0';"), 'wersja v1.38.0');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -853,7 +855,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.37.0';"), 'wersja v1.37.0 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.38.0';"), 'wersja v1.38.0 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji
@@ -957,7 +959,34 @@ console.log('— T11: audyt T1 — klasyfikator ≡ apply —');
   ok(HTML.includes("if (aid <= 0) { items.push(_deltaClsItem(op, 'impossible', 'obszar domyślny"), 'T1: klasyfikator guard DELETE_AREA <= 0');
   ok(HTML.includes('kierunek przeciwny u pokoju docelowego jest zajęty'), 'T1: klasyfikator ADD_EXIT guard przeciwnego kierunku');
   ok(HTML.includes('return false;  // audyt T1/W15'), 'T1: commitDeleteArea jawny zwrot false');
-  ok(HTML.includes("const APP_VERSION = 'v1.37.0';"), 'wersja v1.37.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.38.0';"), 'wersja v1.38.0');
+}
+
+
+console.log('— T12: audyt T3 — baseInfo widzi etykiety/kolory (CRC v2), baseCheck, reszta kalki —');
+{
+  const c = makeDeltaCtx();
+  const bi1 = c.api._computeBaseInfo();
+  ok(bi1 && typeof bi1.crc === 'string' && bi1.crc.length === 8, 'baseInfo: crc v2 obecne');
+  const a1 = c.state.map.areas[0];
+  const labels0 = a1.labels;
+  const colors0 = c.state.map.colors.custom_env_colors;
+  a1.labels = [{ id: 1, x: 0, y: 0, z: 0, text: 'L' }];
+  const bi2 = c.api._computeBaseInfo();
+  ok(bi2.crc !== bi1.crc, 'baseInfo crc: dodanie etykiety zmienia tozsamosc bazy (W3)');
+  a1.labels[0].text = 'ZMIANA';
+  ok(c.api._computeBaseInfo().crc !== bi2.crc, 'baseInfo crc: mutacja etykiety zmienia tozsamosc (W3)');
+  a1.labels = labels0;
+  c.state.map.colors.custom_env_colors = { 262: [1, 2, 3] };
+  ok(c.api._computeBaseInfo().crc !== bi1.crc, 'baseInfo crc: kolory env zmieniaja tozsamosc (W3)');
+  c.state.map.colors.custom_env_colors = colors0;
+  ok(c.api._computeBaseInfo().crc === bi1.crc, 'baseInfo crc: powrot do stanu = powrot crc (determinizm)');
+  c.state.baseInfo = bi1;
+  ok(c.api._deltaBaseCheck({ crc: bi1.crc }) === null, '_deltaBaseCheck: zgodne crc → null (bez dialogu)');
+  const mm = c.api._deltaBaseCheck({ crc: 'deadbeef' });
+  ok(mm && mm.kind === 'mismatch', '_deltaBaseCheck: obce crc → mismatch (dialog)');
+  ok(c.api._arkdeltaBaseNote({ crc: bi1.crc }).includes('pasuje'), '_arkdeltaBaseNote: „Kalka pasuje" dla zgodnej bazy');
+  ok(c.api._arkdeltaBaseNote({}).includes('bez informacji'), '_arkdeltaBaseNote: kalka bez base → uczciwy komunikat');
 }
 
 console.log('');
