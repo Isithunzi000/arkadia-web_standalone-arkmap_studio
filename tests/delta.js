@@ -455,7 +455,7 @@ ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo 
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.35.0';"), 'wersja: v1.35.0');
+ok(HTML.includes("const APP_VERSION = 'v1.36.0';"), 'wersja: v1.36.0');
 
 // — W3 (v1.35.0): etykiety kalki zachowane przez 6 niskopoziomowych sciezek commit —
 {
@@ -817,7 +817,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
   ok(HTML.includes('const _DELTA_TYPE_PL = {') && HTML.includes("MOVE_ROOM: 'przesunięcie pokoju'")
     && HTML.includes("AUTO_FIX_SUPPRESSORS: 'automatyczna naprawa podwójnych linii'"),
     'W1 karta: typy opów po polsku (_DELTA_TYPE_PL)');
-  ok(HTML.includes("const APP_VERSION = 'v1.35.0';"), 'wersja v1.35.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.36.0';"), 'wersja v1.36.0');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -853,7 +853,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.35.0';"), 'wersja v1.35.0 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.36.0';"), 'wersja v1.36.0 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji
@@ -870,6 +870,94 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
   const SPEC = fs.readFileSync(path.join(ROOT, 'docs', 'arkdelta_spec.html'), 'utf8');
   ok(SPEC.includes('Position overrides (session-only)') && SPEC.includes('never enter the file format'),
     'spec: dopisek o sesyjnych override poza formatem');
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// T11 (v1.36.0): audyt Tier 1 — zbieznosc klasyfikatora z apply (W13/W14/W15/W16).
+// ═══════════════════════════════════════════════════════════════════════════
+console.log('— T11: audyt T1 — klasyfikator ≡ apply —');
+{
+  // W13: done-SID — zalezny op tlumaczy sie na zywe id przez seed z klasyfikacji
+  const c = makeDeltaCtx();
+  const { state, api } = c;
+  const delta = { meta: { format: 'arkdelta', format_version: 1 }, ops: [
+    { seq: 1, type: 'ADD_AREA', target: { areaId: 'd:1' }, payload: { area: { id: 'd:1', name: 'Area Two' } }, label: 'a' },
+    { seq: 2, type: 'ADD_ROOM', target: { roomId: 'd:2', areaId: 'd:1' }, payload: { room: { id: 'd:2', x: 7, y: 7, z: 0, name: 'Seedowy', env: 262 } }, label: 'r' },
+  ] };
+  const items = api.classifyDelta(delta);
+  ok(items[0].cls === 'done' && items[1].cls === 'ok', 'W13: ADD_AREA done (nazwa), ADD_ROOM z sid-obszaru → ok');
+  const only = new Set([2]);
+  const resNoSeed = api.applyDelta(JSON.parse(JSON.stringify(delta)), only);
+  ok(resNoSeed.applied === 0 && resNoSeed.skipped.length === 1, 'W13: bez seed zalezny op → skip (brak rozstrzygniecia)');
+  const seed = new Map();
+  for (const m of [items.sidRoomId, items.sidAreaId, items.sidLabelId]) if (m) for (const [k, v] of m) seed.set(k, v);
+  ok(seed.get('d:1') === 2, 'W13: seed niesie rozstrzygniecie done d:1 → 2');
+  const resSeed = api.applyDelta(delta, only, undefined, seed);
+  ok(resSeed.applied === 1 && resSeed.skipped.length === 0, 'W13: z seed zalezny op → applied');
+  const newRoom = Object.values(state.roomById).find(r => r.name === 'Seedowy');
+  ok(!!newRoom && state.roomArea[newRoom.id] === 2, 'W13: pokój wszedł do żywego obszaru #2');
+  const items2 = api.classifyDelta(delta);
+  ok(items2[0].cls === 'done' && items2[1].cls === 'done', 'W13: re-klasyfikacja po apply → done/done (idempotentność)');
+}
+{
+  // W15: DELETE_AREA obszaru domyslnego — klasyfikacja impossible, apply skip (nie sukces)
+  const c = makeDeltaCtx();
+  const { state, api } = c;
+  const defArea = { id: -1, name: 'Default Area', rooms: [], labels: [] };
+  state.map.areas.push(defArea); state.areas.set(-1, defArea);
+  const delta = { meta: { format: 'arkdelta', format_version: 1 }, ops: [
+    { seq: 1, type: 'DELETE_AREA', target: { areaId: -1 }, payload: {}, label: 'x' },
+  ] };
+  const items = api.classifyDelta(delta);
+  ok(items[0].cls === 'impossible' && items[0].note.includes('obszar domyślny'), 'W15: klasyfikacja DELETE_AREA -1 → impossible (obszar domyślny)');
+  const res = api.applyDelta(delta);
+  ok(res.applied === 0 && res.skipped.length === 1 && res.skipped[0].reason.includes('obszar domyślny'),
+    'W15: apply DELETE_AREA -1 → skip, zero mutacji');
+  ok(!!state.areas.get(-1), 'W15: Default Area nadal istnieje po apply');
+  const res2 = api.applyDelta({ meta: { format: 'arkdelta', format_version: 1 }, ops: [
+    { seq: 1, type: 'DELETE_AREA', target: { areaId: 2 }, payload: {}, label: 'x' } ] });
+  ok(res2.applied === 1 && !state.areas.get(2), 'W15: DELETE_AREA zwykłego obszaru → applied (regresja guardu)');
+}
+{
+  // W16: bidirectional ADD_EXIT — guard przeciwnego kierunku + symetria done
+  const c = makeDeltaCtx();
+  const { state, api } = c;
+  const mkDelta = (ops) => ({ meta: { format: 'arkdelta', format_version: 1 }, ops });
+  let items = api.classifyDelta(mkDelta([
+    { seq: 1, type: 'ADD_EXIT', target: { sourceId: 12, dir: 'e' }, payload: { targetId: 11, bidirectional: true }, label: 'x' } ]));
+  ok(items[0].cls === 'hard' && items[0].note.includes('kierunek przeciwny'), 'W16: bidirectional, przeciwny zajęty → hard (nie ok)');
+  items = api.classifyDelta(mkDelta([
+    { seq: 1, type: 'ADD_EXIT', target: { sourceId: 10, dir: 'e' }, payload: { targetId: 11, bidirectional: true }, label: 'x' } ]));
+  ok(items[0].cls === 'done', 'W16: bidirectional, para kompletna → done');
+  delete state.roomById[11].exits.w;
+  items = api.classifyDelta(mkDelta([
+    { seq: 1, type: 'ADD_EXIT', target: { sourceId: 10, dir: 'e' }, payload: { targetId: 11, bidirectional: true }, label: 'x' } ]));
+  ok(items[0].cls === 'hard' && items[0].note.includes('tylko w jedną stronę'), 'W16: jednostronne + bidirectional → hard (nie done)');
+}
+{
+  // W14: PAINT_BATCH / AUTO_FIX_SUPPRESSORS z sid z tej samej kalki → nie impossible
+  const c = makeDeltaCtx();
+  const { api } = c;
+  const delta = { meta: { format: 'arkdelta', format_version: 1 }, ops: [
+    { seq: 1, type: 'ADD_ROOM', target: { roomId: 'd:1', areaId: 1 }, payload: { room: { id: 'd:1', x: 6, y: 6, z: 0, name: 'Malowany', env: 258 } }, label: 'r' },
+    { seq: 2, type: 'PAINT_BATCH', target: {}, payload: { changes: [{ roomId: 'd:1', beforeEnv: 258, afterEnv: 262, afterSymbol: '*' }] }, label: 'p' },
+    { seq: 3, type: 'AUTO_FIX_SUPPRESSORS', target: {}, payload: { added: [{ roomId: 'd:1', dir: 'e', cl: { points: [], color: [255, 0, 0] } }], removed: [] }, label: 's' },
+  ] };
+  const items = api.classifyDelta(delta);
+  ok(items[0].cls === 'ok', 'W14: ADD_ROOM → ok');
+  ok(items[1].cls === 'ok', 'W14: PAINT_BATCH na sid z tej kalki → ok (przed fixem: impossible)');
+  ok(items[2].cls === 'ok', 'W14: AUTO_FIX na sid z tej kalki → ok (przed fixem: impossible)');
+}
+{
+  // Asercje strukturalne T1
+  ok(HTML.includes('function applyDelta(delta, onlySeq, overrides, seedSids) {'), 'T1: sygnatura applyDelta z seedSids');
+  ok(HTML.includes('const res = applyDelta(R.delta, only, _deltaOverrides, seedSids);'), 'T1: _deltaApplyReviewed przekazuje seed');
+  ok(HTML.includes("if (op.target.areaId <= 0) { skip('obszar domyślny"), 'T1: applyDelta guard DELETE_AREA <= 0');
+  ok(HTML.includes("if (aid <= 0) { items.push(_deltaClsItem(op, 'impossible', 'obszar domyślny"), 'T1: klasyfikator guard DELETE_AREA <= 0');
+  ok(HTML.includes('kierunek przeciwny u pokoju docelowego jest zajęty'), 'T1: klasyfikator ADD_EXIT guard przeciwnego kierunku');
+  ok(HTML.includes('return false;  // audyt T1/W15'), 'T1: commitDeleteArea jawny zwrot false');
+  ok(HTML.includes("const APP_VERSION = 'v1.36.0';"), 'wersja v1.36.0');
 }
 
 console.log('');
