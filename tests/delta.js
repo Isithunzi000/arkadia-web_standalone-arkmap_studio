@@ -455,7 +455,40 @@ ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo 
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.34.0';"), 'wersja: v1.34.0');
+ok(HTML.includes("const APP_VERSION = 'v1.35.0';"), 'wersja: v1.35.0');
+
+// — W3 (v1.35.0): etykiety kalki zachowane przez 6 niskopoziomowych sciezek commit —
+{
+  const sigs = [
+    'function deleteRoom(roomId, label) {',
+    'function commitDeleteArea(areaId, label) {',
+    'function commitMoveRoomToArea(roomId, targetAreaId, label) {',
+    'function commitAddExit(sourceId, dir, targetId, bidirectional, customLabel) {',
+    'function commitDeleteExit(room, dir, label) {',
+    'function commitMoveRoom(room, fromX, fromY, fromZ, toX, toY, toZ, label) {',
+  ];
+  for (const s of sigs) ok(HTML.includes(s), 'W3: sygnatura z etykieta — ' + s.slice(9, s.indexOf('(')));
+  const fallbacks = [
+    'label: label || `Usunięcie pokoju',
+    'label: label || `Usunięcie obszaru',
+    'label: label || `Przeniesienie pokoju',
+    'const label = customLabel || (bidirectional',
+    'label: label || `Usunięcie wyjścia',
+    'label: label || `Przesunięcie pokoju',
+  ];
+  for (const f of fallbacks) ok(HTML.includes(f), 'W3: fallback etykiety — ' + f.replace('label: ', '').slice(0, 40));
+  const callers = [
+    'deleteRoom(op.target.roomId, op.label);',
+    'commitDeleteArea(op.target.areaId, op.label);',
+    'commitMoveRoomToArea(op.target.roomId, op.payload.toAreaId, op.label);',
+    'commitAddExit(op.target.sourceId, op.target.dir, op.payload.targetId, !!op.payload.bidirectional, op.label);',
+    'commitDeleteExit(room, op.target.dir, op.label);',
+    'commitMoveRoom(room, fx, fy, fz, tx, ty, tz, op.label);',
+  ];
+  for (const c of callers) ok(HTML.includes(c), 'W3: applyDelta przekazuje op.label — ' + c.slice(0, c.indexOf('(')));
+  ok(HTML.includes("ops.push({ seq: ++seq, type: e.type, target, payload, label: e.label || '' });"),
+    'W3: buildDelta emituje e.label z wpisu undo (round-trip etykiety)');
+}
 
 console.log('— T8: classifyDelta + recenzja (M2) —');
 {
@@ -784,7 +817,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
   ok(HTML.includes('const _DELTA_TYPE_PL = {') && HTML.includes("MOVE_ROOM: 'przesunięcie pokoju'")
     && HTML.includes("AUTO_FIX_SUPPRESSORS: 'automatyczna naprawa podwójnych linii'"),
     'W1 karta: typy opów po polsku (_DELTA_TYPE_PL)');
-  ok(HTML.includes("const APP_VERSION = 'v1.34.0';"), 'wersja v1.34.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.35.0';"), 'wersja v1.35.0');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -820,7 +853,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.34.0';"), 'wersja v1.34.0 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.35.0';"), 'wersja v1.35.0 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji

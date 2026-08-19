@@ -17,7 +17,7 @@ function extract(src, anchor) {
   }
   throw new Error('niezbalansowane klamry: ' + anchor);
 }
-for (const a of ['function commitDeleteArea(areaId) {', 'function _dispatchUndo(entry) {', 'function _dispatchRedo(entry) {']) {
+for (const a of ['function commitDeleteArea(areaId, label) {', 'function _dispatchUndo(entry) {', 'function _dispatchRedo(entry) {']) {
   if (NEW.indexOf(a) !== NEW.lastIndexOf(a)) throw new Error('kotwica nieunikalna: ' + a);
 }
 
@@ -25,7 +25,7 @@ const codeNew = [
   extract(NEW, 'function _replaceRoomData(room, snapshot) {'),
   extract(NEW, 'function _dispatchUndo(entry) {'),
   extract(NEW, 'function _dispatchRedo(entry) {'),
-  extract(NEW, 'function commitDeleteArea(areaId) {'),
+  extract(NEW, 'function commitDeleteArea(areaId, label) {'),
 ].join('\n');
 const codeOld = [
   extract(OLD, 'function _replaceRoomData(room, snapshot) {'),

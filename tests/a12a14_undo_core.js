@@ -18,7 +18,7 @@ function extract(src, anchor) {
   }
   throw new Error('niezbalansowane klamry: ' + anchor);
 }
-for (const a of ['function _dispatchUndo(entry) {', 'function commitAddExit(sourceId, dir, targetId, bidirectional) {']) {
+for (const a of ['function _dispatchUndo(entry) {', 'function commitAddExit(sourceId, dir, targetId, bidirectional, customLabel) {']) {
   if (NEW.indexOf(a) !== NEW.lastIndexOf(a)) throw new Error('kotwica nieunikalna: ' + a);
 }
 
@@ -26,7 +26,7 @@ const codeNew = [
   extract(NEW, 'function _replaceRoomData(room, snapshot) {'),
   extract(NEW, 'function _dispatchUndo(entry) {'),
   extract(NEW, 'function _dispatchRedo(entry) {'),
-  extract(NEW, 'function commitAddExit(sourceId, dir, targetId, bidirectional) {'),
+  extract(NEW, 'function commitAddExit(sourceId, dir, targetId, bidirectional, customLabel) {'),
 ].join('\n');
 const codeOld = [
   extract(OLD, 'function _replaceRoomData(room, snapshot) {'),

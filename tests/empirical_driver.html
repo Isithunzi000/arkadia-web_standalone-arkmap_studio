@@ -2109,6 +2109,79 @@ scenario('E8.cardrefresh', async () => {
   A('E8.cardrefresh.filter', (cardHtml() || '').length > 0, 'zmiana filtru: karta nie gina (item nadal w widoku)');
 });
 
+// ═══ E8.labelkeep: etykiety kalki zachowane przez 6 niskopoziomowych sciezek commit (v1.35.0) ═══
+// Reprodukcja buga z testow recznych: re-eksport („Zapisz naniesione zmiany") gubil
+// customowe op.label dla ADD_EXIT/DELETE_EXIT/MOVE_ROOM/MOVE_ROOM_TO_AREA/DELETE_ROOM/DELETE_AREA,
+// bo niskopoziomowe commit* generowaly wlasne auto-etykiety. Fix: entry.label = op.label || auto.
+scenario('E8.labelkeep', async () => {
+  await loadBase('dat');
+  // 6 niezależnych opow budowanych na zywej mapie (bez hardkodowanej geometrii),
+  // kazdy z rozpoznawcza customowa etykieta:
+  const ops = JSON.parse(ev(`JSON.stringify((() => {
+    const rooms = Object.values(state.roomById).sort((a, b) => a.id - b.id);
+    const DIRS = ['n','ne','e','se','s','sw','w','nw'];
+    // ADD_EXIT: pierwszy pokoj z wolnym kierunkiem, cel = inny istniejacy pokoj
+    let ae = null;
+    for (const r of rooms) {
+      const free = DIRS.find(d => !(r.exits && r.exits[d] !== undefined) && !(r.stubs || []).includes(d));
+      if (free) { ae = { sourceId: r.id, dir: free, targetId: rooms.find(x => x.id !== r.id).id }; break; }
+    }
+    // DELETE_EXIT: pierwszy INNY pokoj z istniejacym wyjsciem
+    let de = null;
+    for (const r of rooms) {
+      if (r.id === ae.sourceId) continue;
+      const d = Object.keys(r.exits || {})[0];
+      if (d) { de = { roomId: r.id, dir: d }; break; }
+    }
+    // MOVE_ROOM: pierwszy pokoj na gwarantowanie wolna komorke (skan _deltaRoomAt)
+    const mr = rooms[0];
+    const mArea = state.roomArea[mr.id];
+    let tx = mr.x + 500, ty = mr.y + 500; const tz = mr.z ?? 0;
+    while (_deltaRoomAt(mArea, tx, ty, tz)) tx += 17;
+    // MOVE_ROOM_TO_AREA: INNY pokoj do innego istniejacego obszaru
+    const areaIds = [...state.areas.keys()];
+    const mar = rooms.find(r => r.id !== mr.id);
+    const mFrom = state.roomArea[mar.id];
+    const mTo = areaIds.find(a => a !== mFrom);
+    // DELETE_ROOM: pokoj nie uzyty wyzej
+    const dr = rooms.find(r => r.id !== ae.sourceId && r.id !== de.roomId && r.id !== mr.id && r.id !== mar.id);
+    // DELETE_AREA: obszar z najmniejsza liczba pokojow (baza testowa — kaskada OK);
+    // bez Default Area (id <= 0 — zarezerwowana, commitDeleteArea odmawia)
+    const counts = new Map(areaIds.map(a => [a, 0]));
+    for (const r of rooms) counts.set(state.roomArea[r.id], (counts.get(state.roomArea[r.id]) || 0) + 1);
+    const daArea = areaIds.filter(a => a > 0).slice().sort((a, b) => counts.get(a) - counts.get(b))[0];
+    return [
+      { type: 'ADD_EXIT', target: { sourceId: ae.sourceId, dir: ae.dir },
+        payload: { targetId: ae.targetId, bidirectional: false }, label: 'CUSTOM ADD_EXIT' },
+      { type: 'DELETE_EXIT', target: { roomId: de.roomId, dir: de.dir }, payload: {}, label: 'CUSTOM DELETE_EXIT' },
+      { type: 'MOVE_ROOM', target: { roomId: mr.id },
+        payload: { fromX: mr.x, fromY: mr.y, fromZ: mr.z ?? 0, toX: tx, toY: ty, toZ: tz }, label: 'CUSTOM MOVE_ROOM' },
+      { type: 'MOVE_ROOM_TO_AREA', target: { roomId: mar.id },
+        payload: { fromAreaId: mFrom, toAreaId: mTo }, label: 'CUSTOM MOVE_ROOM_TO_AREA' },
+      { type: 'DELETE_ROOM', target: { roomId: dr.id, areaId: state.roomArea[dr.id] },
+        payload: { room: JSON.parse(JSON.stringify(dr)) }, label: 'CUSTOM DELETE_ROOM' },
+      { type: 'DELETE_AREA', target: { areaId: daArea },
+        payload: { name: state.areas.get(daArea).name }, label: 'CUSTOM DELETE_AREA' },
+    ];
+  })())`).val);
+  const text = _e4Craft(ops);
+  const res = JSON.parse(ev('JSON.stringify(applyDelta(validateDeltaText(' + JSON.stringify(text) + ').delta))').val);
+  EQ('E8.labelkeep.applied', res.applied, 6, 'apply: wszystkie 6 opow naniesione');
+  EQ('E8.labelkeep.skipped', res.skipped.length, 0, 'apply: zero pomińiętych');
+  EQ('E8.labelkeep.loglabels', JSON.parse(ev('JSON.stringify(state.deltaLog.map(e => e.label))').val),
+    ['CUSTOM ADD_EXIT', 'CUSTOM DELETE_EXIT', 'CUSTOM MOVE_ROOM', 'CUSTOM MOVE_ROOM_TO_AREA', 'CUSTOM DELETE_ROOM', 'CUSTOM DELETE_AREA'],
+    'wpisy undo niosa etykiety kalki (nie auto-etykiety)');
+  const ops2 = JSON.parse(ev('JSON.stringify(validateDeltaText(' + JSON.stringify(ev('buildDelta()').val) + ').delta.ops.map(o => [o.type, o.label]))').val);
+  EQ('E8.labelkeep.reexport', ops2,
+    [['ADD_EXIT', 'CUSTOM ADD_EXIT'], ['DELETE_EXIT', 'CUSTOM DELETE_EXIT'], ['MOVE_ROOM', 'CUSTOM MOVE_ROOM'],
+     ['MOVE_ROOM_TO_AREA', 'CUSTOM MOVE_ROOM_TO_AREA'], ['DELETE_ROOM', 'CUSTOM DELETE_ROOM'], ['DELETE_AREA', 'CUSTOM DELETE_AREA']],
+    're-eksport (buildDelta): etykiety kalki zachowane round-trip dla 6 typow');
+  // porzadkowosc: undo-all wraca do bazy (zadna z 6 sciezek nie zostawia sladu)
+  ex('undoAll()');
+  EQ('E8.labelkeep.undo', ev('_computeBaseInfo().crc').val, ev('state.baseInfo.crc').val,
+    'undoAll po apply: baza odtworzona (6 sciezek bez sladu)');
+});
+
 // ═══ E8.realshow: „Pokaż" przy opach zrobionych (M6d, v1.29.0) ═══
 scenario('E8.realshow', async () => {
   // W1: jednolity przycisk „Pokaż" dla wszystkich klas (done = realny obiekt,
