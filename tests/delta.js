@@ -339,7 +339,7 @@ console.log('— T4: validateDeltaText — strict refuse —');
     ok(r.ok === false && r.errors.some(e => e.includes(frag)), name + (r.ok ? ' — PRZESZŁO!' : (r.errors.some(e => e.includes(frag)) ? '' : ' — komunikat: ' + r.errors[0])));
   };
   refuse('', 'Pusty plik', 'odmowa: pusty plik');
-  refuse('{nie-json', 'JSON', 'odmowa: niepoprawny JSON');
+  refuse('{nie-json', 'Nie można odczytać pliku', 'odmowa: nieczytelny plik kalki');
   refuse('{}', 'nie jest plik .arkdelta', 'odmowa: JSON bez meta.format');
   { const d = JSON.parse(validText); d.meta.format = 'arkmap';
     refuse(api.stableStringify(d), 'nie jest plik .arkdelta', 'odmowa: zły znacznik formatu'); }
@@ -351,13 +351,13 @@ console.log('— T4: validateDeltaText — strict refuse —');
     const r = api.validateDeltaText(api.stableStringify(d));
     ok(r.ok === false && r.errors[0].includes('#2'), 'lokalizacja per-op CRC: wskazany op #2'); }
   { const d = JSON.parse(validText); d.ops[1].seq = 999;
-    refuse(reseal(d), 'seq nieciągłe', 'odmowa: seq nieciągłe'); }
+    refuse(reseal(d), 'numeracja nie jest po kolei', 'odmowa: numeracja op nie po kolei'); }
   { const d = JSON.parse(validText); d.ops[0].type = 'FOO_BAR';
     refuse(reseal(d), 'nieznany typ', 'odmowa: nieznany typ operacji'); }
   { const d = JSON.parse(validText); d.ops[3].target.dir = 'northeast';
     refuse(reseal(d), 'nieprawidłowy kierunek', 'odmowa: kierunek spoza VALID_DIRS'); }
   { const d = JSON.parse(validText); delete d.ops[1].payload.room;
-    refuse(reseal(d), 'brak payload.room', 'odmowa: brak wymaganego pola payload'); }
+    refuse(reseal(d), 'brak: dane pokoju', 'odmowa: brak wymaganego pola danych pokoju'); }
   { const d = JSON.parse(validText); d.ops[5].target.roomId = 'd:99';
     refuse(reseal(d), 'nieistniejącego obiektu kalki', 'odmowa: sid bez definicji'); }
   { const d = JSON.parse(validText); d.ops[2].target.roomId = 'd:2'; d.ops[2].payload.room.id = 'd:2';
@@ -366,7 +366,7 @@ console.log('— T4: validateDeltaText — strict refuse —');
     d.ops[0].payload = JSON.parse('{"__proto__":{},"area":' + JSON.stringify(d.ops[0].payload.area) + '}');
     refuse(reseal(d), 'niedozwolony klucz', 'odmowa: klucz __proto__'); }
   { const d = JSON.parse(validText); d.meta.ops_count = 999;
-    refuse(reseal(d), 'ops_count', 'odmowa: ops_count nie zgadza się z listą'); }
+    refuse(reseal(d), 'w nagłówku', 'odmowa: liczba operacji z nagłówka nie zgadza się z listą'); }
   refuse('x'.repeat(8 * 1024 * 1024 + 1), 'za duży', 'odmowa: plik ponad limit 8 MB');
   { const d = { meta: { format: 'arkdelta', format_version: 1, ops_count: 5001, base: {} },
       ops: Array.from({ length: 5001 }, (_, i) => ({ seq: i + 1, type: 'EDIT_ENV_COLOR', target: { envId: 1 }, payload: { newColor: [1, 2, 3] } })) };
@@ -442,8 +442,8 @@ console.log('— T7: baseInfo, spec-clean, struktura UI —');
     && stripped.weight === undefined && stripped.symbol === undefined && stripped.stubs === undefined
     && stripped.id === 5 && stripped.env === 258 && stripped.x === 1, '_deltaStripRoom: omission convention spec');
   state.baseInfo = bi1;
-  ok(api._arkdeltaBaseNote(null) === 'Kalka bez informacji o bazie.', 'baseNote: brak bazy');
-  ok(api._arkdeltaBaseNote({ crc: bi1.crc, version: '9.9.9' }).includes('Baza zgodna'), 'baseNote: baza zgodna');
+  ok(api._arkdeltaBaseNote(null) === 'Kalka bez informacji o wersji mapy, na której ją zapisano.', 'baseNote: brak informacji o wersji');
+  ok(api._arkdeltaBaseNote({ crc: bi1.crc, version: '9.9.9' }).includes('Kalka pasuje do wczytanej mapy'), 'baseNote: kalka pasuje do mapy');
   ok(api._arkdeltaBaseNote({ crc: 'deadbeef', version: '1.0.0' }).includes('innej wersji'), 'baseNote: baza niezgodna');
 }
 ok(HTML.includes('<input type="file" id="fi-arkdelta" accept=".arkdelta">'), 'markup: fi-arkdelta');
@@ -455,7 +455,7 @@ ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo 
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.33.0';"), 'wersja: v1.33.0');
+ok(HTML.includes("const APP_VERSION = 'v1.34.0';"), 'wersja: v1.34.0');
 
 console.log('— T8: classifyDelta + recenzja (M2) —');
 {
@@ -532,7 +532,7 @@ console.log('— T8: classifyDelta + recenzja (M2) —');
   ok(cls(19) === 'impossible', 'classify MOVE_ROOM (F1): jw. → impossible');
   ok(cls(24) === 'hard', 'classify EDIT_ROOM: live != before → hard (zmieniony upstream)');
   ok(cls(25) === 'ok', 'classify ADD_EXIT: wolny kierunek → ok');
-  ok(cls(26) === 'hard' && note(26).includes('pominie ten op'), 'classify ADD_EXIT: kierunek zajęty innym → hard (Zastosuj pominie op)');
+  ok(cls(26) === 'hard' && note(26).includes('pominie tę operację'), 'classify ADD_EXIT: kierunek zajęty innym → hard (Zastosuj pominie operację)');
   ok(cls(27) === 'ok', 'classify MOVE_ROOM: wolne pole → ok');
   ok(cls(28) === 'done', 'classify MOVE_ROOM (F1): już na miejscu wg pozycji z CIENIA (po op24) → done');
   ok(cls(29) === 'hard' && note(29).includes('kolizja'), 'classify MOVE_ROOM (F1): pole zajęte przez pokój przesunięty wcześniej w kali (op27) → hard');
@@ -784,7 +784,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
   ok(HTML.includes('const _DELTA_TYPE_PL = {') && HTML.includes("MOVE_ROOM: 'przesunięcie pokoju'")
     && HTML.includes("AUTO_FIX_SUPPRESSORS: 'automatyczna naprawa podwójnych linii'"),
     'W1 karta: typy opów po polsku (_DELTA_TYPE_PL)');
-  ok(HTML.includes("const APP_VERSION = 'v1.33.0';"), 'wersja v1.33.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.34.0';"), 'wersja v1.34.0');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -820,7 +820,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.33.0';"), 'wersja v1.33.0 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.34.0';"), 'wersja v1.34.0 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji

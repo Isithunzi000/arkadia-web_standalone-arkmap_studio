@@ -1433,9 +1433,9 @@ scenario('E4.format', async () => {
   const valid = await _e4ValidText();
   const crc0 = ev('_computeBaseInfo().crc').val;
   const cases = [
-    ['garbage', 'to nie jest json {{{', 'JSON'],
+    ['garbage', 'to nie jest json {{{', 'Nie można odczytać pliku'],
     ['notdelta', '{"hello": 1}', 'nie jest plik .arkdelta'],
-    ['truncated', valid.slice(0, Math.floor(valid.length / 2)), 'JSON'],
+    ['truncated', valid.slice(0, Math.floor(valid.length / 2)), 'Nie można odczytać pliku'],
     ['badversion', _e4Craft([{ type: 'PAINT_BATCH', target: {}, payload: { changes: [] } }], { meta: { format_version: 999 } }), 'Nieznana wersja formatu'],
   ];
   for (const [name, text, frag] of cases){
@@ -1467,8 +1467,8 @@ scenario('E4.integrity', async () => {
     ['tamper-file', tampered2Text, ['uszkodzony']],
     ['unknown-type', _e4Craft([{ type: 'NUKE_MAP', target: {}, payload: {} }]), ['nieznany typ operacji', 'NUKE_MAP']],
     ['seq-gap', _e4Craft([{ type: 'PAINT_BATCH', target: {}, payload: { changes: [] } },
-                          { seq: 3, type: 'PAINT_BATCH', target: {}, payload: { changes: [] } }]), ['seq nieciągłe']],
-    ['ops-count', _e4Craft([{ type: 'PAINT_BATCH', target: {}, payload: { changes: [] } }], { meta: { ops_count: 99 } }), ['ops_count (99)']],
+                          { seq: 3, type: 'PAINT_BATCH', target: {}, payload: { changes: [] } }]), ['numeracja nie jest po kolei']],
+    ['ops-count', _e4Craft([{ type: 'PAINT_BATCH', target: {}, payload: { changes: [] } }], { meta: { ops_count: 99 } }), ['w nagłówku (99)']],
     ['proto', _e4Craft([protoOp]), ['niedozwolony klucz', '__proto__']],
     ['sid-forward', _e4Craft([{ type: 'ADD_EXIT', target: { sourceId: 'd:9', dir: 'n' }, payload: { targetId: 1 } }]), ['nieistniejącego obiektu kalki', 'd:9']],
   ];
@@ -1542,7 +1542,7 @@ scenario('E4.nobase', async () => {
   await _e4Load(_e4Craft([{ type: 'PAINT_BATCH', target: {}, payload: { changes: [] } }], { meta: { base: null } }));
   let s = _e4Surface();
   A('E4.nobase.dlg', s.mis && !s.panel, 'brak bazy: dialog mismatch');
-  A('E4.nobase.msg', s.misText.indexOf('nie niesie informacji o bazie') >= 0, 'komunikat o braku informacji o bazie');
+  A('E4.nobase.msg', s.misText.indexOf('nie niesie informacji o wersji mapy') >= 0, 'komunikat o braku informacji o wersji mapy');
   ex("document.getElementById('arkdelta-mismatch-ok').click()");
   s = _e4Surface();
   A('E4.nobase.review', s.panel && !s.mis, 'po OK: panel recenzji otwarty');
@@ -2152,7 +2152,7 @@ scenario('E8.naming', async () => {
   A('E8.naming.supp-cls', ev('_deltaReview.items[1].cls').val === 'hard', 'ADD_SUPPRESSOR na zajetym kierunku = hard');
   A('E8.naming.supp-note', (ev('_deltaReview.items[1].note').val || '').indexOf('pustą custom line') >= 0,
     'notatka hard mowi o pustej custom line (nie „tłumik") [=' + ev('_deltaReview.items[1].note').val + ']');
-  A('E8.naming.rebase-tip', (ev('document.getElementById("dp-rebase").title').val || '').indexOf('nie nienaniesione opy kalki') >= 0,
+  A('E8.naming.rebase-tip', (ev('document.getElementById("dp-rebase").title').val || '').indexOf('już naniesiono na mapę w tej sesji') >= 0,
     'dp-rebase: tooltip wyjasnia, ze zapisuje zmiany sesji (nie reszte kalki)');
   const txt = await (await fetch('./fixture_demo.arkdelta')).text();
   A('E8.naming.fixture-label', txt.indexOf('tłumik') < 0 && txt.indexOf('tlumik') < 0 && txt.indexOf('pustej custom line') >= 0,
@@ -2267,8 +2267,8 @@ scenario('E7.texts', async () => {
   const note = i => ev('_deltaReview.items[' + i + '].note').val || '';
   A('E7.texts.coll', note(27).indexOf('kolizja') >= 0 && note(27).indexOf('Autopozycję') >= 0,
     'op28 ADD_ROOM hard: notatka z kolizja wskazuje Autopozycje/Odznacz [=' + note(27) + ']');
-  A('E7.texts.guard', note(32).indexOf('pominie ten op') >= 0,
-    'op33 ADD_EXIT hard: notatka mowi, ze Zastosuj pominie op [=' + note(32) + ']');
+  A('E7.texts.guard', note(32).indexOf('pominie tę operację') >= 0,
+    'op33 ADD_EXIT hard: notatka mowi, ze Zastosuj pominie operacje [=' + note(32) + ']');
   A('E7.texts.edit-hard', note(29).indexOf('nadpisze go wersją z kalki') >= 0,
     'op30 EDIT_ROOM hard: notatka mowi o nadpisaniu wersja z kalki [=' + note(29) + ']');
   EQ('E7.texts.done-badge', ev('(function(){ const r = document.querySelectorAll("#dp-body .dp-row")[30];'

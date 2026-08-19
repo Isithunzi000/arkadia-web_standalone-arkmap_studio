@@ -2529,8 +2529,8 @@
       <div class="vd-body" id="dp-body"></div>
       <div class="vd-ftr">
         <button class="vd-btn" id="dp-apply">✓ Zastosuj zaznaczone</button>
-        <button class="vd-btn" id="dp-rebase" style="display:none" title="Zapisuje zmiany naniesione w tej sesji (nie nienaniesione opy kalki)">💾 Zapisz naniesione zmiany&hellip;</button>
-        <button class="vd-btn" id="dp-remainder" style="display:none" title="Zapisuje opy kalki, których nie naniesiono (konflikty, niewykonalne, odznaczone) — z oryginalnymi payloadami">📤 Zapisz resztę kalki&hellip;</button>
+        <button class="vd-btn" id="dp-rebase" style="display:none" title="Zapisuje do pliku zmiany, które już naniesiono na mapę w tej sesji">💾 Zapisz naniesione zmiany&hellip;</button>
+        <button class="vd-btn" id="dp-remainder" style="display:none" title="Zapisuje do pliku operacje z kalki, których nie naniesiono (konflikty, niewykonalne, odznaczone) — w pierwotnej postaci">📤 Zapisz resztę kalki&hellip;</button>
         <button class="vd-btn close" id="dp-close2">Zamknij</button>
       </div>
       <div id="dp-resize" title="Przeciągnij, aby zmienić rozmiar panelu"></div>
@@ -6123,7 +6123,7 @@ function evY(e){ const r = cv.getBoundingClientRect(); return r.height ? (e.clie
 // ─── LOAD .ARKMAP ─────────────────────────────────────────────────────────────
 async function loadArkmap(text, filename) {
   let map;
-  try { map = JSON.parse(text); } catch { toast('✗ Błąd parsowania JSON (.arkmap)', true); return; }
+  try { map = JSON.parse(text); } catch { toast('✗ Nie można odczytać pliku .arkmap — uszkodzony lub niepoprawny format', true); return; }
   if (!map || typeof map !== 'object') { toast('✗ To nie jest mapa .arkmap (poprawny JSON, ale nie obiekt mapy)', true); return; }   // audyt A17
 
   const valRes  = validate(map);
@@ -6139,7 +6139,7 @@ async function loadArkmap(text, filename) {
 
   state.filename = filename || null;
   applyMap(map);
-  const label = chkRes.present ? (chkRes.ok ? ' [✓ checksum]' : ' [⚠ checksum]') : '';
+  const label = chkRes.present ? (chkRes.ok ? ' [✓ suma kontrolna]' : ' [⚠ suma kontrolna]') : '';
   const allOk = valRes.ok && !hasWarnings && (!chkRes.present || chkRes.ok);
   toast((allOk ? '✓' : '⚠') + ' Wczytano: ' + (filename || 'plik') + fmtSz(text.length) + ' [.arkmap]' + label);
 }
@@ -9322,7 +9322,7 @@ async function openOnlineConfirm() {
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     olIndex = await resp.json();
     if (!olIndex || typeof olIndex.revision !== 'string') throw new Error('niepoprawny index.json');
-    const ver  = olIndex.version ? 'v' + olIndex.version : 'master';
+    const ver  = olIndex.version ? 'v' + olIndex.version : 'wersja nieznana';
     const rev  = olIndex.revision.slice(0, 7);
     // v1.5.39: 3 segmenty nowrap — linia łamie się wyłącznie między nimi; data bez sekund
     const when = olIndex.synced_at
@@ -11366,7 +11366,7 @@ async function handleDropFiles(files) {
         state.filename = file.name; await loadDat(file);
       } else {
         const text = await file.text();
-        let parsed; try { parsed = JSON.parse(text); } catch { toast('✗ Błąd parsowania JSON: ' + (file?.name || 'plik'), true); return; }
+        let parsed; try { parsed = JSON.parse(text); } catch { toast('✗ Nie można odczytać pliku: ' + (file?.name || 'plik'), true); return; }
         if (parsed?.format === 'arkmap') await loadArkmap(text);
         else toast('✗ Nieznany format JSON (oczekiwano .arkmap)', true);
       }
@@ -11921,21 +11921,21 @@ resize();
       if (chkRes.present) {
         if (chkRes.ok) {
           const ok = document.createElement('div'); ok.className = 'val-ok-line';
-          ok.textContent = '✓ Integralność CRC-32: OK';
+          ok.textContent = '✓ Suma kontrolna pliku: OK';
           body.appendChild(ok);
         } else {
           const sec = document.createElement('div');
           const t = document.createElement('div'); t.className = 'val-section-title';
-          t.textContent = 'INTEGRALNOŚĆ CRC-32 — plik uszkodzony lub zmodyfikowany ręcznie';
+          t.textContent = 'SUMA KONTROLNA — plik uszkodzony lub zmieniony ręcznie';
           sec.appendChild(t);
           const list = document.createElement('div'); list.className = 'val-warn-list';
           const lines = [];
-          if (!chkRes.fileOk) lines.push('⚠ Checksum pliku: niezgodny');
+          if (!chkRes.fileOk) lines.push('⚠ Suma kontrolna pliku: niezgodna');
           for (const a of chkRes.badAreas.slice(0, 5)) lines.push('  Obszar: ' + a.name + ' (id=' + a.id + ')');
           for (const r of chkRes.badRooms.slice(0, 10)) lines.push('  Pokój: ' + r.roomId + ' (' + r.areaName + ')');
           const extra = chkRes.badRooms.length - 10;
           if (extra > 0) lines.push('  … i ' + extra + ' więcej pokojów');
-          list.textContent = lines.join('\n') || '⚠ Niezgodność checksumów';
+          list.textContent = lines.join('\n') || '⚠ Niezgodne sumy kontrolne';
           sec.appendChild(list);
           body.appendChild(sec);
         }
@@ -11943,7 +11943,7 @@ resize();
         // Brak checksumów w pliku — stary format lub ręcznie edytowany
         const note = document.createElement('div');
         note.style.cssText = 'font-size: 11px;color:var(--dim)';
-        note.textContent = '(brak checksumów — plik bez weryfikacji integralności)';
+        note.textContent = '(brak sum kontrolnych — plik bez weryfikacji spójności)';
         body.appendChild(note);
       }
 
@@ -12742,7 +12742,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.33.0';
+const APP_VERSION = 'v1.34.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -14232,7 +14232,7 @@ function _vdMigrate(){
 function _vdClearAccepts(){
   let bc=0; try { bc = JSON.parse(localStorage.getItem('arkmap_accepted_dir_issues')||'[]').length; } catch(_){ }
   if (!bc){ toast('Brak akceptacji przeglądarki do wyczyszczenia'); return; }
-  if (!confirm('Wyczyścić wszystkie akceptacje tej przeglądarki ('+bc+')?\n\nZatwierdzenia zapisane w pliku (.arkmap → meta) NIE zostaną ruszone.')) return;
+  if (!confirm('Wyczyścić wszystkie akceptacje tej przeglądarki ('+bc+')?\n\nZatwierdzenia zapisane w pliku .arkmap NIE zostaną ruszone.')) return;
   localStorage.removeItem('arkmap_accepted_dir_issues');
   _renderVdPanel();
   draw();
@@ -16536,7 +16536,7 @@ function addRoomAtPosition(mx, my) {
   const newId  = allIds.length > 0 ? Math.max(...allIds) + 1 : 1;
   const newX = Math.round(mx);
   const newY = Math.round(my);
-  // Guard zajętości pola (spójnie z F5 w kałkach): dodawanie wymaga wolnej komórki —
+  // Guard zajętości pola (spójnie z F5 w kalkach): dodawanie wymaga wolnej komórki —
   // zero mutacji, zero undo, tylko toast. W przeciwieństwie do przenoszenia nie ma
   // wymuszenia Shift: kliknij wolną komórkę albo przenieś istniejący pokój.
   const occ = _roomCollisionAt(newX, newY, state.z, -1);
@@ -17832,10 +17832,10 @@ function _deltaRemainderOps() {
 
 function saveDeltaRemainder() {
   const ops = _deltaRemainderOps();
-  if (!ops.length) { toast('Brak reszty — cała kałka naniesiona.', true); return; }
+  if (!ops.length) { toast('Brak reszty — cała kalka naniesiona.', true); return; }
   const base = (_deltaReview.delta.meta && _deltaReview.delta.meta.base) || state.baseInfo || {};
   download(_arkdeltaSuggestedName().replace(/\.arkdelta$/, '-reszta.arkdelta'), _deltaSerializeOps(ops, base), 'application/json');
-  toast('✓ Zapisano resztę kalki (' + ops.length + ' ' + (ops.length === 1 ? 'op' : 'opów') + ')');
+  toast('✓ Zapisano resztę kalki (' + plPl(ops.length, 'operacja', 'operacje', 'operacji') + ')');
 }
 
 // ── Walidacja pliku (fail-closed, strict refuse z diagnostyką) ───────────────
@@ -17877,13 +17877,22 @@ function _deltaScanDeep(val, onKey, onStr) {
 }
 
 // Zwraca { ok, delta?, errors: [string] }. Nigdy nie rzuca.
+// W2: nazwy pól po polsku do komunikatów walidatora (laicko, bez nazw technicznych).
+const _DELTA_FIELD_PL = {
+  roomId: 'pokój', areaId: 'obszar', dir: 'kierunek', sourceId: 'pokój źródłowy',
+  labelId: 'etykieta', envId: 'teren', room: 'dane pokoju', label: 'dane etykiety',
+  before: 'stan przed', after: 'stan po', cl: 'custom line', name: 'nazwa',
+  changes: 'lista zmian', newColor: 'nowy kolor', exitId: 'wyjście', cmd: 'komenda',
+  targetId: 'cel', area: 'dane obszaru',
+};
+
 function validateDeltaText(text) {
   const errors = [];
   if (typeof text !== 'string' || !text.length) return { ok: false, errors: ['Pusty plik.'] };
   if (text.length > ARKDELTA_MAX_BYTES) return { ok: false, errors: ['Plik za duży (limit ' + (ARKDELTA_MAX_BYTES / 1024 / 1024) + ' MB).'] };
   let delta = null;
   try { delta = JSON.parse(text); }
-  catch (e) { return { ok: false, errors: ['Plik nie jest poprawnym JSON-em.'] }; }
+  catch (e) { return { ok: false, errors: ['Nie można odczytać pliku — uszkodzony lub to nie jest plik kalki.'] }; }
   if (!delta || typeof delta !== 'object' || Array.isArray(delta)) return { ok: false, errors: ['To nie jest plik .arkdelta.'] };
   const meta = delta.meta || {};
   if (meta.format !== ARKDELTA_FORMAT) return { ok: false, errors: ['To nie jest plik .arkdelta.'] };
@@ -17901,27 +17910,28 @@ function validateDeltaText(text) {
           bad.push(delta.ops[i] && delta.ops[i].seq !== undefined ? delta.ops[i].seq : i + 1);
       }
     }
-    const detail = bad.length ? ' — op ' + bad.map(s => '#' + s).join(', #') + ' nie zgadza się z sumą kontrolną' : '';
+    const detail = bad.length === 1 ? ' — operacja #' + bad[0] + ' nie zgadza się z sumą kontrolną'
+      : bad.length ? ' — operacje ' + bad.map(s => '#' + s).join(', ') + ' nie zgadzają się z sumą kontrolną' : '';
     return { ok: false, errors: ['Plik .arkdelta jest uszkodzony' + detail + '. Plik nie został wczytany.'] };
   }
 
   const ops = delta.ops;
   if (!Array.isArray(ops)) return { ok: false, errors: ['Plik uszkodzony — brak listy operacji.'] };
   if (ops.length > ARKDELTA_MAX_OPS) return { ok: false, errors: ['Za dużo operacji (limit ' + ARKDELTA_MAX_OPS + ').'] };
-  if (meta.ops_count !== ops.length) errors.push('Plik uszkodzony — ops_count (' + meta.ops_count + ') nie zgadza się z liczbą operacji (' + ops.length + ').');
+  if (meta.ops_count !== ops.length) errors.push('Plik uszkodzony — liczba operacji w nagłówku (' + meta.ops_count + ') nie zgadza się z zawartością (' + ops.length + ').');
 
   const definedSid = new Set();
   for (let i = 0; i < ops.length; i++) {
     const op = ops[i];
-    const tag = 'op #' + (op && op.seq !== undefined ? op.seq : i + 1);
+    const tag = 'operacja #' + (op && op.seq !== undefined ? op.seq : i + 1);
     if (!op || typeof op !== 'object') { errors.push(tag + ': niepoprawny kształt.'); continue; }
-    if (op.seq !== i + 1) { errors.push(tag + ': seq nieciągłe.'); continue; }
+    if (op.seq !== i + 1) { errors.push(tag + ': numeracja nie jest po kolei.'); continue; }
     const schema = _DELTA_SCHEMA[op.type];
     if (!schema) { errors.push(tag + ': nieznany typ operacji "' + op.type + '". Plik nie został wczytany.'); continue; }
-    if (!op.target || typeof op.target !== 'object') { errors.push(tag + ': brak target.'); continue; }
-    if (!op.payload || typeof op.payload !== 'object') { errors.push(tag + ': brak payload.'); continue; }
-    for (const k of schema.target)  if (op.target[k] === undefined)  errors.push(tag + ': brak target.' + k + '.');
-    for (const k of schema.payload) if (op.payload[k] === undefined) errors.push(tag + ': brak payload.' + k + '.');
+    if (!op.target || typeof op.target !== 'object') { errors.push(tag + ': niekompletne dane (brak celu).'); continue; }
+    if (!op.payload || typeof op.payload !== 'object') { errors.push(tag + ': niekompletne dane (brak treści).'); continue; }
+    for (const k of schema.target)  if (op.target[k] === undefined)  errors.push(tag + ': niekompletne dane (brak: ' + (_DELTA_FIELD_PL[k] || k) + ').');
+    for (const k of schema.payload) if (op.payload[k] === undefined) errors.push(tag + ': niekompletne dane (brak: ' + (_DELTA_FIELD_PL[k] || k) + ').');
     if (op.target.dir !== undefined && !VALID_DIRS.has(op.target.dir)) errors.push(tag + ': nieprawidłowy kierunek "' + op.target.dir + '".');
     // Integralność sid: definicja przed użyciem, brak duplikatów, sanitizacja kluczy.
     let badKey = null;
@@ -18345,7 +18355,7 @@ function classifyDelta(delta) {
           items.push(_deltaClsItem(op, 'done', 'już na mapie (to samo pole i nazwa → pokój #' + occ.id + ')', roomJump(occ.id)));
         } else if (occ) {
           sidCls.set(sid, 'ok');
-          const _it = _deltaClsItem(op, 'hard', 'pole (' + room.x + ',' + room.y + ',' + (room.z ?? 0) + ') jest zajęte przez pokój #' + occ.id + ' — kolizja; wybierz Autopozycję / Ręcznie albo odznacz op', roomJump(occ.id));
+          const _it = _deltaClsItem(op, 'hard', 'pole (' + room.x + ',' + room.y + ',' + (room.z ?? 0) + ') jest zajęte przez pokój #' + occ.id + ' — kolizja; wybierz Autopozycję / Ręcznie albo odznacz tę operację', roomJump(occ.id));
           _it.coll = true;  // M3: kolizja pozycji — autopozycja / ręczna pozycja
           items.push(_it);
         } else {
@@ -18414,7 +18424,7 @@ function classifyDelta(delta) {
         if (room.x === P.toX && room.y === P.toY && (room.z ?? 0) === P.toZ) { items.push(_deltaClsItem(op, 'done', 'już na mapie', roomJump(id))); break; }
         const occ = shRoomAt(sh.roomArea[id], P.toX, P.toY, P.toZ);
         if (occ && occ.id !== id) {
-          const _it = _deltaClsItem(op, 'hard', 'pole docelowe (' + P.toX + ',' + P.toY + ',' + (P.toZ ?? 0) + ') jest zajęte przez pokój #' + occ.id + ' — kolizja; wybierz Autopozycję / Ręcznie albo odznacz op', roomJump(id));
+          const _it = _deltaClsItem(op, 'hard', 'pole docelowe (' + P.toX + ',' + P.toY + ',' + (P.toZ ?? 0) + ') jest zajęte przez pokój #' + occ.id + ' — kolizja; wybierz Autopozycję / Ręcznie albo odznacz tę operację', roomJump(id));
           _it.coll = true;  // M3: kolizja pozycji
           items.push(_it);
         }
@@ -18439,7 +18449,7 @@ function classifyDelta(delta) {
         const src = sh.roomById[srcId];
         if (!src || !sh.roomById[tgtId]) { items.push(_deltaClsItem(op, 'impossible', 'pokój źródłowy lub docelowy nie istnieje', roomJump(srcId))); break; }
         if (src.exits && src.exits[T.dir] === tgtId) { items.push(_deltaClsItem(op, 'done', 'już na mapie', roomJump(srcId))); break; }
-        if (src.exits && src.exits[T.dir] !== undefined) items.push(_deltaClsItem(op, 'hard', 'kierunek jest już zajęty — Zastosuj pominie ten op (mapa bez zmian)', roomJump(srcId)));
+        if (src.exits && src.exits[T.dir] !== undefined) items.push(_deltaClsItem(op, 'hard', 'kierunek jest już zajęty — Zastosuj pominie tę operację (mapa bez zmian)', roomJump(srcId)));
         else items.push(_deltaClsItem(op, 'ok', '', roomJump(srcId)));
         break;
       }
@@ -19200,9 +19210,9 @@ function _deltaGhostGeoms(delta, items, ghostSeqs, overrides) {
 // ── UI: dialog + wiring ──────────────────────────────────────────────────────
 function _arkdeltaBaseNote(base) {
   const cur = state.baseInfo || {};
-  if (!base || !base.crc) return 'Kalka bez informacji o bazie.';
+  if (!base || !base.crc) return 'Kalka bez informacji o wersji mapy, na której ją zapisano.';
   const srcOf = b => (b.revision ? '@' + String(b.revision).slice(0, 7) : (b.version ? 'v' + b.version : 'inna baza'));
-  if (base.crc === cur.crc) return 'Baza zgodna z wczytaną mapą (' + srcOf(base) + ').';
+  if (base.crc === cur.crc) return 'Kalka pasuje do wczytanej mapy (' + srcOf(base) + ').';
   return 'Kalka z innej wersji mapy (' + srcOf(base) + ' · nakładasz na ' + srcOf(cur) + ').';
 }
 
@@ -19223,13 +19233,13 @@ function _openDeltaMismatch(delta, chk) {
   const srcOf = (v, r) => r ? '@' + String(r).slice(0, 7) : (v ? 'v' + v : 'nieznana');
   let html;
   if (chk.kind === 'nobase') {
-    html = '<div class="dlg-info warn">Kalka nie niesie informacji o bazie — nie można zweryfikować zgodności z wczytaną mapą.</div>';
+    html = '<div class="dlg-info warn">Kalka nie niesie informacji o wersji mapy, na której ją zapisano — nie można sprawdzić zgodności z wczytaną mapą.</div>';
   } else {
-    html = '<div class="dlg-info warn">Kalka została zapisana na <strong>innej wersji mapy</strong> niż aktualnie wczytana. To normalny scenariusz (nakładanie na nowszy upstream).</div>'
-      + '<div class="dlg-info">Baza kalki: <strong>' + escHtml(srcOf(chk.baseVersion, chk.baseRevision)) + '</strong> (crc ' + escHtml(String(chk.baseCrc).slice(0, 10)) + '…)<br>'
+    html = '<div class="dlg-info warn">Kalka została zapisana na <strong>innej wersji mapy</strong> niż aktualnie wczytana. To normalny scenariusz (nakładanie na nowszą wersję mapy).</div>'
+      + '<div class="dlg-info">Mapa, na której zapisano kalkę: <strong>' + escHtml(srcOf(chk.baseVersion, chk.baseRevision)) + '</strong> (sygnatura ' + escHtml(String(chk.baseCrc).slice(0, 10)) + '…)<br>'
       + 'Wczytana mapa: <strong>' + escHtml(srcOf(chk.curVersion, chk.curRevision)) + '</strong> (crc ' + escHtml(String(chk.curCrc || '—').slice(0, 10)) + (chk.curCrc ? '…' : '') + ')</div>';
   }
-  html += '<div class="dlg-info">Nic nie zostanie naniesione automatycznie — każdy op kalki zostanie sklasyfikowany w oknie recenzji: do naniesienia / konflikt / naniesione / niewykonalne. Opy niewykonalne są wykluczone, konflikty wymagają Twojej decyzji.</div>';
+  html += '<div class="dlg-info">Nic nie zostanie naniesione automatycznie — każda operacja z kalki zostanie sprawdzona w oknie recenzji: do naniesienia / konflikt / naniesione / niewykonalne. Operacje niewykonalne są wykluczone, konflikty wymagają Twojej decyzji.</div>';
   body.innerHTML = html;
   document.getElementById('arkdelta-mismatch-ok').onclick = () => {
     closeDialog('dlg-arkdelta-mismatch');
@@ -19304,7 +19314,7 @@ function _deltaShowReal(it) {
   } else if (j.areaId !== undefined && j.x !== undefined && state.areas.get(j.areaId)) {
     hl = { x: j.x, y: j.y, z: j.z ?? state.z, areaId: j.areaId };
   }
-  if (!hl) { toast('Brak obiektu na mapie (op usuwania — nie ma czego pokazać)'); return; }
+  if (!hl) { toast('Brak obiektu na mapie (to operacja usuwania — nie ma czego pokazać)'); return; }
   if (hl.areaId !== state.areaId && state.areas.get(hl.areaId)) selectArea(hl.areaId, false);
   if (hl.z !== undefined && hl.z !== state.z) selectZ(hl.z);
   centerViewOnMap(hl.x, hl.y);
