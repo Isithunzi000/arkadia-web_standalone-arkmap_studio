@@ -2,6 +2,13 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## repo — sync mapy na model Delwinga: wersja z tagu release, nie ze stempla mastera
+
+- **Przyczyna:** mirror pobieral surowego mastera upstream, ktory NIE jest artefaktem dystrybucyjnym — jego wewnetrzny stempel wersji (user_data.version w .dat) bywa stary (master @e999896 niosl „0.204.0" przy tresci release 0.205.0; roznica master↔asset to 36 bajtow samego stempla). Do tego krok `ver` szukal tagu NA commicie mastera, wiec `index.json` wychodzil z `version: null` — okienko pobierania online pokazywalo „mapa master · @…" bez numeru wersji, a aplikacja spadala na zastarzaly stempel z pliku (naglowek „v0.204.0" przy swiezej mapie). U Delwinga artefaktem jest zawsze RELEASE (auto-release stempluje plik przy kazdej zmianie mapy), a zrodlem prawdy o wersji jest tag releases/latest — klient Dargotha w ogóle nie czyta wersji z pliku.
+- **Fix:** `sync-map.yml` przepisany na model Delwinga. Brama na tag `releases/latest` (ten sam tag = cisza). Pobranie assetu `map_master3.dat` przypietego do tagu (`releases/download/<tag>/…` — brak wyscigu z nowym release w trakcie runu). Weryfikacja fail-closed: stempel w pliku == tag (parsowanie przez tools/dat2arkmap.mjs). Guard regresji semver: tag starszy niz publikowany = stop (np. gdyby upstream usunal release). `index.json` zawsze z wersja (fail-closed przy pustej) — okienko online i naglowek aplikacji pokaza prawdziwa wersje bez zmian w kodzie apki (olLoadDat juz wbija version/revision z index.json do user_data). Nowy input `force` przy workflow_dispatch (reczna przebudowa; regresji nie omija). Publikacja bez zmian: max 2 snapshoty, force-push na `mapa`.
+- **Testy (w tym samym commicie):** 10 nowych asercji strukturalnych w `tests/sync_map.js` (gate na releases/latest, asset przypiety do tagu, zakaz raw master, weryfikacja stempla, guard regresji, fail-closed bez release/assetu, input force, index.json bez null, deref tagu ^{}). Flow przetestowane end-to-end na zywym upstreamie: tag 0.205.0, asset 7 847 878 B, stempel zgodny, index.json z uczciwa wersja.
+- Repo-only: bez zmian w aplikacji, bez podbicia wersji.
+
 ## repo — CI: cache Chromium + sufit joba 40 min (flake instalacji zabil run regresji)
 
 - **Przyczyna:** run regresji na commicie v1.32.0 zostal zabity timeoutem joba (25 min) — krok `playwright install --with-deps chromium` zacial sie na pobieraniu przegladarki (flake sieciowy runnera) i regresja nigdy nie wystartowala; run wyszedl „cancelled" mimo zdrowego kodu (lokalna regresja przed pushem byla zielona).

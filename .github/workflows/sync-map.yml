@@ -1,16 +1,32 @@
 name: sync-map
-# Synchronizacja mapy z Delwing/arkadia-mapa (master) do gałęzi `mapa` — 2× dziennie.
+# Synchronizacja mapy z Delwing/arkadia-mapa do gałęzi `mapa` — 2× dziennie.
 # Pory pod rytm commitów upstream (analiza 198 commitów mapy, 2022–2026): rano 05:17 UTC
 # łapie commity nocne; wieczorem 21:00 UTC (23:00 PL latem / 22:00 zimą) domyka dzień —
 # główny szczyt aktywności upstream przypada na 20–22 PL, noc (03–08 PL) jest martwa.
-# Brama na SHA: ten sam commit upstream = cisza (zero commitów). Nowy commit =
-# pobranie map_master3.dat, konwersja do .arkmap (tools/dat2arkmap.mjs), publikacja
-# na gałęzi `mapa` (max 2 snapshoty: bieżący + poprzedni, force-push jednym commitem).
+#
+# Model Delwinga: artefaktem dystrybucyjnym jest RELEASE — auto-release upstream
+# (auto-release.yml) stempluje wersję w pliku przy każdej zmianie mapy, a źródłem
+# prawdy o wersji jest tag releases/latest. Surowy master NIE jest artefaktem:
+# jego wewnętrzny stempel bywa stary (np. 0.204.0 przy treści 0.205.0) i nikt z
+# klientów go nie konsumuje. Dlatego mirror pobiera ASSET release przypięty do
+# tagu (nie raw master) i zawsze publikuje uczciwą wersję w index.json.
+#
+# Brama na tag: ten sam tag = cisza (zero commitów). Nowy tag = pobranie assetu,
+# weryfikacja stempla w pliku == tag, konwersja do .arkmap (tools/dat2arkmap.mjs),
+# publikacja na gałęzi `mapa` (max 2 snapshoty: bieżący + poprzedni, force-push).
+# Guardy fail-closed: brak releases/latest, brak assetu, stempel != tag, regresja
+# wersji (tag starszy niż publikowany — np. upstream usunął release). Input force
+# omija wyłącznie no-op przy tym samym tagu (regresji nie omija).
 on:
   schedule:
     - cron: '17 5 * * *'
     - cron: '0 21 * * *'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Wymuś publikację nawet bez zmiany tagu (regresji nie omija)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -30,55 +46,69 @@ jobs:
         with:
           node-version: 20
 
-      - name: SHA upstreama i brama (cisza gdy bez zmian)
+      - name: Brama na releases/latest (cisza gdy ten sam tag)
         id: gate
         run: |
           set -euo pipefail
-          SHA=$(timeout 90 git ls-remote https://github.com/Delwing/arkadia-mapa.git refs/heads/master | cut -f1)
-          test -n "$SHA"
-          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          FORCE="${{ github.event.inputs.force }}"
+          REL=$(curl -sf --retry 3 --connect-timeout 30 --max-time 90 \
+                https://api.github.com/repos/Delwing/arkadia-mapa/releases/latest) \
+            || { echo "::error::brak releases/latest upstream — fail-closed"; exit 1; }
+          TAG=$(printf '%s' "$REL" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const t=JSON.parse(s).tag_name; if(typeof t!=='string'||!t) process.exit(1); console.log(t)})")
+          test -n "$TAG"
+          REV=$(timeout 90 git ls-remote --tags https://github.com/Delwing/arkadia-mapa.git "refs/tags/$TAG" "refs/tags/$TAG^{}" | tail -1 | cut -f1)
+          test -n "$REV"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "rev=$REV" >> "$GITHUB_OUTPUT"
           OLD=""
           if timeout 90 git fetch -q --depth=1 origin mapa 2>/dev/null; then
-            OLD=$(git show FETCH_HEAD:index.json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).revision??'')}catch{console.log('')}})" || true)
+            OLD=$(git show FETCH_HEAD:index.json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version??'')}catch{console.log('')}})" || true)
           fi
           echo "old=$OLD" >> "$GITHUB_OUTPUT"
-          if [ "$OLD" = "$SHA" ]; then
-            echo "bez zmian upstream ($SHA) — koniec"
+          if [ -n "$OLD" ] && [ "$OLD" != "$TAG" ]; then
+            NEWER=$(printf '%s\n%s\n' "$OLD" "$TAG" | sort -V | tail -1)
+            if [ "$NEWER" = "$OLD" ]; then
+              echo "::error::regresja wersji upstream: publikowane $OLD, latest $TAG — fail-closed"
+              exit 1
+            fi
+          fi
+          if [ "$OLD" = "$TAG" ] && [ "$FORCE" != "true" ]; then
+            echo "bez zmian upstream (tag $TAG) — koniec"
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            echo "zmiana upstream: $OLD → $SHA"
+            echo "zmiana upstream: ${OLD:-brak} → $TAG (rev $REV)"
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Pobranie map_master3.dat (przypięte do SHA)
+      - name: Pobranie assetu release (przypięte do tagu)
         if: steps.gate.outputs.changed == 'true'
         run: |
           set -euo pipefail
           curl -sfL --retry 3 --connect-timeout 30 --max-time 180 -o map_master3.dat \
-            "https://raw.githubusercontent.com/Delwing/arkadia-mapa/${{ steps.gate.outputs.sha }}/map_master3.dat"
+            "https://github.com/Delwing/arkadia-mapa/releases/download/${{ steps.gate.outputs.tag }}/map_master3.dat" \
+            || { echo "::error::brak assetu map_master3.dat w release ${{ steps.gate.outputs.tag }} — fail-closed"; exit 1; }
           echo "pobrano $(stat -c%s map_master3.dat) B"
 
-      - name: Wersja (tag release wskazujący na ten commit, jeśli jest)
+      - name: Weryfikacja stempla wersji w pliku (fail-closed)
         if: steps.gate.outputs.changed == 'true'
-        id: ver
         run: |
           set -euo pipefail
-          VER=$(timeout 90 git ls-remote --tags https://github.com/Delwing/arkadia-mapa.git \
-                | grep "${{ steps.gate.outputs.sha }}" \
-                | grep -oE 'refs/tags/[0-9][0-9.]*' | sed 's|refs/tags/||' \
-                | sort -V | tail -1 || true)
-          echo "version=$VER" >> "$GITHUB_OUTPUT"
-          echo "wersja: ${VER:-brak tagu — master}"
+          node tools/dat2arkmap.mjs map_master3.dat /tmp/probe.arkmap
+          node -e '
+            const ud = JSON.parse(require("fs").readFileSync("/tmp/probe.arkmap", "utf8")).meta.user_data || {};
+            if (ud.version !== process.argv[1]) {
+              console.error("::error::stempel w pliku (" + ud.version + ") != tag release (" + process.argv[1] + ") — fail-closed");
+              process.exit(1);
+            }
+            console.log("stempel zgodny z tagiem: " + ud.version);
+          ' "${{ steps.gate.outputs.tag }}"
 
       - name: Konwersja do .arkmap (fail-closed)
         if: steps.gate.outputs.changed == 'true'
         run: |
           set -euo pipefail
-          ARGS=(--revision "${{ steps.gate.outputs.sha }}")
-          if [ -n "${{ steps.ver.outputs.version }}" ]; then
-            ARGS+=(--version "${{ steps.ver.outputs.version }}")
-          fi
-          node tools/dat2arkmap.mjs map_master3.dat map_master3.arkmap "${ARGS[@]}"
+          node tools/dat2arkmap.mjs map_master3.dat map_master3.arkmap \
+            --version "${{ steps.gate.outputs.tag }}" --revision "${{ steps.gate.outputs.rev }}"
 
       - name: index.json
         if: steps.gate.outputs.changed == 'true'
@@ -87,15 +117,16 @@ jobs:
           node -e '
             const fs = require("fs");
             const idx = {
-              version: process.argv[1] || null,
+              version: process.argv[1],
               revision: process.argv[2],
               synced_at: new Date().toISOString(),
               dat_size: fs.statSync("map_master3.dat").size,
               arkmap_size: fs.statSync("map_master3.arkmap").size,
             };
+            if (!idx.version || !idx.revision) { console.error("::error::pusta wersja/revision — fail-closed"); process.exit(1); }
             fs.writeFileSync("index.json", JSON.stringify(idx, null, 1) + "\n");
             console.log(JSON.stringify(idx));
-          ' "${{ steps.ver.outputs.version }}" "${{ steps.gate.outputs.sha }}"
+          ' "${{ steps.gate.outputs.tag }}" "${{ steps.gate.outputs.rev }}"
 
       - name: Publikacja na gałęzi mapa (max 2 snapshoty, force-push)
         if: steps.gate.outputs.changed == 'true'
@@ -117,7 +148,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -q -m "sync: map_master3 @${{ steps.gate.outputs.sha }}"
+          git commit -q -m "sync: map_master3 v${{ steps.gate.outputs.tag }} @${{ steps.gate.outputs.rev }}"
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           timeout 120 git push -q --force origin HEAD:refs/heads/mapa
           rm -rf "$PUB"
@@ -126,8 +157,8 @@ jobs:
         if: steps.gate.outputs.changed == 'true'
         run: |
           set -euo pipefail
-          echo "revision: ${{ steps.gate.outputs.sha }}"
-          echo "version:  ${{ steps.ver.outputs.version }}"
+          echo "version:  ${{ steps.gate.outputs.tag }}"
+          echo "revision: ${{ steps.gate.outputs.rev }}"
           echo "dat:      $(stat -c%s map_master3.dat) B"
           echo "arkmap:   $(stat -c%s map_master3.arkmap) B"
           echo "raw:      https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/mapa/map_master3.arkmap"
