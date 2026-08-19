@@ -12742,7 +12742,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.32.0';
+const APP_VERSION = 'v1.33.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -18928,6 +18928,38 @@ function _deltaGhostReset() {
   _deltaCardHide();
 }
 
+// W1: typy opow po polsku (karta zbiorcza + komunikaty; NIE zmienia identyfikatorow formatu).
+const _DELTA_TYPE_PL = {
+  ADD_AREA: 'dodanie obszaru', DELETE_AREA: 'usunięcie obszaru', EDIT_AREA: 'edycja obszaru',
+  ADD_ROOM: 'dodanie pokoju', DELETE_ROOM: 'usunięcie pokoju', EDIT_ROOM: 'edycja pokoju',
+  MOVE_ROOM: 'przesunięcie pokoju', MOVE_ROOM_TO_AREA: 'przeniesienie pokoju do innego obszaru',
+  ADD_EXIT: 'dodanie wyjścia', DELETE_EXIT: 'usunięcie wyjścia', EDIT_EXIT: 'edycja wyjścia',
+  DELETE_SPECIAL_EXIT: 'usunięcie wyjścia specjalnego',
+  ADD_CL: 'dodanie custom line', EDIT_CL: 'edycja custom line', DELETE_CL: 'usunięcie custom line',
+  ADD_SUPPRESSOR: 'dodanie pustej custom line', DELETE_SUPPRESSOR: 'usunięcie pustej custom line',
+  PAINT_BATCH: 'malowanie pokoi', EDIT_ENV_COLOR: 'zmiana koloru terenu',
+  ADD_LABEL: 'dodanie etykiety', EDIT_LABEL: 'edycja etykiety', DELETE_LABEL: 'usunięcie etykiety',
+  MOVE_LABEL: 'przesunięcie etykiety', RESIZE_LABEL: 'zmiana rozmiaru etykiety',
+  AUTO_FIX_SUPPRESSORS: 'automatyczna naprawa podwójnych linii',
+};
+
+// W1: wiersze zapasowe karty dla opow bez tabeli roznic/kolizji — karta ma byc ZAWSZE.
+function _deltaFallbackRows(it) {
+  const R = _deltaReview; if (!R) return [];
+  const op = R.delta.ops.find(o => o.seq === it.seq); if (!op) return [];
+  const T = op.target || {}, P = op.payload || {};
+  const cell = (x, y, z) => (x === undefined) ? '—' : ('(' + x + ', ' + y + (z !== undefined ? ', ' + z : '') + ')');
+  const rows = [['operacja', _DELTA_TYPE_PL[op.type] || op.type, '']];
+  if (op.type === 'ADD_ROOM') { const r = P.room || {}; rows.push(['pole', '—', cell(r.x, r.y, r.z)]); }
+  else if (op.type === 'MOVE_ROOM') rows.push(['pole', cell(P.fromX, P.fromY, P.fromZ), cell(P.toX, P.toY, P.toZ)]);
+  else if (op.type === 'ADD_AREA') rows.push(['nazwa', '—', (P.area && P.area.name) || '—']);
+  else if (op.type === 'ADD_EXIT') rows.push(['wyjście', (T.dir || '?') + ' z #' + T.sourceId, '→ ' + (P.targetId !== undefined ? ('#' + P.targetId) : 'pokój z kalki')]);
+  else if (op.type === 'DELETE_EXIT') rows.push(['wyjście', (T.dir || '?') + ' z #' + T.roomId, 'usunięcie']);
+  else if (T.roomId !== undefined) rows.push(['pokój', '#' + T.roomId, '']);
+  else if (T.areaId !== undefined) rows.push(['obszar', '#' + T.areaId, '']);
+  return rows;
+}
+
 // Zajęte komórki obszaru: świeży Set 'x:y:z' per wywołanie (zero problemu unieważniania cache).
 function _deltaBuildOcc(areaId) {
   const occ = new Set();
@@ -19281,7 +19313,12 @@ function _deltaShowReal(it) {
 }
 
 // ── M6c: karta szczegółów konfliktu/edycji (tabela parametr | aktualnie | w kalce) ──
+// W1: karta pokazuje sie ZAWSZE po kliku w item (fallback = _deltaFallbackRows);
+// _deltaCardSeq sledzi otwarty item — _renderDeltaPanel odswieza karte po mutacjach.
+let _deltaCardSeq = null;
+
 function _deltaCardHide() {
+  _deltaCardSeq = null;
   const c = document.getElementById('dp-card');
   if (c) c.style.display = 'none';
 }
@@ -19289,6 +19326,7 @@ function _deltaCardHide() {
 function _deltaCardShow(it) {
   const card = document.getElementById('dp-card');
   if (!card) return;
+  _deltaCardSeq = it.seq;
   const rows = [];
   if (it.diffRows && it.diffRows.length) {
     for (const r of it.diffRows) rows.push([r.p, r.b, r.a]);
@@ -19302,8 +19340,9 @@ function _deltaCardShow(it) {
     const cell = '(' + ci.x + ', ' + ci.y + ', ' + ci.z + ')';
     rows.push(['pole', cell, cell]);
     rows.push(['zajęte przez', (ci.occId !== null && ci.occId !== undefined) ? ('#' + ci.occId) : '—', '—']);
-    rows.push(['kałka chce', '—', ci.kind === 'move' ? ('przenieść pokój #' + ci.roomId) : ('postawić nowy pokój' + (ci.name ? ' „' + ci.name + '"' : ''))]);
+    rows.push(['kalka chce', '—', ci.kind === 'move' ? ('przenieść pokój #' + ci.roomId) : ('postawić nowy pokój' + (ci.name ? ' „' + ci.name + '"' : ''))]);
   }
+  if (!rows.length) rows.push(..._deltaFallbackRows(it));
   if (!rows.length) { _deltaCardHide(); return; }
   document.getElementById('dp-card-title').textContent = it.label;
   let h = '<tr><th>parametr</th><th>aktualnie na mapie</th><th>w kalce</th></tr>';
@@ -19612,12 +19651,12 @@ function _renderDeltaPanel() {
     if (_DELTA_GHOST_TYPES.has(it.type) && it.cls !== 'impossible') {
       const bShow = document.createElement('button');
       bShow.className = 'vd-btn dp-mini';
-      // M6d: op zrobiony (done) → „Pokaż" = skok + podświetlenie REALNEGO obiektu;
-      // ok/hard → „Efekt" = duch (podgląd tego, co kałka chce zrobić).
+      // W1: jednolite „Pokaż" (para z „Ukryj"). done = skok + podświetlenie REALNEGO
+      // obiektu; ok/hard = duch (podgląd tego, co kalka chce zrobić) — rozróżnia tooltip.
       const isDone = it.cls === 'done';
-      bShow.textContent = isDone ? 'Pokaż' : 'Efekt';
+      bShow.textContent = 'Pokaż';
       bShow.title = isDone ? 'Pokaż naniesiony obiekt na mapie (podświetlenie realnego pokoju)'
-                           : 'Pokaż efekt na mapie (warstwa duchów — niczego nie zmienia)';
+                           : 'Pokaż na mapie, jak będzie po naniesieniu (podgląd — niczego nie zmienia)';
       bShow.addEventListener('click', e => { e.stopPropagation(); if (isDone) _deltaShowReal(it); else _deltaShowGhost(it); _renderDeltaPanel(); });
       row.appendChild(bShow);
       const bHide = document.createElement('button');
@@ -19659,14 +19698,14 @@ function _renderDeltaPanel() {
     }
     if (it.jump) {
       row.style.cursor = 'pointer';
-      row.title = 'Kliknij — pokaż na mapie';
-      row.addEventListener('click', () => _deltaJump(it));
+      row.title = 'Kliknij — pokaż na mapie i szczegóły';
+      row.addEventListener('click', () => { _deltaJump(it); _deltaCardShow(it); });
     } else if (it.areaInfo) {
-      // M5: ok-ADD_AREA — obszaru jeszcze nie ma na mapie, klik = informacja
+      // M5: ok-ADD_AREA — obszaru jeszcze nie ma na mapie, klik = informacja + karta
       row.style.cursor = 'pointer';
       row.title = 'Kliknij — informacja o nowym obszarze';
-      row.addEventListener('click', () => toast('Nowy obszar „' + it.areaInfo.name + '" — powstanie po Zastosuj'
-        + (it.areaInfo.rooms ? ' (pokoi w kalce: ' + it.areaInfo.rooms + ')' : '')));
+      row.addEventListener('click', () => { _deltaCardShow(it); toast('Nowy obszar „' + it.areaInfo.name + '" — powstanie po Zastosuj'
+        + (it.areaInfo.rooms ? ' (pokoi w kalce: ' + it.areaInfo.rooms + ')' : '')); });
     }
     body.appendChild(row);
   }
@@ -19679,6 +19718,12 @@ function _renderDeltaPanel() {
     const remN = _deltaRemainderOps().length;
     remBtn.style.display = remN > 0 ? '' : 'none';
     remBtn.textContent = '📤 Zapisz resztę kalki (' + remN + ')…';
+  }
+  // W1: odswiezenie otwartej karty po kazdej mutacji panelu (checkbox, autopozycja,
+  // override, Zastosuj) — karta nigdy nie zostaje z danymi poprzedniego itemu.
+  if (_deltaCardSeq !== null) {
+    const cur = R.items.find(i => i.seq === _deltaCardSeq);
+    if (cur) _deltaCardShow(cur); else _deltaCardHide();
   }
 }
 

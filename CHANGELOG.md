@@ -2,6 +2,13 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.33.0 — karta zbiorcza kalki: zawsze po kliku w item, odswiezanie, jednolite „Pokaz"
+
+- **Przyczyna:** karta szczegolow (#dp-card) pokazywala sie wylacznie z przycisku „Efekt" i trybu stawiania — klik wiersza itemu robil tylko skok na mapie, wiec po przejsciu na inny item karta zostawala z danymi poprzedniego (zgłoszone z testow recznych). Do tego „Efekt" obok „Ukryj" byl niejednoznaczny, a opy bez tabeli roznic chowaly karte zamiast pokazac cokolwiek.
+- **Fix:** klik wiersza = skok na mapie ORAZ karta szczegolow (bez ducha — duch nadal z przycisku). Karta sledzi otwarty item (`_deltaCardSeq`) i jest odswiezana przy kazdej mutacji panelu (checkbox, autopozycja, override, Zastosuj, filtry) — nie moze zostac stara. Opy bez tabeli roznic/kolizji dostaja wiersze zapasowe (`_deltaFallbackRows` + `_DELTA_TYPE_PL`: typ operacji po polsku, pole/pokoj/obszar/zrodlo→cel), wiec karta jest ZAWSZE. Przycisk „Efekt" → jednolite „Pokaz" (para z „Ukryj"); roznica done (realny obiekt) vs ok/hard (duch-podglad) wyjasniona w tooltipie. Przy okazji: literowka „kalka chce" w karcie kolizji.
+- **Testy (w tym samym commicie):** nowy scenariusz E8.cardrefresh (6 asercji: klik=karta bez ducha, przelaczenie na inny item, autopozycja nie zostawia starej karty, tracking seq, filtr nie gubi karty) + E8.confcard.fallback (wiersze zapasowe dla op bez szczegolow — odwrocenie dawnego hide-empty). Asercje strukturalne w tests/delta.js (klik=karta, fallback, refresh, typy PL). Wszystkie lookup-y przycisku w kampanii empirycznej na „Pokaz".
+- Regresja lokalna: pelny `run-all.sh` PASS (14 harnessow node + kampania empiryczna SMOKE+E0–E8, 0 FAIL).
+
 ## repo — sync mapy na model Delwinga: wersja z tagu release, nie ze stempla mastera
 
 - **Przyczyna:** mirror pobieral surowego mastera upstream, ktory NIE jest artefaktem dystrybucyjnym — jego wewnetrzny stempel wersji (user_data.version w .dat) bywa stary (master @e999896 niosl „0.204.0" przy tresci release 0.205.0; roznica master↔asset to 36 bajtow samego stempla). Do tego krok `ver` szukal tagu NA commicie mastera, wiec `index.json` wychodzil z `version: null` — okienko pobierania online pokazywalo „mapa master · @…" bez numeru wersji, a aplikacja spadala na zastarzaly stempel z pliku (naglowek „v0.204.0" przy swiezej mapie). U Delwinga artefaktem jest zawsze RELEASE (auto-release stempluje plik przy kazdej zmianie mapy), a zrodlem prawdy o wersji jest tag releases/latest — klient Dargotha w ogóle nie czyta wersji z pliku.

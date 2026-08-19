@@ -1178,11 +1178,11 @@ scenario('E3.collide', async () => {
 
 scenario('E3.autoplace', async () => {
   await e3Setup();
-  // duch przez prawdziwy przycisk wiersza "Efekt"
+  // duch przez prawdziwy przycisk wiersza "Pokaż"
   ex('(function(){ const r0 = document.querySelectorAll("#dp-body .dp-row")[0];'
-    + ' const b = [...r0.querySelectorAll("button")].find(b => b.textContent === "Efekt");'
+    + ' const b = [...r0.querySelectorAll("button")].find(b => b.textContent === "Pokaż");'
     + ' if (b) b.click(); })()');
-  A('E3.autoplace.ghost', ev('_deltaGhosts.has(1)').val === true, 'przycisk "Efekt" pokazuje ducha (warstwa nie mutuje stanu)');
+  A('E3.autoplace.ghost', ev('_deltaGhosts.has(1)').val === true, 'przycisk "Pokaż" pokazuje ducha (warstwa nie mutuje stanu)');
   const taken = _e3TakenSet();
   const origins = [[9999,9999],[9999,9999],[9998,9999]];
   for (let i = 0; i < 3; i++){
@@ -1850,7 +1850,7 @@ scenario('E5.ghost-layer', async () => {
   // stan do sanity-screenshota: panel z kolizjami + duchy + chipy autopozycji
   await e3Setup();
   ex('(function(){ for (const r of document.querySelectorAll("#dp-body .dp-row")){'
-    + ' const b = [...r.querySelectorAll("button")].find(b => b.textContent === "Efekt");'
+    + ' const b = [...r.querySelectorAll("button")].find(b => b.textContent === "Pokaż");'
     + ' if (b) b.click(); } })()');
   EQ('E5.ghost-layer.count', ev('_deltaGhosts.size').val, 4, '4 duchy pokazane (warstwa addytywna)');
   const crc0 = ev('_computeBaseInfo().crc').val;
@@ -2062,33 +2062,67 @@ scenario('E8.confcard', async () => {
   // op28 ADD_ROOM (kolizja): pole + okupant #13 + intencja kalki
   ex('_deltaShowGhost(_deltaReview.items[27])');
   const h3 = cardHtml() || '';
-  A('E8.confcard.coll', h3.indexOf('zajęte przez') >= 0 && h3.indexOf('#13') >= 0 && h3.indexOf('kałka chce') >= 0,
+  A('E8.confcard.coll', h3.indexOf('zajęte przez') >= 0 && h3.indexOf('#13') >= 0 && h3.indexOf('kalka chce') >= 0,
     'karta kolizji: pole + zajęte przez #13 + intencja [=' + h3.slice(0, 90) + ']');
-  // op bez szczegolow (op1 ADD_AREA ok): karta zostaje ukryta
+  // W1: op bez tabeli roznic (op1 ADD_AREA ok) — karta POKAZUJE wiersze zapasowe
   ex('_deltaShowGhost(_deltaReview.items[0])');
-  EQ('E8.confcard.hide-empty', cardHtml(), null, 'op bez szczegolow: karta ukryta');
+  const h4 = cardHtml() || '';
+  A('E8.confcard.fallback', h4.indexOf('operacja') >= 0 && h4.indexOf('dodanie obszaru') >= 0 && h4.indexOf('E1 Test Area') >= 0,
+    'karta zapasowa: op bez szczegolow pokazuje operacja/nazwa [=' + h4.slice(0, 90) + ']');
   // przycisk Ukryj w wierszu chowa karte razem z duchem
   ex('_deltaShowGhost(_deltaReview.items[9]); _renderDeltaPanel()');
-  A('E8.confcard.reshown', (cardHtml() || '').indexOf('nazwa') >= 0, 'karta z powrotem po Efekt');
+  A('E8.confcard.reshown', (cardHtml() || '').indexOf('nazwa') >= 0, 'karta z powrotem po Pokaż');
   ex('(function(){ const row = document.querySelectorAll("#dp-body .dp-row")[9];'
     + ' const b = [...row.querySelectorAll("button")].find(x => x.textContent === "Ukryj"); b.click(); })()');
   EQ('E8.confcard.hide-btn', cardHtml(), null, 'Ukryj: karta znika razem z duchem');
 });
 
+scenario('E8.cardrefresh', async () => {
+  // W1 (obs 1/2): klik wiersza = zawsze karta; przejscie na inny item odswieza karte;
+  // autopozycja nie zostawia starej karty; checkbox nie rusza karty innego itemu.
+  await loadBase('dat');
+  const txt = await (await fetch('./fixture_demo.arkdelta')).text();
+  ex('const r = validateDeltaText(' + JSON.stringify(txt) + '); if (!r.ok) throw new Error("walidacja fixture_demo"); window.__e8crdelta = r.delta;');
+  ex('openDeltaReview(window.__e8crdelta)');
+  const cardHtml = () => ev('(function(){ const c = document.getElementById("dp-card");'
+    + ' return (c && c.style.display !== "none") ? c.textContent : null; })()').val;
+  const clickRow = (i) => ex('(function(){ document.querySelectorAll("#dp-body .dp-row")[' + i + '].click(); })()');
+  // klik wiersza op10 (EDIT_ROOM): karta bez zucia ducha
+  clickRow(9);
+  const c1 = cardHtml() || '';
+  A('E8.cardrefresh.click', c1.indexOf('E1 Zmieniona Nazwa') >= 0, 'klik wiersza: karta op10 od razu [=' + c1.slice(0, 70) + ']');
+  EQ('E8.cardrefresh.noghost', ev('_deltaGhosts.size').val, 0, 'klik wiersza: karta bez ducha (Pokaż = osobna akcja)');
+  // klik innego wiersza (op12 MOVE_ROOM ok): karta przelacza sie na nowy item
+  clickRow(11);
+  const c2 = cardHtml() || '';
+  A('E8.cardrefresh.switch', c2.indexOf('przesunięcie pokoju') >= 0 && c2.indexOf('E1 Zmieniona Nazwa') < 0,
+    'klik innego wiersza: karta odswiezona (op12, bez sladow op10) [=' + c2.slice(0, 70) + ']');
+  // klik wiersza kolizji (op28) + autopozycja: karta zostaje przy tym itemie, nie wisnie
+  clickRow(27);
+  ex('_deltaAutoplace(_deltaReview.items[27])');
+  const c3 = cardHtml() || '';
+  A('E8.cardrefresh.autoplace', c3.indexOf('zajęte przez') >= 0 || c3.indexOf('pole') >= 0,
+    'autopozycja: karta nadal przy op28 (odswiezona, nie stara) [=' + c3.slice(0, 70) + ']');
+  EQ('E8.cardrefresh.seq', ev('_deltaCardSeq').val, 28, 'tracking: _deltaCardSeq = 28 po autopozycji');
+  // zmiana filtru na „do naniesienia": op28 (hard) nadal widoczny, karta zostaje
+  ex('(function(){ document.querySelectorAll(".dp-filter")[1].click(); })()');
+  A('E8.cardrefresh.filter', (cardHtml() || '').length > 0, 'zmiana filtru: karta nie gina (item nadal w widoku)');
+});
+
 // ═══ E8.realshow: „Pokaż" przy opach zrobionych (M6d, v1.29.0) ═══
 scenario('E8.realshow', async () => {
-  // done → przycisk „Pokaż" (skok + podswietlenie REALNEGO obiektu, zero ducha);
-  // ok/hard → zostaje „Efekt" (duch). Ukryj chowa podswietlenie.
+  // W1: jednolity przycisk „Pokaż" dla wszystkich klas (done = realny obiekt,
+  // ok/hard = duch — rozroznienie w tooltipie). Ukryj chowa podswietlenie/ducha.
   await loadBase('dat');
   const txt = await (await fetch('./fixture_demo.arkdelta')).text();
   ex('const r = validateDeltaText(' + JSON.stringify(txt) + '); if (!r.ok) throw new Error("walidacja fixture_demo"); window.__e8rdelta = r.delta;');
   ex('openDeltaReview(window.__e8rdelta)');
   ex("document.getElementById('dp-apply').click()");
   const btnAt = (i) => ev('(function(){ const row = document.querySelectorAll("#dp-body .dp-row")[' + i + '];'
-    + ' const b = [...row.querySelectorAll("button")].find(x => x.textContent === "Pokaż" || x.textContent === "Efekt");'
+    + ' const b = [...row.querySelectorAll("button")].find(x => x.textContent === "Pokaż");'
     + ' return b ? b.textContent : null; })()').val;
   EQ('E8.realshow.done-btn', btnAt(9), 'Pokaż', 'op naniesiony (done): przycisk Pokaz');
-  EQ('E8.realshow.hard-btn', btnAt(27), 'Efekt', 'op konfliktowy (hard): zostaje Efekt');
+  EQ('E8.realshow.hard-btn', btnAt(27), 'Pokaż', 'op konfliktowy (hard): tez Pokaz (W1, jednolite)');
   // Pokaz na op10 (EDIT_ROOM #1): podswietlenie na zywych wspolrzednych, bez ducha
   ex('(function(){ const row = document.querySelectorAll("#dp-body .dp-row")[9];'
     + ' [...row.querySelectorAll("button")].find(x => x.textContent === "Pokaż").click(); })()');
@@ -2280,13 +2314,13 @@ scenario('E7.contrast', async () => {
   const txt = await (await fetch('./fixture_demo.arkdelta')).text();
   ex('const r = validateDeltaText(' + JSON.stringify(txt) + '); if (!r.ok) throw new Error("walidacja fixture_demo"); window.__e7cdelta = r.delta;');
   ex('openDeltaReview(window.__e7cdelta)');
-  const bg = ev('(function(){ const b = [...document.querySelectorAll("#dp-body .dp-mini")].find(x => x.textContent === "Efekt");'
+  const bg = ev('(function(){ const b = [...document.querySelectorAll("#dp-body .dp-mini")].find(x => x.textContent === "Pokaż");'
     + ' return b ? getComputedStyle(b).backgroundColor : null; })()').val;
   A('E7.contrast.mini-bg', !!bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent',
-    'przycisk Efekt ma wlasne tlo (nie zanika na hoverze wiersza) [=' + bg + ']');
-  const col = ev('(function(){ const b = [...document.querySelectorAll("#dp-body .dp-mini")].find(x => x.textContent === "Efekt");'
+    'przycisk Pokaż ma wlasne tlo (nie zanika na hoverze wiersza) [=' + bg + ']');
+  const col = ev('(function(){ const b = [...document.querySelectorAll("#dp-body .dp-mini")].find(x => x.textContent === "Pokaż");'
     + ' return b ? getComputedStyle(b).color : null; })()').val;
-  EQ('E7.contrast.mini-fg', col, 'rgb(232, 238, 248)', 'przycisk Efekt: jasny tekst (--text), nie przygaszony --dim');
+  EQ('E7.contrast.mini-fg', col, 'rgb(232, 238, 248)', 'przycisk Pokaż: jasny tekst (--text), nie przygaszony --dim');
   ex('_deltaAutoplace(_deltaReview.items[27])');  // op28: twarda kolizja -> autopozycja
   const pill = ev('(function(){ const c = document.querySelector("#dp-body .dp-ovr"); if (!c) return null;'
     + ' const s = getComputedStyle(c); return { br: s.borderRadius, bw: s.borderTopWidth, bg: s.backgroundColor, fw: s.fontWeight }; })()').val;
