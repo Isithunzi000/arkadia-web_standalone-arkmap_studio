@@ -8885,6 +8885,7 @@ function populateEditForm(r) {
   state.pendingSpecialExits     = null;
   state.pendingSpecialExitLocks = null;
   state.pendingSpecialDoors     = null;
+  state.pendingSERenames        = null;  // audyt T2/Q4
 
   // Populate tabs based on active tab
   const activeTabName = lastTab;
@@ -9920,63 +9921,65 @@ function fitRouteToView() {
     .filter(r => r && state.roomArea[r.id] === targetAreaId);
   if (fitRooms.length === 0) return;
 
-  // Navigate to target area — bypass dirty dialog (user explicitly asked to view route)
+  // audyt T2/K2: reszta fitu w domknieciu — po guardzie dirty fit musi wykonac sie na NOWYM obszarze
+  const _finishFit = () => {
+    // Z-level docelowy (po selectArea state.z może być złe)
+    const z = targetZ;
+    state.z = z;
+    buildRoomsZ();
+    document.querySelectorAll('.z-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.z) === z));
+
+    // Bounding box: tylko pokoje na docelowym Z
+    const roomsZ = fitRooms.filter(r => r.z === z);
+    const useRooms = roomsZ.length > 0 ? roomsZ : fitRooms;
+
+    const xs = useRooms.map(r => r.x), ys = useRooms.map(r => r.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const spanX = Math.max(maxX - minX, 1), spanY = Math.max(maxY - minY, 1);
+    const pad = 4; // v1.5.40: fit do trasy — niewielki margines (cross-area też 4)
+    // Dostępna przestrzeń: odejmij room-panel + margines
+    // Na mobile room-panel to bottom-sheet (full-width) — zmniejsza wysokość, nie szerokość
+    const rpEl = document.getElementById('room-panel');
+    let rpW = 0, rpH = 0;
+    if (rpEl && rpEl.classList.contains('visible')) {
+      const rpRect = rpEl.getBoundingClientRect();
+      const isMobilePanel = rpRect.width >= cv.width * 0.9;
+      if (isMobilePanel) {
+        rpH = rpRect.height + 8;
+      } else {
+        rpW = (rpRect.width > 50 ? Math.round(rpRect.width) : 300) + 16;
+      }
+    }
+    // Dynamiczne TOOLBAR_H — uwzględnia mobile gdzie toolbar jest wyżej
+    const toolbarEl = document.getElementById('toolbar');
+    const TOOLBAR_H = toolbarEl ? Math.max(toolbarEl.getBoundingClientRect().bottom, 50) : 110;
+    const statusBarEl = document.getElementById('map-status-bar');
+    const STATUS_H = statusBarEl ? statusBarEl.getBoundingClientRect().height : 28;
+    const availW = cv.width - rpW;
+    const availH = cv.height - TOOLBAR_H - STATUS_H - rpH;
+    const zx = (availW * 0.80) / ((spanX + pad * 2) * CELL);
+    const zy = (availH * 0.80) / ((spanY + pad * 2) * CELL);
+    state.zoom = Math.max(0.18, Math.min(zx, zy, MAX_ZOOM));
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    state.ox = availW / 2 - cx * CELL * state.zoom;
+    state.oy = TOOLBAR_H + availH / 2 + cy * CELL * state.zoom;
+    if (typeof syncZoomSlider === 'function') syncZoomSlider();
+    draw();  };
+  // audyt T2/K2: kanoniczny dirty-guard zamiast cichego discardu (wzorce: selectArea, skok do pokoju)
   if (targetAreaId !== undefined && targetAreaId !== state.areaId) {
-    // Silently discard pending edits before switching area
-    if (state.editDirty && state.selected) {
-      const room = state.roomById[state.selected];
-      if (room && state.editSnapshot) _replaceRoomData(room, JSON.parse(JSON.stringify(state.editSnapshot)));
-      state.editDirty = false; state.editSnapshot = null;
-      const rp = document.getElementById('room-panel');
-      if (rp) rp.classList.remove('visible');
-      state.selected = null;
+    if (state.editMode && state.editDirty && state.selected) {
+      showDirtyConfirm(() => {
+        roomPanel.classList.remove('visible');
+        state.selected = null;
+        _doSelectArea(targetAreaId, false);
+        _finishFit();
+      });
+      return;
     }
     _doSelectArea(targetAreaId, false);
   }
-
-  // Z-level docelowy (po selectArea state.z może być złe)
-  const z = targetZ;
-  state.z = z;
-  buildRoomsZ();
-  document.querySelectorAll('.z-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.z) === z));
-
-  // Bounding box: tylko pokoje na docelowym Z
-  const roomsZ = fitRooms.filter(r => r.z === z);
-  const useRooms = roomsZ.length > 0 ? roomsZ : fitRooms;
-
-  const xs = useRooms.map(r => r.x), ys = useRooms.map(r => r.y);
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
-  const spanX = Math.max(maxX - minX, 1), spanY = Math.max(maxY - minY, 1);
-  const pad = 4; // v1.5.40: fit do trasy — niewielki margines (cross-area też 4)
-  // Dostępna przestrzeń: odejmij room-panel + margines
-  // Na mobile room-panel to bottom-sheet (full-width) — zmniejsza wysokość, nie szerokość
-  const rpEl = document.getElementById('room-panel');
-  let rpW = 0, rpH = 0;
-  if (rpEl && rpEl.classList.contains('visible')) {
-    const rpRect = rpEl.getBoundingClientRect();
-    const isMobilePanel = rpRect.width >= cv.width * 0.9;
-    if (isMobilePanel) {
-      rpH = rpRect.height + 8;
-    } else {
-      rpW = (rpRect.width > 50 ? Math.round(rpRect.width) : 300) + 16;
-    }
-  }
-  // Dynamiczne TOOLBAR_H — uwzględnia mobile gdzie toolbar jest wyżej
-  const toolbarEl = document.getElementById('toolbar');
-  const TOOLBAR_H = toolbarEl ? Math.max(toolbarEl.getBoundingClientRect().bottom, 50) : 110;
-  const statusBarEl = document.getElementById('map-status-bar');
-  const STATUS_H = statusBarEl ? statusBarEl.getBoundingClientRect().height : 28;
-  const availW = cv.width - rpW;
-  const availH = cv.height - TOOLBAR_H - STATUS_H - rpH;
-  const zx = (availW * 0.80) / ((spanX + pad * 2) * CELL);
-  const zy = (availH * 0.80) / ((spanY + pad * 2) * CELL);
-  state.zoom = Math.max(0.18, Math.min(zx, zy, MAX_ZOOM));
-  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  state.ox = availW / 2 - cx * CELL * state.zoom;
-  state.oy = TOOLBAR_H + availH / 2 + cy * CELL * state.zoom;
-  if (typeof syncZoomSlider === 'function') syncZoomSlider();
-  draw();
+  _finishFit();
 }
 
 // Przelicz wszystkie odcinki trasy
@@ -12742,7 +12745,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.36.0';
+const APP_VERSION = 'v1.37.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -12789,6 +12792,7 @@ Object.assign(state, {
   pendingStubRemovals: new Set(),
   // ── Special exits (Pass 44, 48) ──
   pendingSpecialExits:      null,
+  pendingSERenames:         null,  // audyt T2/Q4: mapa orygCmd→nowyCmd z edytora SE
   pendingSpecialExitLocks:  null,
   pendingSpecialDoors:      null,
   // ── CL drawing (Pass 40) ──
@@ -13137,6 +13141,12 @@ function _dispatchUndo(entry) {
     case 'ADD_AREA': {
       state.map.areas = (state.map.areas || []).filter(a => a.id !== entry.areaId);
       state.areas.delete(entry.areaId);
+      // audyt T2/W11: commit nawigowal do nowego obszaru — undo naprawia wiszacy areaId
+      // (preferuje prevAreaId; wpisy z kalki nie nawigowaly, wiec guard je pomija)
+      if (state.areaId === entry.areaId) {
+        const cand = state.areas.has(entry.prevAreaId) ? entry.prevAreaId : state.areas.keys().next().value;
+        if (cand !== undefined) selectArea(cand, false);
+      }
       buildAreaList(); break;
     }
     case 'DELETE_AREA': {
@@ -13414,6 +13424,8 @@ function _dispatchRedo(entry) {
       state.map.areas = state.map.areas || [];
       state.map.areas.push(snap);
       state.areas.set(entry.areaId, snap);
+      // audyt T2/W11: naprawa wylacznie wiszacego areaId — bez szarpania widokiem uzytkownika
+      if (!state.areas.has(state.areaId)) selectArea(entry.areaId, false);
       buildAreaList(); break;
     }
     case 'DELETE_AREA': {
@@ -13466,7 +13478,7 @@ function _dispatchRedo(entry) {
       state.areas.delete(entry.areaId);
       if (state.areaId === entry.areaId) {
         const first = state.areas.keys().next().value;
-        if (first) selectArea(first, true);
+        if (first !== undefined) selectArea(first, true);  // audyt T2/W12: id 0 (Default Area) jest poprawnym celem
       }
       // Cleanup waypoints referencing rooms from re-deleted area
       if (typeof wpState !== 'undefined' && wpState.waypoints) {
@@ -14252,7 +14264,7 @@ function _vdSyncAccUI(view){
     clr.title = fileMode ? 'Niedostępne w trybie „plik" — czyści tylko akceptacje przeglądarki' : 'Wyczyść wszystkie akceptacje tej przeglądarki'; }
 }
 function _refreshOpenRoomWarn(){
-  const r = (state.selectedRoom!=null) ? state.roomById[state.selectedRoom] : null;
+  const r = (state.selected!=null) ? state.roomById[state.selected] : null;
   if (r){ if (typeof _updateSkryptyWarn==='function') _updateSkryptyWarn(r); if (typeof _markSkryptyBadRows==='function') _markSkryptyBadRows(r); }
 }
 
@@ -14775,6 +14787,7 @@ function updateSpecialeTab(room) {
   if (!state.pendingSpecialExits)      state.pendingSpecialExits      = JSON.parse(JSON.stringify(specExits));
   if (!state.pendingSpecialExitLocks)  state.pendingSpecialExitLocks  = JSON.parse(JSON.stringify(specLocks));
   if (!state.pendingSpecialDoors)      state.pendingSpecialDoors      = JSON.parse(JSON.stringify(specDoors));
+  if (!state.pendingSERenames)         state.pendingSERenames         = {};  // audyt T2/Q4
 
   // Przebuduj HTML
   let html = `<div style="font-size: 10px;color:var(--dim);margin-bottom:6px">Komendy specjalne → ID pokoju docelowego</div>
@@ -14817,6 +14830,14 @@ function updateSpecialeTab(room) {
       const id  = parseInt(idIn.value);
       const lock = lockChk.checked;
       if (currentCmd !== newCmd) {
+        // audyt T2/Q4: dokladne sledzenie rename (edytor zna origCmd — zrodlo prawdy)
+        const ren = state.pendingSERenames;
+        if (ren) {
+          for (const k of Object.keys(ren))  // kolaps lancucha A→B→C do A→C; pelne kolo = brak rename
+            if (ren[k] === currentCmd) { if (k === newCmd) delete ren[k]; else ren[k] = newCmd; }
+          if ((room.special_exits || {})[currentCmd] !== undefined)  // tylko oryginalne komendy pokoju
+            ren[currentCmd] = newCmd;
+        }
         if (currentCmd) delete state.pendingSpecialExits[currentCmd];
         delete state.pendingSpecialExitLocks[currentCmd];
         currentCmd = newCmd;
@@ -14841,6 +14862,7 @@ function updateSpecialeTab(room) {
     if (idIn)  idIn.onfocus  = _setActiveSpec;
     if (delBtn)  delBtn.onclick  = () => {
       delete state.pendingSpecialExits[origCmd || cmdIn?.value];
+      if (state.pendingSERenames) delete state.pendingSERenames[origCmd || cmdIn?.value];  // audyt T2/Q4
       setEditDirty();
       updateSpecialeTab(room);
     };
@@ -15464,14 +15486,18 @@ function commitRoomEdit() {
     const allExitKeys = new Set(Object.keys(room.exits || {}));
     for (const oldCmd of oldSEKeys) {
       if (!newSEKeys.has(oldCmd) && !allExitKeys.has(oldCmd)) {
-        // Heuristic: if a new SE key has same targetId → rename, migrate metadata
+        // audyt T2/Q4: najpierw jawny rename z edytora (pendingSERenames), potem heurystyka po targecie
         const oldTarget = oldSE[oldCmd];
-        const renamed = Object.entries(newSE).find(([c, t]) => t === oldTarget && !oldSEKeys.has(c));
+        const explicitTo = state.pendingSERenames ? state.pendingSERenames[oldCmd] : undefined;
+        const renamed = (explicitTo !== undefined && newSEKeys.has(explicitTo))
+          ? [explicitTo, newSE[explicitTo]]
+          : Object.entries(newSE).find(([c, t]) => t === oldTarget && !oldSEKeys.has(c));
         if (renamed) {
           const [newCmd] = renamed;
-          if (room.doors?.[oldCmd])        { room.doors = room.doors || {}; room.doors[newCmd] = room.doors[oldCmd]; delete room.doors[oldCmd]; }
-          if (room.exit_weights?.[oldCmd]) { room.exit_weights = room.exit_weights || {}; room.exit_weights[newCmd] = room.exit_weights[oldCmd]; delete room.exit_weights[oldCmd]; }
-          if (room.custom_lines?.[oldCmd]) { room.custom_lines = room.custom_lines || {}; room.custom_lines[newCmd] = room.custom_lines[oldCmd]; delete room.custom_lines[oldCmd]; }
+          // audyt T2/Q4: target wygrywa per-pole — bez nadpisywania istniejacych metadanych docelowego klucza
+          if (room.doors?.[oldCmd])        { room.doors = room.doors || {}; if (room.doors[newCmd] === undefined) room.doors[newCmd] = room.doors[oldCmd]; delete room.doors[oldCmd]; }
+          if (room.exit_weights?.[oldCmd]) { room.exit_weights = room.exit_weights || {}; if (room.exit_weights[newCmd] === undefined) room.exit_weights[newCmd] = room.exit_weights[oldCmd]; delete room.exit_weights[oldCmd]; }
+          if (room.custom_lines?.[oldCmd]) { room.custom_lines = room.custom_lines || {}; if (room.custom_lines[newCmd] === undefined) room.custom_lines[newCmd] = room.custom_lines[oldCmd]; delete room.custom_lines[oldCmd]; }
         } else {
           if (room.doors)        { delete room.doors[oldCmd];        if (!Object.keys(room.doors).length)        delete room.doors; }
           if (room.exit_weights) { delete room.exit_weights[oldCmd]; if (!Object.keys(room.exit_weights).length) delete room.exit_weights; }
@@ -15498,6 +15524,7 @@ function commitRoomEdit() {
   state.pendingSpecialExits      = null;
   state.pendingSpecialExitLocks  = null;
   state.pendingSpecialDoors      = null;
+  state.pendingSERenames         = null;  // audyt T2/Q4
 
   const after = JSON.parse(JSON.stringify(room));
 
@@ -15810,9 +15837,11 @@ function commitAddArea(name) {
   };
 
   doFn();
+  // audyt T2/W11: zapamietaj poprzedni obszar — undo naprawi wiszacy areaId
+  const prevAreaId = state.areaId;
   // Po dodaniu — przejdź do nowego obszaru
   if (typeof selectArea === 'function') selectArea(newId);
-  pushUndo({ type: 'ADD_AREA', areaId: newId, areaData: JSON.parse(JSON.stringify(newArea)),
+  pushUndo({ type: 'ADD_AREA', areaId: newId, prevAreaId, areaData: JSON.parse(JSON.stringify(newArea)),
     label: `Dodanie obszaru "${name.trim()}" (#${newId})` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
@@ -15945,7 +15974,7 @@ function commitDeleteArea(areaId, label) {
     state.areas.delete(areaId);
     if (state.areaId === areaId) {
       const first = state.areas.keys().next().value;
-      if (first) selectArea(first, true);
+      if (first !== undefined) selectArea(first, true);  // audyt T2/W12: id 0 (Default Area) jest poprawnym celem
     }
     if (typeof buildAreaList === 'function') buildAreaList();
     // Cleanup waypoints referencing rooms from deleted area (with snapshot for undo)
@@ -16157,9 +16186,10 @@ function commitMoveRoomToArea(roomId, targetAreaId, label) {
     room.area = targetAreaId;
     state.roomArea[roomId] = targetAreaId;
     if (typeof buildAreaList === 'function') buildAreaList();
-    // Navigate to moved room in target area
-    state.editDirty = false; state.editSnapshot = null;
-    jumpToRoom(roomId);
+    // audyt T2/K3: bez prewencyjnego czyszczenia dirty — brudny formularz (moze byc INNEGO pokoju)
+    // dostaje kanoniczny guard; przeniesienie zostaje (zatwierdzone dialogiem, ma wpis undo)
+    if (state.editMode && state.editDirty && state.selected) showDirtyConfirm(() => jumpToRoom(roomId));
+    else jumpToRoom(roomId);
   };
   const undoFn = () => {
     toArea.rooms   = (toArea.rooms || []).filter(r => r.id !== roomId);
@@ -16168,9 +16198,8 @@ function commitMoveRoomToArea(roomId, targetAreaId, label) {
     room.area = fromAreaId;
     state.roomArea[roomId] = fromAreaId;
     if (typeof buildAreaList === 'function') buildAreaList();
-    // Navigate back to source area
-    state.editDirty = false; state.editSnapshot = null;
-    jumpToRoom(roomId);
+    // audyt T2/K3: martwy closure — undo/redo MOVE_ROOM_TO_AREA idzie przez dispatcher
+    // (data-only, bez nawigacji); zostawione dla symetrii, bez clearow dirty
   };
 
   doFn();
@@ -16672,7 +16701,7 @@ function commitSetPosition() {
   if (rpy) rpy.value = newY;
   if (rpz) rpz.value = newZ;
   // Sync editSnapshot so panel doesn't think position is dirty
-  if (state.editSnapshot && state.selectedRoom === roomId) {
+  if (state.editSnapshot && state.selected === roomId) {
     state.editSnapshot.x = newX;
     state.editSnapshot.y = newY;
     state.editSnapshot.z = newZ;

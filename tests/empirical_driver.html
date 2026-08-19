@@ -1862,6 +1862,161 @@ scenario('E5.ghost-layer', async () => {
     'panel widoczny (stan do screenshota)');
 });
 
+// ═══ E5 Tier 2 (v1.37.0): utrata danych UX — dirty-guard K2/K3, rename SE Q4, W10/W11 ═══
+
+scenario('E5.dirty-movearea', async () => {
+  await loadBase('dat');
+  const setup = JSON.parse(ev("JSON.stringify((function(){"
+    + " const rid = state.roomsZ[0].id;"
+    + " const cur = state.roomArea[rid];"
+    + " const keys = [...state.areas.keys()];"
+    + " const other = keys.find(k => k !== cur && k > 0);"
+    + " if (other === undefined) return null;"
+    + " return { rid: rid, cur: cur, other: other, name: state.roomById[rid].name || '' };"
+    + " })())").val);
+  A('E5.dirty-movearea.setup', !!setup, 'pokoj + docelowy obszar znaleziony');
+  if (!setup) return;
+  const rid = setup.rid, cur = setup.cur, other = setup.other, name0 = setup.name;
+  ex('state.selected = ' + rid + '; showRoomInfo(state.roomById[' + rid + ']);');
+  ex('(function(){ const n = document.getElementById("rp-name"); n.value = "T2 DIRTY"; n.dispatchEvent(new Event("input")); })()');
+  EQ('E5.dirty-movearea.dirty', ev('state.editDirty').val, true, 'formularz zabrudzony (nazwa)');
+  ex('commitMoveRoomToArea(' + rid + ', ' + other + ')');
+  EQ('E5.dirty-movearea.moved', ev('state.roomArea[' + rid + ']').val, other, 'przeniesienie naniesione na mape (zatwierdzone dialogiem)');
+  A('E5.dirty-movearea.guard', ev('document.getElementById("rp-actions").classList.contains("dirty-confirm")').val === true,
+    'kanoniczny dirty-guard WIDOCZNY (przed fixem: cichy discard)');
+  EQ('E5.dirty-movearea.dirtykept', ev('state.editDirty').val, true, 'dirty nienaruszone do decyzji uzytkownika');
+  EQ('E5.dirty-movearea.navyet', ev('state.areaId').val, cur, 'nawigacja odlozona — obszar jeszcze stary');
+  ex('document.getElementById("rp-dirty-abandon").click()');
+  EQ('E5.dirty-movearea.reverted', ev('state.roomById[' + rid + '].name || ""').val, name0, 'Porzuc: nazwa cofnieta ze snapshotu');
+  EQ('E5.dirty-movearea.nav', ev('state.areaId').val, other, 'Porzuc: nawigacja do obszaru docelowego');
+  EQ('E5.dirty-movearea.sel', ev('state.selected').val, rid, 'Porzuc: panel na przeniesionym pokoju');
+  ex('undoAction()');
+  EQ('E5.dirty-movearea.undo', ev('state.roomArea[' + rid + ']').val, cur, 'undo: pokoj z powrotem w obszarze zrodlowym');
+});
+
+scenario('E5.dirty-routefit', async () => {
+  await loadBase('dat');
+  const crc0 = ev('_computeBaseInfo().crc').val;
+  const setup = JSON.parse(ev("JSON.stringify((function(){"
+    + " const cur = state.areaId;"
+    + " let target = null;"
+    + " for (const k of Object.keys(state.roomArea)) { if (state.roomArea[k] !== cur) { target = +k; break; } }"
+    + " if (target === null) return null;"
+    + " return { r1: state.roomsZ[0].id, cur: cur, target: target, tarea: state.roomArea[target] };"
+    + " })())").val);
+  A('E5.dirty-routefit.setup', !!setup, 'pokoj trasy w innym obszarze znaleziony');
+  if (!setup) return;
+  ex('state.selected = ' + setup.r1 + '; showRoomInfo(state.roomById[' + setup.r1 + ']);');
+  ex('(function(){ const n = document.getElementById("rp-name"); n.value = "T2 DIRTY FIT"; n.dispatchEvent(new Event("input")); })()');
+  const view0 = JSON.parse(ev('JSON.stringify({ a: state.areaId, z: state.zoom, ox: state.ox })').val);
+  ex('wpState.waypoints = [{ roomId: ' + setup.target + ', label: "T2" }]; wpState.paths = []; wpState.hops = [];');
+  ex('fitRouteToView()');
+  A('E5.dirty-routefit.guard', ev('document.getElementById("rp-actions").classList.contains("dirty-confirm")').val === true,
+    'dirty-guard WIDOCZNY (przed fixem: cichy discard przed skokiem)');
+  EQ('E5.dirty-routefit.noyet', ev('state.areaId').val, setup.cur, 'przed decyzja: obszar NIE przelaczony');
+  ex('document.getElementById("rp-dirty-abandon").click()');
+  EQ('E5.dirty-routefit.switched', ev('state.areaId').val, setup.tarea, 'Porzuc: obszar przelaczony na obszar trasy');
+  const view1 = JSON.parse(ev('JSON.stringify({ z: state.zoom, ox: state.ox })').val);
+  A('E5.dirty-routefit.fitted', view1.z !== view0.z || view1.ox !== view0.ox, 'Porzuc: fit wykonany NA NOWYM obszarze (domkniecie _finishFit)');
+  EQ('E5.dirty-routefit.map', ev('_computeBaseInfo().crc').val, crc0, 'mapa bez zmian (fit to tylko widok)');
+  ex('wpState.waypoints = []; wpState.paths = []; wpState.hops = [];');
+});
+
+scenario('E5.se-rename', async () => {
+  await loadBase('dat');
+  const setup = JSON.parse(ev("JSON.stringify((function(){"
+    + " for (const id of Object.keys(state.roomById)) {"
+    + "   const r = state.roomById[id]; const se = r.special_exits;"
+    + "   if (!se) continue;"
+    + "   const cmd = Object.keys(se)[0];"
+    + "   if (!cmd) continue;"
+    + "   let nt = null;"
+    + "   for (const k of Object.keys(state.roomById)) { if (+k !== se[cmd] && +k !== +id) { nt = +k; break; } }"
+    + "   if (nt === null) return null;"
+    + "   r.doors = r.doors || {}; r.doors[cmd] = 2;"
+    + "   r.exit_weights = r.exit_weights || {}; r.exit_weights[cmd] = 5;"
+    + "   r.custom_lines = r.custom_lines || {}; r.custom_lines[cmd] = { points: [[0, 0], [1, 1]], color: [1, 2, 3], arrow: false };"
+    + "   return { rid: +id, cmd: cmd, oldT: se[cmd], nt: nt };"
+    + " }"
+    + " return null; })())").val);
+  A('E5.se-rename.setup', !!setup, 'pokoj z SE + spreparowane metadane (doors/waga/CL)');
+  if (!setup) return;
+  const rid = setup.rid, cmd = setup.cmd;
+  ex('state.selected = ' + rid + '; showRoomInfo(state.roomById[' + rid + ']);'
+    + ' switchRpTab(document.querySelector("#rp-tabs .rp-tab[data-tab=\'Specjalne\']"));');
+  A('E5.se-rename.row', ev('document.querySelectorAll(".spec-row").length').val >= 1, 'wiersz SE w DOM');
+  ex('(function(){ const row = document.querySelector(".spec-row");'
+    + ' const ci = row.querySelector(".spec-cmd"), ii = row.querySelector(".spec-id");'
+    + ' ci.value = "t2nowakomenda"; ci.dispatchEvent(new Event("input"));'
+    + ' ii.value = "' + setup.nt + '"; ii.dispatchEvent(new Event("input")); })()');
+  EQ('E5.se-rename.tracked', ev('JSON.stringify(state.pendingSERenames || {})').val,
+    JSON.stringify({ [cmd]: 't2nowakomenda' }), 'rename + retarget sledzony JAWNIE (pendingSERenames)');
+  ex('document.querySelector(".spec-confirm").click()');
+  EQ('E5.se-rename.se', ev('state.roomById[' + rid + '].special_exits.t2nowakomenda').val, setup.nt,
+    'komenda przemianowana z NOWYM celem (rename+retarget jednym gestem)');
+  A('E5.se-rename.oldgone', ev('JSON.stringify("'+cmd.replace(/"/g, '')+'" in (state.roomById[' + rid + '].special_exits || {}))').val === 'false',
+    'stara komenda zniknela z SE');
+  EQ('E5.se-rename.doors', ev('JSON.stringify([state.roomById[' + rid + '].doors.t2nowakomenda, state.roomById[' + rid + '].doors["' + cmd + '"]])').val,
+    JSON.stringify([2, undefined]), 'doors zmigrowane (przed fixem: skasowane bezpowrotnie)');
+  EQ('E5.se-rename.weights', ev('state.roomById[' + rid + '].exit_weights.t2nowakomenda').val, 5, 'waga zmigrowana');
+  A('E5.se-rename.cl', ev('!!(state.roomById[' + rid + '].custom_lines && state.roomById[' + rid + '].custom_lines.t2nowakomenda)').val === true,
+    'custom line zmigrowana');
+  ex('undoAction()');
+  EQ('E5.se-rename.undose', ev('(state.roomById[' + rid + '].special_exits || {})["' + cmd + '"]').val, setup.oldT,
+    'undo: SE wrocilo pod stara komenda ze starym celem');
+  EQ('E5.se-rename.undodoors', ev('(state.roomById[' + rid + '].doors || {})["' + cmd + '"]').val, 2, 'undo: doors wrocily');
+  ex('redoAction()');
+  EQ('E5.se-rename.redo', ev('state.roomById[' + rid + '].special_exits.t2nowakomenda').val, setup.nt, 'redo: migracja powtorzona');
+  ex('undoAction()');
+});
+
+scenario('E5.undo-addarea', async () => {
+  await loadBase('dat');
+  const a0 = ev('state.areaId').val;
+  ex('commitAddArea("T2 AREA")');
+  const newId = ev('state.areaId').val;
+  A('E5.undo-addarea.nav', newId !== a0 && ev('state.areas.has(' + newId + ')').val === true,
+    'commit: nawigacja do nowego obszaru #' + newId);
+  ex('undoAction()');
+  EQ('E5.undo-addarea.back', ev('state.areaId').val, a0, 'undo: areaId naprawiony na poprzedni (przed fixem: wiszacy)');
+  A('E5.undo-addarea.gone', ev('state.areas.has(' + newId + ')').val === false, 'undo: obszar usuniety');
+  ex('redoAction()');
+  A('E5.undo-addarea.redo', ev('state.areas.has(' + newId + ')').val === true, 'redo: obszar przywrocony');
+  EQ('E5.undo-addarea.noyank', ev('state.areaId').val, a0, 'redo: bez szarpania widokiem');
+  ex('undoAction()');
+});
+
+scenario('E5.setpos-sync', async () => {
+  await loadBase('dat');
+  const rid = ev('state.roomsZ[0].id').val;
+  ex('state.selected = ' + rid + '; showRoomInfo(state.roomById[' + rid + ']);');
+  const x0 = ev('state.roomById[' + rid + '].x').val;
+  ex('openSetPositionDialog(' + rid + ');');
+  ex('document.getElementById("pos-x").value = String(' + x0 + ' + 100)');
+  ex('commitSetPosition()');
+  EQ('E5.setpos-sync.pos', ev('state.roomById[' + rid + '].x').val, x0 + 100, 'pozycja zatwierdzona');
+  EQ('E5.setpos-sync.snap', ev('state.editSnapshot && state.editSnapshot.x').val, x0 + 100,
+    'editSnapshot zsynchronizowany (przed fixem: martwe selectedRoom)');
+  EQ('E5.setpos-sync.count', ev('_editDirtyCount()').val, 0, 'brak falszywego dirty po zatwierdzeniu pozycji');
+  ex('(function(){ const n = document.getElementById("rp-name"); n.value = "T2 X"; n.dispatchEvent(new Event("input")); })()');
+  ex('showDirtyConfirm(() => {})');
+  ex('document.getElementById("rp-dirty-abandon").click()');
+  EQ('E5.setpos-sync.kept', ev('state.roomById[' + rid + '].x').val, x0 + 100,
+    'Porzuc: zatwierdzona pozycja NIE cofnieta (snapshot juz zsynchronizowany)');
+  ex('undoAction()');
+  EQ('E5.setpos-sync.undo', ev('state.roomById[' + rid + '].x').val, x0, 'undo: pozycja wrocila do bazy');
+});
+
+scenario('E5.warnrefresh', async () => {
+  await loadBase('dat');
+  const rid = ev('state.roomsZ[0].id').val;
+  ex('state.selected = ' + rid + '; showRoomInfo(state.roomById[' + rid + ']);');
+  ex('window.__t2warn = 0;'
+    + ' window._updateSkryptyWarn = (function(orig){ return function(r){ if (r && r.id === ' + rid + ') window.__t2warn++; return orig.apply(this, arguments); }; })(window._updateSkryptyWarn);');
+  ex('_refreshOpenRoomWarn()');
+  EQ('E5.warnrefresh.called', ev('window.__t2warn').val, 1,
+    '_refreshOpenRoomWarn odswieza OTWARTY pokoj (przed fixem: martwe selectedRoom)');
+});
 
 
 // ═══ E6: przeploty undo/redo z apply kalki ═══
