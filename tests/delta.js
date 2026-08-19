@@ -455,7 +455,7 @@ ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo 
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.32.0';"), 'wersja: v1.32.0');
+ok(HTML.includes("const APP_VERSION = 'v1.33.0';"), 'wersja: v1.33.0');
 
 console.log('— T8: classifyDelta + recenzja (M2) —');
 {
@@ -768,11 +768,23 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
   ok(HTML.includes("_deltaGhostReset();  // ARKDELTA M3: nowa mapa"),
     'applyMap: reset stanu M3 przy nowej mapie');
   ok(HTML.includes('Autopozycja') && HTML.includes('Ręcznie')
-    && HTML.includes("bShow.textContent = isDone ? 'Pokaż' : 'Efekt'") && HTML.includes("bHide.textContent = 'Ukryj'")
+    && HTML.includes("bShow.textContent = 'Pokaż'") && HTML.includes("bHide.textContent = 'Ukryj'")
     && HTML.includes('function _deltaShowReal(it) {') && HTML.includes('_deltaRealHl.set(it.seq, hl)'),
-    'panel: przyciski Pokaz/Efekt/Ukryj/Autopozycja/Ręcznie (M6d)');
+    'panel: przyciski Pokaż/Ukryj/Autopozycja/Ręcznie (W1: jednolite Pokaż, rozróżnia tooltip)');
   ok(HTML.includes('Duchy:') && HTML.includes('pozycja zastępcza'), 'panel: legenda kolorów duchów');
-  ok(HTML.includes("const APP_VERSION = 'v1.32.0';"), 'wersja v1.32.0');
+  // W1: karta zbiorcza — zawsze po kliku, odświeżanie po mutacjach, fallback-treść
+  ok(HTML.includes("row.addEventListener('click', () => { _deltaJump(it); _deltaCardShow(it); });"),
+    'W1 karta: klik wiersza = skok na mapie + karta szczegółów');
+  ok(HTML.includes('let _deltaCardSeq = null;') && HTML.includes('function _deltaFallbackRows(it) {')
+    && HTML.includes('if (!rows.length) rows.push(..._deltaFallbackRows(it));'),
+    'W1 karta: tracking seq + wiersze zapasowe (karta zawsze ma treść)');
+  ok(HTML.includes('const cur = R.items.find(i => i.seq === _deltaCardSeq);')
+    && HTML.includes('if (cur) _deltaCardShow(cur); else _deltaCardHide();'),
+    'W1 karta: odświeżanie w _renderDeltaPanel po mutacjach (brak starej karty)');
+  ok(HTML.includes('const _DELTA_TYPE_PL = {') && HTML.includes("MOVE_ROOM: 'przesunięcie pokoju'")
+    && HTML.includes("AUTO_FIX_SUPPRESSORS: 'automatyczna naprawa podwójnych linii'"),
+    'W1 karta: typy opów po polsku (_DELTA_TYPE_PL)');
+  ok(HTML.includes("const APP_VERSION = 'v1.33.0';"), 'wersja v1.33.0');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -808,7 +820,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.32.0';"), 'wersja v1.32.0 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.33.0';"), 'wersja v1.33.0 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji
