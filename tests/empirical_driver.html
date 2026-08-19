@@ -1047,7 +1047,7 @@ async function _e2RunDesc(d) {
   // budowa kalki (realny commit albo craft)
   loadBase('dat');
   let text;
-  try { text = d.make(P); if (!text) text = ev('buildDelta()').val; }
+  try { text = d.make(P); if (typeof text !== 'string') text = ev('buildDelta()').val; }
   catch (e) { FAIL('E2.' + d.type, 'make: ' + String(e && e.message || e)); return; }
   const v = W().validateDeltaText(text);
   A('E2.' + d.type + '.file', v.ok === true && v.delta.ops.length === d.ops,
@@ -2180,6 +2180,72 @@ scenario('E8.labelkeep', async () => {
   ex('undoAll()');
   EQ('E8.labelkeep.undo', ev('_computeBaseInfo().crc').val, ev('state.baseInfo.crc').val,
     'undoAll po apply: baza odtworzona (6 sciezek bez sladu)');
+});
+
+
+// ═══ E8.tier1: audyt T1 (v1.36.0) — seed done-SID przez panel + DELETE_AREA obszaru domyslnego ═══
+// W13: ADD_AREA done-by-name + zalezny ADD_ROOM — przed fixem apply skipowal zalezny op
+// („odwolanie do obiektu kalki, ktory nie istnieje"), mimo ze recenzja mowila „ok".
+// W15: DELETE_AREA id<=0 — przed fixem apply liczylo cichy odmowny commit jako sukces.
+scenario('E8.tier1', async () => {
+  await loadBase('dat');
+  // Kalka budowana na zywej mapie: ADD_AREA z nazwa ISTNIEJACEGO obszaru (→ done),
+  // ADD_ROOM do tego sid-obszaru na gwarantowanie wolnej komorce tego obszaru.
+  const prep = JSON.parse(ev(`JSON.stringify((() => {
+    const areaIds = [...state.areas.keys()].filter(a => a > 0);
+    const counts = new Map(areaIds.map(a => [a, 0]));
+    for (const r of Object.values(state.roomById)) counts.set(state.roomArea[r.id], (counts.get(state.roomArea[r.id]) || 0) + 1);
+    const aid = areaIds.slice().sort((a, b) => counts.get(b) - counts.get(a))[0];  // najgesciej zaludniony
+    const area = state.areas.get(aid);
+    let fx = 4000, fy = 4000; const fz = 0;
+    while (_deltaRoomAt(aid, fx, fy, fz)) fx += 13;
+    return { aid, name: area.name, x: fx, y: fy, z: fz };
+  })())`).val);
+  const text = _e4Craft([
+    { type: 'ADD_AREA', target: { areaId: 'd:1' },
+      payload: { area: { id: 'd:1', name: prep.name } }, label: 'T1 ADD_AREA' },
+    { type: 'ADD_ROOM', target: { roomId: 'd:2', areaId: 'd:1' },
+      payload: { room: { id: 'd:2', x: prep.x, y: prep.y, z: prep.z, name: 'TIER1 SEED', env: 1 } }, label: 'T1 ADD_ROOM' },
+  ]);
+  ex('window.__t1res = validateDeltaText(' + JSON.stringify(text) + '); if (!window.__t1res.ok) throw new Error("walidacja t1"); openDeltaReview(window.__t1res.delta);');
+  EQ('E8.tier1.cls', JSON.parse(ev('JSON.stringify(_deltaReview.items.map(i => i.cls))').val),
+    ['done', 'ok'], 'recenzja: ADD_AREA done (nazwa), ADD_ROOM ok');
+  EQ('E8.tier1.checked', JSON.parse(ev('JSON.stringify(_deltaReview.items.map(i => i.checked))').val),
+    [false, true], 'recenzja: done odznaczone, ok zaznaczone (domyslne)');
+  ex('_deltaApplyReviewed()');  // sciezka produkcyjna: seed z klasyfikacji
+  const seedRoom = JSON.parse(ev(`JSON.stringify((() => {
+    const r = Object.values(state.roomById).find(x => x.name === 'TIER1 SEED');
+    return r ? { id: r.id, area: state.roomArea[r.id] } : null;
+  })())`).val);
+  EQ('E8.tier1.applied', !!seedRoom && seedRoom.area === prep.aid, true,
+    'apply przez panel: zalezny ADD_ROOM naniesiony do zywego obszaru (seed done-SID)');
+  EQ('E8.tier1.masked', JSON.parse(ev('JSON.stringify(_deltaReview.items.map(i => [i.seq, i.cls, i.session || false]))').val),
+    [[1, 'done', false], [2, 'done', true]], 'po apply: op2 maskowany done „naniesione z tej kalki"');
+  EQ('E8.tier1.log', JSON.parse(ev('JSON.stringify(state.deltaLog.map(e => [e.type, e.label]))').val),
+    [['ADD_ROOM', 'T1 ADD_ROOM']], 'deltaLog: dokladnie jeden wpis, etykieta kalki zachowana');
+  // idempotentnosc: ponowne Zastosuj niczego nie nanosi (op2 juz done)
+  ex('_deltaApplyReviewed()');
+  EQ('E8.tier1.idem', JSON.parse(ev('JSON.stringify(state.deltaLog.map(e => e.type))').val),
+    ['ADD_ROOM'], 'drugie Zastosuj: zero nowych wpisow (idempotentnosc)');
+  ex('undoAll()');
+  EQ('E8.tier1.undo', ev('_computeBaseInfo().crc').val, ev('state.baseInfo.crc').val,
+    'undoAll: baza odtworzona');
+
+  // W15: DELETE_AREA obszaru domyslnego (id <= 0) — klasyfikacja impossible + apply skip
+  const defId = JSON.parse(ev(`JSON.stringify((() => { for (const id of state.areas.keys()) if (id <= 0) return id; return null; })())`).val);
+  EQ('E8.tier1.defarea', defId !== null, true, 'mapa ma obszar domyslny (id <= 0) — fixture do W15');
+  const t2 = _e4Craft([{ type: 'DELETE_AREA', target: { areaId: defId }, payload: {}, label: 'T1 DEL DEFAULT' }]);
+  const rCls = ev('JSON.stringify(classifyDelta(validateDeltaText(' + JSON.stringify(t2) + ').delta).map(i => [i.cls, i.note]))');
+  if (!rCls.ok) throw new Error('ev classify: ' + rCls.err);
+  const cls2 = JSON.parse(rCls.val);
+  EQ('E8.tier1.defcls', cls2[0][0] === 'impossible' && cls2[0][1].includes('obszar domyślny'), true,
+    'klasyfikacja DELETE_AREA default → impossible (obszar domyslny)');
+  const rApp = ev('JSON.stringify(applyDelta(validateDeltaText(' + JSON.stringify(t2) + ').delta))');
+  if (!rApp.ok) throw new Error('ev apply: ' + rApp.err);
+  const res2 = JSON.parse(rApp.val);
+  EQ('E8.tier1.defapply', [res2.applied, res2.skipped.length], [0, 1], 'apply DELETE_AREA default → 0 applied, 1 skip');
+  EQ('E8.tier1.defalive', ev('!!state.areas.get(' + defId + ')').val, true, 'obszar domyslny nietkniety');
+  EQ('E8.tier1.deflog', ev('state.deltaLog.length').val, 0, 'deltaLog pusty — zadnego falszywego sukcesu');
 });
 
 // ═══ E8.realshow: „Pokaż" przy opach zrobionych (M6d, v1.29.0) ═══

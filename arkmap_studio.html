@@ -12742,7 +12742,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.35.0';
+const APP_VERSION = 'v1.36.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -15860,14 +15860,14 @@ function openDeleteAreaDialog() {
 
 // ── commitDeleteArea(areaId) — usuń obszar z undo ────────────────────────────
 function commitDeleteArea(areaId, label) {
-  if (!state.editMode || !areaId) return;
+  if (!state.editMode || !areaId) return false;  // audyt T1/W15: jawny zwrot dla applyDelta
   // T9: Default Area (id <= 0) nie może być usunięty (Pass 48.7)
   if (areaId <= 0) {
     toast('Obszar Default Area jest zarezerwowany i nie może być usunięty.');
-    return;
+    return false;
   }
   const area = state.areas.get(areaId);
-  if (!area) return;
+  if (!area) return false;
   const snap = JSON.parse(JSON.stringify(area));
   const removedRoomIds = (area.rooms || []).map(r => r.id);
 
@@ -15987,6 +15987,7 @@ function commitDeleteArea(areaId, label) {
   state.redoStack = [];
   updateUndoRedoUI();
   toast(`✓ Obszar usunięty`);
+  return true;
 }
 
 // ── commitEditArea(areaId) — zapisz edycję obszaru z undo (Pass 66) ─────────
@@ -18155,7 +18156,8 @@ function classifyDelta(delta) {
       }
       case 'PAINT_BATCH': {
         for (const ch of (P.changes || [])) {
-          const r = sh.roomById[ch.roomId];
+          const ridP = resR(ch.roomId);  // audyt T1/W14
+          const r = ridP === undefined ? null : sh.roomById[ridP];
           if (!r) continue;
           r.env = ch.afterEnv;
           if ((ch.afterSymbol ?? '') !== '') r.symbol = ch.afterSymbol; else delete r.symbol;
@@ -18246,12 +18248,14 @@ function classifyDelta(delta) {
       }
       case 'AUTO_FIX_SUPPRESSORS': {
         for (const x of (P.added || [])) {
-          const r = sh.roomById[x.roomId]; if (!r) continue;
+          const ridA = resR(x.roomId);  // audyt T1/W14
+          const r = ridA === undefined ? null : sh.roomById[ridA]; if (!r) continue;
           r.custom_lines = r.custom_lines || {};
           r.custom_lines[x.dir] = JSON.parse(JSON.stringify(x.cl));
         }
         for (const x of (P.removed || [])) {
-          const r = sh.roomById[x.roomId]; if (!r || !r.custom_lines) continue;
+          const ridD = resR(x.roomId);  // audyt T1/W14
+          const r = ridD === undefined ? null : sh.roomById[ridD]; if (!r || !r.custom_lines) continue;
           delete r.custom_lines[x.dir];
         }
         break;
@@ -18404,13 +18408,14 @@ function classifyDelta(delta) {
       }
       case 'PAINT_BATCH': {
         const changes = P.changes || [];
-        const existing = changes.filter(ch => sh.roomById[ch.roomId]);
+        // audyt T1/W14: identyfikatory kalki (d:N) przez resR — jak w pozostalych typach
+        const existing = changes.filter(ch => { const rid = resR(ch.roomId); return rid !== undefined && sh.roomById[rid]; });
         if (!existing.length) { items.push(_deltaClsItem(op, 'impossible', 'żaden pokój nie istnieje')); break; }
         const allMatch = existing.every(ch => {
-          const r = sh.roomById[ch.roomId];
+          const r = sh.roomById[resR(ch.roomId)];
           return r.env === ch.afterEnv && (r.symbol || '') === (ch.afterSymbol || '');
         });
-        const j = roomJump(existing[0].roomId);
+        const j = roomJump(resR(existing[0].roomId));
         if (existing.length < changes.length) items.push(_deltaClsItem(op, 'hard', 'część pokoi nie istnieje (' + (changes.length - existing.length) + ' z ' + changes.length + ')', j));
         else if (allMatch) items.push(_deltaClsItem(op, 'done', 'już na mapie', j));
         else items.push(_deltaClsItem(op, 'ok', '', j));
@@ -18448,8 +18453,16 @@ function classifyDelta(delta) {
         if (srcId === undefined || tgtId === undefined) { items.push(_deltaClsItem(op, 'ok', 'dotyczy obiektów kalki')); break; }
         const src = sh.roomById[srcId];
         if (!src || !sh.roomById[tgtId]) { items.push(_deltaClsItem(op, 'impossible', 'pokój źródłowy lub docelowy nie istnieje', roomJump(srcId))); break; }
-        if (src.exits && src.exits[T.dir] === tgtId) { items.push(_deltaClsItem(op, 'done', 'już na mapie', roomJump(srcId))); break; }
+        // audyt T1/W16: klasyfikacja uzywa obu guardow commitAddExit (zrodlo + przeciwny u celu)
+        const oppCls = _DELTA_OPP[T.dir];
+        const tgtCls = sh.roomById[tgtId];
+        const oppTaken = !!(P.bidirectional && oppCls && tgtCls.exits && tgtCls.exits[oppCls] !== undefined);
+        const bothDone = src.exits && src.exits[T.dir] === tgtId
+          && (!P.bidirectional || !oppCls || (tgtCls.exits && tgtCls.exits[oppCls] === srcId));
+        if (bothDone) { items.push(_deltaClsItem(op, 'done', 'już na mapie', roomJump(srcId))); break; }
+        if (src.exits && src.exits[T.dir] === tgtId) { items.push(_deltaClsItem(op, 'hard', 'wyjście istnieje tylko w jedną stronę — Zastosuj pominie tę operację; napraw ręcznie', roomJump(srcId))); break; }
         if (src.exits && src.exits[T.dir] !== undefined) items.push(_deltaClsItem(op, 'hard', 'kierunek jest już zajęty — Zastosuj pominie tę operację (mapa bez zmian)', roomJump(srcId)));
+        else if (oppTaken) items.push(_deltaClsItem(op, 'hard', 'kierunek przeciwny u pokoju docelowego jest zajęty — Zastosuj pominie tę operację (mapa bez zmian)', roomJump(srcId)));
         else items.push(_deltaClsItem(op, 'ok', '', roomJump(srcId)));
         break;
       }
@@ -18475,6 +18488,8 @@ function classifyDelta(delta) {
       case 'DELETE_AREA': {
         const aid = resA(T.areaId);  // F1: sid-area z tej samej kalki rozwiazuje sie w cieniu
         if (aid === undefined || !sh.areas.get(aid)) { items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
+        // audyt T1/W15: obszar domyslny (id<=0) — commitDeleteArea odmawia; klasyfikujemy uczciwie
+        if (aid <= 0) { items.push(_deltaClsItem(op, 'impossible', 'obszar domyślny — usuwanie zabronione')); break; }
         items.push(_deltaClsItem(op, 'ok', '', areaJump(aid)));
         break;
       }
@@ -18526,13 +18541,14 @@ function classifyDelta(delta) {
         break;
       }
       case 'AUTO_FIX_SUPPRESSORS': {
-        const added = (P.added || []).filter(x => sh.roomById[x.roomId]);
-        const removed = (P.removed || []).filter(x => sh.roomById[x.roomId]);
+        // audyt T1/W14: resR — jak w pozostalych typach
+        const added = (P.added || []).filter(x => { const rid = resR(x.roomId); return rid !== undefined && sh.roomById[rid]; });
+        const removed = (P.removed || []).filter(x => { const rid = resR(x.roomId); return rid !== undefined && sh.roomById[rid]; });
         const total = (P.added || []).length + (P.removed || []).length;
         if (!added.length && !removed.length) { items.push(_deltaClsItem(op, 'impossible', 'pokoje nie istnieją')); break; }
-        const eff = added.filter(x => { const c = sh.roomById[x.roomId].custom_lines; return !c || !c[x.dir]; }).length
-                  + removed.filter(x => { const c = sh.roomById[x.roomId].custom_lines; return c && c[x.dir]; }).length;
-        const j = roomJump((added[0] || removed[0]).roomId);
+        const eff = added.filter(x => { const c = sh.roomById[resR(x.roomId)].custom_lines; return !c || !c[x.dir]; }).length
+                  + removed.filter(x => { const c = sh.roomById[resR(x.roomId)].custom_lines; return c && c[x.dir]; }).length;
+        const j = roomJump(resR((added[0] || removed[0]).roomId));
         if (eff === 0) items.push(_deltaClsItem(op, 'done', 'już na mapie', j));
         else if (eff < added.length + removed.length) items.push(_deltaClsItem(op, 'hard', 'część wpisów już aktualna', j));
         else items.push(_deltaClsItem(op, 'ok', '', j));
@@ -18644,8 +18660,11 @@ function _deltaTranslate(obj, sidMap) {
 // odznaczone sa pomijane milczaco (nie trafiaja do skipped).
 // overrides (Map seq -> {x,y}, opcjonalny, M3) — pozycje zastępcze dla ADD_ROOM/
 // MOVE_ROOM; re-walidowane fail-closed tuż przed commitem (zajęta = skip).
-function applyDelta(delta, onlySeq, overrides) {
+function applyDelta(delta, onlySeq, overrides, seedSids) {
   const sidMap = new Map();
+  // audyt T1/W13: seed = rozstrzygniecia done z klasyfikacji (sid -> zywe id).
+  // Wykonany ADD nadpisuje seed swiezym id (sidMap.set nizej) — egzekucja wygrywa.
+  if (seedSids) for (const [k, v] of seedSids) if (!sidMap.has(k)) sidMap.set(k, v);
   let nextRoomId = _deltaMaxRoomId() + 1;
   let nextAreaId = _deltaMaxAreaId() + 1;
   const labelNext = new Map(); // areaId -> next label id
@@ -18802,7 +18821,10 @@ function applyDelta(delta, onlySeq, overrides) {
         }
         case 'DELETE_AREA': {
           if (!state.areas.get(op.target.areaId)) { skip('obszar nie istnieje'); break; }
-          commitDeleteArea(op.target.areaId, op.label);
+          // audyt T1/W15: obszar domyslny — commit odmawia; liczymy jako skip, nie sukces
+          if (op.target.areaId <= 0) { skip('obszar domyślny — usuwanie zabronione'); break; }
+          const delOk = commitDeleteArea(op.target.areaId, op.label);
+          if (delOk === false) { skip('obszar domyślny — usuwanie zabronione'); break; }
           applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
@@ -19745,7 +19767,14 @@ function _deltaApplyReviewed() {
   // re-klasyfikacja z cienia sekwencyjnego przywracala je jako ok/hard i kazde
   // kolejne "Zastosuj" nanosilo je ponownie, zalewajac stos undo).
   const only = new Set(R.items.filter(i => i.checked && !_deltaAppliedSeqs.has(i.seq)).map(i => i.seq));
-  const res = applyDelta(R.delta, only, _deltaOverrides);
+  // audyt T1/W13: seed sid->zywe id z rozstrzygniec done biezacej klasyfikacji
+  // (tej, ktora widzial user) — zalezne opy tlumacza sie na zywe obiekty.
+  // Walidator gwarantuje globalna unikalnosc sid (wspolny rejestr definedSid).
+  const seedSids = new Map();
+  for (const m of [R.items.sidRoomId, R.items.sidAreaId, R.items.sidLabelId]) {
+    if (m) for (const [k, v] of m) seedSids.set(k, v);
+  }
+  const res = applyDelta(R.delta, only, _deltaOverrides, seedSids);
   for (const s of res.appliedSeqs || []) _deltaAppliedSeqs.add(s);
   for (const s of res.skipped || []) _deltaSkippedSeqs.add(s.seq);
   let msg = '✓ Naniesiono: ' + res.applied;
