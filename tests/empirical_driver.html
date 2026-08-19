@@ -2724,6 +2724,152 @@ scenario('E7.resize', async () => {
     'clamp maksymalny 92vw x 80vh');
 });
 
+// ═══ E10: Tier 4 — zaostrzony walidator kalki, reszta wg P2, wp-lock drag, undo CL, roundtrip .dat ═══
+
+scenario('E10.delta-validate', async () => {
+  await loadBase('dat');
+  const txt = await (await fetch('./fixture_demo.arkdelta')).text();
+  A('E10.delta-validate.helpers', ev('typeof crc32str === "function" && typeof stableStringify === "function"').val === true,
+    'crc32str/stableStringify dostepne w iframe');
+  // 1. wlasna kalka przechodzi zaostrzony walidator (typy K6 + sid K7 + glebokosc S8)
+  const ok0 = ev('(function(){ const r = validateDeltaText(' + JSON.stringify(txt) + '); return { ok: r.ok, errs: r.errors }; })()').val;
+  A('E10.delta-validate.fixture', ok0 && ok0.ok === true, 'fixture_demo przechodzi zaostrzony walidator');
+  // helper: mutacja fixture z przeliczeniem checksumow (inaczej odrzut na CRC, nie na typach)
+  const mutate = (fn) => ev('(function(){ const d = JSON.parse(' + JSON.stringify(txt) + ');'
+    + ' (' + fn + ')(d);'
+    + ' d.checksums = { file: crc32str(stableStringify({ meta: d.meta, ops: d.ops })),'
+    + '   ops: d.ops.map(function(op){ return crc32str(stableStringify(op)); }) };'
+    + ' const r = validateDeltaText(JSON.stringify(d));'
+    + ' return { ok: r.ok, errs: r.errors }; })()').val;
+  // 2. zly typ wspolrzednej (op#29 = MOVE_ROOM, index 28) — K6
+  const r1 = mutate('function(d){ d.ops[28].payload.toX = "abc"; }');
+  A('E10.delta-validate.coord', r1 && r1.ok === false && r1.errs.join(' ').indexOf('nieprawidłowe dane') !== -1,
+    'toX:"abc" → blad typu [errs=' + (r1 ? JSON.stringify(r1.errs).slice(0, 120) : 'ev-fail') + ']');
+  // 3. ADD_ROOM bez sid (op#28, index 27) — K7
+  const r2 = mutate('function(d){ d.ops[27].target.roomId = 12345; d.ops[27].payload.room.id = 12345; }');
+  A('E10.delta-validate.nosid', r2 && r2.ok === false && r2.errs.join(' ').indexOf('identyfikator kalki') !== -1,
+    'ADD z numerem zamiast d:N → blad [errs=' + (r2 ? JSON.stringify(r2.errs).slice(0, 120) : 'ev-fail') + ']');
+  // 4. bomba glebokosci (100 > limit 60) — S8, walidator NIE rzuca
+  const r3 = mutate('function(d){ let cur = d.ops[27].payload.room; for (let i = 0; i < 100; i++){ cur.k = {}; cur = cur.k; } }');
+  A('E10.delta-validate.depth', r3 && r3.ok === false && r3.errs.join(' ').indexOf('zbyt głęboko') !== -1,
+    'glebokosc 100 → blad, brak rzutu [errs=' + (r3 ? JSON.stringify(r3.errs).slice(0, 120) : 'ev-fail') + ']');
+});
+
+scenario('E10.remainder-p2', async () => {
+  // P2: „Zapisz reszte" = oryginalne opy + TYLKO reczne przesuniecia; autopozycje NIE przeciekaja.
+  await loadBase('dat');
+  const ids = ev('Object.keys(state.roomById).slice(0, 2).map(Number)').val;
+  A('E10.remainder-p2.pre', Array.isArray(ids) && ids.length === 2, 'dwa pokoje bazy: ' + JSON.stringify(ids));
+  const delta = { meta: { format: 'arkdelta', format_version: 1 }, ops: [
+    { seq: 1, type: 'MOVE_ROOM', label: '', target: { roomId: ids[0] },
+      payload: { fromX: 0, fromY: 0, fromZ: 0, toX: 5000, toY: 5000, toZ: 0 } },
+    { seq: 2, type: 'MOVE_ROOM', label: '', target: { roomId: ids[1] },
+      payload: { fromX: 0, fromY: 0, fromZ: 0, toX: 5001, toY: 5000, toZ: 0 } },
+  ] };
+  ex('_deltaOverrides = new Map(); _deltaAppliedSeqs = new Set(); _deltaSkippedSeqs = new Set();');
+  ex('openDeltaReview(' + JSON.stringify(delta) + ')');
+  const cls = ev('_deltaReview.items.map(function(it){ return it.seq + ":" + it.cls; }).join(",")').val;
+  A('E10.remainder-p2.cls', /1:(ok|hard)/.test(cls) && /2:(ok|hard)/.test(cls), 'oba opy kwalifikuja sie do reszty [' + cls + ']');
+  ex('_deltaOverrides.set(1, { x: 0, y: 0, how: "auto" }); _deltaOverrides.set(2, { x: 20, y: 20, how: "manual" });');
+  const rest = ev('JSON.parse(JSON.stringify(_deltaRemainderOps()))').val;
+  const r1 = rest.find(o => o.seq === 1), r2 = rest.find(o => o.seq === 2);
+  EQ('E10.remainder-p2.len', rest.length, 2, 'reszta kompletna (2 nienaniesione)');
+  A('E10.remainder-p2.auto', r1 && r1.payload.toX === 5000, 'autopozycja NIE przecieka (toX z oryginalu)');
+  A('E10.remainder-p2.manual', r2 && r2.payload.toX === 20, 'reczne przesuniecie przecieka (swiadoma decyzja)');
+  ex('_deltaAppliedSeqs = new Set([1]);');
+  const rest2 = ev('JSON.parse(JSON.stringify(_deltaRemainderOps()))').val;
+  A('E10.remainder-p2.applied', rest2.length === 1 && rest2[0].seq === 2, 'naniesiony seq wypada z reszty');
+  ex('(function(){ document.getElementById("delta-panel").classList.remove("visible");'
+   + ' _deltaReview = null; _deltaOverrides = new Map(); _deltaAppliedSeqs = new Set(); _deltaSkippedSeqs = new Set(); })()');
+});
+
+scenario('E10.wp-lock-drag', async () => {
+  // S5: LOCK panelu planera blokuje WSZYSTKIE handlery drag (pierwszy brakowal guarda).
+  await loadBase('dat');
+  ex('(function(){ document.getElementById("wp-panel").classList.add("visible"); wpLocked = false; })()');
+  const drag = (x0, y0, x1, y1) => ex('(function(){'
+    + ' const hdr = document.getElementById("wp-panel-header");'
+    + ' hdr.dispatchEvent(new MouseEvent("mousedown", { clientX: ' + x0 + ', clientY: ' + y0 + ', bubbles: true }));'
+    + ' document.dispatchEvent(new MouseEvent("mousemove", { clientX: ' + x1 + ', clientY: ' + y1 + ', bubbles: true }));'
+    + ' document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true })); })()');
+  const pos = () => ev('(function(){ const p = document.getElementById("wp-panel");'
+    + ' const r = p.getBoundingClientRect();'
+    + ' return { left: Math.round(r.left), top: Math.round(r.top), sLeft: p.style.left, sTop: p.style.top }; })()').val;
+  const p0 = pos();
+  drag(400, 300, 500, 350);
+  const p1 = pos();
+  EQ('E10.wp-lock-drag.unlocked', { sLeft: p1.sLeft, sTop: p1.sTop },
+    { sLeft: (p0.left + 100) + 'px', sTop: (p0.top + 50) + 'px' }, 'odblokowany: drag przesuwa (+100/+50)');
+  ex('wpLocked = true;');
+  drag(400, 300, 700, 600);
+  const p2 = pos();
+  EQ('E10.wp-lock-drag.locked', { sLeft: p2.sLeft, sTop: p2.sTop }, { sLeft: p1.sLeft, sTop: p1.sTop },
+    'LOCK: drag nie przesuwa (guard we wszystkich handlerach)');
+  ex('(function(){ wpLocked = false; document.getElementById("wp-panel").classList.remove("visible"); })()');
+});
+
+scenario('E10.undo-cl-container', async () => {
+  // S7: undo ADD_CL sprzata pusty kontener custom_lines (hadContainer=false), ale nie rusza istniejacego.
+  await loadBase('dat');
+  const id1 = ev('(function(){ const ks = Object.keys(state.roomById);'
+    + ' for (const k of ks) { const r = state.roomById[k]; if (!r.custom_lines) return r.id; }'
+    + ' return null; })()').val;
+  A('E10.undo-cl-container.pre', Number.isInteger(id1), 'znaleziono pokoj bez kontenera: ' + id1);
+  ex('(function(){ const r = state.roomById[' + id1 + '];'
+   + ' state.clRoom = r; state.clDir = "e"; state.clIsNew = true; state.clPoints = [[0, 0], [5, 5]];'
+   + ' commitCLDrawing(); })()');
+  A('E10.undo-cl-container.added', ev('!!(state.roomById[' + id1 + '].custom_lines && state.roomById[' + id1 + '].custom_lines.e)').val === true,
+    'CL dodane, kontener utworzony');
+  ex('undoAction()');
+  A('E10.undo-cl-container.gone', ev('state.roomById[' + id1 + '].custom_lines === undefined').val === true,
+    'undo: pusty kontener usuniety (hadContainer=false)');
+  // kontrolnie: pokoj Z istniejacym kontenerem — undo zostawia kontener
+  const c2 = ev('(function(){ const dirs = ["w", "n", "s", "ne", "nw"];'
+    + ' const ks = Object.keys(state.roomById);'
+    + ' for (const k of ks) { const r = state.roomById[k];'
+    + '   if (r.custom_lines && Object.keys(r.custom_lines).length > 0) {'
+    + '     for (const d of dirs) if (!r.custom_lines[d]) return { id: r.id, dir: d }; } }'
+    + ' return null; })()').val;
+  A('E10.undo-cl-container.pre2', !!(c2 && Number.isInteger(c2.id)), 'znaleziono pokoj z kontenerem: ' + JSON.stringify(c2));
+  if (c2) {
+    ex('(function(){ const r = state.roomById[' + c2.id + '];'
+     + ' state.clRoom = r; state.clDir = "' + c2.dir + '"; state.clIsNew = true; state.clPoints = [[1, 1], [6, 6]];'
+     + ' commitCLDrawing(); })()');
+    ex('undoAction()');
+    A('E10.undo-cl-container.kept', ev('!!(state.roomById[' + c2.id + '].custom_lines && Object.keys(state.roomById[' + c2.id + '].custom_lines).length > 0)').val === true,
+      'undo: istniejacy kontener NIE ruszony');
+  }
+});
+
+scenario('E10.dat-roundtrip', async () => {
+  // Bramka zapisu .dat (W1/W2): writer musi byc stabilny (fixpoint bajtowy) i zgodny
+  // z wyjsciem writera v1.38.0 dla fixture — E5/E6 dotykaja tylko ujemnych id,
+  // ktorych fixture nie ma. Bajt-w-bajt WZGLEDEM FIXTURE nie ma sensu: fixture pisal
+  // Mudlet, a nasz writer normalizuje kolejnosci (np. stubs) juz od v1.38.0 (sprawdzone).
+  const rr = await eva('(async function(){'
+    + ' const resp = await fetch("map_master3.dat");'
+    + ' if (!resp.ok) return { eq: false, why: "HTTP " + resp.status };'
+    + ' const buf = await resp.arrayBuffer();'
+    + ' const o1 = arkmapToDat(datToArkmap(buf.slice(0)));'
+    + ' const b1 = o1 instanceof Uint8Array ? o1 : new Uint8Array(o1);'
+    + ' const o2 = arkmapToDat(datToArkmap(b1.buffer.slice(b1.byteOffset, b1.byteOffset + b1.byteLength)));'
+    + ' const b2 = o2 instanceof Uint8Array ? o2 : new Uint8Array(o2);'
+    + ' if (b1.length !== b2.length) return { eq: false, why: "fixpoint len " + b1.length + " vs " + b2.length };'
+    + ' for (let i = 0; i < b1.length; i++) if (b1[i] !== b2[i]) return { eq: false, why: "fixpoint byte@" + i };'
+    + ' let crc = 4294967295;'
+    + ' for (let j = 0; j < b1.length; j++) crc = CRC32_TABLE[(crc ^ b1[j]) & 255] ^ (crc >>> 8);'
+    + ' crc = (crc ^ 4294967295) >>> 0;'
+    + ' return { eq: true, len: b1.length, crc: ("00000000" + crc.toString(16)).slice(-8) }; })()');
+  const r = AEV('E10.dat-roundtrip.fixpoint', rr, 'roundtrip .dat');
+  if (r !== undefined) {
+    A('E10.dat-roundtrip.fixpoint', r.eq === true, 'write(read(write(read(fix)))) == write(read(fix)) [' + (r.why || 'OK') + ']');
+    if (r.eq) {
+      EQ('E10.dat-roundtrip.len', r.len, 7845726, 'golden: dlugosc wyjscia writera');
+      EQ('E10.dat-roundtrip.crc', r.crc, '65da3512', 'golden: crc32 wyjscia — zgodnosc z writerem v1.38.0 (W1/W2)');
+    }
+  }
+});
+
 // ═══ Runner ═══
 function appReady() {
   return new Promise(res => {
