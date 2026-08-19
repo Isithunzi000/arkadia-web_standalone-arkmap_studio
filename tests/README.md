@@ -30,6 +30,7 @@ node tests/dir_validation.js    # walidacja kierunków 1:1 z Delwing: złote prz
 node tests/transports_sync.js   # sync transportów: bramka semantyczna generatora — etykiety przystanków, fail-closed
 node tests/ui_strings.js        # watchdog jezyka UI: zero zargonu (payload/checksum/op/seq) w komunikatach
 node tests/ci_workflow.js       # watchdog CI: cache Playwright + sufit timeoutu + pinning w ci-tests.yml
+node tests/tier2_state.js       # Tier 2 (v1.37.0): dirty-guard K2/K3, rename SE Q4, W10/W11/W12 + strazniki
 ```
 
 albo wszystkie naraz:
