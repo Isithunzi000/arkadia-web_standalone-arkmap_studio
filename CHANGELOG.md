@@ -2,6 +2,13 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.35.0 — etykiety kalki zachowane przy re-eksporcie dla 6 typow opow
+
+- **Przyczyna:** „Zapisz naniesione zmiany" (re-eksport z logu undo) gubil customowe `op.label` z kalki dla 6 typow opow: ADD_EXIT, DELETE_EXIT, MOVE_ROOM, MOVE_ROOM_TO_AREA, DELETE_ROOM, DELETE_AREA (zgłoszone z testow recznych — re-eksport uzytkownika mial auto-etykiety na 8 opach). Pozostale typy przekladaly etykiete kalki (`label: op.label` w applyDelta), ale te 6 ida przez niskopoziomowe funkcje commit* (wspoldzielone z reczna edycja), ktore generowaly wlasne auto-etykiety i nadpisywaly etykiete kalki we wpisie undo — a `buildDelta` bierze `e.label` wlasnie z tego wpisu.
+- **Fix:** 6 funkcji (`deleteRoom`, `commitDeleteArea`, `commitMoveRoomToArea`, `commitAddExit`, `commitDeleteExit`, `commitMoveRoom`) dostalo opcjonalny parametr etykiety i zasade `entry.label = op.label || auto`. applyDelta przekazuje `op.label` kalki; sciezki recznej edycji wywoluja bez parametru, wiec auto-etykiety zostaja jak byly. Re-eksport niesie teraz etykiety kalki round-trip dla wszystkich typow opow.
+- **Testy (w tym samym commicie):** nowy scenariusz empiryczny E8.labelkeep (5 asercji): 6 niezaleznych opow (po jednym na typ) budowanych na zywej mapie z rozpoznawczymi etykietami CUSTOM-*, apply na czystej bazie (6/6 naniesione, 0 pominiete), wpisy undo niosa etykiety kalki, re-eksport buildDelta zachowuje je round-trip, undoAll wraca do bazy. 19 asercji strukturalnych w tests/delta.js (sygnatury z etykieta, fallbacki `label || auto`, wywolania z `op.label`, emisja `e.label` w buildDelta).
+- Regresja lokalna: pelny `run-all.sh` PASS (15 harnessow node + kampania empiryczna SMOKE+E0–E8, 0 FAIL).
+
 ## v1.34.0 — caly UI kalki prostym, laickim polskim tekstem (zero zargonu)
 
 - **Przyczyna:** komunikaty kalki i walidacji plikow mowily zargonem technicznym (zglaszone z testow recznych): „payload", „checksum", „CRC-32", „op", „opy", „ops_count", „seq", „parsowania JSON", „upstream", „→ meta", „master" jako fallback wersji. Normalny uzytkownik nie wie, co to „op" albo „payload".

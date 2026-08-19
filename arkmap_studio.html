@@ -12742,7 +12742,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.34.0';
+const APP_VERSION = 'v1.35.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -15662,7 +15662,7 @@ function showDeleteRoomDialog(roomId) {
   }
 }
 
-function deleteRoom(roomId) {
+function deleteRoom(roomId, label) {
   if (!roomId || !state.editMode) return;
   const room = state.roomById[roomId];
   if (!room) return;
@@ -15783,7 +15783,7 @@ function deleteRoom(roomId) {
   const wpCleared = state._lastWpCleared || [];
   state._lastWpCleared = null;
   pushUndo({ type: 'DELETE_ROOM', roomId, areaId, snapshot: snap, removedIncoming, removedIncomingSpecial, wpCleared,
-    label: `Usunięcie pokoju "${snap.name||'#'+roomId}" (#${roomId})` });
+    label: label || `Usunięcie pokoju "${snap.name||'#'+roomId}" (#${roomId})` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
@@ -15859,7 +15859,7 @@ function openDeleteAreaDialog() {
 }
 
 // ── commitDeleteArea(areaId) — usuń obszar z undo ────────────────────────────
-function commitDeleteArea(areaId) {
+function commitDeleteArea(areaId, label) {
   if (!state.editMode || !areaId) return;
   // T9: Default Area (id <= 0) nie może być usunięty (Pass 48.7)
   if (areaId <= 0) {
@@ -15982,7 +15982,7 @@ function commitDeleteArea(areaId) {
   const removedEmptyContainers = state._lastRemovedEmptyContainers || [];   // audyt A13
   state._lastRemovedEmptyContainers = null;
   pushUndo({ type: 'DELETE_AREA', areaId, removedRoomIds, snapshot: snap, cleanedExits, removedEmptyContainers, wpCleared: wpCleared2,
-    label: `Usunięcie obszaru "${snap.name}" (#${areaId})` });
+    label: label || `Usunięcie obszaru "${snap.name}" (#${areaId})` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
@@ -16138,7 +16138,7 @@ function openMoveAreaDialog(roomId) {
 }
 
 // ── commitMoveRoomToArea(roomId, targetAreaId) — przenieś pokój (Pass 57/66) ─
-function commitMoveRoomToArea(roomId, targetAreaId) {
+function commitMoveRoomToArea(roomId, targetAreaId, label) {
   if (!state.editMode || !roomId || !targetAreaId) return;
   const room = state.roomById[roomId];
   if (!room) return;
@@ -16174,7 +16174,7 @@ function commitMoveRoomToArea(roomId, targetAreaId) {
 
   doFn();
   pushUndo({ type: 'MOVE_ROOM_TO_AREA', roomId, fromAreaId, toAreaId: targetAreaId,
-    label: `Przeniesienie pokoju "${room.name||'#'+roomId}" (#${roomId}) do obszaru "${toArea.name}"` });
+    label: label || `Przeniesienie pokoju "${room.name||'#'+roomId}" (#${roomId}) do obszaru "${toArea.name}"` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
@@ -16187,7 +16187,7 @@ function commitMoveRoomToArea(roomId, targetAreaId) {
 }
 
 // ── commitAddExit(sourceId, dir, targetId, bidirectional) — dodaj wyjście ─────
-function commitAddExit(sourceId, dir, targetId, bidirectional) {
+function commitAddExit(sourceId, dir, targetId, bidirectional, customLabel) {
   const src = state.roomById[sourceId];
   const tgt = state.roomById[targetId];
   if (!src || !tgt) return;
@@ -16204,9 +16204,9 @@ function commitAddExit(sourceId, dir, targetId, bidirectional) {
   if (bidirectional && opp) { tgt.exits = tgt.exits || {}; tgt.exits[opp] = sourceId; }
   draw();
 
-  const label = bidirectional
+  const label = customLabel || (bidirectional
     ? `Dodanie wyjścia ${dir} ↔ ${opp||'?'} między #${sourceId} a #${targetId}`
-    : `Dodanie wyjścia ${dir} → #${targetId} (z #${sourceId})`;
+    : `Dodanie wyjścia ${dir} → #${targetId} (z #${sourceId})`);
   pushUndo({ type: 'ADD_EXIT', sourceId, dir, targetId, bidirectional, opp, prevExit, prevOppExit, label });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
@@ -16215,7 +16215,7 @@ function commitAddExit(sourceId, dir, targetId, bidirectional) {
 }
 
 // ── commitDeleteExit(room, dir) — usuń wyjście z undo (Pass 60) ──────────────
-function commitDeleteExit(room, dir) {
+function commitDeleteExit(room, dir, label) {
   if (!room || !room.exits?.[dir]) return;
   const roomId = room.id;
   const snap = {
@@ -16235,7 +16235,7 @@ function commitDeleteExit(room, dir) {
   if (!snap.hasStub && room.doors) delete room.doors[dir];
   draw();
   pushUndo({ type: 'DELETE_EXIT', roomId, dir, snap,
-    label: `Usunięcie wyjścia ${dir} z #${roomId}` });
+    label: label || `Usunięcie wyjścia ${dir} z #${roomId}` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
@@ -16284,7 +16284,7 @@ function _tryMoveRoomWithPolicy(room, toX, toY, opts) {
 }
 
 // ── commitMoveRoom(room, fromX, fromY, fromZ, toX, toY, toZ) — drag z undo ───
-function commitMoveRoom(room, fromX, fromY, fromZ, toX, toY, toZ) {
+function commitMoveRoom(room, fromX, fromY, fromZ, toX, toY, toZ, label) {
   if (!room) return;
   if (fromX === toX && fromY === toY && fromZ === toZ) return; // no-move guard (Pass 54)
   const roomId = room.id;
@@ -16294,7 +16294,7 @@ function commitMoveRoom(room, fromX, fromY, fromZ, toX, toY, toZ) {
   const undoFn = () => { room.x = fromX; room.y = fromY; room.z = fromZ; draw(); };
 
   pushUndo({ type: 'MOVE_ROOM', roomId, fromX, fromY, fromZ, toX, toY, toZ,
-    label: `Przesunięcie pokoju "${roomName}" (#${roomId})` });
+    label: label || `Przesunięcie pokoju "${roomName}" (#${roomId})` });
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
   updateUndoRedoUI();
@@ -18702,7 +18702,7 @@ function applyDelta(delta, onlySeq, overrides) {
         }
         case 'DELETE_ROOM': {
           if (!state.roomById[op.target.roomId]) { skip('pokój nie istnieje'); break; }
-          deleteRoom(op.target.roomId);
+          deleteRoom(op.target.roomId, op.label);
           applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
@@ -18743,7 +18743,7 @@ function applyDelta(delta, onlySeq, overrides) {
           const occM = _deltaRoomAt(state.roomArea[room.id], tx, ty, tz);
           if (occM && occM.id !== room.id) { skip('komórka docelowa zajęta'); break; }
           room.x = tx; room.y = ty; room.z = tz;
-          commitMoveRoom(room, fx, fy, fz, tx, ty, tz);
+          commitMoveRoom(room, fx, fy, fz, tx, ty, tz, op.label);
           buildRoomsZ();
           applied++; appliedSeqs.push(rawOp.seq);
           break;
@@ -18751,14 +18751,14 @@ function applyDelta(delta, onlySeq, overrides) {
         case 'MOVE_ROOM_TO_AREA': {
           if (!state.roomById[op.target.roomId]) { skip('pokój nie istnieje'); break; }
           if (!state.areas.get(op.payload.toAreaId)) { skip('obszar docelowy nie istnieje'); break; }
-          commitMoveRoomToArea(op.target.roomId, op.payload.toAreaId);
+          commitMoveRoomToArea(op.target.roomId, op.payload.toAreaId, op.label);
           applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'ADD_EXIT': {
           const src = state.roomById[op.target.sourceId], tgt = state.roomById[op.payload.targetId];
           if (!src || !tgt) { skip('pokój źródłowy lub docelowy nie istnieje'); break; }
-          commitAddExit(op.target.sourceId, op.target.dir, op.payload.targetId, !!op.payload.bidirectional);
+          commitAddExit(op.target.sourceId, op.target.dir, op.payload.targetId, !!op.payload.bidirectional, op.label);
           if (src.exits?.[op.target.dir] !== op.payload.targetId) { skip('kierunek zajęty (guard)'); break; }
           applied++; appliedSeqs.push(rawOp.seq);
           break;
@@ -18766,7 +18766,7 @@ function applyDelta(delta, onlySeq, overrides) {
         case 'DELETE_EXIT': {
           const room = state.roomById[op.target.roomId];
           if (!room || !room.exits?.[op.target.dir]) { skip('wyjście nie istnieje'); break; }
-          commitDeleteExit(room, op.target.dir);
+          commitDeleteExit(room, op.target.dir, op.label);
           applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
@@ -18802,7 +18802,7 @@ function applyDelta(delta, onlySeq, overrides) {
         }
         case 'DELETE_AREA': {
           if (!state.areas.get(op.target.areaId)) { skip('obszar nie istnieje'); break; }
-          commitDeleteArea(op.target.areaId);
+          commitDeleteArea(op.target.areaId, op.label);
           applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
