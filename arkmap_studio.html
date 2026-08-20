@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ArkMap Studio</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0d0f12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
 <style>
   :root {
     --bg:      #0d0f12;
@@ -13005,7 +13011,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.42.2';
+const APP_VERSION = 'v1.43.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -13013,6 +13019,9 @@ const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).
   const _sb = document.getElementById('sb-version');  if (_sb) _sb.textContent = _vt;
   const _ab = document.getElementById('about-version'); if (_ab) _ab.textContent = _vt;
 }
+
+// PWA: rejestracja no-op service workera (instalowalnosc; zero cache — testy/empiryka nieobjete)
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
 
 // ── EDITOR STATE EXTENSION ─────────────────────────────────────────────────
 // Per checkpoint Pass 69 sekcja F — dopisz do state{} po inicjalizacji
