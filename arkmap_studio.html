@@ -1981,7 +1981,7 @@
       <div id="ol-confirm-body">
         <div id="ol-confirm-desc">
           Synchronizowana kopia mapy Arkadii (<span class="ol-src">Delwing/arkadia-mapa</span>)
-          — lustro bez poprawek, odświeżane codziennie.
+          — lustro bez poprawek, odświeżane dwa razy dziennie.
         </div>
         <div id="ol-sync-info"></div>
         <div id="ol-confirm-progress"></div>
@@ -2091,7 +2091,7 @@
           <div class="cs-section-title">Tryb edycji — canvas</div>
           <div class="cs-row"><span class="cs-key">Shift+Klik</span><span class="cs-desc">Dodaj pokój</span></div>
           <div class="cs-row"><span class="cs-key">E</span><span class="cs-desc">Edytuj zaznaczony pokój</span></div>
-          <div class="cs-row"><span class="cs-key">Delete</span><span class="cs-desc">Usuń zaznaczony pokój</span></div>
+          <div class="cs-row"><span class="cs-key">Delete / Backspace</span><span class="cs-desc">Usuń zaznaczony pokój / etykietę</span></div>
           <div class="cs-row"><span class="cs-key">←↑↓→</span><span class="cs-desc">Przesuń pokój o 1</span></div>
           <div class="cs-row"><span class="cs-key">Shift+←↑↓→</span><span class="cs-desc">Przesuń pokój o 5</span></div>
           <div class="cs-row"><span class="cs-key">Tab</span><span class="cs-desc">Następny pokój na Z</span></div>
@@ -2118,10 +2118,11 @@
         </div>
         <div class="cs-section">
           <div class="cs-section-title">Prawy klik</div>
-          <div class="cs-row"><span class="cs-key">Pokój</span><span class="cs-desc">Edytuj / wyjście / przenieś / usuń</span></div>
-          <div class="cs-row"><span class="cs-key">Puste</span><span class="cs-desc">Dodaj pokój / edytuj obszar</span></div>
+          <div class="cs-row"><span class="cs-key">Pokój</span><span class="cs-desc">Edytuj / pozycja / przenieś / usuń</span></div>
+          <div class="cs-row"><span class="cs-key">Puste</span><span class="cs-desc">Dodaj pokój / etykietę / edytuj obszar</span></div>
           <div class="cs-row"><span class="cs-key">Linia</span><span class="cs-desc">Edytuj / usuń wyjście</span></div>
           <div class="cs-row"><span class="cs-key">Etykieta</span><span class="cs-desc">Edytuj / usuń etykietę</span></div>
+          <div class="cs-row"><span class="cs-key">Puste (podgląd)</span><span class="cs-desc">Wyśrodkuj widok tutaj</span></div>
         </div>
       </div>
 
@@ -6028,7 +6029,7 @@ function buildRoom(room, areaId) {
   for (const [key, cl] of Object.entries(room.custom_lines || {})) {
     out.customLines[key]      = (cl.points || []).map(p => [p[0], p[1]]);
     out.customLinesArrow[key] = cl.arrow ?? false;
-    out.customLinesColor[key] = toQColor(cl.color);
+    out.customLinesColor[key] = toQColor(cl.color || [255, 0, 0]);  // audyt D-C1: default red per .arkmap spec (reader datToArkmap tez daje [255,0,0])
     out.customLinesStyle[key] = LINE_INT[cl.style] ?? LINE_INT.solid;
   }
   if (room.hash) out._hash = room.hash;
@@ -13004,7 +13005,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.42.1';
+const APP_VERSION = 'v1.42.2';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
