@@ -272,6 +272,7 @@
 <tr><td><code>symbol</code></td><td>string</td><td class="opt">optional</td><td>Room symbol displayed on map (e.g. "P", "K", "[]"). Omit if empty. No length limit (Mudlet has none). ArkMap Studio fits the symbol font to the room square; symbols too long to stay legible are not drawn. Short symbols (1–2 chars) are recommended for readability.</td></tr>
 <tr><td><code>locked</code></td><td>boolean</td><td class="opt">optional</td><td>Room locked flag (Mudlet isLocked). Locked rooms are skipped by pathfinding (not traversed through, but can be a destination). Omit if false.</td></tr>
 <tr><td><code>hash</code></td><td>string</td><td class="opt">optional</td><td>Mudlet room database hash (mpRoomDbHashToRoomId). Omit if not present.</td></tr>
+<tr><td><code>hidden</code></td><td>boolean</td><td class="opt">optional</td><td>Hidden room — not drawn and skipped by pathfinding. In .dat (v20) there is no native field, so it round-trips through userData as <code>system.hidden = "1"</code> (readers accept both the flag and the userData key). Omit if false.</td></tr>
 <tr><td><code>exits</code></td><td>object</td><td class="opt">optional</td><td>Standard exits. See <a href="#exits">§7</a>.</td></tr>
 <tr><td><code>stubs</code></td><td>array of strings</td><td class="opt">optional</td><td>Stub directions — exits without a known target. Sorted alphabetically.</td></tr>
 <tr><td><code>doors</code></td><td>object</td><td class="opt">optional</td><td>Door data. See <a href="#doors">§8</a>.</td></tr>
@@ -577,6 +578,7 @@
 <p>ArkMap Studio computes hierarchical CRC-32 (IEEE 802.3) checksums on save and stores them in <code>meta.checksums</code>. They are optional — a file without checksums is valid.</p>
 
 <pre><span class="k">"checksums"</span>: {
+  <span class="k">"alg"</span>:   <span class="s">"v2"</span>,
   <span class="k">"file"</span>:  <span class="s">"a1b2c3d4"</span>,
   <span class="k">"areas"</span>: { <span class="s">"7"</span>: <span class="s">"e5f6a7b8"</span>, <span class="s">"12"</span>: <span class="s">"c9d0e1f2"</span> },
   <span class="k">"rooms"</span>: { <span class="s">"12847"</span>: <span class="s">"1a2b3c4d"</span>, <span class="s">"12848"</span>: <span class="s">"5e6f7a8b"</span> }
@@ -584,9 +586,9 @@
 
 <h3>Computation algorithm</h3>
 <ol>
-  <li><strong>Room CRC</strong> = CRC-32 of <code>stableStringify(normalize(room))</code> — where <code>normalize</code> creates a deep copy, strips default values (<code>weight: 1</code>, <code>locked: false</code>, <code>symbol: ""</code>, <code>name: ""</code>), removes empty containers (<code>exits: {}</code>, <code>stubs: []</code>, etc.), removes internal fields (<code>area</code>), and normalizes custom line defaults (<code>style: "solid"</code> → omit, <code>arrow: false</code> → omit). This ensures CRC stability regardless of in-memory representation.</li>
-  <li><strong>Area CRC</strong> = CRC-32 of concatenated room CRCs (rooms sorted by ID, CRC hex strings joined)</li>
-  <li><strong>File CRC</strong> = CRC-32 of concatenated area CRCs (areas sorted by ID, CRC hex strings joined)</li>
+  <li><strong>Room CRC</strong> = CRC-32 of <code>stableStringify(normalize(room))</code> — where <code>normalize</code> creates a deep copy, strips default values (<code>weight: 1</code>, <code>locked: false</code>, <code>symbol: ""</code>, <code>name: ""</code>), removes empty containers (<code>exits: {}</code>, <code>stubs: []</code>, etc.), strips <code>hidden: false</code>, removes internal fields (<code>area</code>), and normalizes custom line defaults (<code>style: "solid"</code> → omit, <code>arrow: false</code> → omit). This ensures CRC stability regardless of in-memory representation.</li>
+  <li><strong>Area CRC</strong> (algorithm v2) = CRC-32 of <code>"a2:" + area.id + ":" + stableStringify(canonicalArea) + ":" + concatenated room CRCs</code> — where <code>canonicalArea</code> is a deep copy of the area object <em>without</em> the <code>rooms</code> list, with <code>labels</code> sorted by <code>id</code>. Room CRCs enter sorted by room ID, hex strings joined. Because the area's own canonical fields (name, user_data, labels, …) and its <code>id</code> are part of the input, two empty areas are distinguishable.</li>
+  <li><strong>File CRC</strong> (algorithm v2) = CRC-32 of <code>"f2:" + stableStringify(colors ?? {}) + ":" + concatenated area CRCs</code> (areas sorted by ID, CRC hex strings joined). The map-level <code>colors</code> tables (env_colors, custom_env_colors) are part of the input.</li>
 </ol>
 
 <p>All CRC values are stored as 8-character lowercase hexadecimal strings.</p>
@@ -594,7 +596,9 @@
 <h3>Verification</h3>
 <p>On load, recompute from bottom up and compare. Mismatches indicate the file was modified externally (hand-edited JSON, merge conflict resolution, etc.). Mismatches are warnings, not fatal errors.</p>
 
-<div class="note"><strong>Scope:</strong> these checksums cover room data and the room → area → file graph only. They do <strong>not</strong> cover map-level metadata (<code>meta</code>, <code>colors</code>), area attributes (name, position, grid mode), labels, or pixmaps — edits to those are not detected by checksum verification. The <code>file</code> key is the graph rollup (CRC of area CRCs), not a hash of the entire document.</div>
+<div class="note"><strong>Scope (v2):</strong> room CRCs cover room data; area CRCs additionally cover all canonical area attributes (everything on the area object except the <code>rooms</code> list — id, name, position, grid mode, user_data, labels); the file CRC additionally covers the <code>colors</code> tables. Only <code>meta</code> itself stays outside the checksum scope. The <code>file</code> key is still a rollup (CRC of area CRCs + colors), not a hash of the entire document byte stream.</div>
+
+<div class="note"><strong>Algorithm versioning:</strong> the active scheme is recorded as <code>"alg": "v2"</code> in <code>meta.checksums</code>. Files written by ArkMap Studio before v1.38.0 carry no <code>alg</code> and were computed with the legacy v1 scheme (area CRC = concatenated room CRCs only; file CRC = concatenated area CRCs only). Verification always recomputes v2, so legacy files report checksum mismatches on load — these are non-fatal warnings, and re-saving rewrites the checksums in v2.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="serialization">16. Deterministic Serialization</h2>

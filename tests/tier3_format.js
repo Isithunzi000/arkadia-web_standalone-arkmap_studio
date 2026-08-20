@@ -221,9 +221,9 @@ console.log('── T6 (W18 v2): exitEditMode — undo/redo czyszczone, deltaLog
 // ═══ T7: strazniki strukturalne + piny wersji ═══
 console.log('── T7: strazniki strukturalne Tier 3 + piny wersji ──');
 {
-  ok(NEW.includes("const APP_VERSION = 'v1.42.1';"), 'pin: APP_VERSION v1.42.1');
+  ok(NEW.includes("const APP_VERSION = 'v1.42.2';"), 'pin: APP_VERSION v1.42.2');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok((deltaSrc.match(/v1\.42\.1/g) || []).length === 8, 'pin: delta.js 8x v1.42.1 (4 linie x includes+label)');
+  ok((deltaSrc.match(/v1\.42\.2/g) || []).length === 8, 'pin: delta.js 8x v1.42.2 (4 linie x includes+label)');
   ok(NEW.includes("arkmap.meta.checksums = { alg: 'v2',"), 'straznik: addChecksums alg v2');
   ok(NEW.includes('function _crcArea(area, roomCrcs)') && NEW.includes('function _crcFile(areaCrcs, colors)'),
      'straznik: sygnatury CRC v2');
@@ -236,6 +236,22 @@ console.log('── T7: strazniki strukturalne Tier 3 + piny wersji ──');
   ok(NEW.includes("state.undoStack = []; state.redoStack = [];") &&
      NEW.indexOf('audyt T3/W18') > NEW.indexOf('function exitEditMode(force) {'),
      'straznik: reset undo/redo w exitEditMode z komentarzem W18');
+}
+
+// ═══ T6 (audyt Arc8/D-C1): writer .dat — custom line bez color → czerwony [255,0,0] ═══
+console.log('── T6 (D-C1): buildRoom custom line bez color → [255,0,0] (spec .arkmap par.10) ──');
+{
+  const { api } = makeCtx();
+  const out = api.buildRoom({ id: 1, x: 0, y: 0, z: 0, env: 258, exits: { n: 2 },
+    custom_lines: { n: { points: [[1, 2], [3, 4]], arrow: false, style: 'solid' } } }, 5);
+  const qc = out.customLinesColor && out.customLinesColor.n;
+  ok(qc && qc.r === 255 && qc.g === 0 && qc.b === 0,
+    'buildRoom: CL bez color → czerwony [255,0,0] (zgodnie z readerem datToArkmap i specem)');
+  const out2 = api.buildRoom({ id: 1, x: 0, y: 0, z: 0, env: 258, exits: { n: 2 },
+    custom_lines: { n: { points: [[1, 2]], color: [1, 2, 3] } } }, 5);
+  const qc2 = out2.customLinesColor.n;
+  ok(qc2.r === 1 && qc2.g === 2 && qc2.b === 3, 'buildRoom: jawny color CL zachowany');
+  ok(NEW.includes('toQColor(cl.color || [255, 0, 0])'), 'straznik: writer CL ma default czerwony');
 }
 
 console.log(`═══ tier3_format: ${pass} OK, ${fail} FAIL ═══`);

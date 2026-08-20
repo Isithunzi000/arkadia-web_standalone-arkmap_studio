@@ -2,6 +2,46 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.42.2 — audyt dokumentacji vs kod (kimi-k2.7-code) + fixy
+
+Audyt zgodnosci trzech dokumentow (manual PL, spec .arkmap EN, spec .arkdelta EN)
+z kodem: 9 partii, 46 znalezisk, z czego 21 potwierdzonych w kodzie i zfixowanych,
+25 falszywych alarmow udokumentowanych. 3 fixy kodu (z pinami), 17 fixow dokumentacji,
+1 fix tooling (run-all.sh). Kazdy fix kodu ma pin w harnessie Node (tier3/tier6).
+
+- **D-C1 (kod, medium)**: writer .dat — custom line bez pola color zapisowywala sie
+  jako czarna [0,0,0], podczas gdy spec .arkmap (par.10) i reader (datToArkmap)
+  definiuja default czerwony [255,0,0]. Fix: buildRoom uzywa toQColor(cl.color ||
+  [255,0,0]). Pin: tier3_format.js T6 (zachowanie buildRoom + straznik zrodla).
+- **D-C3 (kod, low)**: dialog pobierania online mowil „odswiezane codziennie",
+  a cron sync-map.yml biegnie 2x dziennie (17 5 + 0 21 UTC). Fix: tekst dialogu.
+  Pin: tier6_ux.js E1-E2.
+- **D-C4 (kod, low)**: cheat sheet — brak aliasu Backspace przy Delete (kod obsluguje
+  oba klawisze dla pokoju i etykiety), nieaktualne pozycje menu kontekstowego
+  (pokoj: „Ustaw pozycje" zamiast „wyjscie"; puste: brak „Dodaj etykiete";
+  brak wariantu viewer „Wysrodkuj widok"). Pin: tier6_ux.js E3-E8.
+- **D-doc (spec .arkmap)**: par.15 opisywal algorytm CRC v1 — kod od v1.38.0 liczy
+  v2 (a2:/f2:, pola kanoniczne obszaru, tablice colors, alg:'v2'); przepisany opis
+  + notka o wersjonowaniu algorytmu i scope. par.6: brakujace pole hidden w tabeli
+  Room Object (round-trip przez userData system.hidden w .dat v20).
+- **D-doc (spec .arkdelta)**: par.5 — dopisane reguly kanoniczne (tablice prymitywow
+  <=8 el. inline, jak w .arkmap par.16); par.9 — ksztalt wyniku apply z appliedSeqs
+  oraz guard DELETE_AREA na obszar domyslny (areaId <= 0 zawsze skip).
+- **D-doc (manual)**: intro — trzy formaty zamiast dwoch (dopisany .arkdelta);
+  par.3 — sidebar bez legendy (legenda jest w cheat sheet); par.6 — przyciski
+  „Wczytaj .arkdelta…" i „Stworz kalke mapy…", dialog „Podwojne linie wyjscia"
+  przy eksporcie .dat, przycisk „+ Nowy obszar" (tylko tryb edycji); par.4 — dialog
+  „Aktywna sesja edycji" przy wczytywaniu (online i lokalnym) z niezapisanymi
+  zmianami; par.21 — dwa przyciski zapisu po nalozeniu kalki („Zapisz naniesione
+  zmiany…" + „Zapisz reszte kalki…"); par.23 — hierarchia Esc z krokiem stawiania
+  pozycji z kalki i doprecyzowanym warunkiem dirty (zaznaczony pokoj z edycjami),
+  notka o guardach Ctrl+S (modal / drag) w par.20 i par.23.
+- **Falszywy alarm (wyroznic)**: zgloszenie „validate() nie egzekwuje regul par.17
+  spec .arkmap" (636/638/639/641) — kod egzekwuje wszystkie cztery jako ERRORY
+  (validateRoom), silniej niz zaproponowane warnings. Bez zmian w kodzie.
+- **Tooling**: run-all.sh dopisuje grupe E14 do regresji empirycznej (README juz
+  ja deklarowal — dryf z v1.42.1).
+
 ## v1.42.1 — fixy z rozszerzonego audytu zewnetrznego (kimi-k2.7-code)
 
 Audyt 4 partii (kalka F1, Tier 6, planer/transporty, sync online): 12 znalezisk,

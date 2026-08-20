@@ -155,8 +155,33 @@ console.log('— D: #8 touch —');
     'D9: pinch-to-zoom nienaruszony (pin regresji)');
 }
 
+// ═══ Sekcja E (audyt Arc 8 / D-C3, D-C4): cheat sheet + dialog online vs kod ═══
+console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
+{
+  // D-C3: sync-map.yml cron 2x dziennie (17 5 + 0 21 UTC) — dialog nie moze mowic "codziennie"
+  ok(!HTML.includes('od\u015Bwie\u017Cane codziennie'),
+    'E1: dialog online — brak "odswiezane codziennie" (cron 2x/dobe)');
+  ok(HTML.includes('od\u015Bwie\u017Cane dwa razy dziennie'),
+    'E2: dialog online — "odswiezane dwa razy dziennie"');
+  // D-C4a: keydown 11474/11481 obsluguje Delete ORAZ Backspace (pokoj i etykieta)
+  ok(HTML.includes('Delete / Backspace'), 'E3: cheat sheet — alias Backspace przy Delete');
+  ok(HTML.includes('Usu\u0144 zaznaczony pok\u00F3j / etykiet\u0119'),
+    'E4: cheat sheet — Delete usuwa pokoj lub etykiete');
+  // D-C4b: ctx-room (markup ~3954) ma "Ustaw pozycje (x/y/z)", nie pozycje "wyjscie"
+  ok(!HTML.includes('Edytuj / wyj\u015Bcie / przenie\u015B / usu\u0144'),
+    'E5: cheat sheet — stary opis menu pokoju usuniety');
+  ok(HTML.includes('Edytuj / pozycja / przenie\u015B / usu\u0144'),
+    'E6: cheat sheet — menu pokoju: edytuj/pozycja/przenies/usun');
+  // D-C4c: ctx-empty ma tez "Dodaj etykiete tutaj"
+  ok(HTML.includes('Dodaj pok\u00F3j / etykiet\u0119 / edytuj obszar'),
+    'E7: cheat sheet — menu pustego: pokoj/etykieta/obszar');
+  // D-C4d: wariant viewer (ctx-viewer: Wysrodkuj widok tutaj)
+  ok(HTML.includes('Puste (podgl\u0105d)'),
+    'E8: cheat sheet — wariant viewer menu kontekstowego');
+}
+
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.42.1';"), 'V1: pin APP_VERSION v1.42.1');
+ok(HTML.includes("const APP_VERSION = 'v1.42.2';"), 'V1: pin APP_VERSION v1.42.2');
 
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);
