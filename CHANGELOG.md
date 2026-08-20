@@ -2,6 +2,43 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.40.0 — Tier 5: fixy z audytu AI (kimi-k2.7-code, 34 znaleziska, 7 realnych)
+
+Pelny audyt kodu przez kimi-k2.7-code (7 chunkow, ~403k tokenow in) + reczna weryfikacja
+kazdego znaleziska w kodzie: 7 realnych defektow naprawionych, 27 odpartych z dowodami
+(falszywe pozytywy albo znane decyzje projektowe P1-P5).
+
+- **Fix F1 (audyt #3/#24/#25/#26):** klucz "__proto__" w mapach QString klucz→wartosc
+  (userData, mSpecialExitLocks, exitWeights/doors) ginal cicho przy imporcie .dat/.arkmap
+  i w edytorach (zwykly assign na plain object jest w JS ignorowany). Nowy helper
+  _setMapKey (defineProperty, enumerable/writable/configurable) w readQMapSU/SS/SI,
+  edytorze user_data pokoju i obszaru, pendingach i commicie special exits.
+- **Fix F2 (audyt #32):** _replaceRoomData odtwarza redundantny backlink room.area
+  z kanonu state.roomArea — sciezki delty (EDIT_ROOM/EDIT_EXIT) i Porzuc nie gubia go
+  w modelu. Weryfikacja W1: writer .dat bierze obszar z area.rooms[] przez buildRoom,
+  wiec zapis .dat/.arkmap nietkniety (golden writera bez zmian: len 7845726, crc 65da3512).
+- **Fix F3 (audyt #27):** martwy suppressor (custom_lines[dir] z pustymi points)
+  kasowany przy dodaniu wlasnego exit w tym kierunku — wczesniej ukrywal jego linie
+  na renderze. Panel (pendingExitTarget w commitRoomEdit; undo pokryte snapshotem
+  pokoju) i canvas (commitAddExit: entry ADD_EXIT niesie prevSupCL/prevOppSupCL,
+  undo przywraca, redo kasuje — jedna jednostka undo).
+- **Fix F4 (audyt #1):** select rp-env nie mutuje juz r.env na zywo — zmiana idzie
+  do state.pendingEnv (dirty, live preview koloru przez _envOf w roomColor/minimap),
+  commitRoomEdit konsumuje ja w normalnym batchu undo, Porzuc czysci. Kalka/deltaLog
+  i undo widza teraz zmiane env spojnie z reszta pol formularza. Chipy palety env
+  dzialaja bez zmian (dispatch change → ten sam kanal).
+- **Fix F5 (audyt #34, zwezone po weryfikacji W3):** _deltaPlaceCtx zwraca kontekst
+  stawiania dla ADD_ROOM do obszaru-kalki (sid), gdy ADD_AREA tego obszaru jest
+  zaznaczone i wykonalne — Autopozycja/Recznie dzialaja (taken/cellFree/findFreeCell
+  sa sid-spojne). Oryginalne znalezisko mylilo resA classifyDelta (ma fallback
+  sidShArea — cien symuluje apply i wykrywa kolizje miedzyopowe; potwierdzone
+  testem E3) z resA warstwy duchow; realna czesc = brak pozycjonowania. Galaz
+  "obszar z kalki" w classifyDelta udokumentowana jako defensywna/nieosiagalna.
+- **Testy:** nowy harness tier5_audit.js (44 OK: A1-A7, B1-B4, C1-C8, D1-D8d,
+  E1-E12); empiria E11 (2 scenariusze, 8 asercji: rp-env nomut/commit/undo/porzuc,
+  suppressor add/undo/redo); delta.js +2 (placeCtx sid-area; pin starego zachowania
+  zaktualizowany — zamierzona zmiana F5); run-all.sh: 19 harnessow + grupy SMOKE E0-E11.
+
 ## v1.39.0 — walidator kalki twardnieje (typy/sid/glebokosc), kodek .dat czyta ujemne id, reszta kalki bez autopozycji
 
 - **Przyczyna:** scalony audyt (Tier 4: K6/K7/S8, W1/W2, C-K5/C-locks, S2/S3/S5/S6/S7, Q5/W6/W8 + decyzje wlasciciela P1-P5) — 15 potwierdzonych defektow w 4 grupach: (K6) walidator .arkdelta sprawdzal ksztalt opow (schemat pol), ale NIE typy wartosci — toX:"abc", kolor 999 czy roomId:{} przechodzily walidacje i wywalaly sie dopiero przy nanoszeniu albo cicho psuly mape; (K7) ADD_ROOM/ADD_AREA/ADD_LABEL ze zwyklym numerem zamiast identyfikatora kalki (d:N) przechodzily — anonimowe adds lamaly kontrakt define-before-use; (S8) skaner kalki (_deltaScanDeep) rekurencyjny bez limitu glebokosci — bomba 100+ poziomow zabijala zakladke (stack overflow) przy samej walidacji; (W1/W2) kodek .dat czytal liste pokoi obszaru (readQListU) i klucze rawSpecialExits (readQMMUS) jako uint32 — pokoj o ujemnym id (legalny int32 w formacie Mudleta) wczytywal sie jako 4294967294, a special exit do ujemnego id gubil cel; (C-K5) „Zapisz reszte" serializowal R.delta.ops z NANIESIONYMI override'ami — autopozycje wymyslone przez program (how:'auto') cicho przeciekaly do pliku uzytkownika i wracaly przy nastepnym otwarciu jako „jego" decyzje; (C-locks) buildRoom emitowal mSpecialExitLocks jako roomId (liczby), a writer-rekonstrukcja sprawdzala lockSet.has(cmd) po stringach — locki special exitow byly niezapisywalne mina latentna; (S5) pierwszy z trzech handlerow drag panelu planera nie mial guarda wpLocked — LOCK nie blokowal przeciagania za naglowek; (S6) 6 golego localStorage.removeItem bez try/catch — wyjatek storage (prywatny tryb Safari, QuotaExceeded) przerywal applyMap/merge/czyszczenie w pol akcji; (S7) undo ADD_CL/ADD_SUPPRESSOR/AUTO_FIX zostawialo pusty kontener custom_lines {} w pokoju, ktory go nigdy nie mial — kalka eksportowala sztuczny pusty obiekt; (S2/S3) validateArea rzucal TypeError na labels-bedacym-obiektem zamiast zwrocic blad walidacji, a validateLabel przyjmowal uszkodzony base64 (wykrywal sie dopiero przy eksporcie .dat) i pixmapy bez limitu rozmiaru; (Q5) martwy guard `if (targetId === -1) continue;` po zmapowaniu stubow — nigdy niespelniony, mylacy czytelnika; (W6) wpEncodeRoute kodowal trase bez walidacji id (0/-2/2.5 produkowaly uszkodzony link zamiast odmowy); (W8) planer budowal allExits przez Object.assign — wyjscia specjalne przeciazaly zwykle o tej samej nazwie kierunku, trasa mogla isc nie ta krawedzia.

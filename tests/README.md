@@ -33,6 +33,7 @@ node tests/ci_workflow.js       # watchdog CI: cache Playwright + sufit timeoutu
 node tests/tier2_state.js       # Tier 2 (v1.37.0): dirty-guard K2/K3, rename SE Q4, W10/W11/W12 + strazniki
 node tests/tier3_format.js     # Tier 3 (v1.38.0): CRC v2 W3, hidden/symbolColor W4/Q2, piksmapy W9, cap W17, granica sesji W18
 node tests/tier4_hardening.js  # Tier 4 (v1.39.0): walidator kalki K6/K7/S8, kodek .dat W1/W2, C-K5 reszta wg P2, C-locks, S7 undo, W6/W8 planer, piny P1/P3
+node tests/tier5_audit.js     # Tier 5 (v1.40.0): fixy audytu AI — __proto__-safe mapy (F1), backlink room.area (F2), suppressor przy addExit (F3), rp-env pendingEnv (F4), placeCtx sid-area + spojnosc classify/apply (F5)
 ```
 
 albo wszystkie naraz:

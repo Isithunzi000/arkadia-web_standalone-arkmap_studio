@@ -2870,6 +2870,56 @@ scenario('E10.dat-roundtrip', async () => {
   }
 });
 
+// ═══ E11: Tier 5 — rp-env przez pendingEnv (F4/#1), suppressor przy addExit (F3/#27) ═══
+
+scenario('E11.rp-env', async () => {
+  await loadBase('dat');
+  const id = ev('Object.keys(state.roomById).map(Number)[0]').val;
+  const env0 = ev('state.roomById[' + id + '].env').val;
+  // otworz formularz i zmien select env na ISTNIEJACA opcje (jak user)
+  ev('(function(){ state.selected = ' + id + '; populateEditForm(state.roomById[' + id + ']); return 1; })()');
+  const envNew = parseInt(ev('(function(){ const s = document.getElementById("rp-env"); const other = [...s.options].find(o => Number(o.value) !== ' + env0 + '); s.value = other.value; s.dispatchEvent(new Event("change")); return other.value; })()').val);
+  const st1 = ev('({ env: state.roomById[' + id + '].env, pend: state.pendingEnv, dirty: state.editDirty })').val;
+  A('E11.rp-env.nomut', st1 && st1.env === env0 && st1.pend === envNew && st1.dirty === true,
+    'change [debug: env=' + (st1 && st1.env) + '==env0(' + env0 + ')=' + (st1 && st1.env === env0) + ' pend=' + (st1 && st1.pend) + '==envNew(' + envNew + ',ty:' + typeof envNew + ')=' + (st1 && st1.pend === envNew) + ' dirty=' + (st1 && st1.dirty) + ']');
+  // Zapisz -> commit konsumuje pendingEnv; undo cofa
+  ev('commitRoomEdit()');
+  const st2 = ev('({ env: state.roomById[' + id + '].env, pend: state.pendingEnv })').val;
+  A('E11.rp-env.commit', st2 && st2.env === envNew && st2.pend === null,
+    'Zapisz [debug: env=' + (st2 && st2.env) + ' pend=' + JSON.stringify(st2 && st2.pend) + ' eqEnv=' + (st2 && st2.env === envNew) + ']');
+  ex('undoAction()');
+  EQ('E11.rp-env.undo', ev('state.roomById[' + id + '].env').val, env0, 'undo cofa env do wartosci sprzed');
+  // Porzuc: zmiana env + abandon -> model bez zmian, pendingEnv czysty, dirty=false
+  ev('(function(){ populateEditForm(state.roomById[' + id + ']); const s = document.getElementById("rp-env"); s.value = String(' + envNew + '); s.dispatchEvent(new Event("change")); return 1; })()');
+  const envBefore = ev('state.roomById[' + id + '].env').val;
+  ex('showDirtyConfirm(() => {})');
+  ex('document.getElementById("rp-dirty-abandon").click()');
+  const st3 = ev('({ env: state.roomById[' + id + '].env, pend: state.pendingEnv, dirty: state.editDirty })').val;
+  A('E11.rp-env.porzuc', st3 && st3.env === envBefore && st3.pend === null && st3.dirty === false,
+    'Porzuc: env bez zmian (' + (st3 && st3.env) + '), pendingEnv=null, dirty=false');
+});
+
+scenario('E11.suppressor', async () => {
+  await loadBase('dat');
+  const ids = ev('Object.keys(state.roomById).map(Number).slice(0, 2)').val;
+  A('E11.suppressor.pre', Array.isArray(ids) && ids.length === 2, 'dwa pokoje bazy: ' + JSON.stringify(ids));
+  // martwy suppressor na kierunku e w pierwszym pokoju (points [] = ukrycie linii)
+  ev('(function(){ const r = state.roomById[' + ids[0] + ']; r.custom_lines = { e: { points: [], color: [255, 0, 0] } }; if (r.exits) delete r.exits.e; return 1; })()');
+  ex('commitAddExit(' + ids[0] + ', "e", ' + ids[1] + ', false)');
+  const st1 = ev('(function(){ const r = state.roomById[' + ids[0] + ']; return { ex: (r.exits || {}).e, sup: !!(r.custom_lines && r.custom_lines.e) }; })()').val;
+  A('E11.suppressor.add', st1 && st1.ex === ids[1] && st1.sup === false,
+    'addExit [debug: ex=' + (st1 && st1.ex) + ' tyEx=' + typeof (st1 && st1.ex) + ' ids1=' + ids[1] + ' tyIds=' + typeof ids[1] + ' eq=' + (st1 && st1.ex === ids[1]) + ' sup=' + (st1 && st1.sup) + ']');
+  ex('undoAction()');
+  const st2 = ev('(function(){ const r = state.roomById[' + ids[0] + ']; return { ex: (r.exits || {}).e, sup: !!(r.custom_lines && r.custom_lines.e), pts: r.custom_lines && r.custom_lines.e && r.custom_lines.e.points.length }; })()').val;
+  A('E11.suppressor.undo', st2 && st2.ex === undefined && st2.sup === true && st2.pts === 0,
+    'undo: exit zniknal, suppressor przywrocony (points []) ' + JSON.stringify(st2));
+  ex('redoAction()');
+  const st3 = ev('(function(){ const r = state.roomById[' + ids[0] + ']; return { ex: (r.exits || {}).e, sup: !!(r.custom_lines && r.custom_lines.e) }; })()').val;
+  A('E11.suppressor.redo', st3 && st3.ex === ids[1] && st3.sup === false,
+    'redo [debug: ex=' + (st3 && st3.ex) + ' ids1=' + ids[1] + ' eq=' + (st3 && st3.ex === ids[1]) + ' sup=' + (st3 && st3.sup) + ']');
+  ex('undoAction()');  // porzadek: zostaw baze bez zmian
+});
+
 // ═══ Runner ═══
 function appReady() {
   return new Promise(res => {
