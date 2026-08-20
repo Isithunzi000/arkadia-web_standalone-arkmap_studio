@@ -2,6 +2,41 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.41.0 — Tier 6: UX — dirty przy re-wejsciu, „Przywroc ostatni zapis", import trasy, touch
+
+- **D1:** startLocalEditMode nie zeruje juz state.dirty — flaga jest utrzymywana przez
+  mutacje (pushUndo choke point), zapis .arkmap i applyMap; wyjscie z edycji zachowuje
+  zmiany, wiec re-wejscie pokazuje prawde. Wariantowy toast: „— masz niezapisane zmiany".
+- **D2 (wariant c):** nowy bufor state.pristineArkmap = kanoniczna serializacja mapy
+  w ostatnim punkcie kontrolnym (kazde wczytanie przez wrapper applyMap + kazdy zapis
+  w _performArkmapSave i _performArkmapSaveAs — serializacja raz, wynik trafia do bufora
+  przy wszystkich 6 punktach sukcesu). Nowa funkcja restoreLastSave(): pelna podmiana
+  mapy z bufora przez applyMap (deltaLog pusty, dirty=false, wyjscie z edycji), handle
+  pliku zachowany, pendingEnv czyszczony, parse w try/catch. Oba dialogi unsaved maja
+  trzeci przycisk „Przywroc ostatni zapis", a "Wyjdz do podgladu" przemianowane na
+  jednoznaczne "Wyjdz — zachowaj w pamieci". Semantyka: restore = ostatni zapis,
+  nie poczatek sesji (kalka deltaLog przepada jak przy swiezym wczytaniu pliku).
+- **D4:** dlg-unsaved-exit (sesja GitHub) mial martwe przyciski (tylko inline
+  closeDialog) — zwiazane wszystkie 4 (Wyjdz/Przywroc/Zapisz/Wyslij PR). Blokada
+  GitHub celowo NIETKNIETA: edlg-gh-*, startGithubSession stub i gating githubSession
+  bez zmian; dialog wciaz nieosigalny w runtime, naprawa to higiena kodu uspionego.
+- **#18:** import trasy z aktywna trasa wymaga potwierdzenia — pierwszy klik uzbraja
+  przycisk „Nadpisz" (klucz trescia kodu), drugi aplikuje; zmiana kodu, Anuluj, X,
+  overlay i Escape resetuja bramke (wpImportClose). Bez aktywnej trasy import dziala
+  od razu. Cialo ladowania wydzielone do _wpImportApply(res).
+- **#8:** 1-palcowy touch-drag delegowany do logiki canvasMode zamiast zawsze panowac:
+  paint maluje pociagnieciem (commit/revert jak mysz, touchcancel sprzata), drag
+  zaznaczonego pokoju przesuwa go (hit Chebyshev 0.525, commit przez
+  _tryMoveRoomWithPolicy z force:false + obsluga blocked), w pozostalych trybach pan
+  bez zmian; pinch i tap nietkniete. Znane ograniczenie: drag/resize etykiet na touch
+  poza zakresem (mysz bez zmian).
+- **Testy:** nowy harness tier6_ux.js (33 OK: A-D + pin wersji), empiria grupa E12
+  (5 scenariuszy, 26 asercji: dirty-reentry, restore z fixpointem i wariantem mid-save,
+  dialogi z wymuszona flaga githubSession tylko w driverze, bramka importu + regresja
+  bez aktywnej trasy, touch syntetyczny: pan/paint/room-drag/pinch). Pelna regresja:
+  20 harnessow node + SMOKE E0-E12 = 693 PASS empirii, 0 FAIL. Golden writera .dat
+  bez zmian (len 7845726, crc 65da3512).
+
 ## v1.40.0 — Tier 5: fixy z audytu AI (kimi-k2.7-code, 34 znaleziska, 7 realnych)
 
 Pelny audyt kodu przez kimi-k2.7-code (7 chunkow, ~403k tokenow in) + reczna weryfikacja

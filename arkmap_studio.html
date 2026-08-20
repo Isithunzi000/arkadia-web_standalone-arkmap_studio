@@ -3224,10 +3224,11 @@
       </div>
     </div>
     <div class="dlg-body">
-      <p>Po wyjściu zmiany pozostaną widoczne w podglądzie tej sesji, ale <strong>nie zapiszą się do pliku</strong> — przepadną po przeładowaniu lub zamknięciu strony.<br>Zapisz <strong>.arkmap</strong>, aby zachować je na stałe.</p>
+      <p>Po wyjściu zmiany pozostaną widoczne w podglądzie tej sesji, ale <strong>nie zapiszą się do pliku</strong> — przepadną po przeładowaniu lub zamknięciu strony.<br>Zapisz <strong>.arkmap</strong>, aby zachować je na stałe.<br>Aby porzucić zmiany i wrócić do ostatniego punktu zapisu, użyj <strong>Przywróć ostatni zapis</strong>.</p>
     </div>
     <div class="dlg-ftr">
-      <button class="dlg-cancel dlg-abandon" onclick="closeDialog('dlg-unsaved-local')">Wyjdź do podglądu</button>
+      <button class="dlg-cancel dlg-abandon" onclick="closeDialog('dlg-unsaved-local')">Wyjdź — zachowaj w pamięci</button>
+      <button class="dlg-cancel dlg-restore" onclick="closeDialog('dlg-unsaved-local')">Przywróć ostatni zapis</button>
       <button class="btn-primary" onclick="closeDialog('dlg-unsaved-local')">Zapisz .arkmap</button>
     </div>
   </div>
@@ -3244,11 +3245,12 @@
       </div>
     </div>
     <div class="dlg-body">
-      <p>Zmiany pozostaną widoczne w podglądzie, ale <strong>nie zapiszą się do pliku</strong> ani do repozytorium — przepadną po przeładowaniu strony. Zapisz <strong>.arkmap</strong> lub wyślij PR, aby je zachować.</p>
+      <p>Zmiany pozostaną widoczne w podglądzie, ale <strong>nie zapiszą się do pliku</strong> ani do repozytorium — przepadną po przeładowaniu strony. Zapisz <strong>.arkmap</strong> lub wyślij PR, aby je zachować.<br>Aby porzucić zmiany i wrócić do ostatniego punktu zapisu, użyj <strong>Przywróć ostatni zapis</strong>.</p>
     </div>
     <div class="dlg-ftr">
-      <button class="dlg-cancel" onclick="closeDialog('dlg-unsaved-exit')">Wyjdź do podglądu</button>
-      <button onclick="closeDialog('dlg-unsaved-exit')">Zapisz .arkmap</button>
+      <button class="dlg-cancel dlg-abandon" onclick="closeDialog('dlg-unsaved-exit')">Wyjdź — zachowaj w pamięci</button>
+      <button class="dlg-cancel dlg-restore" onclick="closeDialog('dlg-unsaved-exit')">Przywróć ostatni zapis</button>
+      <button class="dlg-save" onclick="closeDialog('dlg-unsaved-exit')">Zapisz .arkmap</button>
       <button class="btn-edit" onclick="closeDialog('dlg-unsaved-exit')">Wyślij PR</button>
     </div>
   </div>
@@ -8127,6 +8129,25 @@ cv.addEventListener('touchstart', e => {
   for (const t of e.touches) _touches[t.identifier] = { x: t.clientX, y: t.clientY };
   _lastPinchDist = null;
   if (e.touches.length === 1) {
+    // T6/#8: delegacja 1-palcowego dragu do logiki narzedzia (jak mysz) zamiast zawsze pan
+    const t0 = e.touches[0];
+    if (state.editMode && state.canvasMode === 'paint') {
+      _paintStroke = new Map();
+      state._paintHover = null;
+      _paintApplyAtScreen(evX(t0), evY(t0));
+      return;
+    }
+    if (state.editMode && state.canvasMode === 'normal' && state.selected) {
+      const [mx, my] = screenToMap(evX(t0), evY(t0));
+      for (const r of state.roomsZ) {
+        if (Math.max(Math.abs(r.x - mx), Math.abs(r.y - my)) <= 0.525 && r.id === state.selected) {
+          state.editDraggingRoom = true;
+          state.editDragCurrentX = r.x;
+          state.editDragCurrentY = r.y;
+          return;
+        }
+      }
+    }
     state.dragging = true;
     state.dragX = e.touches[0].clientX;
     state.dragY = e.touches[0].clientY;
@@ -8135,6 +8156,22 @@ cv.addEventListener('touchstart', e => {
 
 cv.addEventListener('touchmove', e => {
   e.preventDefault();
+  if (e.touches.length === 1) {
+    const t = e.touches[0];
+    // T6/#8: paint drag maluje; drag zaznaczonego pokoju przesuwa — zamiast panu
+    if (_paintStroke !== null) { _paintApplyAtScreen(evX(t), evY(t)); return; }
+    if (state.editMode && state.editDraggingRoom && state.selected) {
+      const [mx, my] = screenToMap(evX(t), evY(t));
+      state.editDragCurrentX = Math.round(mx);
+      state.editDragCurrentY = Math.round(my);
+      const rpx = document.getElementById('rp-x');
+      const rpy = document.getElementById('rp-y');
+      if (rpx) rpx.value = state.editDragCurrentX;
+      if (rpy) rpy.value = state.editDragCurrentY;
+      draw();
+      return;
+    }
+  }
   if (e.touches.length === 1 && state.dragging) {
     const t = e.touches[0];
     state.ox += t.clientX - state.dragX;
@@ -8162,6 +8199,32 @@ let _lastTap = { time: 0, x: 0, y: 0 };
 cv.addEventListener('touchend', e => {
   state.dragging = false;
   _lastPinchDist = null;
+  // T6/#8: commit narzedzi zamiast detekcji tap (mirror mouseup: po commicie return)
+  if (_paintStroke !== null) { _paintStrokeCommit(); return; }
+  if (state.editDraggingRoom) {
+    const room = state.roomById[state.selected];
+    if (room) {
+      const t = e.changedTouches[0];
+      const [mx, my] = screenToMap(evX(t), evY(t));
+      const toX = Math.round(mx);
+      const toY = Math.round(my);
+      const fromX = state.editSnapshot?.x ?? room.x;
+      const fromY = state.editSnapshot?.y ?? room.y;
+      // brak Shift na touch — force:false; blocked: pokoj nie ruszyl sie, pola wracaja
+      const moveRes = _tryMoveRoomWithPolicy(room, toX, toY, { force: false, fromX, fromY, fromZ: room.z });
+      if (moveRes === 'blocked') {
+        const rpx = document.getElementById('rp-x');
+        const rpy = document.getElementById('rp-y');
+        if (rpx) rpx.value = room.x;
+        if (rpy) rpy.value = room.y;
+      }
+    }
+    state.editDraggingRoom = false;
+    state.editDragCurrentX = 0;
+    state.editDragCurrentY = 0;
+    draw();
+    return;
+  }
   if (e.changedTouches.length === 1 && e.touches.length === 0) {
     const t = e.changedTouches[0];
     const start = _touches[t.identifier];
@@ -8188,6 +8251,18 @@ cv.addEventListener('touchend', e => {
 cv.addEventListener('touchcancel', () => {
   state.dragging = false;
   _lastPinchDist = null;
+  // T6/#8: przerwanie dotyku sprzata narzedzia bez mutacji mapy
+  if (_paintStroke !== null) { _paintStrokeRevert(); _paintStroke = null; }
+  if (state.editDraggingRoom) {
+    state.editDraggingRoom = false;
+    state.editDragCurrentX = 0;
+    state.editDragCurrentY = 0;
+    const room = state.roomById[state.selected];
+    const rpx = document.getElementById('rp-x');
+    const rpy = document.getElementById('rp-y');
+    if (room && rpx) rpx.value = room.x;
+    if (room && rpy) rpy.value = room.y;
+  }
 });
 
 cv.addEventListener('wheel', e => {
@@ -9063,6 +9138,22 @@ function stableStringify(val, indent, _lvl) {
   return JSON.stringify(val);
 }
 
+// T6/D2: pelna podmiana mapy z bufora ostatniego punktu kontrolnego (wczytanie/zapis .arkmap).
+// applyMap robi reszte: exitEditMode(true), undo/redo=[], deltaLog=[], dirty=false,
+// odswieza bufor do postaci kanonicznej (fixpoint serialize/parse).
+function restoreLastSave() {
+  if (!state.pristineArkmap || !state.map) return;
+  const fh = _arkmapFileHandle;   // wrapper applyMap zeruje handle (krok 6) — zachowujemy
+  let map;
+  try { map = JSON.parse(state.pristineArkmap); }
+  catch { toast('✗ Nie mozna przywrocic ostatniego zapisu', true); return; }
+  applyMap(map);
+  _arkmapFileHandle = fh;
+  state.pendingEnv = null;   // wrapper applyMap nie rusza pendingEnv (T5/F4) — czyscimy tu
+  if (typeof _updateSaveButtonText === 'function') _updateSaveButtonText();
+  toast('✓ Przywrocono ostatni zapis');
+}
+
 function saveArkmapAs() {
   if (!state.map) return;
   const missing = checkSuppressors();
@@ -9083,15 +9174,16 @@ function _performArkmapSaveAs() {
   // Zawsze pokaż dialog wyboru pliku (ignoruj istniejący handle)
   if (!state.map) return;
   _prepareArkmapForSave();
+  const text = _serializeMap();  // T6/D2: serializuj raz — zapis + bufor
   // A11': dirty kasowane dopiero po POTWIERDZONYM zapisie (success-pointy niżej), nie przed dialogiem
   const suggestedName = _arkmapSuggestedName();
   const hasFSAPI = typeof window.showSaveFilePicker === 'function';
   if (hasFSAPI) {
-    saveWithDialog(suggestedName, 'application/json', () => _serializeMap())
-      .then(fh => { if (fh) { state.dirty = false; _arkmapFileHandle = fh; _updateSaveButtonText(); } });
+    saveWithDialog(suggestedName, 'application/json', () => text)
+      .then(fh => { if (fh) { state.dirty = false; state.pristineArkmap = text; _arkmapFileHandle = fh; _updateSaveButtonText(); } });
   } else {
-    saveWithDialog(suggestedName, 'application/json', () => _serializeMap())
-      .then(r => { if (r) state.dirty = false; });
+    saveWithDialog(suggestedName, 'application/json', () => text)
+      .then(r => { if (r) state.dirty = false; state.pristineArkmap = text; });
   }
 }
 
@@ -9155,6 +9247,7 @@ function saveArkmap(onSaved) {
 function _performArkmapSave(onSaved) {
   if (!state.map) return;
   _prepareArkmapForSave();
+  const text = _serializeMap();  // T6/D2: serializuj raz — zapis + bufor
   // A11': dirty kasowane dopiero po POTWIERDZONYM zapisie; clear PRZED onSaved (latentny TypeError z A16 nie pominie cleara)
   const suggestedName = _arkmapSuggestedName();
 
@@ -9163,15 +9256,15 @@ function _performArkmapSave(onSaved) {
     (async () => {
       try {
         const writable = await _arkmapFileHandle.createWritable();
-        await writable.write(_serializeMap());
+        await writable.write(text);
         await writable.close();
-        state.dirty = false;
+        state.dirty = false; state.pristineArkmap = text;
         toast('✓ Zapisano ' + _arkmapFileHandle.name);
         if (onSaved) onSaved();
       } catch (err) {
         _arkmapFileHandle = null;
-        saveWithDialog(suggestedName, 'application/json', () => _serializeMap())
-          .then(r => { if (r) { state.dirty = false; if (onSaved) onSaved(); } });
+        saveWithDialog(suggestedName, 'application/json', () => text)
+          .then(r => { if (r) { state.dirty = false; state.pristineArkmap = text; if (onSaved) onSaved(); } });
       }
     })();
     return;
@@ -9180,11 +9273,11 @@ function _performArkmapSave(onSaved) {
   // Pierwszy zapis lub handle=null → dialog
   const hasFSAPI = typeof window.showSaveFilePicker === 'function';
   if (hasFSAPI) {
-    saveWithDialog(suggestedName, 'application/json', () => _serializeMap())
-      .then(fh => { if (fh) { state.dirty = false; _arkmapFileHandle = fh; _updateSaveButtonText(); if (onSaved) onSaved(); } });
+    saveWithDialog(suggestedName, 'application/json', () => text)
+      .then(fh => { if (fh) { state.dirty = false; state.pristineArkmap = text; _arkmapFileHandle = fh; _updateSaveButtonText(); if (onSaved) onSaved(); } });
   } else {
-    saveWithDialog(suggestedName, 'application/json', () => _serializeMap())
-      .then(r => { if (r) { state.dirty = false; if (onSaved) onSaved(); } });
+    saveWithDialog(suggestedName, 'application/json', () => text)
+      .then(r => { if (r) { state.dirty = false; state.pristineArkmap = text; if (onSaved) onSaved(); } });
   }
 }
 
@@ -10832,8 +10925,14 @@ function wpImportOpen() {
   setTimeout(() => ta.focus(), 80);
 }
 
+let _wpImportPending = null;  // T6/#18: kod trasy z uzbrojonym potwierdzeniem nadpisania
+
 function wpImportClose() {
   document.getElementById('wp-import-overlay').classList.remove('open');
+  // T6/#18: wyjscie z modala resetuje uzbrojone potwierdzenie (cancel/X/overlay/Escape — wszystkie tu wchodza)
+  _wpImportPending = null;
+  const _wic = document.getElementById('wp-import-confirm');
+  if (_wic) _wic.textContent = 'Importuj trasę';
 }
 
 function wpHasActiveRoute() {
@@ -10842,6 +10941,10 @@ function wpHasActiveRoute() {
 
 // Aktualizuj ostrzeżenie w modalu na żywo
 document.getElementById('wp-import-textarea').addEventListener('input', function() {
+  // T6/#18: zmiana kodu resetuje uzbrojone potwierdzenie
+  _wpImportPending = null;
+  const _wic = document.getElementById('wp-import-confirm');
+  if (_wic) _wic.textContent = 'Importuj trasę';
   const warn = document.getElementById('wp-import-warn');
   const code = this.value.trim();
   if (!code) { warn.style.display = 'none'; return; }
@@ -10868,7 +10971,24 @@ document.getElementById('wp-import-confirm').addEventListener('click', () => {
   if (!res) { toast('✗ Kod trasy jest uszkodzony lub niepoprawny'); return; }
   if (!res.valid.length) { toast('✗ Żaden waypoint nie pasuje do wczytanej mapy'); return; }
 
-  // Załaduj
+  // T6/#18: nadpisanie aktywnej trasy wymaga potwierdzenia — pierwszy klik uzbraja,
+  // drugi (ten sam kod) wykonuje. Zmiana kodu / zamkniecie modala resetuja bramke.
+  if (wpHasActiveRoute() && _wpImportPending !== code) {
+    _wpImportPending = code;
+    const cur = wpState.waypoints.filter(w => w.roomId !== null).length;
+    const warn = document.getElementById('wp-import-warn');
+    warn.textContent = `⚠ Aktualna trasa ma ${cur} waypointów — nadpisać? Kliknij „Nadpisz", aby potwierdzić.`;
+    warn.style.display = 'block';
+    document.getElementById('wp-import-confirm').textContent = 'Nadpisz';
+    return;
+  }
+  _wpImportPending = null;
+
+  _wpImportApply(res);
+});
+
+// T6/#18: zastosowanie zwalidowanej trasy (wydzielone z handlera confirm — bramka nadpisania)
+function _wpImportApply(res) {
   wpImportClose();
 
   // Ustaw parametry zakodowane w trasie: algorytm + filtr kierunków + transporty
@@ -10910,7 +11030,7 @@ document.getElementById('wp-import-confirm').addEventListener('click', () => {
   // Dopasuj widok do trasy
   if (typeof fitRouteToView === 'function') fitRouteToView();
   if (typeof mobUpdateClearBtn === 'function') mobUpdateClearBtn();
-});
+}
 
 // Zamknięcie modalu
 document.getElementById('wp-import-btn').addEventListener('click', wpImportOpen);
@@ -12804,7 +12924,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.40.0';
+const APP_VERSION = 'v1.41.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -12844,6 +12964,7 @@ Object.assign(state, {
   // ── Exit adding (Pass 36, 42) ──
   pendingExitTarget:  {},
   pendingEnv:         null,  // audyt T5/F4 (#1): oczekujaca zmiana env z selecta rp-env
+  pristineArkmap:     null,  // T6/D2: serializacja ostatniego punktu kontrolnego (wczytanie/zapis .arkmap)
   // ── Exit detail (Pass 45) ──
   pendingDoors:       {},
   pendingExitWeight:  {},
@@ -12925,7 +13046,7 @@ function startLocalEditMode() {
   if (dlg) dlg.classList.remove('open');
   state.editMode = true;
   state.githubSession = false;
-  state.dirty = false;  // A11': wejście w tryb edycji nie zmienia treści
+  // T6/D1: dirty utrzymuja mutacje/zapis/applyMap — wejscie w edycje flagi nie rusza
   document.getElementById('app').classList.add('edit-mode');
   updateEditUI();
   // Odśwież panel pokoju jeśli zaznaczony
@@ -12933,7 +13054,8 @@ function startLocalEditMode() {
     const r = state.roomById[state.selected];
     if (r) populateEditForm(r);
   }
-  toast('✎ Tryb edycji lokalnej aktywny');
+  // T6/D1: re-wejscie z niezapisanymi zmianami musi to jawnie sygnalizowac
+  toast(state.dirty ? '✎ Tryb edycji lokalnej aktywny — masz niezapisane zmiany' : '✎ Tryb edycji lokalnej aktywny');
 }
 
 function exitEditMode(force) {
@@ -13779,6 +13901,7 @@ applyMap = function(map) {
     _renderDeltaPanel();
   }
   state.dirty = false;  // A11': nowa mapa = czysty stan
+  state.pristineArkmap = _serializeMap();  // T6/D2: bufor ostatniego punktu kontrolnego (wczytanie)
   state.editDirty = false; state.editSnapshot = null; state.areaSnapshot = null;  // krok 3
   state.selectedLabel = null;  // krok 4
   if (_lockInterval) { clearInterval(_lockInterval); _lockInterval = null; }
@@ -20209,16 +20332,44 @@ window.addEventListener('beforeunload', (e) => {
   const btnNewArea = document.getElementById('btn-new-area');
   if (btnNewArea) btnNewArea.addEventListener('click', () => openDialog('dlg-new-area'));
 
-  // dlg-unsaved-local buttons: Porzuć / Zapisz
+  // dlg-unsaved-local buttons: Wyjdz / Przywroc / Zapisz
   const unsavedLocal = document.getElementById('dlg-unsaved-local');
   if (unsavedLocal) {
     unsavedLocal.querySelector('.dlg-abandon')?.addEventListener('click', () => {
       closeDialog('dlg-unsaved-local');
       exitEditMode(true);
     });
+    // T6/D2: pelna podmiana mapy z bufora ostatniego punktu kontrolnego
+    unsavedLocal.querySelector('.dlg-restore')?.addEventListener('click', () => {
+      closeDialog('dlg-unsaved-local');
+      restoreLastSave();
+    });
     unsavedLocal.querySelector('.btn-primary')?.addEventListener('click', () => {
       closeDialog('dlg-unsaved-local');
       saveArkmap(() => exitEditMode(true));   // po udanym zapisie wyjdź do podglądu
+    });
+  }
+
+  // T6/D4: dlg-unsaved-exit (sesja GitHub — obecnie uspiona, flaga nigdy true w runtime)
+  // mial martwe przyciski (tylko inline closeDialog). Wiazanie jak w dialogu lokalnym + PR.
+  // Blokada GitHub (edlg-gh-*, startGithubSession stub) celowo NIETKNIETA.
+  const unsavedExit = document.getElementById('dlg-unsaved-exit');
+  if (unsavedExit) {
+    unsavedExit.querySelector('.dlg-abandon')?.addEventListener('click', () => {
+      closeDialog('dlg-unsaved-exit');
+      exitEditMode(true);
+    });
+    unsavedExit.querySelector('.dlg-restore')?.addEventListener('click', () => {
+      closeDialog('dlg-unsaved-exit');
+      restoreLastSave();
+    });
+    unsavedExit.querySelector('.dlg-save')?.addEventListener('click', () => {
+      closeDialog('dlg-unsaved-exit');
+      saveArkmap(() => exitEditMode(true));
+    });
+    unsavedExit.querySelector('.btn-edit')?.addEventListener('click', () => {
+      closeDialog('dlg-unsaved-exit');
+      openDialog('dlg-compose-pr');
     });
   }
 

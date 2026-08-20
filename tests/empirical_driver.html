@@ -2920,6 +2920,173 @@ scenario('E11.suppressor', async () => {
   ex('undoAction()');  // porzadek: zostaw baze bez zmian
 });
 
+
+// ═══ E12: Tier 6 — D1 dirty re-wejscie, D2(c) Przywroc ostatni zapis, D4 dialogi,
+//      #18 bramka importu trasy, #8 touch w trybach narzedzi ═══
+
+scenario('E12.dirty-reentry', async () => {
+  await loadBase('dat');
+  const id = ev('Object.keys(state.roomById).map(Number)[0]').val;
+  const mv = ev('(function(){ const r = state.roomById[' + id + ']; return _tryMoveRoomWithPolicy(r, r.x + 40, r.y + 40, { force: true, fromX: r.x, fromY: r.y, fromZ: r.z }); })()').val;
+  A('E12.dirty.edit', (mv === 'moved' || mv === 'forced') && ev('state.dirty').val === true,
+    'edycja ustawia dirty [debug: mv=' + mv + ' dirty=' + ev('state.dirty').val + ']');
+  ex('exitEditMode(true)');
+  A('E12.dirty.exit', ev('state.editMode === false && state.dirty === true').val === true,
+    'wyjscie z edycji zachowuje zmiany (dirty=true, editMode=false)');
+  ex('startLocalEditMode()');
+  A('E12.dirty.reentry', ev('state.editMode === true && state.dirty === true').val === true,
+    'D1: re-wejscie NIE zeruje dirty [debug: dirty=' + ev('state.dirty').val + ']');
+});
+
+scenario('E12.restore', async () => {
+  await loadBase('dat');
+  const id = ev('Object.keys(state.roomById).map(Number)[0]').val;
+  ex('window.__t6snap = _serializeMap(); window.__t6orig = { id: ' + id + ', x: state.roomById[' + id + '].x, y: state.roomById[' + id + '].y };');
+  A('E12.restore.buf', ev('state.pristineArkmap === window.__t6snap').val === true,
+    'bufor == kanoniczna serializacja po wczytaniu (fixpoint)');
+  // dwie edycje: move + move
+  ex('(function(){ const r = state.roomById[' + id + ']; _tryMoveRoomWithPolicy(r, r.x + 40, r.y + 40, { force: true }); })()');
+  const pre = ev('({ dl: state.deltaLog.length, dirty: state.dirty })').val;
+  A('E12.restore.pre', pre && pre.dl > 0 && pre.dirty === true,
+    'edycje: deltaLog=' + (pre && pre.dl) + ' dirty=' + (pre && pre.dirty));
+  ex('restoreLastSave()');
+  const post = ev('({ em: state.editMode, dl: state.deltaLog.length, dirty: state.dirty, fix: _serializeMap() === window.__t6snap, back: state.roomById[window.__t6orig.id].x === window.__t6orig.x && state.roomById[window.__t6orig.id].y === window.__t6orig.y, pend: state.pendingEnv })').val;
+  A('E12.restore.core', post && post.em === false && post.dl === 0 && post.dirty === false && post.fix === true,
+    'D2: restore = pelna podmiana ' + JSON.stringify(post));
+  A('E12.restore.coords', post && post.back === true, 'pokoj wrocil na wspolrzedne z punktu kontrolnego');
+  A('E12.restore.pendenv', post && post.pend === null, 'pendingEnv czysty po restore');
+  // wariant mid-save: punkt kontrolny = ostatni zapis, NIE poczatek sesji
+  ex('startLocalEditMode()');
+  ex('(function(){ const r = state.roomById[' + id + ']; _tryMoveRoomWithPolicy(r, r.x + 40, r.y + 40, { force: true }); })()');
+  ex('window.__t6snapA = _serializeMap(); state.pristineArkmap = window.__t6snapA; state.dirty = false;');  // dokladnie to co sciezka zapisu
+  const idB = ev('Object.keys(state.roomById).map(Number)[1]').val;
+  ex('(function(){ const r = state.roomById[' + idB + ']; _tryMoveRoomWithPolicy(r, r.x + 40, r.y + 40, { force: true }); })()');
+  ex('restoreLastSave()');
+  const mid = ev('({ fixA: _serializeMap() === window.__t6snapA, notOrig: _serializeMap() !== window.__t6snap, em: state.editMode })').val;
+  A('E12.restore.midsave', mid && mid.fixA === true && mid.notOrig === true && mid.em === false,
+    'semantyka (c): restore po zapisie w polowie sesji wraca do TEGO zapisu ' + JSON.stringify(mid));
+});
+
+scenario('E12.unsaved-dialogs', async () => {
+  await loadBase('dat');
+  A('E12.dlg.markup', ev("document.querySelectorAll('.dlg-restore').length").val === 2,
+    'markup: .dlg-restore w obu dialogach — jest ' + ev("document.querySelectorAll('.dlg-restore').length").val);
+  const id = ev('Object.keys(state.roomById).map(Number)[0]').val;
+  // (a) lokalny: klik Przywroc ostatni zapis
+  ex('(function(){ const r = state.roomById[' + id + ']; _tryMoveRoomWithPolicy(r, r.x + 40, r.y + 40, { force: true }); })()');
+  ex("openDialog('dlg-unsaved-local')");
+  ex("document.querySelector('#dlg-unsaved-local .dlg-restore').click()");
+  const a1 = ev('({ em: state.editMode, dl: state.deltaLog.length, dirty: state.dirty })').val;
+  A('E12.dlg.local-restore', a1 && a1.em === false && a1.dl === 0 && a1.dirty === false,
+    'lokalny: klik Przywroc -> mapa przywrocona ' + JSON.stringify(a1));
+  // (b) github-owy (flaga wymuszona TYLKO w driverze — D4): Wyjdz zachowuje zmiany
+  ex('startLocalEditMode()');
+  ex('state.githubSession = true;');  // D4: test wiazan, blokada GitHub nietknieta
+  ex('(function(){ const r = state.roomById[' + id + ']; _tryMoveRoomWithPolicy(r, r.x + 40, r.y + 40, { force: true }); })()');
+  ex("openDialog('dlg-unsaved-exit')");
+  ex("document.querySelector('#dlg-unsaved-exit .dlg-abandon').click()");
+  const b1 = ev('({ em: state.editMode, dl: state.deltaLog.length })').val;
+  A('E12.dlg.exit-abandon', b1 && b1.em === false && b1.dl > 0,
+    'exit: klik Wyjdz-zachowaj -> zmiany w pamieci ' + JSON.stringify(b1));
+  // (c) exit: klik Przywroc
+  ex('startLocalEditMode()');
+  ex('state.githubSession = true;');
+  ex("openDialog('dlg-unsaved-exit')");
+  ex("document.querySelector('#dlg-unsaved-exit .dlg-restore').click()");
+  const c1 = ev('({ em: state.editMode, dl: state.deltaLog.length, dirty: state.dirty })').val;
+  A('E12.dlg.exit-restore', c1 && c1.em === false && c1.dl === 0 && c1.dirty === false,
+    'exit: klik Przywroc -> mapa przywrocona ' + JSON.stringify(c1));
+  ex('state.githubSession = false;');  // porzadek po tescie
+});
+
+scenario('E12.import-gate', async () => {
+  await loadBase('dat');
+  const ids = ev('Object.keys(state.roomById).map(Number).slice(0, 3)').val;
+  // kod trasy z [id0, id1]; aktywna trasa = [id2]
+  ex('wpState.waypoints = [{ roomId: ' + ids[0] + ', label: "" }, { roomId: ' + ids[1] + ', label: "" }];');
+  const code = ev('wpEncodeRoute()').val;
+  A('E12.import.code', typeof code === 'string' && code.indexOf('ARKMAP2:') === 0,
+    'wygenerowany kod ARKMAP2 [debug: ' + (code || '').slice(0, 14) + '...]');
+  ex('wpState.waypoints = [{ roomId: ' + ids[2] + ', label: "" }, { roomId: null, label: "" }];');
+  ex('document.getElementById("wp-import-textarea").value = ' + JSON.stringify(code) + ';');
+  ex('document.getElementById("wp-import-confirm").click()');
+  const g1 = ev('({ first: wpState.waypoints[0].roomId, pend: _wpImportPending !== null, btn: document.getElementById("wp-import-confirm").textContent })').val;
+  A('E12.import.armed', g1 && g1.first === ids[2] && g1.pend === true && g1.btn === 'Nadpisz',
+    'pierwszy klik uzbraja bramke, trasa NIETKNIETA ' + JSON.stringify(g1));
+  ex('document.getElementById("wp-import-confirm").click()');
+  const g2 = ev('({ first: wpState.waypoints[0].roomId, second: wpState.waypoints[1].roomId, pend: _wpImportPending })').val;
+  A('E12.import.applied', g2 && g2.first === ids[0] && g2.second === ids[1] && g2.pend === null,
+    'drugi klik (ten sam kod) aplikuje trase ' + JSON.stringify(g2));
+  // wariant Anuluj: uzbrojona bramka + cancel -> reset, trasa nietknieta
+  ex('wpState.waypoints = [{ roomId: ' + ids[2] + ', label: "" }, { roomId: null, label: "" }];');
+  ex('document.getElementById("wp-import-textarea").value = ' + JSON.stringify(code) + ';');
+  ex('document.getElementById("wp-import-confirm").click()');
+  ex('document.getElementById("wp-import-cancel").click()');
+  const g3 = ev('({ first: wpState.waypoints[0].roomId, pend: _wpImportPending, btn: document.getElementById("wp-import-confirm").textContent })').val;
+  A('E12.import.cancel', g3 && g3.first === ids[2] && g3.pend === null && g3.btn === 'Importuj trasę',
+    'Anuluj resetuje bramke, trasa nietknieta ' + JSON.stringify(g3));
+  // brak aktywnej trasy -> import od pierwszego kliku (regresja)
+  ex('wpState.waypoints = [{ roomId: null, label: "" }, { roomId: null, label: "" }];');
+  ex('document.getElementById("wp-import-textarea").value = ' + JSON.stringify(code) + ';');
+  ex('document.getElementById("wp-import-confirm").click()');
+  const g4 = ev('({ first: wpState.waypoints[0].roomId })').val;
+  A('E12.import.noactive', g4 && g4.first === ids[0],
+    'bez aktywnej trasy import dziala od razu (regresja) ' + JSON.stringify(g4));
+});
+
+scenario('E12.touch', async () => {
+  await loadBase('dat');
+  const hasTouch = ev('typeof Touch === "function" && typeof TouchEvent === "function"').val;
+  A('E12.touch.env', hasTouch === true,
+    'SRODOWISKO: konstruktory Touch/TouchEvent dostepne (bez nich scenariusz niemozliwy — to FAIL swiadomy, nie skip)');
+  if (!hasTouch) return;
+  // helpery syntetycznych dotkniec w stronie
+  ex('window.__t6Client = function(sx, sy){ const r = cv.getBoundingClientRect(); return { x: r.left + sx * (r.width / cv.width), y: r.top + sy * (r.height / cv.height) }; };');
+  ex('window.__t6Touch = function(type, pts){ const ts = pts.map(function(p, i){ return new Touch({ identifier: i + 1, target: cv, clientX: p.x, clientY: p.y }); }); const te = new TouchEvent(type, { cancelable: true, bubbles: true, touches: type === "touchend" ? [] : ts, targetTouches: type === "touchend" ? [] : ts, changedTouches: ts }); cv.dispatchEvent(te); };');
+  ex('window.__t6RoomClient = function(id){ const r = state.roomById[id]; return __t6Client(wx(r.x), wy(r.y)); };');
+
+  // (a) viewer: drag panuje
+  ex('exitEditMode(true)');
+  const pan0 = ev('({ ox: state.ox, oy: state.oy })').val;
+  ex('(function(){ const p = __t6Client(200, 200); __t6Touch("touchstart", [p]); const q = __t6Client(230, 215); __t6Touch("touchmove", [q]); __t6Touch("touchend", [q]); })()');
+  const pan1 = ev('({ ox: state.ox, oy: state.oy })').val;
+  A('E12.touch.pan', pan1 && pan0 && (pan1.ox !== pan0.ox || pan1.oy !== pan0.oy),
+    'viewer: 1-palcowy drag panuje [ox ' + (pan0 && pan0.ox) + '->' + (pan1 && pan1.ox) + ']');
+
+  // (b) paint: drag maluje, NIE panuje
+  ex('startLocalEditMode()');
+  const idP = ev('Object.keys(state.roomById).map(Number)[0]').val;
+  const env0 = ev('state.roomById[' + idP + '].env').val;
+  const envNew = ev('(function(){ const ids = Object.keys(state.colorCache).map(Number); const o = ids.find(function(x){ return x !== ' + env0 + '; }); return o === undefined ? null : o; })()').val;
+  A('E12.touch.paintsw', typeof envNew === 'number', 'swatch docelowy istnieje [envNew=' + envNew + ']');
+  ex('state.paintSwatch = { kind: "env", env: ' + envNew + ' }; state.canvasMode = "paint";');
+  ex('(function(){ const p = __t6RoomClient(' + idP + '); __t6Touch("touchstart", [p]); const q = __t6Client(wx(state.roomById[' + idP + '].x) + 3, wy(state.roomById[' + idP + '].y)); __t6Touch("touchmove", [q]); __t6Touch("touchend", [q]); })()');
+  const pb = ev('({ env: state.roomById[' + idP + '].env, ox: state.ox, oy: state.oy })').val;
+  A('E12.touch.paint', pb && pb.env === envNew && pb.ox === pan1.ox && pb.oy === pan1.oy,
+    'paint: drag pomalowal pokoj i NIE panowal ' + JSON.stringify(pb));
+  ex('state.canvasMode = "normal"; state.paintSwatch = null;');
+
+  // (d) normal+zaznaczony: drag przesuwa pokoj, NIE panuje
+  // deterministycznie: pokoj z roomsZ (biezacy poziom!) + gwarantowane wolne pole docelowe
+  const pick = ev('(function(){ for (const r of state.roomsZ) { for (let d = 1; d <= 8; d++) { if (!_roomCollisionAt(r.x + d, r.y, r.z, r.id)) return { id: r.id, dx: d }; } } return null; })()').val;
+  A('E12.touch.pick', pick && typeof pick.id === 'number', 'wybrano pokoj i wolne pole: ' + JSON.stringify(pick));
+  if (pick) {
+    ex('state.selected = ' + pick.id + ';');
+    const r0 = ev('({ x: state.roomById[' + pick.id + '].x, ox: state.ox })').val;
+    ex('(function(){ const p = __t6RoomClient(' + pick.id + '); __t6Touch("touchstart", [p]); const q = __t6Client(wx(state.roomById[' + pick.id + '].x + ' + pick.dx + '), wy(state.roomById[' + pick.id + '].y)); __t6Touch("touchmove", [q]); __t6Touch("touchend", [q]); })()');
+    const rd = ev('({ x: state.roomById[' + pick.id + '].x, ox: state.ox, drag: state.editDraggingRoom })').val;
+    A('E12.touch.roomdrag', rd && r0 && rd.x === r0.x + pick.dx && rd.ox === r0.ox && rd.drag === false,
+      'room-drag: pokoj +' + pick.dx + ' w x, mapa nieruchoma, stan posprzatany [x ' + (r0 && r0.x) + '->' + (rd && rd.x) + ']');
+    ex('state.selected = null;');
+  }
+
+  // (f) pinch: zoom dziala (regresja nienaruszalnosci)
+  const z0 = ev('state.zoom').val;
+  ex('(function(){ const a = __t6Client(300, 300), b = __t6Client(300, 340); __t6Touch("touchstart", [a, b]); __t6Touch("touchmove", [a, __t6Client(300, 350)]); __t6Touch("touchmove", [a, __t6Client(300, 400)]); __t6Touch("touchend", [a, b]); })()');
+  const z1 = ev('state.zoom').val;
+  A('E12.touch.pinch', typeof z1 === 'number' && typeof z0 === 'number' && z1 !== z0,
+    'pinch: zoom zmieniony [' + z0 + ' -> ' + z1 + ']');
+});
 // ═══ Runner ═══
 function appReady() {
   return new Promise(res => {

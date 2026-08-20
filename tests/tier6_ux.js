@@ -1,0 +1,163 @@
+// Harness Tier 6 (v1.41.0) — UX: D1 dirty przy re-wejsciu w edycje, D2(c) bufor
+// „Przywroc ostatni zapis" (pristineArkmap + restoreLastSave + dialogi unsaved,
+// D4: wiazania dlg-unsaved-exit przy uspionym GitHub), #18 bramka nadpisania
+// importu trasy, #8 delegacja 1-palcowego touch-drag do canvasMode.
+// Wzorzec extract/ok jak tier5_audit.js.
+const fs = require('fs');
+const path = require('path');
+const ROOT = path.join(__dirname, '..');
+const HTML = fs.readFileSync(path.join(ROOT, 'arkmap_studio.html'), 'utf8');
+
+let pass = 0, fail = 0;
+function ok(cond, name) {
+  if (cond) { pass++; console.log('  OK', name); }
+  else { fail++; console.log('  FAIL', name); }
+}
+function extract(src, anchor) {
+  const i = src.indexOf(anchor);
+  if (i < 0) throw new Error('BRAK KOTWICY: ' + anchor);
+  if (src.indexOf(anchor) !== src.lastIndexOf(anchor)) throw new Error('kotwica nieunikalna: ' + anchor);
+  let d = 0; const j = src.indexOf('{', i);
+  for (let k = j; k < src.length; k++) {
+    if (src[k] === '{') d++;
+    else if (src[k] === '}') { d--; if (d === 0) return src.slice(i, k + 1); }
+  }
+  throw new Error('niezbalansowane klamry: ' + anchor);
+}
+function blockSlice(a, b) {
+  const i = HTML.indexOf(a), j = HTML.indexOf(b);
+  if (i < 0 || j < 0 || j <= i) throw new Error('kotwica bloku: ' + a);
+  return HTML.slice(i, j);
+}
+function count(s) { return HTML.split(s).length - 1; }
+
+// ═══ Sekcja A: D1 — startLocalEditMode nie zeruje dirty ═══
+console.log('— A: D1 dirty przy re-wejsciu —');
+{
+  const fn = extract(HTML, 'function startLocalEditMode() {');
+  ok(!fn.includes('state.dirty = false'), 'A1: startLocalEditMode NIE zeruje dirty');
+  ok(fn.includes('T6/D1'), 'A2: komentarz T6/D1 w ciele funkcji');
+  ok(fn.includes("state.dirty ?") && fn.includes('niezapisane zmiany'),
+    'A3: wariantowy toast sygnalizuje niezapisane zmiany przy re-wejsciu');
+  ok(count('state.editMode = true') === 1,
+    'A4: dokladnie jedna sciezka wejscia w editMode (grep-audyt) — jest ' + count('state.editMode = true'));
+}
+
+// ═══ Sekcja B: D2(c) — bufor + restoreLastSave + dialogi ═══
+console.log('— B: D2(c) Przywroc ostatni zapis —');
+{
+  ok(count('pristineArkmap:     null') === 1, 'B1: pristineArkmap w state init (count==1)');
+
+  const wrap = extract(HTML, 'applyMap = function(map) {');
+  ok(wrap.includes('state.pristineArkmap = _serializeMap();'),
+    'B2: wrapper applyMap ustawia bufor przy kazdym wczytaniu');
+
+  const save = extract(HTML, 'function _performArkmapSave(onSaved) {');
+  ok((save.split('const text = _serializeMap()').length - 1) === 1
+    && !save.includes('() => _serializeMap()') && save.includes('writable.write(text)'),
+    'B3: _performArkmapSave serializuje raz (const text), zero leniwych lambd');
+  ok((save.split('state.pristineArkmap = text;').length - 1) === 4,
+    'B4: bufor ustawiany przy 4/4 punktow sukcesu zapisu — jest '
+    + (save.split('state.pristineArkmap = text;').length - 1));
+
+  const saveAs = extract(HTML, 'function _performArkmapSaveAs() {');
+  ok((saveAs.split('const text = _serializeMap()').length - 1) === 1
+    && !saveAs.includes('() => _serializeMap()'),
+    'B5: _performArkmapSaveAs serializuje raz (luka z audytu planu zamknieta)');
+  ok((saveAs.split('state.pristineArkmap = text;').length - 1) === 2,
+    'B6: bufor przy 2/2 punktow sukcesu Zapisz-kopie — jest '
+    + (saveAs.split('state.pristineArkmap = text;').length - 1));
+
+  const rest = extract(HTML, 'function restoreLastSave() {');
+  ok(rest.includes('if (!state.pristineArkmap || !state.map) return;'),
+    'B7: restoreLastSave guard braku bufora');
+  ok(rest.includes('try { map = JSON.parse(state.pristineArkmap); }') && rest.includes('catch'),
+    'B8: parse w try/catch — blad = stan nietkniety');
+  ok(rest.includes('applyMap(map)') && rest.includes('_arkmapFileHandle = fh'),
+    'B9: pelna podmiana przez applyMap + zachowanie handle pliku');
+  ok(rest.includes('state.pendingEnv = null;'),
+    'B10: restore czysci pendingEnv (T5/F4 — wrapper go nie rusza)');
+
+  ok(count('class="dlg-cancel dlg-restore"') === 2 && count('dlg-restore') === 4,
+    'B11: przycisk Przywroc w obu dialogach (2 markup + 2 listenery) — markup '
+    + count('class="dlg-cancel dlg-restore"') + ', total ' + count('dlg-restore'));
+  ok(count('Wyjdź — zachowaj w pamięci') === 2,
+    'B12: jednoznaczne etykiety Wyjdz-zachowaj w obu dialogach');
+
+  const wireExit = blockSlice("const unsavedExit = document.getElementById('dlg-unsaved-exit');",
+    '// dlg-lock-expired buttons');
+  ok(wireExit.includes("querySelector('.dlg-abandon')") && wireExit.includes("querySelector('.dlg-restore')")
+    && wireExit.includes("querySelector('.dlg-save')") && wireExit.includes("querySelector('.btn-edit')")
+    && wireExit.includes("openDialog('dlg-compose-pr')"),
+    'B13: dlg-unsaved-exit — wszystkie 4 przyciski zwiazane (D4, naprawa martwych)');
+
+  // D4: blokada GitHub nietknieta
+  ok(count('edlg-gh-disabled') >= 1 && HTML.includes('pointer-events:none')
+    && count('githubSession = true') === 0,
+    'B14: GitHub dalej uspiony — zero sciezek githubSession=true, kafelki zablokowane');
+}
+
+// ═══ Sekcja C: #18 — bramka potwierdzenia importu trasy ═══
+console.log('— C: #18 import trasy —');
+{
+  ok(count('let _wpImportPending = null;') === 1, 'C1: deklaracja _wpImportPending (count==1)');
+
+  const closeFn = extract(HTML, 'function wpImportClose() {');
+  ok(closeFn.includes('_wpImportPending = null;') && closeFn.includes("textContent = 'Importuj trasę'"),
+    'C2: wpImportClose resetuje bramke (pokrywa cancel/X/overlay/Escape)');
+
+  const inputIdx = HTML.indexOf("document.getElementById('wp-import-textarea').addEventListener('input'");
+  ok(inputIdx > 0 && HTML.slice(inputIdx, inputIdx + 400).includes('_wpImportPending = null;'),
+    'C3: zmiana kodu w textarei resetuje bramke');
+
+  const handler = blockSlice('// Importuj trasę — logika', '_wpImportApply(res);');
+  ok(handler.includes('wpHasActiveRoute() && _wpImportPending !== code')
+    && handler.includes("'Nadpisz'") && !handler.includes('wpState.waypoints = newWps'),
+    'C4: handler confirm: bramka wpHasActiveRoute+pending, bez bezposredniego nadpisania');
+
+  const applyFn = extract(HTML, 'function _wpImportApply(res) {');
+  ok(applyFn.includes('wpImportClose();') && applyFn.includes('wpState.waypoints = newWps;'),
+    'C5: _wpImportApply wydzielone: zamyka modal (reset bramki) i aplikuje trase');
+  ok(count('_wpImportApply(res);') === 1 && count('function _wpImportApply(res) {') === 1,
+    'C6: dokladnie jedno wywolanie i jedna definicja _wpImportApply');
+}
+
+// ═══ Sekcja D: #8 — touch delegowany do canvasMode ═══
+console.log('— D: #8 touch —');
+{
+  const tstart = blockSlice("cv.addEventListener('touchstart'", "cv.addEventListener('touchmove'");
+  ok(tstart.includes('_paintStroke = new Map();') && tstart.includes('_paintApplyAtScreen(evX(t0), evY(t0))'),
+    'D1: touchstart — paint rozpoczyna pociagniecie i maluje pierwszy pokoj');
+  ok(tstart.includes('state.editDraggingRoom = true;') && tstart.includes('r.id === state.selected'),
+    'D2: touchstart — drag na zaznaczonym pokoju = przesuwanie (hit Chebyshev 0.525)');
+  ok(tstart.includes('state.dragging = true;'),
+    'D3: touchstart — pan zostaje domyslny (viewer/cl-drawing/puste pole)');
+
+  const tmove = blockSlice("cv.addEventListener('touchmove'", "cv.addEventListener('touchend'");
+  ok(tmove.includes('if (_paintStroke !== null) { _paintApplyAtScreen(evX(t), evY(t)); return; }'),
+    'D4: touchmove — paint drag maluje zamiast panowac');
+  ok(tmove.includes('state.editDraggingRoom && state.selected')
+    && tmove.includes('state.ox += t.clientX - state.dragX;'),
+    'D5: touchmove — delegacja room-drag PRZED zachowanym panem');
+
+  const tend = blockSlice("cv.addEventListener('touchend'", "cv.addEventListener('touchcancel'");
+  ok(tend.includes('_paintStrokeCommit()') && tend.indexOf('_paintStrokeCommit()') < tend.indexOf('_lastTap'),
+    'D6: touchend — commit paint przed detekcja tap (mirror mouseup: return po commicie)');
+  ok(tend.includes('_tryMoveRoomWithPolicy(room, toX, toY, { force: false,')
+    && tend.includes("moveRes === 'blocked'"),
+    'D7: touchend — commit MOVE_ROOM z force:false (brak Shift na touch) + obsluga blocked');
+
+  const tcancel = blockSlice("cv.addEventListener('touchcancel'", "cv.addEventListener('wheel'");
+  ok(tcancel.includes('_paintStrokeRevert()') && tcancel.includes('state.editDraggingRoom = false;'),
+    'D8: touchcancel — sprzata oba stany bez mutacji mapy');
+
+  ok(count('Math.hypot(t2.clientX - t1.clientX') === 1 && tmove.includes('_lastPinchDist = dist;'),
+    'D9: pinch-to-zoom nienaruszony (pin regresji)');
+}
+
+// ── Pin wersji ──
+ok(HTML.includes("const APP_VERSION = 'v1.41.0';"), 'V1: pin APP_VERSION v1.41.0');
+
+console.log('');
+console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);
+process.exit(fail ? 1 : 0);
