@@ -3087,6 +3087,325 @@ scenario('E12.touch', async () => {
   A('E12.touch.pinch', typeof z1 === 'number' && typeof z0 === 'number' && z1 !== z0,
     'pinch: zoom zmieniony [' + z0 + ' -> ' + z1 + ']');
 });
+
+// ═══ GRUPA E13 — generator kalki z diffu map (F1) ═══
+// Scenariusze dziela helpery instalowane w E13.empty — grupe odpalamy w calosci.
+
+scenario('E13.empty', async () => {
+  loadBase('dat');
+  ex('window.__canonMap = function(m){'
+   + ' const c = JSON.parse(JSON.stringify(m));'
+   + ' delete c.meta;'
+   + ' (c.areas || []).forEach(function(a){'
+   + '   a.rooms = (a.rooms || []).map(function(r){ return _diffCanonRoom(r); }).sort(function(x,y){ return x.id - y.id; });'
+   + '   a.labels = (a.labels || []).slice().sort(function(x,y){ return x.id - y.id; });'
+   + ' });'
+   + ' (c.areas || []).sort(function(x,y){ return x.id - y.id; });'
+   + ' c.labels = (c.labels || []).slice().sort(function(x,y){ return x.id - y.id; });'
+   + ' return stableStringify(c); };'
+   + ' window.__e13src = JSON.parse(_serializeMap());'
+   + ' return "ok";');
+  const n = AEV('E13.empty.diff', ev('diffMaps(state.map, JSON.parse(_serializeMap())).entries.length'),
+    'diff mapy z soba sama');
+  A('E13.empty.zero', n === 0, 'zero zmian dla identycznej mapy (phantom-defaults, .dat vs .arkmap)');
+  const ui = AEV('E13.empty.ui', ev('(function(){'
+   + ' _kalka.src = state.map; _kalka.dst = JSON.parse(_serializeMap());'
+   + ' _kalka.srcName = "a.arkmap"; _kalka.dstName = "b.arkmap";'
+   + ' openDialog("dlg-kalka"); kalkaCreate();'
+   + ' return { sum: document.getElementById("dk-summary").textContent,'
+   + '   text: _kalka.text,'
+   + '   saveShown: document.getElementById("dk-save").style.display !== "none",'
+   + '   warnShown: document.getElementById("dk-warn").style.display !== "none" };'
+   + '})()'), 'pusta kalka w dialogu');
+  if (!ui) return;
+  A('E13.empty.msg', ui.sum.indexOf('identyczne') >= 0, 'komunikat identycznosci w dialogu');
+  A('E13.empty.notext', ui.text === null, 'brak tekstu kalki');
+  A('E13.empty.nosave', !ui.saveShown, 'przycisk zapisu ukryty');
+  A('E13.empty.nowarn', !ui.warnShown, 'brak ostrzezenia (overlap 1)');
+});
+
+scenario('E13.online', async () => {
+  loadBase('dat');
+  const r = await eva('(async function(){'
+   + ' _kalkaOl = { base: location.origin + "/",'
+   + '   index: { version: 20, revision: "e13rev", dat_size: 0, arkmap_size: 0 } };'
+   + ' await _kalkaOnlineLoad("src", "dat");'
+   + ' if (!_kalka.src) return { loaded: false, status: document.getElementById("dk-status-src").textContent };'
+   + ' return { loaded: true,'
+   + '   eq: __canonMap(_kalka.src) === __canonMap(state.map),'
+   + '   ver: _kalka.src.meta && _kalka.src.meta.user_data && _kalka.src.meta.user_data.version,'
+   + '   rev: _kalka.src.meta && _kalka.src.meta.user_data && _kalka.src.meta.user_data.revision,'
+   + '   status: document.getElementById("dk-status-src").textContent };'
+   + '})()');
+  if (!r.ok) { FAIL('E13.online.load', '[ev error: ' + r.err + ']'); return; }
+  const v = r.val;
+  A('E13.online.loaded', v.loaded === true, 'kopia online wczytana (lokalny serwer, zero realnej sieci)'
+    + (v.loaded ? '' : ' [status=' + v.status + ']'));
+  if (!v.loaded) return;
+  A('E13.online.eq', v.eq === true, 'mapa online === mapa z fixture (kanon)');
+  A('E13.online.meta', v.ver === 20 && v.rev === 'e13rev', 'version/revision uzupelnione z index');
+  A('E13.online.status', v.status.indexOf('pokoi') >= 0, 'status karty pokazuje liczbe pokoi');
+});
+
+scenario('E13.guard', async () => {
+  const r = AEV('E13.guard.run', ev('(function(){'
+   + ' const mk = function(ids){ return { version:1, meta:{ user_data:{} }, colors:{},'
+   + '   areas:[{ id:1, name:"A", user_data:{}, rooms: ids.map(function(id, i){'
+   + '     return { id:id, x:i*2, y:0, z:0, env:1, symbol:"", name:"R"+id, desc:"", weight:1,'
+   + '       exits:{}, stubs:[], doors:{}, exit_locks:[], exit_weights:{},'
+   + '       special_exits:{}, special_exit_locks:[], custom_lines:{} };'
+   + '   }), labels:[] }], labels:[] }; };'
+   + ' _kalka.src = mk([1,2,3]); _kalka.dst = mk([101,102,103]);'
+   + ' _kalka.srcName = "obca-a.arkmap"; _kalka.dstName = "obca-b.arkmap";'
+   + ' openDialog("dlg-kalka"); kalkaCreate();'
+   + ' return { warn: document.getElementById("dk-warn").textContent,'
+   + '   warnShown: document.getElementById("dk-warn").style.display !== "none",'
+   + '   hasText: typeof _kalka.text === "string" && _kalka.text.length > 0,'
+   + '   saveShown: document.getElementById("dk-save").style.display !== "none",'
+   + '   fname: _kalka.fname };'
+   + '})()'), 'obce mapy w dialogu');
+  if (!r) return;
+  A('E13.guard.warn', r.warnShown && r.warn.indexOf('niespokrewnione') >= 0,
+    'ostrzezenie o niespokrewnionych mapach widoczne');
+  A('E13.guard.built', r.hasText && r.saveShown, 'kalka zbudowana mimo ostrzezenia (D6: nie blokada)');
+  A('E13.guard.fname', r.fname === 'kalka-obca-a-obca-b.arkdelta', 'nazwa pliku z nazw map');
+});
+
+scenario('E13.swap', async () => {
+  const r = AEV('E13.swap.run', ev('(function(){'
+   + ' const mk = function(p){ return { version:1, meta:{ user_data:{} }, colors:{},'
+   + '   areas:[{ id:1, name:"A", user_data:{}, rooms:p, labels:[] }], labels:[] }; };'
+   + ' const R = function(id, x){ return { id:id, x:x, y:0, z:0, env:1, symbol:"", name:"R"+id,'
+   + '   desc:"", weight:1, exits:{}, stubs:[], doors:{}, exit_locks:[], exit_weights:{},'
+   + '   special_exits:{}, special_exit_locks:[], custom_lines:{} }; };'
+   + ' const src = mk([R(1,0), R(2,2)]), dst = mk([R(1,2), R(2,0)]);'
+   + ' const d = diffMaps(src, dst);'
+   + ' const text = buildDelta(d.entries, _computeBaseInfo(src));'
+   + ' const v = validateDeltaText(text);'
+   + ' applyMap(JSON.parse(JSON.stringify(src)));'
+   + ' startLocalEditMode();'
+   + ' const cl = classifyDelta(JSON.parse(text));'
+   + ' const bad = cl.filter(function(i){ return i.cls === "hard" || i.cls === "impossible"; });'
+   + ' const res = applyDelta(JSON.parse(text));'
+   + ' return { types: d.entries.map(function(e){ return e.type; }).join(","),'
+   + '   vok: v.ok, hard: bad.length, applied: res.applied, ops: JSON.parse(text).ops.length,'
+   + '   eq: __canonMap(state.map) === __canonMap(dst) };'
+   + '})()'), 'swap dwoch pokoi end-to-end');
+  if (!r) return;
+  A('E13.swap.types', r.types === 'EDIT_ROOM,MOVE_ROOM',
+    'cykl = fallback EDIT_ROOM + MOVE_ROOM [actual=' + r.types + ']');
+  A('E13.swap.valid', r.vok === true, 'kalka przechodzi walidacje');
+  A('E13.swap.nohard', r.hard === 0, 'klasyfikacja bez hard/impossible');
+  A('E13.swap.applied', r.applied === r.ops, 'wszystkie opy naniesione');
+  A('E13.swap.eq', r.eq === true, 'mapa po apply === cel (kanon)');
+});
+
+scenario('E13.buildapply', async () => {
+  loadBase('dat');
+  // ── etap 1: chirurgia na klonie fixture (target) ──
+  const S = AEV('E13.buildapply.surgery', ev('(function(){'
+   + ' const src = JSON.parse(JSON.stringify(window.__e13src));'
+   + ' const target = JSON.parse(JSON.stringify(window.__e13src));'
+   + ' const out = {};'
+   + ' const areasT = target.areas.slice().sort(function(a,b){ return a.id - b.id; });'
+   + ' let maxRoom = 0, maxX = -1e9, maxArea = 0;'
+   + ' target.areas.forEach(function(a){ if (a.id > maxArea) maxArea = a.id;'
+   + '   (a.rooms || []).forEach(function(r){ if (r.id > maxRoom) maxRoom = r.id; if (r.x > maxX) maxX = r.x; }); });'
+   + ' const used = {};'
+   + ' const take = function(arr, pred){'
+   + '   for (const r of arr) { if (!used[r.id] && pred(r)) { used[r.id] = 1; return r; } } return null; };'
+   + ' const a0 = areasT.find(function(a){ return (a.rooms || []).length >= 10; });'
+   + ' const DIRS = ["n","ne","e","se","s","sw","w","nw","up","down","in","out"];'
+   // 1. MOVE_ROOM — wolna komorka poza zasiegiem mapy
+   + ' const rMove = take(a0.rooms, function(){ return true; });'
+   + ' out.rMove = rMove.id; rMove.x = maxX + 10;'
+   // 2. EDIT_ROOM — rename + desc
+   + ' const rEdit = take(a0.rooms, function(){ return true; });'
+   + ' out.rEdit = rEdit.id; rEdit.name = "ZZ E13 edycja"; rEdit.desc = "opis testowy E13";'
+   // 3. PAINT_BATCH — 3 pokoje z IDENTYCZNYM (env,symbol) przed zmiana
+   + ' const buckets = {};'
+   + ' a0.rooms.forEach(function(r){ if (used[r.id]) return;'
+   + '   const k = (r.env === undefined ? "u" : r.env) + "|" + (r.symbol === undefined ? "u" : r.symbol);'
+   + '   (buckets[k] = buckets[k] || []).push(r); });'
+   + ' const bk = Object.keys(buckets).map(function(k){ return buckets[k]; })'
+   + '   .filter(function(g){ return g.length >= 3; })[0];'
+   + ' if (!bk) return { fail: "brak grupy 3 pokoi o tym samym env/symbol" };'
+   + ' out.paint = [];'
+   + ' for (let i = 0; i < 3; i++) { const rp = bk[i]; used[rp.id] = 1;'
+   + '   out.paint.push(rp.id); rp.env = 9; rp.symbol = "##"; }'
+   // 4. ADD_EXIT — wolny kierunek bez CL/suppressora, cel istniejacy
+   + ' const rAddExT = take(a0.rooms, function(){ return true; });'
+   + ' const rAddEx = take(a0.rooms, function(r){'
+   + '   return DIRS.some(function(d){ return !(r.exits || {})[d] && !(r.special_exits || {})[d]'
+   + '     && !(r.custom_lines || {})[d]; }); });'
+   + ' const dirAdd = DIRS.find(function(d){ return !(rAddEx.exits || {})[d]'
+   + '   && !(rAddEx.special_exits || {})[d] && !(rAddEx.custom_lines || {})[d]; });'
+   + ' rAddEx.exits = rAddEx.exits || {}; rAddEx.exits[dirAdd] = rAddExT.id;'
+   + ' out.addExit = [rAddEx.id, dirAdd, rAddExT.id];'
+   // 5. DELETE_EXIT — czyste wyjscie (bez doors/weights/locks/stubs/CL)
+   + ' const rDelEx = take(a0.rooms, function(r){'
+   + '   return Object.keys(r.exits || {}).some(function(d){'
+   + '     return !(r.doors || {})[d] && !(r.exit_weights || {})[d]'
+   + '       && !(r.exit_locks || []).includes(d) && !(r.stubs || []).includes(d)'
+   + '       && !(r.custom_lines || {})[d]; }); });'
+   + ' const dirDel = Object.keys(rDelEx.exits).find(function(d){'
+   + '   return !(rDelEx.doors || {})[d] && !(rDelEx.exit_weights || {})[d]'
+   + '     && !(rDelEx.exit_locks || []).includes(d) && !(rDelEx.stubs || []).includes(d)'
+   + '     && !(rDelEx.custom_lines || {})[d]; });'
+   + ' out.delExit = [rDelEx.id, dirDel, rDelEx.exits[dirDel]];'
+   + ' delete rDelEx.exits[dirDel];'
+   + ' if (rDelEx.exit_weights) delete rDelEx.exit_weights[dirDel];'
+   + ' if (rDelEx.custom_lines) delete rDelEx.custom_lines[dirDel];'
+   + ' if (rDelEx.exit_locks) rDelEx.exit_locks = rDelEx.exit_locks.filter(function(x){ return x !== dirDel; });'
+   + ' if (!(rDelEx.stubs || []).includes(dirDel) && rDelEx.doors) delete rDelEx.doors[dirDel];'
+   // 6. EDIT_EXIT — nowe wyjscie specjalne (rodzina exit-rest)
+   + ' const rSpec = take(a0.rooms, function(r){ return !(r.special_exits || {})["e13cmd"]; });'
+   + ' rSpec.special_exits = rSpec.special_exits || {}; rSpec.special_exits["e13cmd"] = rAddExT.id;'
+   + ' out.editExit = rSpec.id;'
+   // 7. ADD_CL — CL na ISTNIEJACYM wyjsciu (egzemplarz CL sklonowany z mapy)
+   + ' let clEx = null;'
+   + ' for (const a of target.areas) { for (const r of (a.rooms || [])) {'
+   + '   for (const d of Object.keys(r.custom_lines || {})) {'
+   + '     const c = r.custom_lines[d];'
+   + '     if (c && c.points && c.points.length > 0) { clEx = JSON.parse(JSON.stringify(c)); break; } }'
+   + '   if (clEx) break; } if (clEx) break; }'
+   + ' if (!clEx) return { fail: "brak egzemplarza CL w fixture" };'
+   + ' const rAddCL = take(a0.rooms, function(r){'
+   + '   return Object.keys(r.exits || {}).some(function(d){ return !(r.custom_lines || {})[d]; }); });'
+   + ' const dirCL = Object.keys(rAddCL.exits).find(function(d){ return !(rAddCL.custom_lines || {})[d]; });'
+   + ' rAddCL.custom_lines = rAddCL.custom_lines || {}; rAddCL.custom_lines[dirCL] = clEx;'
+   + ' out.addCL = [rAddCL.id, dirCL];'
+   // 8. DELETE_ROOM z kaskada — pokoj bedacy celem wyjsc, poza a0, incoming nieuzywane
+   + ' const inCount = {};'
+   + ' target.areas.forEach(function(a){ (a.rooms || []).forEach(function(r){'
+   + '   Object.keys(r.exits || {}).forEach(function(d){'
+   + '     inCount[r.exits[d]] = (inCount[r.exits[d]] || 0) + 1; });'
+   + '   Object.keys(r.special_exits || {}).forEach(function(c){'
+   + '     inCount[r.special_exits[c]] = (inCount[r.special_exits[c]] || 0) + 1; }); }); });'
+   + ' let rDel = null;'
+   + ' outer: for (const a of areasT) {'
+   + '   if (a === a0 || (a.rooms || []).length < 3) continue;'
+   + '   for (const r of a.rooms) {'
+   + '     if (used[r.id] || !inCount[r.id]) continue;'
+   + '     let clash = false;'
+   + '     for (const a2 of target.areas) for (const s2 of (a2.rooms || [])) {'
+   + '       if (used[s2.id]) continue;'
+   + '       for (const d of Object.keys(s2.exits || {}))'
+   + '         if (s2.exits[d] === r.id && used[s2.id]) { clash = true; break; }'
+   + '       if (clash) break;'
+   + '       for (const c of Object.keys(s2.special_exits || {}))'
+   + '         if (s2.special_exits[c] === r.id && used[s2.id]) { clash = true; break; }'
+   + '       if (clash) break; }'
+   + '     if (!clash) { rDel = r; break outer; } } }'
+   + ' if (!rDel) return { fail: "brak kandydata DELETE_ROOM z incoming" };'
+   + ' out.delRoom = rDel.id; out.delRoomIncoming = inCount[rDel.id];'
+   + ' used[rDel.id] = 1;'
+   + ' const delId = rDel.id;'
+   + ' for (const a of target.areas) {'
+   + '   const ix = (a.rooms || []).findIndex(function(r){ return r.id === delId; });'
+   + '   if (ix >= 0) { a.rooms.splice(ix, 1); break; } }'
+   // lustro kaskady deleteRoom (z czyszczeniem pustych kontenerow)
+   + ' for (const a of target.areas) for (const s2 of (a.rooms || [])) {'
+   + '   for (const d of Object.keys(s2.exits || {})) if (s2.exits[d] === delId) {'
+   + '     delete s2.exits[d]; if (!Object.keys(s2.exits).length) delete s2.exits;'
+   + '     if (s2.exit_weights) { delete s2.exit_weights[d]; if (!Object.keys(s2.exit_weights).length) delete s2.exit_weights; }'
+   + '     if (s2.exit_locks) { s2.exit_locks = s2.exit_locks.filter(function(x){ return x !== d; }); if (!s2.exit_locks.length) delete s2.exit_locks; }'
+   + '     if (s2.doors) { delete s2.doors[d]; if (!Object.keys(s2.doors).length) delete s2.doors; }'
+   + '     if (s2.custom_lines) { delete s2.custom_lines[d]; if (!Object.keys(s2.custom_lines).length) delete s2.custom_lines; } }'
+   + '   for (const c of Object.keys(s2.special_exits || {})) if (s2.special_exits[c] === delId) {'
+   + '     delete s2.special_exits[c]; if (!Object.keys(s2.special_exits).length) delete s2.special_exits;'
+   + '     if (s2.special_exit_locks) { s2.special_exit_locks = s2.special_exit_locks.filter(function(x){ return x !== c; }); if (!s2.special_exit_locks.length) delete s2.special_exit_locks; }'
+   + '     if (s2.custom_lines) { delete s2.custom_lines[c]; if (!Object.keys(s2.custom_lines).length) delete s2.custom_lines; }'
+   + '     if (s2.doors) { delete s2.doors[c]; if (!Object.keys(s2.doors).length) delete s2.doors; }'
+   + '     if (s2.exit_weights) { delete s2.exit_weights[c]; if (!Object.keys(s2.exit_weights).length) delete s2.exit_weights; } } }'
+   // 9. ADD_ROOM — nowy pokoj w a0, id = maxRoom+1 (zgodne z przydzialem applyDelta)
+   + ' const newRoomId = maxRoom + 1;'
+   + ' a0.rooms.push({ id: newRoomId, x: maxX + 20, y: 0, z: 0, env: 1, symbol: "",'
+   + '   name: "ZZ E13 nowy", desc: "", weight: 1, exits: { out: rAddExT.id }, stubs: [],'
+   + '   doors: {}, exit_locks: [], exit_weights: {}, special_exits: {}, special_exit_locks: [],'
+   + '   custom_lines: {} });'
+   + ' out.addRoom = newRoomId;'
+   // 10. ADD_AREA + ADD_LABEL (etykieta id 1 — zgodnie z _deltaMaxLabelId pustego obszaru)
+   + ' const newAreaId = maxArea + 1;'
+   + ' target.areas.push({ id: newAreaId, name: "ZZ E13 obszar", rooms: [], user_data: {},'
+   + '   labels: [{ id: 1, text: "ZZ E13 etykieta", fg_color: "#ffffff", bg_color: "#000000",'
+   + '     x: 5, y: 5, z: 0, width: 4, height: 1.2 }] });'
+   + ' out.addArea = newAreaId;'
+   // 11. EDIT_AREA — rename istniejacego obszaru
+   + ' const aEdit = areasT.find(function(a){ return a !== a0 && a.id > 0; });'
+   + ' aEdit.name = (aEdit.name || "") + " ZZ";'
+   + ' out.editArea = aEdit.id;'
+   // 12. MOVE_ROOM_TO_AREA — pokoj z a0 do innego obszaru, wolna komorka docelowa
+   + ' const a1 = areasT.find(function(a){ return a !== a0 && (a.rooms || []).length > 0; });'
+   + ' const occ1 = {};'
+   + ' (a1.rooms || []).forEach(function(r){ occ1[r.x + "," + r.y + "," + (r.z === undefined ? 0 : r.z)] = 1; });'
+   + ' let mv = null;'
+   + ' for (const r of a0.rooms.slice()) {'
+   + '   if (used[r.id]) continue;'
+   + '   if (!occ1[r.x + "," + r.y + "," + (r.z === undefined ? 0 : r.z)]) { mv = r; break; } }'
+   + ' if (!mv) return { fail: "brak kandydata MOVE_ROOM_TO_AREA" };'
+   + ' used[mv.id] = 1; out.moveArea = [mv.id, a1.id];'
+   + ' a0.rooms.splice(a0.rooms.indexOf(mv), 1); a1.rooms.push(mv);'
+   // 13. EDIT_ENV_COLOR — nowy custom kolor env
+   + ' target.colors = target.colors || {};'
+   + ' target.colors.custom_env_colors = Object.assign({}, target.colors.custom_env_colors || {});'
+   + ' let ec = [11, 22, 33];'
+   + ' const cur250 = (src.colors && src.colors.custom_env_colors || {})["250"];'
+   + ' if (cur250 && cur250.join() === ec.join()) ec = [12, 23, 34];'
+   + ' target.colors.custom_env_colors["250"] = ec;'
+   + ' window.__e13S = src; window.__e13T = target;'
+   + ' return out;'
+   + '})()'), 'chirurgia na klonie fixture');
+  if (!S) return;
+  if (S.fail) { FAIL('E13.buildapply.surgery', S.fail); return; }
+
+  // ── etap 2: diff + buildDelta x2 (determinizm) + walidacja + klasyfikacja ──
+  const D = AEV('E13.buildapply.diff', ev('(function(){'
+   + ' const d = diffMaps(window.__e13S, window.__e13T);'
+   + ' const t1 = buildDelta(d.entries, _computeBaseInfo(window.__e13S));'
+   + ' const t2 = buildDelta(diffMaps(window.__e13S, window.__e13T).entries,'
+   + '   _computeBaseInfo(window.__e13S));'
+   + ' const v = validateDeltaText(t1);'
+   + ' applyMap(JSON.parse(JSON.stringify(window.__e13S)));'
+   + ' startLocalEditMode();'
+   + ' const cl = classifyDelta(JSON.parse(t1));'
+   + ' const bad = cl.filter(function(i){ return i.cls === "hard" || i.cls === "impossible"; })'
+   + '   .map(function(i){ return i.type + "#" + i.seq + ":" + (i.note || ""); });'
+   + ' window.__e13Text = t1;'
+   + ' return { ops: JSON.parse(t1).ops.length, stats: d.stats, det: t1 === t2,'
+   + '   vok: v.ok, verr: (v.errors || []).slice(0, 3), hardN: bad.length, hard: bad.slice(0, 5) };'
+   + '})()'), 'diff + buildDelta + walidacja + klasyfikacja (fixture)');
+  if (!D) return;
+  const st = D.stats || {};
+  const stExpect = { addRoom: 1, delRoom: 1, moveRoom: 1, editRoom: 1, paintBatches: 1, paintRooms: 3,
+    addExit: 1, delExit: 1, editExit: 1, addCL: 1, addArea: 1, editArea: 1, moveArea: 1, addLabel: 1, envColor: 1 };
+  for (const k of Object.keys(stExpect))
+    EQ('E13.buildapply.stat.' + k, st[k], stExpect[k], 'statystyka diffa');
+  A('E13.buildapply.det', D.det === true, 'buildDelta deterministyczny (2 przebiegi identyczne)');
+  A('E13.buildapply.valid', D.vok === true, 'kalka przechodzi autowalidacje'
+    + (D.vok ? '' : ' [' + JSON.stringify(D.verr) + ']'));
+  A('E13.buildapply.nohard', D.hardN === 0, 'klasyfikacja bez hard/impossible'
+    + (D.hardN ? ' [' + D.hard.join(' | ') + ']' : ''));
+
+  // ── etap 3: apply + porownanie kanoniczne z celem ──
+  const Rr = AEV('E13.buildapply.apply', ev('(function(){'
+   + ' const delta = JSON.parse(window.__e13Text);'
+   + ' const res = applyDelta(delta);'
+   + ' const a = __canonMap(state.map), b = __canonMap(window.__e13T);'
+   + ' let mm = null;'
+   + ' if (a !== b) { let i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++;'
+   + '   mm = { at: i, live: a.slice(Math.max(0, i - 60), i + 100), want: b.slice(Math.max(0, i - 60), i + 100) }; }'
+   + ' return { applied: res.applied, skipN: res.skipped.length,'
+   + '   skipped: res.skipped.slice(0, 5), ops: delta.ops.length, eq: a === b, mm: mm };'
+   + '})()'), 'apply kalki na fixture');
+  if (!Rr) return;
+  A('E13.buildapply.applied', Rr.applied === Rr.ops && Rr.skipN === 0,
+    'wszystkie opy naniesione (' + Rr.applied + '/' + Rr.ops + ')'
+    + (Rr.skipN ? ' [skipped: ' + JSON.stringify(Rr.skipped) + ']' : ''));
+  A('E13.buildapply.eq', Rr.eq === true, 'mapa po apply === cel (kanon, fixture master3)'
+    + (Rr.mm ? ' [rozjazd @' + Rr.mm.at + ' live=…' + Rr.mm.live + '… want=…' + Rr.mm.want + '…]' : ''));
+});
+
 // ═══ Runner ═══
 function appReady() {
   return new Promise(res => {

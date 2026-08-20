@@ -715,6 +715,15 @@
 </ol>
 <div class="note">Jeśli kalka została zapisana na innej wersji mapy niż aktualnie wczytana, przed recenzją pojawi się dialog z porównaniem wersji — to normalny scenariusz, wymaga tylko świadomego „Kontynuuj recenzję".</div>
 
+<h3>Kalka z różnicy dwóch map <span class="badge badge-viewer">WIDOK+EDYTOR</span></h3>
+<p>Przycisk <strong>⇄ Stwórz kalkę mapy…</strong> (pod „Wczytaj .arkdelta…", zawsze aktywny — nie wymaga trybu edycji) otwiera narzędzie, które <strong>porównuje dwie mapy i generuje z różnicy gotową kalkę</strong> .arkdelta do pobrania. Dla każdej ze stron (źródłowa / docelowa) wybierasz: wczytanie z pliku (.arkmap lub .dat) albo pobranie online aktualnej wersji z mirroru. Gdy obie strony są gotowe, <strong>Stwórz kalkę</strong> buduje listę zmian z polskimi opisami (dodane pokoje, wyjścia, przesunięcia, malowania, obszary, etykiety…) i udostępnia przycisk pobierania.</p>
+<ul>
+  <li>Kolejność operacji w kalce jest ułożona automatycznie (najpierw nowe obszary i pokoje, potem usunięcia, przesunięcia i reszta), więc kalka nanosi się czysto przez zwykłe okno recenzji.</li>
+  <li>Jeśli mapy wyglądają na niespokrewnione (mało wspólnych numerów pokoi), narzędzie ostrzega — kalka i tak powstaje, ale zwykle nie ma sensu.</li>
+  <li>Mapy identyczne → komunikat „nie ma czego zapisywać". Zbyt różne (ponad 5000 zmian lub 8 MB) → twarda blokada, zgodnie z limitami formatu.</li>
+  <li>Narzędzie <strong>nie dotyka</strong> aktualnie wczytanej mapy ani historii edycji — tworzy wyłącznie plik do pobrania. Do nałożenia kalki służy zwykłe „Wczytaj .arkdelta…".</li>
+</ul>
+
 <h3>Okno recenzji</h3>
 <p>Po wczytaniu kalki otwiera się niemodalny panel z listą wszystkich operacji. Każda operacja jest sklasyfikowana względem <strong>aktualnie wczytanej</strong> mapy:</p>
 <ul>

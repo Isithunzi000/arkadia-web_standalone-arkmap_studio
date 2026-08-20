@@ -156,7 +156,7 @@ console.log('— D: #8 touch —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.41.0';"), 'V1: pin APP_VERSION v1.41.0');
+ok(HTML.includes("const APP_VERSION = 'v1.42.0';"), 'V1: pin APP_VERSION v1.42.0');
 
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);

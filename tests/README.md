@@ -35,6 +35,7 @@ node tests/tier3_format.js     # Tier 3 (v1.38.0): CRC v2 W3, hidden/symbolColor
 node tests/tier4_hardening.js  # Tier 4 (v1.39.0): walidator kalki K6/K7/S8, kodek .dat W1/W2, C-K5 reszta wg P2, C-locks, S7 undo, W6/W8 planer, piny P1/P3
 node tests/tier5_audit.js     # Tier 5 (v1.40.0): fixy audytu AI — __proto__-safe mapy (F1), backlink room.area (F2), suppressor przy addExit (F3), rp-env pendingEnv (F4), placeCtx sid-area + spojnosc classify/apply (F5)
 node tests/tier6_ux.js       # Tier 6 (v1.41.0): UX — dirty przy re-wejsciu (D1), Przywroc-ostatni-zapis + bufor pristineArkmap (D2-c), wiazania dlg-unsaved-exit przy uspionym GitHub (D4), bramka importu trasy (#18), touch w canvasMode (#8); empiria: grupa E12
+node tests/diff_kalka.js    # F1 (v1.42.0): generator kalki z diffu map — klasyfikacja zmian, kolejnosc topologiczna, straznicy, piny UI; empiria: grupa E13
 ```
 
 albo wszystkie naraz:
@@ -50,12 +51,12 @@ Kod wyjścia: 0 = wszystko OK, 1 = są FAIL-e, 2 = brak fixture.
 Oprócz harnessów Node.js regresja obejmuje testy empiryczne: `tests/empirical.sh` odpala
 pełną aplikację w headless Chromium (driver: `tests/empirical_driver.html` — iframe z
 `arkmap_studio.html`, scenariusze przez eval) i wykonuje scenariusze pogrupowane w
-`SMOKE` oraz `E0`–`E12` (m.in. kalka .arkdelta end-to-end, roundtrip .dat, planer,
+`SMOKE` oraz `E0`–`E13` (m.in. kalka .arkdelta end-to-end, generator kalki z diffu map, roundtrip .dat, planer,
 walidacja kierunków, UI — a od Tier 6 także syntetyczne zdarzenia dotyku).
 `run-all.sh` odpala je automatycznie po harnessach Node.js.
 
 ```bash
-ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12" \
+ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13" \
 ARKTEST_BUDGET=300000 ARKTEST_TIMEOUT=420 bash tests/empirical.sh
 ```
 
