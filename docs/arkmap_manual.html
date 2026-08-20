@@ -344,7 +344,7 @@
 <p>Pole <strong>Kod trasy</strong> wyświetla serializowaną trasę w formacie <code>ARKMAP2:&lt;algo&gt;&lt;kierunki&gt;&lt;transport&gt;:...</code>. Kod zawiera nie tylko waypointy, ale też wszystkie ustawienia planera: algorytm (<code>d</code> = Dijkstra, <code>a</code> = A*), filtr kierunków (<code>k</code> = kardynalne, <code>p</code> = +pionowe, <code>w</code> = wszystkie) i transporty (<code>p</code> = pieszo, <code>n</code> = normalny, <code>g</code> = agresywny). Możesz skopiować ten kod (przycisk ⎘) i udostępnić innej osobie, która zaimportuje go w swoim ArkMap Studio.</p>
 
 <h3>Import trasy</h3>
-<p>Kliknij <strong>Importuj</strong> w nagłówku panelu → wklej kod <code>ARKMAP2:...</code> w oknie dialogowym → kliknij „Importuj trasę". Import ustawia algorytm, filtr kierunków i transporty zgodnie z kodem, a następnie przelicza trasę.</p>
+<p>Kliknij <strong>Importuj</strong> w nagłówku panelu → wklej kod <code>ARKMAP2:...</code> w oknie dialogowym → kliknij „Importuj trasę". Import ustawia algorytm, filtr kierunków i transporty zgodnie z kodem, a następnie przelicza trasę. Jeśli bieżąca trasa ma przypisane waypointy, nadpisanie wymaga potwierdzenia: pierwszy klik pokazuje ostrzeżenie i zmienia przycisk na „Nadpisz" — dopiero drugi klik zastępuje trasę (zmiana kodu, „Anuluj" albo zamknięcie okna resetują potwierdzenie).</p>
 
 <h3>Dodatkowe akcje</h3>
 <ul>
@@ -407,11 +407,8 @@
 <p>Tryb edycji pozwala modyfikować mapę — dodawać, usuwać i edytować pokoje, wyjścia, obszary, etykiety i custom lines.</p>
 
 <h3>Włączanie trybu edycji</h3>
-<p>Naciśnij <kbd>Ctrl+E</kbd> lub kliknij przycisk <strong>✎ Edycja</strong> w pasku statusu. Pojawi się dialog wyboru trybu:</p>
-<ul>
-  <li><strong>💾 Edycja lokalna</strong> — edycja offline, zapis do .arkmap w dowolnym momencie (eksport .dat wymaga wyjścia z trybu edycji)</li>
-  <li><strong>⬡ Sesja GitHub</strong> — (wkrótce) edycja z synchronizacją z repozytorium GitHub, lock, Pull Request</li>
-</ul>
+<p>Naciśnij <kbd>Ctrl+E</kbd> lub kliknij przycisk <strong>✎ Edycja</strong> w pasku statusu. Edytor wchodzi od razu w <strong>edycję lokalną</strong> — edycja offline, zapis do .arkmap w dowolnym momencie (eksport .dat wymaga wyjścia z trybu edycji).</p>
+<div class="note">Istnieje też wariant <strong>⬡ Sesja GitHub</strong> (edycja z synchronizacją z repozytorium, lock, Pull Request) — obecnie ukryty i nieaktywny; szczegóły w sekcji <a href="#github">Integracja z GitHub</a>.</div>
 
 <h3>Sygnalizacja trybu edycji</h3>
 <p>Gdy tryb edycji jest aktywny:</p>
@@ -434,7 +431,7 @@
 <p>Tryb malowania pozwala szybko nadać to samo środowisko lub symbol wielu pokojom naraz. W panelu <strong>🎨 Narzędzia</strong> (lub w zakładce <strong>Paleta</strong> panelu pokoju) kliknij kolor albo symbol, aby <strong>uzbroić pędzel</strong> — u góry canvasa pojawi się baner „🖌 Malowanie", a kursor zaczyna malować.</p>
 <ul>
   <li><strong>Klik na pokój</strong> — maluje jeden pokój uzbrojoną wartością (kolor środowiska lub symbol)</li>
-  <li><strong>Przeciągnięcie (drag)</strong> — maluje wszystkie pokoje pod kursorem jednym pociągnięciem</li>
+  <li><strong>Przeciągnięcie (drag)</strong> — maluje wszystkie pokoje pod kursorem jednym pociągnięciem (na ekranach dotykowych: drag jednym palcem działa tak samo)</li>
   <li><strong>Gumka symbolu</strong> — uzbrojenie trybu wymazywania czyści symbol z malowanych pokoi</li>
   <li><kbd>Esc</kbd> — kończy malowanie (rozbraja pędzel)</li>
 </ul>
@@ -447,7 +444,12 @@
 <p>W pasku statusu widoczny jest licznik zmian (np. „● 12"). Kliknij go aby otworzyć <strong>Historię zmian (sesja)</strong> — chronologiczną listę operacji w bieżącej sesji edycji.</p>
 
 <h3>Wyjście z trybu edycji</h3>
-<p>Naciśnij <kbd>Ctrl+E</kbd> ponownie. Jeśli masz niezapisane zmiany, pojawi się dialog z opcjami: Porzuć / Zapisz .arkmap.</p>
+<p>Naciśnij <kbd>Ctrl+E</kbd> ponownie. Bez niezapisanych zmian edytor wraca do podglądu od razu. Jeśli masz niezapisane zmiany, pojawi się dialog z trzema opcjami:</p>
+<ul>
+  <li><strong>Wyjdź — zachowaj w pamięci</strong> — wracasz do podglądu, a zmiany zostają w tej sesji: po ponownym wejściu w edycję (<kbd>Ctrl+E</kbd>) nadal są obecne i oznaczone jako niezapisane (edytor przypomni o nich komunikatem). Przepadają dopiero przy przeładowaniu lub zamknięciu strony.</li>
+  <li><strong>Przywróć ostatni zapis</strong> — porzuca wszystkie niezapisane zmiany i przywraca mapę do ostatniego punktu zapisu (ostatnie wczytanie mapy albo ostatni zapis .arkmap w tej sesji).</li>
+  <li><strong>Zapisz .arkmap</strong> — zapisuje zmiany do pliku i wychodzi do podglądu.</li>
+</ul>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="edit-room">15. Edycja pokoju <span class="badge badge-edit">EDYTOR</span></h2>
@@ -462,7 +464,7 @@
   <li><strong>Waga</strong> — koszt wejścia do pokoju dla pathfindingu (≥ 1, domyślnie 1)</li>
   <li><strong>Obrys</strong> — własna ramka pokoju: zaznacz „własny", wybierz kolor i grubość (1–10). Odznaczenie przywraca domyślny obrys.</li>
   <li><strong>Ukryty</strong> — oznacza pokój jako ukryty; sposób renderu zależy od ustawienia „Ukryte pokoje" (Przygaszony / Przerywany / Pokaż / Ukryj)</li>
-  <li><strong>Pozycja</strong> — X, Y, Z (edytowalne — zmiana wartości natychmiast przesuwa pokój na mapie z podglądem na żywo; możesz też przesuwać strzałkami lub dragiem)</li>
+  <li><strong>Pozycja</strong> — X, Y, Z (edytowalne — zmiana wartości natychmiast przesuwa pokój na mapie z podglądem na żywo; możesz też przesuwać strzałkami lub dragiem — myszą albo jednym palcem na ekranach dotykowych)</li>
 </ul>
 
 <h3>Zakładka: Wyjścia</h3>

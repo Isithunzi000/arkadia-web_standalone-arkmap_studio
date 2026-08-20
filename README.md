@@ -18,6 +18,7 @@ Samowystarczalna aplikacja przeglądarkowa do podglądu i edycji map gry MUD **A
 
 - [Instrukcja obsługi](https://isithunzi000.github.io/arkadia-web_standalone-arkmap_studio/docs/arkmap_manual.html)
 - [Specyfikacja formatu `.arkmap`](https://isithunzi000.github.io/arkadia-web_standalone-arkmap_studio/docs/arkmap_spec.html)
+- [Specyfikacja formatu `.arkdelta`](https://isithunzi000.github.io/arkadia-web_standalone-arkmap_studio/docs/arkdelta_spec.html) — kalka zmian edycyjnych
 - [Changelog](CHANGELOG.md) — dziennik zmian projektu
 
 ## Testy

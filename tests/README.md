@@ -45,6 +45,26 @@ bash tests/run-all.sh
 
 Kod wyjścia: 0 = wszystko OK, 1 = są FAIL-e, 2 = brak fixture.
 
+## Testy empiryczne (prawdziwa przeglądarka)
+
+Oprócz harnessów Node.js regresja obejmuje testy empiryczne: `tests/empirical.sh` odpala
+pełną aplikację w headless Chromium (driver: `tests/empirical_driver.html` — iframe z
+`arkmap_studio.html`, scenariusze przez eval) i wykonuje scenariusze pogrupowane w
+`SMOKE` oraz `E0`–`E12` (m.in. kalka .arkdelta end-to-end, roundtrip .dat, planer,
+walidacja kierunków, UI — a od Tier 6 także syntetyczne zdarzenia dotyku).
+`run-all.sh` odpala je automatycznie po harnessach Node.js.
+
+```bash
+ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12" \
+ARKTEST_BUDGET=300000 ARKTEST_TIMEOUT=420 bash tests/empirical.sh
+```
+
+Zmienne: `ARKTEST_GROUPS` (domyślnie `SMOKE`), `ARKTEST_BUDGET` (budżet virtual-time
+przeglądarki, ms), `ARKTEST_TIMEOUT` (limit sekund na grupę, domyślnie 420),
+`CHROMIUM_BIN`, `ARKTEST_PORT`. Wymaga fixture `map_master3.dat` (pobierany
+automatycznie przez `fetch-fixture.sh`). Wyniki: linie `R|PASS|...` / `R|FAIL|...`
++ `SUMMARY|pass=N|fail=M` per grupa.
+
 ## CI
 
 Workflow `.github/workflows/ci-tests.yml` odpala **pełną regresję automatycznie na każdy
