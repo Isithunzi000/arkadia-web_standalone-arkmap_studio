@@ -51,12 +51,12 @@ Kod wyjścia: 0 = wszystko OK, 1 = są FAIL-e, 2 = brak fixture.
 Oprócz harnessów Node.js regresja obejmuje testy empiryczne: `tests/empirical.sh` odpala
 pełną aplikację w headless Chromium (driver: `tests/empirical_driver.html` — iframe z
 `arkmap_studio.html`, scenariusze przez eval) i wykonuje scenariusze pogrupowane w
-`SMOKE` oraz `E0`–`E13` (m.in. kalka .arkdelta end-to-end, generator kalki z diffu map, roundtrip .dat, planer,
+`SMOKE` oraz `E0`–`E14` (m.in. kalka .arkdelta end-to-end, generator kalki z diffu map, roundtrip .dat, planer,
 walidacja kierunków, UI — a od Tier 6 także syntetyczne zdarzenia dotyku).
 `run-all.sh` odpala je automatycznie po harnessach Node.js.
 
 ```bash
-ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13" \
+ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13 E14" \
 ARKTEST_BUDGET=300000 ARKTEST_TIMEOUT=420 bash tests/empirical.sh
 ```
 

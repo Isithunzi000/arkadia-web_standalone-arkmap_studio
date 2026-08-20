@@ -3406,6 +3406,167 @@ scenario('E13.buildapply', async () => {
     + (Rr.mm ? ' [rozjazd @' + Rr.mm.at + ' live=…' + Rr.mm.live + '… want=…' + Rr.mm.want + '…]' : ''));
 });
 
+
+// ─── E14: audyt rozszerzony k2.7-code — piny fixow (F1-1, F1-5, T6-F2, T6-F3, T6-F4, F3-01, F3-02) ───
+
+scenario('E14.kalkaXss', async () => {
+  loadBase('dat');
+  // (a) sink _kalkaSetMap: zlosliwa nazwa pliku w label musi byc escapowana
+  const a = AEV('E14.kalkaXss.a', ev('(function(){'
+   + ' _kalkaSetMap("src", state.map, "<img src=x onerror=window.__xss1=1>.arkmap");'
+   + ' var h = document.getElementById("dk-status-src").innerHTML;'
+   + ' return { raw: h.indexOf("<img") >= 0, esc: h.indexOf("&lt;img") >= 0 };'
+   + '})()'), 'status kalki po _kalkaSetMap');
+  if (a) A('E14.kalkaXss.label', a.raw === false && a.esc === true, 'F1-1: label pliku escapowany w _kalkaStatus ' + JSON.stringify(a));
+  // (b) sciezka "Wczytuje <file.name>…" — podsluch wywolan _kalkaStatus
+  const b = AEV('E14.kalkaXss.b', await eva('(async function(){'
+   + ' var calls = []; var orig = window._kalkaStatus;'
+   + ' window._kalkaStatus = function(s, h, e){ calls.push(h); return orig(s, h, e); };'
+   + ' try { await _kalkaLoadFile("src", new File(["{}"], "<img src=y onerror=window.__xss2=1>.arkmap")); } catch(e) {}'
+   + ' window._kalkaStatus = orig;'
+   + ' var first = calls[0] || "";'
+   + ' return { raw: first.indexOf("<img") >= 0, esc: first.indexOf("&lt;img") >= 0, n: calls.length };'
+   + '})()'), 'podsluch _kalkaStatus');
+  if (b) A('E14.kalkaXss.loading', b.raw === false && b.esc === true, 'F1-1: status Wczytuje escapowany ' + JSON.stringify(b));
+  A('E14.kalkaXss.nofire', ev('!(window.__xss1 || window.__xss2)').val === true, 'handlery onerror niewykonane');
+});
+
+scenario('E14.kalkaOlReset', async () => {
+  loadBase('dat');
+  const r = AEV('E14.kalkaOl.r', ev('(function(){'
+   + ' _kalkaOl = { base: "http://x/", index: {} };'
+   + ' document.getElementById("btn-diff-kalka").click();'
+   + ' return { ol: _kalkaOl === null ? null : "stale" };'
+   + '})()'), 'reopen dialogu kalki');
+  if (r) A('E14.kalkaOl.reset', r.ol === null, 'F1-5: reopen dialogu uniewaznia cache online ' + JSON.stringify(r));
+});
+
+scenario('E14.saveRace', async () => {
+  await loadBase('dat');
+  ex('startLocalEditMode()');
+  const setup = AEV('E14.race.s', ev('(function(){'
+   + ' window.__e14res = null; window.__e14orig = window.saveWithDialog;'
+   + ' window.saveWithDialog = function(){ return new Promise(function(r){ window.__e14res = r; }); };'
+   + ' _arkmapFileHandle = null;'
+   + ' pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 a" });'
+   + ' var d0 = state.dirty;'
+   + ' _performArkmapSave();'
+   + ' return { d0: d0, pending: !!window.__e14res };'
+   + '})()'), 'kontrolowany saveWithDialog');
+  if (!setup) return;
+  A('E14.race.setup', setup.d0 === true && setup.pending === true, 'zapis w toku (pending) ' + JSON.stringify(setup));
+  // przypadek kontrolny: brak edycji w trakcie → dirty czyszczone, pristine == fixpoint
+  const ok1 = AEV('E14.race.c1', await eva('(async function(){'
+   + ' window.__e14res(true); await new Promise(function(r){ setTimeout(r, 0); });'
+   + ' return { dirty: state.dirty, fix: state.pristineArkmap === _serializeMap() };'
+   + '})()'), 'zapis bez wspolbieznej edycji');
+  if (ok1) A('E14.race.clean', ok1.dirty === false && ok1.fix === true, 'bez edycji w trakcie: dirty=false, pristine=fixpoint ' + JSON.stringify(ok1));
+  // wyscig: edycja W TRAKCIE pending zapisu → dirty NIE moze byc skasowane, pristine = zapisany tekst
+  ex('_arkmapFileHandle = null; pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 b" });'
+   + ' window.__e14tb = _serializeMap(); _performArkmapSave();');
+  ex('pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 c — edycja w trakcie zapisu" });');
+  const race = AEV('E14.race.c2', await eva('(async function(){'
+   + ' window.__e14res(true); await new Promise(function(r){ setTimeout(r, 0); });'
+   + ' return { dirty: state.dirty, pris: state.pristineArkmap === window.__e14tb };'
+   + '})()'), 'zapis z wspolbiezna edycja');
+  if (race) {
+    A('E14.race.keepdirty', race.dirty === true, 'T6-F2: edycja podczas zapisu → dirty zostaje true ' + JSON.stringify(race));
+    A('E14.race.pris', race.pris === true, 'T6-F2: pristine = faktycznie zapisany tekst (punkt kontrolny zgodny z plikiem)');
+  }
+  ex('window.saveWithDialog = window.__e14orig; _arkmapFileHandle = null;');
+});
+
+scenario('E14.saveFallback', async () => {
+  await loadBase('dat');
+  ex('startLocalEditMode()');
+  // sukces fallbacku: nowy handle musi zostac zachowany + przycisk odswiezony
+  const r = AEV('E14.fallback.r', await eva('(async function(){'
+   + ' window.__e14orig2 = window.saveWithDialog;'
+   + ' var fh2 = { name: "nowa.arkmap" };'
+   + ' window.saveWithDialog = function(){ return Promise.resolve(fh2); };'
+   + ' _arkmapFileHandle = { name: "stara.arkmap", createWritable: function(){ return Promise.reject(new Error("denied")); } };'
+   + ' _updateSaveButtonText();'
+   + ' pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 fallback" });'
+   + ' _performArkmapSave();'
+   + ' await new Promise(function(r2){ setTimeout(r2, 0); });'
+   + ' return { isNew: _arkmapFileHandle === fh2, btn: document.getElementById("btn-save-arkmap").textContent, dirty: state.dirty };'
+   + '})()'), 'fallback po write-error (sukces)');
+  if (r) {
+    A('E14.fallback.handle', r.isNew === true, 'T6-F3: fallback zachowuje nowy handle ' + JSON.stringify(r));
+    A('E14.fallback.btn', r.btn === 'Zapisz .arkmap', 'T6-F3: tekst przycisku odswiezony (bez wielokropka)');
+    A('E14.fallback.dirty', r.dirty === false, 'T6-F3: udany fallback kasuje dirty');
+  }
+  // anulowanie fallbacku: handle null, przycisk z wielokropkiem, dirty nietkniete
+  const c = AEV('E14.fallback.c', await eva('(async function(){'
+   + ' window.saveWithDialog = function(){ return Promise.resolve(false); };'
+   + ' _arkmapFileHandle = { name: "stara.arkmap", createWritable: function(){ return Promise.reject(new Error("denied")); } };'
+   + ' _updateSaveButtonText();'
+   + ' pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 fallback-cancel" });'
+   + ' _performArkmapSave();'
+   + ' await new Promise(function(r2){ setTimeout(r2, 0); });'
+   + ' return { handle: _arkmapFileHandle, btn: document.getElementById("btn-save-arkmap").textContent, dirty: state.dirty };'
+   + '})()'), 'fallback po write-error (anulowanie)');
+  if (c) A('E14.fallback.cancel', c.handle === null && c.btn === 'Zapisz .arkmap…' && c.dirty === true,
+    'T6-F3: anulowany fallback → handle null, przycisk z wielokropkiem, dirty zostaje ' + JSON.stringify(c));
+  ex('window.saveWithDialog = window.__e14orig2; _arkmapFileHandle = null; _updateSaveButtonText();');
+});
+
+scenario('E14.paintStroke', async () => {
+  await loadBase('dat');
+  const r = AEV('E14.paint.r', ev('(function(){'
+   + ' if (state.editMode) exitEditMode(true);'
+   + ' var id = Object.keys(state.roomById).map(Number)[0];'
+   + ' state.canvasMode = "paint";'
+   + ' _paintStroke = new Map([[id, { env: 1, symbol: null }]]);'
+   + ' applyMap(JSON.parse(_serializeMap()));'
+   + ' return { stroke: _paintStroke === null ? null : "ACTIVE", mode: state.canvasMode };'
+   + '})()'), 'applyMap w trakcie pociagniecia pedzla');
+  if (r) A('E14.paint.reset', r.stroke === null && r.mode === 'normal',
+    'T6-F4: applyMap porzuca trwajace pociagniecie (bez revertu na podmienionej mapie) ' + JSON.stringify(r));
+});
+
+scenario('E14.wpTitle', async () => {
+  await loadBase('dat');
+  const r = AEV('E14.wp.t', ev('(function(){'
+   + ' var ids = Object.keys(state.roomById).map(Number);'
+   + ' var r0 = state.roomById[ids[0]]; var ek = Object.keys(r0.exits || {})[0];'
+   + ' var id2 = ek ? r0.exits[ek] : ids[1];'
+   + ' wpState.waypoints = [{ roomId: r0.id, label: "a" }, { roomId: id2, label: "b" }];'
+   + ' wpState.paths = [[ [r0.id, id2] ]];'
+   + ' var q = String.fromCharCode(34);'
+   + ' wpState.hops = [[ { name: "x" + q + " onmouseover=" + q + "window.__xss3=1", time: 5, via: ["A<B>"] } ]];'
+   + ' wpRebuildList();'
+   + ' var el = document.querySelector("#wp-list .wp-dist-val");'
+   + ' return { html: el ? el.outerHTML : null, t: el ? el.getAttribute("title") : null };'
+   + '})()'), 'title odcinka z danymi transportu');
+  if (r && r.html) {
+    A('E14.wp.titleEsc', r.html.indexOf('onmouseover="window') < 0 && r.html.indexOf('&quot;') >= 0,
+      'F3-02: atrybut title escapowany w innerHTML ' + JSON.stringify(r));
+    A('E14.wp.titleKeep', (r.t || '').indexOf('onmouseover') >= 0, 'F3-02: tresc title zachowana po escapowaniu');
+  } else A('E14.wp.titleEsc', false, 'brak elementu .wp-dist-val ' + JSON.stringify(r));
+  A('E14.wp.nofire', ev('!window.__xss3').val === true, 'handler nie wstrzykniety do DOM');
+  ex('wpState.hops = []; wpState.paths = []; wpState.waypoints = [{ roomId: null, label: "" }, { roomId: null, label: "" }]; wpRebuildList();');
+});
+
+scenario('E14.wpImportSync', async () => {
+  await loadBase('dat');
+  const r = AEV('E14.wpImport.r', ev('(function(){'
+   + ' var ids = Object.keys(state.roomById).map(Number);'
+   + ' var r0 = state.roomById[ids[0]]; var ek = Object.keys(r0.exits || {})[0];'
+   + ' var id2 = ek ? r0.exits[ek] : ids[1];'
+   + ' wpState.visible = false;'
+   + ' document.getElementById("wp-panel").classList.remove("visible");'
+   + ' document.getElementById("btn-planer").classList.remove("active");'
+   + ' _wpImportApply({ algorithm: wpState.algorithm, dirMode: wpState.dirMode, transportMode: wpState.transportMode,'
+   + '   valid: [r0.id, id2], total: 2, invalidCount: 0 });'
+   + ' return { vis: wpState.visible, panel: document.getElementById("wp-panel").classList.contains("visible"),'
+   + '   btn: document.getElementById("btn-planer").classList.contains("active") };'
+   + '})()'), 'import trasy przy zamknietym panelu');
+  if (r) A('E14.wpImport.sync', r.vis === true && r.panel === true && r.btn === true,
+    'F3-01: import synchronizuje widocznosc panelu z DOM ' + JSON.stringify(r));
+  ex('if (wpState.visible) wpToggle();');
+});
+
 // ═══ Runner ═══
 function appReady() {
   return new Promise(res => {

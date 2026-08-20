@@ -2,6 +2,30 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.42.1 — fixy z rozszerzonego audytu zewnetrznego (kimi-k2.7-code)
+
+Audyt 4 partii (kalka F1, Tier 6, planer/transporty, sync online): 12 znalezisk,
+z czego 8 potwierdzonych repro w harnessie i zfixowanych, 4 falszywe alarmy
+udokumentowane. Kazdy fix ma pin empiryczny (nowa grupa E14, 17 asercji).
+
+- **T6-F2 (high)**: async save — edycja wykonana W TRAKCIE zapisu (miedzy snapshotem
+  a koncem await) nie jest juz mylnie oznaczana jako zapisana: licznik edycji
+  (editRev) przy kazdym dirty=true; dirty kasowane tylko gdy zapis obywal sie bez
+  edycji wspolbieznych. pristineArkmap zawsze = faktycznie zapisany tekst.
+- **T6-F3**: fallback po bledzie zapisu przez handle — nowy handle z dialogu jest
+  zachowywany, a etykieta przycisku zapisu odswiezana (takze po anulowaniu).
+- **T6-F4**: applyMap porzuca trwajace pociagniecie pedzla (bez revertu — mapa juz
+  podmieniona); wczesniej stroke przezyl podmiane przy editMode=false.
+- **F1-1**: escHtml nazwy pliku i komunikatow bledow w statusach dialogu kalki
+  (XSS nazwa pliku, np. <img onerror>).
+- **F1-5**: reopen dialogu kalki uniewaznia cache resolve online (_kalkaOl).
+- **F3-01**: import trasy (ARKMAP2) synchronizuje widocznosc panelu planera z DOM.
+- **F3-02**: escHtml atrybutu title odcinka z transportem (dane TRANSPORT_DEFS).
+- **sync-F1**: sync-transports.yml — auto-issue przy anomalii upstream faktycznie
+  powstaje (jq '.[0].number // empty'; wczesniej pusta lista dawala string "null"
+  i galaz tworzaca issue nigdy sie nie wykonywala).
+- Higiena: klamry w non-FSAPI save-as (T6-F1 — sciezka falsy byla nieosiagalna).
+
 ## v1.42.0 — F1: generator kalki z diffu map (narzedzie standalone)
 
 - **Nowe narzedzie „Stworz kalke mapy…"** (przycisk ⇄ pod „Wczytaj .arkdelta…", zawsze

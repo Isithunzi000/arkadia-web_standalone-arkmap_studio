@@ -9238,14 +9238,15 @@ function _performArkmapSaveAs() {
   _prepareArkmapForSave();
   const text = _serializeMap();  // T6/D2: serializuj raz — zapis + bufor
   // A11': dirty kasowane dopiero po POTWIERDZONYM zapisie (success-pointy niżej), nie przed dialogiem
+  const saveRev = state.editRev || 0;  // T6-F2: edycja wspolbiezna z async save = dirty zostaje
   const suggestedName = _arkmapSuggestedName();
   const hasFSAPI = typeof window.showSaveFilePicker === 'function';
   if (hasFSAPI) {
     saveWithDialog(suggestedName, 'application/json', () => text)
-      .then(fh => { if (fh) { state.dirty = false; state.pristineArkmap = text; _arkmapFileHandle = fh; _updateSaveButtonText(); } });
+      .then(fh => { if (fh) { if ((state.editRev || 0) === saveRev) state.dirty = false; state.pristineArkmap = text; _arkmapFileHandle = fh; _updateSaveButtonText(); } });  // T6-F2
   } else {
     saveWithDialog(suggestedName, 'application/json', () => text)
-      .then(r => { if (r) state.dirty = false; state.pristineArkmap = text; });
+      .then(r => { if (r) { if ((state.editRev || 0) === saveRev) state.dirty = false; state.pristineArkmap = text; } });  // T6-F1 klamry + T6-F2
   }
 }
 
@@ -9311,6 +9312,7 @@ function _performArkmapSave(onSaved) {
   _prepareArkmapForSave();
   const text = _serializeMap();  // T6/D2: serializuj raz — zapis + bufor
   // A11': dirty kasowane dopiero po POTWIERDZONYM zapisie; clear PRZED onSaved (latentny TypeError z A16 nie pominie cleara)
+  const saveRev = state.editRev || 0;  // T6-F2: edycja wspolbiezna z async save = dirty zostaje
   const suggestedName = _arkmapSuggestedName();
 
   // K6: jeśli mamy istniejący handle → zapisz bezpośrednio (Pass 59)
@@ -9320,13 +9322,22 @@ function _performArkmapSave(onSaved) {
         const writable = await _arkmapFileHandle.createWritable();
         await writable.write(text);
         await writable.close();
-        state.dirty = false; state.pristineArkmap = text;
+        if ((state.editRev || 0) === saveRev) state.dirty = false;  // T6-F2
+        state.pristineArkmap = text;
         toast('✓ Zapisano ' + _arkmapFileHandle.name);
         if (onSaved) onSaved();
       } catch (err) {
         _arkmapFileHandle = null;
         saveWithDialog(suggestedName, 'application/json', () => text)
-          .then(r => { if (r) { state.dirty = false; state.pristineArkmap = text; if (onSaved) onSaved(); } });
+          .then(r => {
+            if (r) {
+              if ((state.editRev || 0) === saveRev) state.dirty = false;  // T6-F2
+              state.pristineArkmap = text;
+              if (typeof r === 'object') _arkmapFileHandle = r;  // T6-F3: zachowaj nowy handle z fallbacku
+              if (onSaved) onSaved();
+            }
+            _updateSaveButtonText();  // T6-F3: etykieta zgodna ze stanem handle (takze po anulowaniu)
+          });
       }
     })();
     return;
@@ -9336,10 +9347,10 @@ function _performArkmapSave(onSaved) {
   const hasFSAPI = typeof window.showSaveFilePicker === 'function';
   if (hasFSAPI) {
     saveWithDialog(suggestedName, 'application/json', () => text)
-      .then(fh => { if (fh) { state.dirty = false; state.pristineArkmap = text; _arkmapFileHandle = fh; _updateSaveButtonText(); if (onSaved) onSaved(); } });
+      .then(fh => { if (fh) { if ((state.editRev || 0) === saveRev) state.dirty = false; state.pristineArkmap = text; _arkmapFileHandle = fh; _updateSaveButtonText(); if (onSaved) onSaved(); } });  // T6-F2
   } else {
     saveWithDialog(suggestedName, 'application/json', () => text)
-      .then(r => { if (r) { state.dirty = false; state.pristineArkmap = text; if (onSaved) onSaved(); } });
+      .then(r => { if (r) { if ((state.editRev || 0) === saveRev) state.dirty = false; state.pristineArkmap = text; if (onSaved) onSaved(); } });  // T6-F2
   }
 }
 
@@ -10252,7 +10263,7 @@ function wpRebuildList() {
             `${h.name}: ${h.time} s` + (h.via.filter(Boolean).length ? ` (przez ${h.via.filter(Boolean).join(', ')})` : '')
           ).join('\n');
         }
-        distHtml = `<div class="wp-dist-line"></div><div class="wp-dist-val"${title ? ` title="${title.replace(/"/g, '&quot;')}"` : ''}><svg width="9" height="9" viewBox="0 0 9 9"><path d="M4.5 1v7M2 5.5l2.5 2.5 2.5-2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>${val}</div>`;
+        distHtml = `<div class="wp-dist-line"></div><div class="wp-dist-val"${title ? ` title="${escHtml(title)}"` : ''}><svg width="9" height="9" viewBox="0 0 9 9"><path d="M4.5 1v7M2 5.5l2.5 2.5 2.5-2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>${val}</div>`;
       } else {
         distHtml = '<div class="wp-dist-line" style="opacity:0.3"></div><div class="wp-dist-val wp-dist-pending">oczekuje…</div>';
       }
@@ -11076,7 +11087,11 @@ function _wpImportApply(res) {
   wpState.waypoints = newWps;
   wpState.activeIdx = newWps.length - 1;
   // Upewnij się że trasa jest widoczna (wymagane przez drawRoute)
-  if (!wpState.visible) wpState.visible = true;
+  if (!wpState.visible) {
+    wpState.visible = true;
+    document.getElementById('wp-panel').classList.add('visible');   // F3-01: sync DOM
+    document.getElementById('btn-planer').classList.add('active');  // F3-01: sync DOM
+  }
   // Na mobile nie włączaj trybu planowania — kliknięcia w pokoje nie powinny dodawać WP
   const isMobile = window.matchMedia('(max-width: 600px)').matches;
   if (!isMobile && !wpState.planning) { wpState.planning = true; wpUpdateModeBtn(); }
@@ -12989,7 +13004,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.42.0';
+const APP_VERSION = 'v1.42.1';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -13858,7 +13873,7 @@ function undoAction() {
   state.deltaLog.pop();  // ARKDELTA mirror
   _dispatchUndo(entry);
   state.redoStack.push(entry);
-  state.dirty = true;  // A11': undo po zapisie odjeżdża od treści pliku
+  state.dirty = true; state.editRev = (state.editRev || 0) + 1;  // T6-F2: licznik edycji (wyscig z async save)  // A11': undo po zapisie odjeżdża od treści pliku
   updateUndoRedoUI();
   draw();
 }
@@ -13869,7 +13884,7 @@ function redoAction() {
   _dispatchRedo(entry);
   state.undoStack.push(entry);
   state.deltaLog.push(entry);  // ARKDELTA mirror
-  state.dirty = true;  // A11'
+  state.dirty = true; state.editRev = (state.editRev || 0) + 1;  // T6-F2: licznik edycji (wyscig z async save)  // A11'
   updateUndoRedoUI();
   draw();
 }
@@ -13883,7 +13898,7 @@ function undoToIndex(targetIdx) {
     state.redoStack.push(entry);
   }
   const undone = startLen - state.undoStack.length;
-  if (undone > 0) state.dirty = true;  // A11'
+  if (undone > 0) state.dirty = true; state.editRev = (state.editRev || 0) + 1;  // T6-F2: licznik edycji (wyscig z async save)  // A11'
   updateUndoRedoUI();
   draw();
   const popup = document.getElementById('changelog-popup');
@@ -13905,7 +13920,7 @@ function redoAll() {
     state.undoStack.push(entry);
     state.deltaLog.push(entry);  // ARKDELTA mirror
   }
-  if (n > 0) state.dirty = true;  // A11'
+  if (n > 0) state.dirty = true; state.editRev = (state.editRev || 0) + 1;  // T6-F2: licznik edycji (wyscig z async save)  // A11'
   updateUndoRedoUI();
   draw();
   toast(`✓ ${plPl(n, 'przywrócona operacja', 'przywrócone operacje', 'przywróconych operacji')}`);
@@ -13919,7 +13934,7 @@ function pushUndo(entry) {
   state.undoStack.push(entry);
   state.deltaLog.push(entry);   // audyt T3/W17: deltaLog = pełny log sesji (eksport kalki), NIE lustro capa
   if (state.undoStack.length > 50) state.undoStack.shift();  // audyt T3/W17: cap 50 TYLKO tutaj (choke point) — każde pushUndo objęte
-  state.dirty = true;
+  state.dirty = true; state.editRev = (state.editRev || 0) + 1;  // T6-F2: licznik edycji (wyscig z async save)
 }
 
 function updateUndoRedoUI() {
@@ -13971,6 +13986,7 @@ applyMap = function(map) {
   state.selectedLabel = null;  // krok 4
   if (_lockInterval) { clearInterval(_lockInterval); _lockInterval = null; }
   state.lockExpiry = null;
+  if (_paintStroke !== null) _paintStroke = null;  // T6-F4: porzuc trwajace pociagniecie — BEZ revertu (mapa juz podmieniona, id before-snapshotow obce)
   state.canvasMode = 'normal';
   cv.style.cursor = 'default';  // Audit3: reset cursor
   _arkmapFileHandle = null;  // Reset file handle przy nowej mapie (Pass 59) — krok 6
@@ -14461,7 +14477,7 @@ function _acceptSet(){
 }
 function _acceptSave(arr){
   if (_acceptStore()==='file'){
-    if (state.map){ state.map.meta = state.map.meta || {}; if (arr.length) state.map.meta.accepted_dir_issues = arr; else delete state.map.meta.accepted_dir_issues; state.dirty = true; }
+    if (state.map){ state.map.meta = state.map.meta || {}; if (arr.length) state.map.meta.accepted_dir_issues = arr; else delete state.map.meta.accepted_dir_issues; state.dirty = true; state.editRev = (state.editRev || 0) + 1; }  // T6-F2: licznik edycji
   } else {
     if (arr.length) { try { localStorage.setItem('arkmap_accepted_dir_issues', JSON.stringify(arr)); } catch(e) {} } else { try { localStorage.removeItem('arkmap_accepted_dir_issues'); } catch(e) {} }  // audyt T4/S6
   }
@@ -14501,7 +14517,7 @@ function _vdMigrate(){
   state.map.meta = state.map.meta || {};
   const merged = Array.from(new Set([...(state.map.meta.accepted_dir_issues||[]), ...browserArr]));
   state.map.meta.accepted_dir_issues = merged;
-  state.dirty = true;   // audyt A19: meta zmienione → plik do zapisu
+  state.dirty = true; state.editRev = (state.editRev || 0) + 1;  // T6-F2: licznik edycji (wyscig z async save)   // audyt A19: meta zmienione → plik do zapisu
   try { localStorage.removeItem('arkmap_accepted_dir_issues'); } catch(e) {}  // audyt T4/S6
   localStorage.setItem('arkmap_accept_store','file');
   const sel = document.getElementById('vd-store'); if (sel) sel.value = 'file';
@@ -15485,7 +15501,7 @@ function cancelRoomEdit() {
       // Undo the add
       state.undoStack.pop();
       state.deltaLog.pop();  // ARKDELTA mirror (cichy pop A11')
-      state.dirty = true;  // A11': cichy pop — gdy pokój był już zapisany, treść odjeżdża od pliku
+      state.dirty = true; state.editRev = (state.editRev || 0) + 1;  // T6-F2: licznik edycji (wyscig z async save)  // A11': cichy pop — gdy pokój był już zapisany, treść odjeżdża od pliku
       const areaId = state.roomArea[lastUndo.roomId];
       const area = state.areas.get(areaId);
       if (area) area.rooms = area.rooms.filter(r => r.id !== lastUndo.roomId);
@@ -18331,7 +18347,7 @@ function _kalkaSetMap(side, map, label) {
   if (side === 'src') { _kalka.src = map; _kalka.srcName = label; }
   else { _kalka.dst = map; _kalka.dstName = label; }
   const base = _computeBaseInfo(map);
-  _kalkaStatus(side, '✓ ' + label + '<br><span class="dk-dim">' + rooms + ' pokoi' +
+  _kalkaStatus(side, '✓ ' + escHtml(label) + '<br><span class="dk-dim">' + rooms + ' pokoi' +
     (base && base.crc ? ' · crc ' + String(base.crc).slice(0, 8) : '') + '</span>');
   _kalkaResetResult();
   _kalkaUpdateCreate();
@@ -18346,7 +18362,7 @@ function _kalkaValidateInput(map) {
 }
 
 async function _kalkaLoadFile(side, file) {
-  _kalkaStatus(side, 'Wczytuję ' + file.name + '…');
+  _kalkaStatus(side, 'Wczytuję ' + escHtml(file.name) + '…');
   try {
     let map;
     if (/\.dat$/i.test(file.name)) map = datToArkmap(await file.arrayBuffer());
@@ -18356,7 +18372,7 @@ async function _kalkaLoadFile(side, file) {
     if (v.fatal) { _kalkaStatus(side, '✗ Nie można odczytać — uszkodzony lub niepoprawny format', true); return; }
     _kalkaSetMap(side, map, file.name + (v.warns ? ' ⚠' : ''));
   } catch (e) {
-    _kalkaStatus(side, '✗ Błąd wczytywania: ' + e.message, true);
+    _kalkaStatus(side, '✗ Błąd wczytywania: ' + escHtml(e.message), true);
   }
 }
 
@@ -18398,7 +18414,7 @@ async function _kalkaOnlineLoad(side, fmt) {
     if (v.fatal) { _kalkaStatus(side, '✗ Kopia online ma niepoprawny format', true); return; }
     _kalkaSetMap(side, map, '🌐 online · ' + fname + (v.warns ? ' ⚠' : ''));
   } catch (e) {
-    _kalkaStatus(side, '✗ Online — ' + (e.name === 'AbortError' ? 'przekroczono limit czasu (180 s)' : 'błąd: ' + e.message), true);
+    _kalkaStatus(side, '✗ Online — ' + (e.name === 'AbortError' ? 'przekroczono limit czasu (180 s)' : 'błąd: ' + escHtml(e.message)), true);
   }
 }
 
@@ -20760,7 +20776,7 @@ btnSaveArkdelta.addEventListener('click', saveDelta);
 // F1: generator kalki z diffu map — przycisk zawsze aktywny (standalone, D7)
 {
   const btnDiffKalka = document.getElementById('btn-diff-kalka');
-  btnDiffKalka.addEventListener('click', () => openDialog('dlg-kalka'));
+  btnDiffKalka.addEventListener('click', () => { _kalkaOl = null; openDialog('dlg-kalka'); });  // F1-5: reopen = swiezy resolve online
   document.getElementById('dk-create').addEventListener('click', kalkaCreate);
   document.getElementById('dk-save').addEventListener('click', kalkaSave);
   for (const side of ['src', 'dst']) {
