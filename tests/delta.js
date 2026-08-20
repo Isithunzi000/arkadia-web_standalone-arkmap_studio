@@ -457,7 +457,7 @@ ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo 
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.39.0';"), 'wersja: v1.39.0');
+ok(HTML.includes("const APP_VERSION = 'v1.40.0';"), 'wersja: v1.40.0');
 
 // — W3 (v1.35.0): etykiety kalki zachowane przez 6 niskopoziomowych sciezek commit —
 {
@@ -708,7 +708,12 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
   ok(pctx1 && pctx1.areaId === 1 && pctx1.z === 0 && pctx1.roomId === undefined, 'placeCtx ADD_ROOM: {areaId, z}');
   const pctx3 = c.api._deltaPlaceCtx(delta, items, 3);
   ok(pctx3 && pctx3.areaId === 1 && pctx3.roomId === 12, 'placeCtx MOVE_ROOM: + roomId');
-  ok(c.api._deltaPlaceCtx(delta, items, 9) === null, 'placeCtx: obszar kalki (sid nierozwiązany) → null');
+  const pctx9 = c.api._deltaPlaceCtx(delta, items, 9);
+  ok(pctx9 && pctx9.areaId === 'd:9' && pctx9.sidArea === true && pctx9.z === 0,
+    'placeCtx: obszar kalki (ADD_AREA ok+checked) -> kontekst na surowym sid (audyt T5/F5)');
+  items[7].checked = false;  // odznaczone ADD_AREA = obszar nie powstanie przy apply
+  ok(c.api._deltaPlaceCtx(delta, items, 9) === null, 'placeCtx: obszar kalki z odznaczonym ADD_AREA -> null (audyt T5/F5)');
+  items[7].checked = true;
 
   // Geometria duchów — czystość i treść
   const checksumBefore = c.api.stableStringify(c.state.map) + '|' + Object.keys(c.state.roomById).length;
@@ -819,7 +824,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
   ok(HTML.includes('const _DELTA_TYPE_PL = {') && HTML.includes("MOVE_ROOM: 'przesunięcie pokoju'")
     && HTML.includes("AUTO_FIX_SUPPRESSORS: 'automatyczna naprawa podwójnych linii'"),
     'W1 karta: typy opów po polsku (_DELTA_TYPE_PL)');
-  ok(HTML.includes("const APP_VERSION = 'v1.39.0';"), 'wersja v1.39.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.40.0';"), 'wersja v1.40.0');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -855,7 +860,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.39.0';"), 'wersja v1.39.0 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.40.0';"), 'wersja v1.40.0 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji
@@ -959,7 +964,7 @@ console.log('— T11: audyt T1 — klasyfikator ≡ apply —');
   ok(HTML.includes("if (aid <= 0) { items.push(_deltaClsItem(op, 'impossible', 'obszar domyślny"), 'T1: klasyfikator guard DELETE_AREA <= 0');
   ok(HTML.includes('kierunek przeciwny u pokoju docelowego jest zajęty'), 'T1: klasyfikator ADD_EXIT guard przeciwnego kierunku');
   ok(HTML.includes('return false;  // audyt T1/W15'), 'T1: commitDeleteArea jawny zwrot false');
-  ok(HTML.includes("const APP_VERSION = 'v1.39.0';"), 'wersja v1.39.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.40.0';"), 'wersja v1.40.0');
 }
 
 

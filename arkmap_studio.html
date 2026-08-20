@@ -2565,7 +2565,7 @@
           <div class="rp-erow"><span class="rp-elbl">Nazwa</span><input class="rp-einput" id="rp-name" value="" oninput="this.classList.remove('invalid');if(typeof setEditDirty==='function')setEditDirty()"></div>
           <div class="rp-field-err" id="rp-name-err">Nazwa nie może być pusta</div>
           <div class="rp-erow"><span class="rp-elbl">Środowisko</span>
-            <select class="rp-eselect" id="rp-env" onchange="if(typeof setEditDirty==='function')setEditDirty();if(state.selected){const r=state.roomById[state.selected];if(r){r.env=parseInt(this.value);draw()}}"><option value="1">1 — (brak)</option></select></div>
+            <select class="rp-eselect" id="rp-env" onchange="if(typeof setEditDirty==='function')setEditDirty();state.pendingEnv=parseInt(this.value);draw()"><!-- audyt T5/F4 (#1): pendingEnv zamiast mutacji r.env — commit/undo/Porzuc widza zmiane --><option value="1">1 — (brak)</option></select></div>
           <div class="rp-erow"><span class="rp-elbl">Symbol</span><input class="rp-einput-sm" id="rp-symbol" placeholder="(pusty)" title="Symbol pokoju (dowolna długość) — np. &quot;[]&quot; dla Tablicy; na mapie czcionka dopasuje się do kwadratu" oninput="if(typeof setEditDirty==='function')setEditDirty()"></div>
           <div class="rp-erow"><span class="rp-elbl">Waga</span><input class="rp-einput-sm" type="number" value="1" id="rp-weight" oninput="this.classList.remove('invalid');if(typeof setEditDirty==='function')setEditDirty()"></div>
           <div class="rp-erow"><span class="rp-elbl">Obrys</span>
@@ -5002,10 +5002,19 @@ function writeQMapIC(w, o) {
   for (const [k, v] of e) { w.writeInt32(parseInt(k)); writeQColor(w, v); }
 }
 
+// audyt T5/F1: bezpieczny zapis klucza do plain-object mapy — "__proto__" przez
+// defineProperty (zwykly assign jest w JS cicho ignorowany, klucz ginial bez sladu).
+// enumerable:true WYMAGANE: JSON.stringify, Object.entries i zapis .arkmap/.dat musza
+// widziec klucz; writable/configurable:true zeby edytor mogl go pozniej nadpisac.
+function _setMapKey(o, k, v) {
+  if (k === '__proto__') Object.defineProperty(o, k, { value: v, enumerable: true, writable: true, configurable: true });
+  else o[k] = v;
+}
+
 // QMap<QString, QUInt> — np. mpRoomDbHashToRoomId
 function readQMapSU(r) {
   const n = r.readUInt32(), o = {};
-  for (let i = 0; i < n; i++) { const k = readQString(r), v = r.readUInt32(); o[k] = v; }
+  for (let i = 0; i < n; i++) { const k = readQString(r), v = r.readUInt32(); _setMapKey(o, k, v); }
   return o;
 }
 function writeQMapSU(w, o) {
@@ -5017,7 +5026,7 @@ function writeQMapSU(w, o) {
 // QMap<QString, QString> — np. userData, mUserData
 function readQMapSS(r) {
   const n = r.readUInt32(), o = {};
-  for (let i = 0; i < n; i++) { const k = readQString(r), v = readQString(r); o[k] = v; }
+  for (let i = 0; i < n; i++) { const k = readQString(r), v = readQString(r); _setMapKey(o, k, v); }
   return o;
 }
 function writeQMapSS(w, o) {
@@ -5029,7 +5038,7 @@ function writeQMapSS(w, o) {
 // QMap<QString, QInt> — np. exitWeights, doors, mRoomIdHash
 function readQMapSI(r) {
   const n = r.readUInt32(), o = {};
-  for (let i = 0; i < n; i++) { const k = readQString(r), v = r.readInt32(); o[k] = v; }
+  for (let i = 0; i < n; i++) { const k = readQString(r), v = r.readInt32(); _setMapKey(o, k, v); }
   return o;
 }
 function writeQMapSI(w, o) {
@@ -6327,8 +6336,13 @@ function buildColorCache(colors) {
 const DEFAULT_ROOM_RGB = [114, 1, 0];
 const DEFAULT_ROOM_CSS = `rgb(${DEFAULT_ROOM_RGB})`;
 
+// audyt T5/F4 (#1): env do renderu — oczekujaca zmiana z formularza (pendingEnv)
+// ma pierwszenstwo dla zaznaczonego pokoju; model (r.env) nietkniety do commitu.
+function _envOf(r) {
+  return (state.pendingEnv != null && state.editMode && r.id === state.selected) ? state.pendingEnv : r.env;
+}
 function roomColor(r) {
-  return state.colorCache[r.env] || DEFAULT_ROOM_CSS;
+  return state.colorCache[_envOf(r)] || DEFAULT_ROOM_CSS;
 }
 
 // Resolve envId → CSS color for UI (panel swatches, dialogs, minimap)
@@ -6690,7 +6704,7 @@ function updateMinimap() {
   for (const r of rooms) {
     const cx = (r.x - minX) * scale + offX;
     const cy = (maxY - r.y) * scale + offY; // Y flipped: north=up
-    const color = state.colorCache[r.env] || DEFAULT_ROOM_CSS;
+    const color = state.colorCache[_envOf(r)] || DEFAULT_ROOM_CSS;  // audyt T5/F4 (#1)
     minimapCtx.fillStyle = color;
     minimapCtx.fillRect(cx - rs/2, cy - rs/2, rs, rs);
   }
@@ -8912,6 +8926,7 @@ function populateEditForm(r) {
 
   // Bezwarunkowy reset pending przy każdym otwarciu pokoju (DS#1/9 fix)
   state.pendingExitTarget = {};
+  state.pendingEnv        = null;  // audyt T5/F4 (#1)
   state.pendingDoors      = {};
   state.pendingExitWeight = {};
   state.pendingExitLock   = {};
@@ -12789,7 +12804,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.39.0';
+const APP_VERSION = 'v1.40.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -12828,6 +12843,7 @@ Object.assign(state, {
   areaSnapshot:       null,
   // ── Exit adding (Pass 36, 42) ──
   pendingExitTarget:  {},
+  pendingEnv:         null,  // audyt T5/F4 (#1): oczekujaca zmiana env z selecta rp-env
   // ── Exit detail (Pass 45) ──
   pendingDoors:       {},
   pendingExitWeight:  {},
@@ -13040,6 +13056,12 @@ function ghLogout() {
 function _replaceRoomData(room, snapshot) {
   for (const k of Object.keys(room)) delete room[k];
   Object.assign(room, snapshot);
+  // audyt T5/F2 (#32): odtworz redundantny backlink room.area z kanonu (state.roomArea).
+  // Snapshot z delty / undo moze backlinka nie miec — bez tego po _replaceRoomData
+  // pokoj tracil room.area na zawsze (zero czytelnikow zapisu, ale model ma byc spojny;
+  // W1: writer .dat bierze obszar z area.rooms[] przez buildRoom, wiec zapis nietkniety).
+  if (room.id !== undefined && state.roomArea && state.roomArea[room.id] !== undefined)
+    room.area = state.roomArea[room.id];
 }
 
 // ── UNDO / REDO — data-only dispatch (Pass 60) ────────────────────────────────
@@ -13155,6 +13177,8 @@ function _dispatchUndo(entry) {
         else delete src.exits[entry.dir];
         if (!Object.keys(src.exits).length) delete src.exits;
       }
+      // audyt T5/F3 (#27): przywroc suppressor usuniety przy dodaniu exit
+      if (entry.prevSupCL) { src.custom_lines = src.custom_lines || {}; src.custom_lines[entry.dir] = JSON.parse(JSON.stringify(entry.prevSupCL)); }
       if (entry.bidirectional && entry.opp) {
         const tgt = rm(entry.targetId);
         if (tgt?.exits) {
@@ -13162,6 +13186,7 @@ function _dispatchUndo(entry) {
           else delete tgt.exits[entry.opp];
           if (!Object.keys(tgt.exits).length) delete tgt.exits;
         }
+        if (tgt && entry.prevOppSupCL) { tgt.custom_lines = tgt.custom_lines || {}; tgt.custom_lines[entry.opp] = JSON.parse(JSON.stringify(entry.prevOppSupCL)); }
       }
       break;
     }
@@ -13444,9 +13469,12 @@ function _dispatchRedo(entry) {
     case 'ADD_EXIT': {
       const src = rm(entry.sourceId); if (!src) break;
       src.exits = src.exits || {}; src.exits[entry.dir] = entry.targetId;
+      // audyt T5/F3 (#27): redo = ponownie usun suppressor w kierunku nowego exit
+      if (entry.prevSupCL && src.custom_lines) { delete src.custom_lines[entry.dir]; if (!Object.keys(src.custom_lines).length) delete src.custom_lines; }
       if (entry.bidirectional && entry.opp) {
         const tgt = rm(entry.targetId);
         if (tgt) { tgt.exits = tgt.exits || {}; tgt.exits[entry.opp] = entry.sourceId; }
+        if (tgt && entry.prevOppSupCL && tgt.custom_lines) { delete tgt.custom_lines[entry.opp]; if (!Object.keys(tgt.custom_lines).length) delete tgt.custom_lines; }
       }
       break;
     }
@@ -14893,7 +14921,7 @@ function updateSpecialeTab(room) {
         delete state.pendingSpecialExitLocks[currentCmd];
         currentCmd = newCmd;
       }
-      if (newCmd) state.pendingSpecialExits[newCmd] = isNaN(id) ? 0 : id;
+      if (newCmd) _setMapKey(state.pendingSpecialExits, newCmd, isNaN(id) ? 0 : id);  // audyt T5/F1: __proto__-safe
       if (lock) state.pendingSpecialExitLocks[newCmd] = true;
       else delete state.pendingSpecialExitLocks[newCmd];
       // Update hint with room name
@@ -15236,6 +15264,7 @@ function showDirtyConfirm(continueAction) {
     // Porzuć: przywróć snapshot, wyczyść dirty
     const room = state.selected ? state.roomById[state.selected] : null;
     if (room && state.editSnapshot) _replaceRoomData(room, JSON.parse(JSON.stringify(state.editSnapshot)));  // Audit3
+    state.pendingEnv = null;  // audyt T5/F4 (#1): porzucona zmiana env nie zostaje w pendingu
     state.editDirty = false;
     const badge = document.getElementById('rp-unsaved-badge');
     if (badge) badge.style.display = 'none';
@@ -15387,7 +15416,7 @@ function commitRoomEdit() {
       udContainer.querySelectorAll('.ud-row').forEach(row => {
         const k = row.querySelector('.ud-key')?.value?.trim();
         const v = row.querySelector('.ud-val')?.value ?? '';
-        if (k) ud[k] = v;
+        if (k) _setMapKey(ud, k, v);  // audyt T5/F1: __proto__-safe
       });
       room.user_data = Object.keys(ud).length > 0 ? ud : {};
     }
@@ -15464,6 +15493,12 @@ function commitRoomEdit() {
       room.exits[dir] = targetId;
       // FIX: remove stub for this dir if it had one (stub+exit coexistence cleanup)
       if (room.stubs) { room.stubs = room.stubs.filter(d => d !== dir); if (!room.stubs.length) delete room.stubs; }
+      // audyt T5/F3 (#27): martwy suppressor (custom_lines[dir] z pustymi points) — po dodaniu
+      // wlasnego exit ukrywalby jego linie; undo pokrywa przywrocenie (snapshot calego pokoju).
+      if (room.custom_lines?.[dir] && (room.custom_lines[dir].points || []).length === 0) {
+        delete room.custom_lines[dir];
+        if (!Object.keys(room.custom_lines).length) delete room.custom_lines;
+      }
     }
   }
   // Remove stubs that user unchecked
@@ -15520,7 +15555,7 @@ function commitRoomEdit() {
   if (state.pendingSpecialExits !== null && state.pendingSpecialExits !== undefined) {
     const filtered = {};
     for (const [cmd, tid] of Object.entries(state.pendingSpecialExits)) {
-      if (cmd.trim() !== '') filtered[cmd] = tid;
+      if (cmd.trim() !== '') _setMapKey(filtered, cmd, tid);  // audyt T5/F1: __proto__-safe
     }
     // Collect old SE data before overwrite for orphan cleanup / rename migration
     const oldSE = room.special_exits ? JSON.parse(JSON.stringify(room.special_exits)) : {};
@@ -15563,6 +15598,7 @@ function commitRoomEdit() {
   }
   // Wyczyść pending po zatwierdzeniu
   state.pendingExitTarget  = {};
+  state.pendingEnv         = null;  // audyt T5/F4 (#1): zapisane — pending skonsumowany
   state.pendingDoors       = {};
   state.pendingExitWeight  = {};
   state.pendingExitLock    = {};
@@ -16102,7 +16138,7 @@ function commitEditArea(areaId) {
     udList.querySelectorAll('.ud-row').forEach(row => {
       const k = row.querySelector('.ud-key')?.value?.trim();
       const v = row.querySelector('.ud-val')?.value ?? '';
-      if (k && k !== 'notes') ud[k] = v;
+      if (k && k !== 'notes') _setMapKey(ud, k, v);  // audyt T5/F1: __proto__-safe
     });
     // Zachowaj notes + nadpisz resztę
     const savedNotes = area.user_data.notes;
@@ -16270,15 +16306,23 @@ function commitAddExit(sourceId, dir, targetId, bidirectional, customLabel) {
   if (bidirectional && opp && tgt.exits?.[opp] !== undefined) { toast(`⚠ Kierunek ${opp.toUpperCase()} w #${targetId} jest już zajęty`, true); return; }
   const prevExit    = src.exits?.[dir];                              // audyt A12: po guardzie zawsze undefined — defense in depth
   const prevOppExit = (bidirectional && opp) ? tgt.exits?.[opp] : undefined;
+  // audyt T5/F3 (#27): martwy suppressor w kierunku nowego exit — usun w TEJ SAMEJ jednostce
+  // undo (entry niesie snapshot suppressora, undo/redo ADD_EXIT go odtwarza/kasuje).
+  const prevSupCL    = (src.custom_lines?.[dir] && (src.custom_lines[dir].points || []).length === 0)
+    ? JSON.parse(JSON.stringify(src.custom_lines[dir])) : null;
+  const prevOppSupCL = (bidirectional && opp && tgt.custom_lines?.[opp] && (tgt.custom_lines[opp].points || []).length === 0)
+    ? JSON.parse(JSON.stringify(tgt.custom_lines[opp])) : null;
   // Wykonaj operację inline (data-only entry per Pass 60)
   src.exits = src.exits || {}; src.exits[dir] = targetId;
+  if (prevSupCL) { delete src.custom_lines[dir]; if (!Object.keys(src.custom_lines).length) delete src.custom_lines; }
   if (bidirectional && opp) { tgt.exits = tgt.exits || {}; tgt.exits[opp] = sourceId; }
+  if (prevOppSupCL) { delete tgt.custom_lines[opp]; if (!Object.keys(tgt.custom_lines).length) delete tgt.custom_lines; }
   draw();
 
   const label = customLabel || (bidirectional
     ? `Dodanie wyjścia ${dir} ↔ ${opp||'?'} między #${sourceId} a #${targetId}`
     : `Dodanie wyjścia ${dir} → #${targetId} (z #${sourceId})`);
-  pushUndo({ type: 'ADD_EXIT', sourceId, dir, targetId, bidirectional, opp, prevExit, prevOppExit, label });
+  pushUndo({ type: 'ADD_EXIT', sourceId, dir, targetId, bidirectional, opp, prevExit, prevOppExit, prevSupCL, prevOppSupCL, label });
   state.redoStack = [];
   updateUndoRedoUI();
   _syncEditSnapshot();
@@ -18465,6 +18509,9 @@ function classifyDelta(delta) {
           items.push(_deltaClsItem(op, 'impossible', 'obszar kalki niewykonalny'));
           break;
         }
+        // audyt T5/F5 (#34): galaz defensywna — w praktyce nieosiagalna, bo resA
+        // rozwiazuje sid-area przez sidShArea (cien z _sim ADD_AREA). Gdyby jednak:
+        // bez cieniowego obszaru pokoj nie trafia do cienia — zachowanie zachowane.
         if (areaId === undefined) { sidCls.set(sid, 'ok'); items.push(_deltaClsItem(op, 'ok', 'obszar z kalki')); break; }
         if (!sh.areas.get(areaId)) { sidCls.set(sid, 'impossible');
           items.push(_deltaClsItem(op, 'impossible', 'obszar nie istnieje')); break; }
@@ -19175,8 +19222,18 @@ function _deltaPlaceCtx(delta, items, seq) {
   const resR = v => _DELTA_SID_RE.test(String(v)) ? items.sidRoomId.get(String(v)) : v;
   if (op.type === 'ADD_ROOM') {
     const areaId = resA(op.target.areaId);
-    if (typeof areaId !== 'number' || !state.areas.get(areaId)) return null;
-    return { areaId, z: (op.payload.room || {}).z ?? 0 };
+    if (typeof areaId === 'number' && state.areas.get(areaId))
+      return { areaId, z: (op.payload.room || {}).z ?? 0 };
+    // audyt T5/F5 (#34): obszar z kalki (sid) — kontekst stawiania na surowym sid,
+    // gdy ADD_AREA tego obszaru jest zaznaczone i wykonalne (powstanie przy apply).
+    // Na zywo obszaru nie ma (pusty); _deltaTakenCells/_deltaCellFree/_deltaFindFreeCell
+    // sa sid-spojne (surowy sid jako klucz obszaru), wiec Autopozycja/Recznie dzialaja.
+    const sid = String(op.target.areaId);
+    const areaSeq = delta.ops.find(o => o.type === 'ADD_AREA' && String(o.target.areaId) === sid)?.seq;
+    const areaIt = areaSeq !== undefined ? items.find(i => i.seq === areaSeq) : null;
+    if (areaIt && areaIt.checked && (areaIt.cls === 'ok' || areaIt.cls === 'hard'))
+      return { areaId: sid, z: (op.payload.room || {}).z ?? 0, sidArea: true };
+    return null;
   }
   if (op.type === 'MOVE_ROOM') {
     const id = resR(op.target.roomId);
