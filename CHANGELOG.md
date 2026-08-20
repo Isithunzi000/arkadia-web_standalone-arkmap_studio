@@ -2,6 +2,37 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.42.0 — F1: generator kalki z diffu map (narzedzie standalone)
+
+- **Nowe narzedzie „Stworz kalke mapy…"** (przycisk ⇄ pod „Wczytaj .arkdelta…", zawsze
+  aktywne — nie wymaga trybu edycji): porownuje dwie mapy (zrodlowa i docelowa) i generuje
+  z roznicy gotowa kalke .arkdelta do pobrania. Kazda strona: wczytanie z pliku
+  (.arkmap/.dat) albo pobranie online z naszego mirroru (arkmap/dat). Kalka przechodzi
+  autowalidacje przed zapisem; nazwa pliku kalka-<zrodlo>-<cel>.arkdelta.
+- **Silnik diffMaps**: pelny slownik operacji z lakonicznymi polskimi etykietami —
+  dodanie/edycja/usuniecie pokoju, obszaru, etykiety, wyjscia, custom line; przesuniecia
+  pokoi (w tym cykle rozbijane jednym fallbackiem EDIT_ROOM), przeniesienia miedzy
+  obszarami, malowanie grupowane w PAINT_BATCH, zmiany kolorow env. Kolejnosc emisji
+  topologiczna (najpierw obszary i nowe pokoje, potem kasowania, ruchy, operacje
+  pokojowe, malowanie, etykiety). Porownanie na kanonie pokoi (phantom-defaults:
+  z=0, env null, puste kontenery) — mapa .dat vs .arkmap tej samej tresci daje pusta kalke.
+- **Straznicy**: ostrzezenie o niespokrewnionych mapach (malo wspolnych ID — kalka i tak
+  powstaje), twarda blokada przy limitach walidatora (5000 zmian / 8 MB), komunikat
+  „Mapy sa identyczne" dla pustej kalki. Narzedzie nie dotyka wczytanej mapy ani
+  historii edycji — tworzy wylacznie plik do pobrania.
+- **Refaktory pod generator** (kompatybilne wstecz, bajt-w-bajt te same wyniki):
+  buildDelta(log, base) i _computeBaseInfo(map) z parametrami opcjonalnymi,
+  olFetchFile z opcjonalnym celem postepu.
+- **Fix**: snapshot „before" opow EDIT_ROOM/EDIT_EXIT bierze pozycje x/y/z z wlasciwej
+  strony diffu (zrodlo dla ruchu-fallbacku cyklu i edycji resid, cel dla EDIT_EXIT po
+  MOVE_ROOM) — wczesniej klasyfikator falszywie zglaszal konflikt „pokoj zmienil sie
+  od zapisu kalki" przy kalkach z cyklami przesuniec (np. zamiana miejsc dwoch pokoi).
+- **Testy**: nowy harness tests/diff_kalka.js (74 OK: klasyfikacja, etykiety, kolejnosc,
+  round-trip, piny UI) + grupa empiryczna E13 (5 scenariuszy, 37 asercji: pusta kalka,
+  online hermetycznie, straznik pokrewienstwa, swap end-to-end, killer buildapply —
+  chirurgia 13 rodzajow zmian na fixture master3, diff → kalka → apply → rownosc
+  kanoniczna map). Golden writera bez zmian (7845726/65da3512).
+
 ## v1.41.0 — Tier 6: UX — dirty przy re-wejsciu, „Przywroc ostatni zapis", import trasy, touch
 
 - **D1:** startLocalEditMode nie zeruje juz state.dirty — flaga jest utrzymywana przez

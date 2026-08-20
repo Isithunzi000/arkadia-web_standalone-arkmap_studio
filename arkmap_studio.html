@@ -194,6 +194,17 @@
   #ol-confirm-bar-fill { height: 100%; width: 0%; background: var(--accent); transition: width .15s; }
   #ol-confirm-footer { padding:10px 16px 12px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end; align-items:center; }
   #btn-load-online { width:100%; text-align:left; margin-top:8px; border-color:var(--accent); color:var(--accent); font-size: 12px; padding:6px 8px; }
+  /* F1: dialog tworzenia kalki z diffu map */
+  #dk-cards { display:flex; gap:10px; }
+  .dk-card { flex:1; border:1px solid var(--border); border-radius:6px; padding:10px; background:#101828; }
+  .dk-card-title { font-weight:600; font-size:12px; margin-bottom:8px; }
+  .dk-side-note { color:var(--dim); font-weight:400; font-size:11px; }
+  .dk-card-btns button, .dk-fmt button { margin:0 6px 6px 0; font-size:12px; padding:4px 10px; }
+  .dk-fmt { margin-bottom:4px; }
+  .dk-status { font-size:12px; min-height:30px; line-height:1.45; word-break:break-word; }
+  .dk-status.err { color:#e06c60; }
+  .dk-dim { color:var(--dim); }
+  #dk-summary { font-size:12px; line-height:1.55; margin-top:10px; padding:8px; border:1px solid var(--border); border-radius:6px; }
   #btn-load-online:hover { background:#1a2840; }
   #rp-lock {
     cursor: pointer; user-select: none; flex-shrink: 0;
@@ -1922,6 +1933,7 @@
       <button id="btn-save-dat" disabled>Eksportuj Mudlet .dat</button>
       <input type="file" id="fi-arkdelta" accept=".arkdelta">
       <button id="btn-load-arkdelta" disabled style="margin-top:6px">Wczytaj .arkdelta&hellip;</button>
+      <button id="btn-diff-kalka" style="margin-top:6px">⇄ Stwórz kalkę mapy&hellip;</button>
       <button id="sb-pr-btn" class="ok" style="margin-top:6px" onclick="openDialog('dlg-compose-pr')">⬡ Wyślij Pull Request…</button>
     </div>
 
@@ -1979,6 +1991,56 @@
         <button id="ol-btn-arkmap" class="dialog-btn ok-btn">.arkmap</button>
         <button id="ol-btn-dat" class="dialog-btn">.dat</button>
         <button id="ol-btn-cancel" class="dialog-btn">Anuluj</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- KALKA Z DIFFU MAP (F1) -->
+  <div id="dlg-kalka" class="dlg-bg">
+    <div class="dlg-box" style="max-width:740px">
+      <div class="dlg-hdr">
+        <div class="dlg-icon">⇄</div>
+        <div class="dlg-hdr-text">
+          <div class="dlg-title">Stwórz kalkę mapy</div>
+          <div class="dlg-sub">Porównaj dwie mapy i zapisz różnicę jako .arkdelta</div>
+        </div>
+      </div>
+      <div class="dlg-body">
+        <div id="dk-cards">
+          <div class="dk-card">
+            <div class="dk-card-title">Mapa źródłowa <span class="dk-side-note">(baza kalki)</span></div>
+            <div class="dk-card-btns">
+              <button id="dk-src-online" class="dlg-cancel">🌐 Online&hellip;</button>
+              <button id="dk-src-file" class="dlg-cancel">📁 Z pliku&hellip;</button>
+              <input type="file" id="dk-fi-src" accept=".arkmap,.dat" style="display:none">
+            </div>
+            <div class="dk-fmt" id="dk-fmt-src" style="display:none">
+              Z kopii online: <button data-side="src" data-fmt="arkmap" class="dlg-cancel">.arkmap</button>
+              <button data-side="src" data-fmt="dat" class="dlg-cancel">.dat</button>
+            </div>
+            <div class="dk-status" id="dk-status-src">Nie wczytano</div>
+          </div>
+          <div class="dk-card">
+            <div class="dk-card-title">Mapa docelowa <span class="dk-side-note">(po zmianach)</span></div>
+            <div class="dk-card-btns">
+              <button id="dk-dst-online" class="dlg-cancel">🌐 Online&hellip;</button>
+              <button id="dk-dst-file" class="dlg-cancel">📁 Z pliku&hellip;</button>
+              <input type="file" id="dk-fi-dst" accept=".arkmap,.dat" style="display:none">
+            </div>
+            <div class="dk-fmt" id="dk-fmt-dst" style="display:none">
+              Z kopii online: <button data-side="dst" data-fmt="arkmap" class="dlg-cancel">.arkmap</button>
+              <button data-side="dst" data-fmt="dat" class="dlg-cancel">.dat</button>
+            </div>
+            <div class="dk-status" id="dk-status-dst">Nie wczytano</div>
+          </div>
+        </div>
+        <div id="dk-warn" class="dlg-info warn" style="display:none;margin-top:10px"></div>
+        <div id="dk-result" style="display:none"><div id="dk-summary"></div></div>
+      </div>
+      <div class="dlg-ftr">
+        <button class="dlg-cancel" onclick="closeDialog('dlg-kalka')">Zamknij</button>
+        <button id="dk-save" class="btn-primary" style="display:none">Zapisz .arkdelta&hellip;</button>
+        <button id="dk-create" class="btn-primary" disabled>Stwórz kalkę</button>
       </div>
     </div>
   </div>
@@ -9517,7 +9579,10 @@ olConfirmBg.addEventListener('click', e => { if (e.target === olConfirmBg) close
 // Pobieranie z paskiem postępu — wspólne dla .arkmap i .dat.
 // v1.5.36: AbortController 180 s — zawieszony transfer (fetch nie ma domyślnego
 // timeoutu) kończy się błędem zamiast wisieć do reloadu strony.
-async function olFetchFile(url, label, expectedSize) {
+async function olFetchFile(url, label, expectedSize, prog) {
+  // F1: prog = { prg, bar } — opcjonalny cel postepu (dialog kalki); domyslnie ol-confirm
+  const _prg = (prog && prog.prg) || olConfirmPrg;
+  const _bar = prog ? (prog.bar || null) : olConfirmBar;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 180000);
   try {
@@ -9538,10 +9603,10 @@ async function olFetchFile(url, label, expectedSize) {
     loaded += value.length;
     if (total) {
       const pct = Math.min(100, Math.round(loaded / total * 100));
-      olConfirmPrg.textContent = `Pobieranie: ${label}… ${pct}% (${(loaded/1024/1024).toFixed(1)} / ${(total/1024/1024).toFixed(1)} MB)`;
-      olConfirmBar.style.width = pct + '%';
+      _prg.textContent = `Pobieranie: ${label}… ${pct}% (${(loaded/1024/1024).toFixed(1)} / ${(total/1024/1024).toFixed(1)} MB)`;
+      if (_bar) _bar.style.width = pct + '%';
     } else {
-      olConfirmPrg.textContent = `Pobieranie: ${label}… ${(loaded/1024/1024).toFixed(1)} MB`;
+      _prg.textContent = `Pobieranie: ${label}… ${(loaded/1024/1024).toFixed(1)} MB`;
     }
   }
   const totalLen = chunks.reduce((s, c) => s + c.length, 0);
@@ -12924,7 +12989,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.41.0';
+const APP_VERSION = 'v1.42.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -17802,9 +17867,11 @@ const ARKDELTA_MAX_BYTES = 8 * 1024 * 1024;
 const _DELTA_SID_RE = /^d:[1-9][0-9]*$/;
 
 // ── baseInfo: tożsamość bazy (crc liczone RAZ, przy wczytaniu mapy) ─────────
-function _computeBaseInfo() {
-  if (!state.map) return null;
-  const clone = JSON.parse(JSON.stringify(state.map));
+function _computeBaseInfo(map) {
+  // F1: parametr opcjonalny — domyslnie state.map; generator kalki liczy baze z mapy zrodlowej
+  if (!map) map = state.map;
+  if (!map) return null;
+  const clone = JSON.parse(JSON.stringify(map));
   if (clone.areas) {
     clone.areas.sort((a, b) => a.id - b.id);
     for (const area of clone.areas) {
@@ -17821,7 +17888,7 @@ function _computeBaseInfo() {
     }
   }
   addChecksums(clone);
-  const ud = (state.map.meta && state.map.meta.user_data) || {};
+  const ud = (map.meta && map.meta.user_data) || {};
   const info = { crc: clone.meta.checksums.file };
   if (ud.version)  info.version  = ud.version;
   if (ud.revision) info.revision = ud.revision;
@@ -17837,13 +17904,579 @@ function _deltaStripRoom(room) {
   return c;
 }
 
+
+// ═══ F1: GENERATOR KALKI Z DIFFU MAP (standalone) ═══
+// diffMaps(srcMap, dstMap) — czysta funkcja: porownuje dwie mapy (format .arkmap)
+// i zwraca syntetyczne wpisy w ksztalcie deltaLog (identycznym jak z pushUndo).
+// Serializacja: buildDelta(wynik.entries, _computeBaseInfo(srcMap)).
+// Nie dotyka globalnego state — narzedzie dziala tez poza trybem edycji.
+
+const _DIFF_DIR_ORDER = ['n','ne','e','se','s','sw','w','nw','up','down','in','out'];
+function _diffDirCmp(a, b) {
+  const ia = _DIFF_DIR_ORDER.indexOf(a), ib = _DIFF_DIR_ORDER.indexOf(b);
+  return ((ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib)) || (a < b ? -1 : a > b ? 1 : 0);
+}
+function _diffEq(a, b) { return stableStringify(a) === stableStringify(b); }
+function _diffPick(c, fields) { const o = {}; for (const f of fields) if (c[f] !== undefined) o[f] = c[f]; return o; }
+function _diffExcept(c, fields) { const o = Object.assign({}, c); for (const f of fields) delete o[f]; return o; }
+
+// Kanon pokoju do porownan — ta sama konwencja co _computeBaseInfo (strip defaultow
+// + posortowane pola tablicowe): ta sama mapa z .dat i .arkmap daje PUSTA kalke.
+function _diffCanonRoom(room) {
+  const c = JSON.parse(JSON.stringify(room));
+  delete c.area;
+  _stripRoomDefaults(c);
+  if (c.stubs) c.stubs.sort();
+  if (c.exit_locks) c.exit_locks.sort();
+  if (c.special_exit_locks) c.special_exit_locks.sort();
+  if (c.env === null || c.env === undefined) delete c.env;
+  if (c.z === 0) delete c.z;
+  return c;
+}
+
+// Trym kaskadowy: dokladnie zakres doFn deleteRoom — wyjscia i special exits
+// wskazujace skasowane pokoje znikaja wraz z polami pobocznymi na tych kierunkach.
+function _diffTrimRoomToDeleted(room, deletedRooms) {
+  for (const dir of Object.keys(room.exits || {})) {
+    if (deletedRooms.has(room.exits[dir])) {
+      delete room.exits[dir];
+      if (room.exit_weights) delete room.exit_weights[dir];
+      if (room.doors) delete room.doors[dir];
+      if (room.exit_locks) room.exit_locks = room.exit_locks.filter(d => d !== dir);
+      if (room.custom_lines) delete room.custom_lines[dir];
+    }
+  }
+  for (const cmd of Object.keys(room.special_exits || {})) {
+    if (deletedRooms.has(room.special_exits[cmd])) {
+      delete room.special_exits[cmd];
+      if (room.special_exit_locks) room.special_exit_locks = room.special_exit_locks.filter(c => c !== cmd);
+      if (room.custom_lines) delete room.custom_lines[cmd];
+      if (room.doors) delete room.doors[cmd];
+      if (room.exit_weights) delete room.exit_weights[cmd];
+    }
+  }
+  ['exits','special_exits','doors','exit_weights','custom_lines'].forEach(k => { if (room[k] && !Object.keys(room[k]).length) delete room[k]; });
+  ['exit_locks','special_exit_locks'].forEach(k => { if (Array.isArray(room[k]) && !room[k].length) delete room[k]; });
+}
+
+// before-snapshot dla opow full-state (EDIT_ROOM/EDIT_EXIT): stan pokoju
+// po kaskadzie delete'ow i po ruchu — zgodny z cieniem classifyDelta w chwili opu.
+// Pozycje bierzemy z SUROWEGO pokoju docelowego (nie z kanonu — kanon normalizuje
+// z=0, a _deltaRoomCmp w classify porownuje snapshoty pelne, z zachowane).
+function _diffBeforeSnapshot(srcRoom, deletedRooms, posRoom) {
+  // posRoom = skad pozycja x/y/z: pokoj DOCZELOWY, gdy kalka najpierw rusza pokoj
+  // (MOVE_ROOM przed roomOps — cien klasyfikatora jest juz na nowej pozycji);
+  // pokoj ZRODLOWY, gdy ten sam op SAM jest ruchem (fallback cyklu) albo gdy
+  // ruchu w ogole nie ma (EDIT_ROOM resid — taki pokoj nigdy nie dostaje MOVE_ROOM).
+  const b = JSON.parse(JSON.stringify(srcRoom));
+  _diffTrimRoomToDeleted(b, deletedRooms);
+  b.x = posRoom.x; b.y = posRoom.y;
+  if (posRoom.z !== undefined) b.z = posRoom.z; else delete b.z;
+  return b;
+}
+
+function _diffClLabel(kind, cl, name, id, dir) {
+  const supp = _deltaIsSuppressor(cl);
+  if (kind === 'add') return supp
+    ? `Dodanie pustej custom line dir=${dir} w pokoju "${name}" (#${id})`
+    : `Dodano CL dir=${dir} w pokoju "${name}" (#${id})`;
+  if (kind === 'del') return `Usunięcie ${supp ? 'pustej custom line' : 'CL'} dir=${dir} w pokoju "${name}" (#${id})`;
+  return `Edycja CL dir=${dir} w pokoju "${name}" (#${id})`;
+}
+
+const _DIFF_EXIT_FAM  = ['exits','special_exits','doors','exit_weights','exit_locks','special_exit_locks','stubs'];
+const _DIFF_PAINT_FAM = ['env','symbol'];
+const _DIFF_RESID_SKIP = ['x','y','z','custom_lines'].concat(_DIFF_EXIT_FAM, _DIFF_PAINT_FAM);
+
+function diffMaps(srcMap, dstMap) {
+  const stats = { addArea:0, editArea:0, delArea:0, envColor:0, addRoom:0, editRoom:0, delRoom:0,
+    moveRoom:0, moveArea:0, addExit:0, editExit:0, delExit:0, paintRooms:0, paintBatches:0,
+    addCL:0, editCL:0, delCL:0, addLabel:0, editLabel:0, delLabel:0, moveLabel:0, resizeLabel:0 };
+  const srcAreas = new Map(), dstAreas = new Map();
+  for (const a of (srcMap.areas || [])) srcAreas.set(a.id, a);
+  for (const a of (dstMap.areas || [])) dstAreas.set(a.id, a);
+  const srcRooms = new Map(), dstRooms = new Map();   // id -> { room, areaId }
+  for (const [aid, a] of srcAreas) for (const r of (a.rooms || [])) srcRooms.set(r.id, { room: r, areaId: aid });
+  for (const [aid, a] of dstAreas) for (const r of (a.rooms || [])) dstRooms.set(r.id, { room: r, areaId: aid });
+
+  // straznik pokrewienstwa: odsetek wspolnych id pokoi (ostrzezenie w dialogu)
+  let common = 0;
+  for (const id of srcRooms.keys()) if (dstRooms.has(id)) common++;
+  const denom = Math.max(srcRooms.size, dstRooms.size);
+  const overlap = denom === 0 ? 1 : common / denom;
+
+  const out = { addArea:[], editArea:[], envColor:[], addRoom:[], moveArea:[], delRoom:[],
+    roomOps:[], labelAdd:[], labelEdit:[], labelDel:[], delArea:[] };
+  const paintGroups = new Map();  // klucz zmiany -> changes[]
+  const moveCands = [];           // { id, name, area, from{x,y,z}, to{x,y,z}, sRoom, dRoom }
+
+  // ── obszary ──
+  const allAreaIds = [...new Set([...srcAreas.keys(), ...dstAreas.keys()])].sort((a, b) => a - b);
+  const deletedAreas = new Set();
+  for (const id of allAreaIds) {
+    const sA = srcAreas.get(id), dA = dstAreas.get(id);
+    if (sA && !dA) {
+      deletedAreas.add(id);
+      out.delArea.push({ type:'DELETE_AREA', areaId:id, snapshot:{ name: sA.name || '' },
+        label:`Usunięcie obszaru "${sA.name || '#' + id}"` }); stats.delArea++;
+    } else if (!sA && dA) {
+      const areaData = JSON.parse(JSON.stringify(dA));
+      delete areaData.rooms; delete areaData.labels;
+      out.addArea.push({ type:'ADD_AREA', areaId:id, areaData,
+        label:`Dodanie obszaru "${dA.name || '#' + id}"` }); stats.addArea++;
+    } else {
+      const bs = { name: sA.name || '', user_data: sA.user_data || {} };
+      const bd = { name: dA.name || '', user_data: dA.user_data || {} };
+      if (!_diffEq(bs, bd)) {
+        out.editArea.push({ type:'EDIT_AREA', areaId:id, before:bs, after:bd,
+          label:`Edycja obszaru "${dA.name || sA.name || '#' + id}"` }); stats.editArea++;
+      }
+    }
+  }
+
+  // ── kolory env ──
+  const sc  = (srcMap.colors && srcMap.colors.custom_env_colors) || {};
+  const dcc = (dstMap.colors && dstMap.colors.custom_env_colors) || {};
+  const envIds = [...new Set([...Object.keys(sc), ...Object.keys(dcc)])].sort((a, b) => (+a) - (+b));
+  for (const envKey of envIds) {
+    const o = sc[envKey] ?? null, n = dcc[envKey] ?? null;
+    if (_diffEq(o, n)) continue;
+    const envId = isFinite(+envKey) ? +envKey : envKey;
+    out.envColor.push({ type:'EDIT_ENV_COLOR', envId,
+      oldColor: o ? [...o] : null, newColor: n ? [...n] : null,
+      label: n ? `Zmiana koloru env ${envId} → rgb(${n.join(',')})` : `Przywróć domyślny kolor env ${envId}` });
+    stats.envColor++;
+  }
+
+  // ── pokoje ──
+  const deletedRooms = new Set(), addedRooms = new Set();
+  const allRoomIds = [...new Set([...srcRooms.keys(), ...dstRooms.keys()])].sort((a, b) => a - b);
+  for (const id of allRoomIds) {
+    if (srcRooms.has(id) && !dstRooms.has(id)) deletedRooms.add(id);
+    if (!srcRooms.has(id) && dstRooms.has(id)) addedRooms.add(id);
+  }
+  for (const id of allRoomIds) {
+    const s = srcRooms.get(id), d = dstRooms.get(id);
+    if (s && !d) {
+      out.delRoom.push({ type:'DELETE_ROOM', roomId:id, areaId:s.areaId,
+        snapshot: JSON.parse(JSON.stringify(s.room)),
+        label:`Usunięcie pokoju "${s.room.name || '#' + id}" (#${id})` });
+      stats.delRoom++;
+      continue;
+    }
+    if (!s && d) {
+      out.addRoom.push({ type:'ADD_ROOM', roomId:id, roomData: JSON.parse(JSON.stringify(d.room)), areaId:d.areaId,
+        label:`Dodanie pokoju "${d.room.name || ''}" (#${id})` });
+      stats.addRoom++;
+      continue;
+    }
+    const name = d.room.name || s.room.name || ('#' + id);
+    const cs = _diffCanonRoom(s.room), cd = _diffCanonRoom(d.room);
+    _diffTrimRoomToDeleted(cs, deletedRooms);   // kanon zrodla po kaskadzie delete'ow
+
+    const areaChanged = s.areaId !== d.areaId;
+    const posChanged  = (cs.x !== cd.x) || (cs.y !== cd.y) || ((cs.z ?? 0) !== (cd.z ?? 0));
+    const exitsDiffer = !_diffEq(cs.exits || {}, cd.exits || {});
+    const exitRestDiffer = !_diffEq(_diffExcept(_diffPick(cs, _DIFF_EXIT_FAM), ['exits']),
+                                    _diffExcept(_diffPick(cd, _DIFF_EXIT_FAM), ['exits']));
+    const paintDiffer = !_diffEq(_diffPick(cs, _DIFF_PAINT_FAM), _diffPick(cd, _DIFF_PAINT_FAM));
+    const clS = cs.custom_lines || {}, clD = cd.custom_lines || {};
+    const clDiffer = !_diffEq(clS, clD);
+    const residDiffer = !_diffEq(_diffExcept(cs, _DIFF_RESID_SKIP), _diffExcept(cd, _DIFF_RESID_SKIP));
+    if (!areaChanged && !posChanged && !exitsDiffer && !exitRestDiffer && !paintDiffer && !clDiffer && !residDiffer) continue;
+
+    if (areaChanged) {
+      out.moveArea.push({ type:'MOVE_ROOM_TO_AREA', roomId:id, fromAreaId:s.areaId, toAreaId:d.areaId,
+        label:`Przeniesienie pokoju "${name}" (#${id}) do obszaru "${(dstAreas.get(d.areaId) || {}).name || '#' + d.areaId}"` });
+      stats.moveArea++;
+    }
+
+    if (residDiffer) {
+      // pelny EDIT_ROOM pokrywa wszystko (wyjscia/malowanie/CL-e/pozycje) jednym opem
+      out.roomOps.push({ type:'EDIT_ROOM', roomId:id,
+        before: _diffBeforeSnapshot(s.room, deletedRooms, s.room),
+        after: JSON.parse(JSON.stringify(d.room)),
+        label:`Edycja pokoju "${name}" (#${id})` });
+      stats.editRoom++;
+      continue;
+    }
+
+    if (posChanged) {
+      moveCands.push({ id, name, area: d.areaId,
+        from: { x: s.room.x, y: s.room.y, z: s.room.z },
+        to:   { x: d.room.x, y: d.room.y, z: d.room.z } });
+    }
+
+    const delExitDirs = new Set();
+    if (exitsDiffer && !exitRestDiffer) {
+      // granularne DELETE/ADD per kierunek (bez snapshotow — najczytelniejsza historia)
+      const dirs = [...new Set([...Object.keys(cs.exits || {}), ...Object.keys(cd.exits || {})])].sort(_diffDirCmp);
+      for (const dir of dirs) {
+        const sT = (cs.exits || {})[dir], dT = (cd.exits || {})[dir];
+        if (sT !== undefined && dT === undefined) {
+          delExitDirs.add(dir);
+          out.roomOps.push({ type:'DELETE_EXIT', roomId:id, dir,
+            snap: { exitId: sT, weight: (cs.exit_weights || {})[dir],
+              lock: (cs.exit_locks || []).includes(dir) ? dir : undefined,
+              door: (cs.doors || {})[dir], hasStub: (cs.stubs || []).includes(dir),
+              cl: clS[dir] ? JSON.parse(JSON.stringify(clS[dir])) : undefined },
+            label:`Usunięcie wyjścia ${dir} z #${id}` });
+          stats.delExit++;
+        } else if (sT === undefined && dT !== undefined) {
+          out.roomOps.push({ type:'ADD_EXIT', sourceId:id, dir, targetId:dT, bidirectional:false,
+            label:`Dodanie wyjścia ${dir} → #${dT} (z #${id})` });
+          stats.addExit++;
+        } else if (sT !== dT) {
+          delExitDirs.add(dir);
+          out.roomOps.push({ type:'DELETE_EXIT', roomId:id, dir,
+            snap: { exitId: sT, weight: (cs.exit_weights || {})[dir],
+              lock: (cs.exit_locks || []).includes(dir) ? dir : undefined,
+              door: (cs.doors || {})[dir], hasStub: (cs.stubs || []).includes(dir),
+              cl: clS[dir] ? JSON.parse(JSON.stringify(clS[dir])) : undefined },
+            label:`Usunięcie wyjścia ${dir} z #${id}` });
+          out.roomOps.push({ type:'ADD_EXIT', sourceId:id, dir, targetId:dT, bidirectional:false,
+            label:`Dodanie wyjścia ${dir} → #${dT} (z #${id})` });
+          stats.delExit++; stats.addExit++;
+        }
+      }
+    } else if (exitsDiffer || exitRestDiffer) {
+      // zmiany mieszane rodziny wyjsc → jeden EDIT_EXIT (full snapshoty; pokrywa tez paint/CL)
+      const dirs = new Set();
+      for (const k of new Set([...Object.keys(cs.exits || {}), ...Object.keys(cd.exits || {})]))
+        if ((cs.exits || {})[k] !== (cd.exits || {})[k]) dirs.add(k);
+      for (const k of new Set([...Object.keys(cs.special_exits || {}), ...Object.keys(cd.special_exits || {})]))
+        if ((cs.special_exits || {})[k] !== (cd.special_exits || {})[k]) dirs.add(k);
+      for (const f of ['doors','exit_weights'])
+        for (const k of new Set([...Object.keys(cs[f] || {}), ...Object.keys(cd[f] || {})]))
+          if (!_diffEq((cs[f] || {})[k], (cd[f] || {})[k])) dirs.add(k);
+      for (const f of ['exit_locks','stubs','special_exit_locks']) {
+        const a = new Set(cs[f] || []), b = new Set(cd[f] || []);
+        for (const k of new Set([...a, ...b])) if (a.has(k) !== b.has(k)) dirs.add(k);
+      }
+      const sd = [...dirs].sort(_diffDirCmp);
+      out.roomOps.push({ type:'EDIT_EXIT', roomId:id,
+        before: _diffBeforeSnapshot(s.room, deletedRooms, d.room),
+        after: JSON.parse(JSON.stringify(d.room)),
+        label: sd.length === 1
+          ? `Edycja wyjścia ${sd[0]} w pokoju "${name}" (#${id})`
+          : `Edycja wyjść w pokoju "${name}" (#${id})` });
+      stats.editExit++;
+    } else {
+      if (paintDiffer) {
+        const key = stableStringify([cs.env ?? null, cs.symbol ?? '', cd.env ?? null, cd.symbol ?? '']);
+        if (!paintGroups.has(key)) paintGroups.set(key, []);
+        paintGroups.get(key).push({ roomId:id, beforeEnv: cs.env ?? null, beforeSymbol: cs.symbol ?? '',
+          afterEnv: cd.env ?? null, afterSymbol: cd.symbol ?? '' });
+      }
+      if (clDiffer) {
+        // kierunki z DELETE_EXIT: CL na nich znika razem z wyjsciem — traktujemy zrodlo jako puste
+        const dirs = [...new Set([...Object.keys(clS), ...Object.keys(clD)])].sort(_diffDirCmp);
+        for (const dir of dirs) {
+          const sC = delExitDirs.has(dir) ? undefined : clS[dir];
+          const dC = clD[dir];
+          if (sC && !dC) {
+            out.roomOps.push({ type:'DELETE_CL', roomId:id, dir, snapshot: JSON.parse(JSON.stringify(sC)),
+              label: _diffClLabel('del', sC, name, id, dir) });
+            stats.delCL++;
+          } else if (!sC && dC) {
+            out.roomOps.push({ type:'ADD_CL', roomId:id, dir, snapshot: JSON.parse(JSON.stringify(dC)),
+              label: _diffClLabel('add', dC, name, id, dir) });
+            stats.addCL++;
+          } else if (sC && dC && !_diffEq(sC, dC)) {
+            out.roomOps.push({ type:'EDIT_CL', roomId:id, dir,
+              before: JSON.parse(JSON.stringify(sC)), after: JSON.parse(JSON.stringify(dC)),
+              label: _diffClLabel('edit', dC, name, id, dir) });
+            stats.editCL++;
+          }
+        }
+      }
+    }
+  }
+
+  // ── ruchy: emisja w kolejnosci odblokowujacej; cykl (np. swap) → fallback EDIT_ROOM ──
+  const occ = new Map();  // "areaId:x,y,z" -> roomId (stan po delete'ach, z dodanymi pokojami)
+  const occKey = (areaId, x, y, z) => areaId + ':' + x + ',' + y + ',' + (z ?? 0);
+  for (const [id, s] of srcRooms) {
+    if (deletedRooms.has(id)) continue;
+    occ.set(occKey(s.areaId, s.room.x, s.room.y, s.room.z), id);
+  }
+  for (const id of addedRooms) {
+    const d = dstRooms.get(id);
+    occ.set(occKey(d.areaId, d.room.x, d.room.y, d.room.z), id);
+  }
+  const moveOps = [];
+  let pend = moveCands;   // allRoomIds posortowane → kandydaci posortowani po id
+  while (pend.length) {
+    let progress = false;
+    const rest = [];
+    for (const m of pend) {
+      const toKey = occKey(m.area, m.to.x, m.to.y, m.to.z);
+      const occupant = occ.get(toKey);
+      if (occupant === undefined || occupant === m.id) {
+        moveOps.push({ type:'MOVE_ROOM', roomId:m.id,
+          fromX:m.from.x, fromY:m.from.y, fromZ:m.from.z, toX:m.to.x, toY:m.to.y, toZ:m.to.z,
+          label:`Przesunięcie pokoju "${m.name}" (#${m.id})` });
+        occ.delete(occKey(m.area, m.from.x, m.from.y, m.from.z));
+        occ.set(toKey, m.id);
+        stats.moveRoom++;
+        progress = true;
+      } else rest.push(m);
+    }
+    if (!progress) {
+      // cykl kolizyjny (np. zamiana miejsc) — rozbijamy JEDEN fallback EDIT_ROOM
+      // (omija klasyfikacje move), co zwalnia pole i odblokowuje reszte cyklu
+      const m = rest[0];
+      const srcRoom = srcRooms.get(m.id).room;
+      const after = JSON.parse(JSON.stringify(srcRoom));
+      _diffTrimRoomToDeleted(after, deletedRooms);
+      after.x = m.to.x; after.y = m.to.y;
+      if (m.to.z !== undefined) after.z = m.to.z; else delete after.z;
+      moveOps.push({ type:'EDIT_ROOM', roomId:m.id,
+        before: _diffBeforeSnapshot(srcRoom, deletedRooms, srcRoom),
+        after,
+        label:`Przesunięcie pokoju "${m.name}" (#${m.id})` });
+      occ.delete(occKey(m.area, m.from.x, m.from.y, m.from.z));
+      occ.set(occKey(m.area, m.to.x, m.to.y, m.to.z), m.id);
+      stats.moveRoom++;
+      rest.shift();
+    }
+    pend = rest;
+  }
+
+  // ── malowanie: grupy identycznych zmian env/symbol ──
+  const paintOps = [];
+  for (const key of [...paintGroups.keys()].sort()) {
+    const changes = paintGroups.get(key).sort((a, b) => a.roomId - b.roomId);
+    const n = changes.length;
+    paintOps.push({ type:'PAINT_BATCH', changes,
+      label:`Malowanie — ${n} ${n === 1 ? 'pokój' : 'pokoi'}` });
+    stats.paintBatches++; stats.paintRooms += n;
+  }
+
+  // ── etykiety (pomijamy obszary skasowane — etykiety znikaja kaskadowo) ──
+  for (const aid of allAreaIds) {
+    if (deletedAreas.has(aid)) continue;
+    const sA = srcAreas.get(aid), dA = dstAreas.get(aid);
+    const sL = new Map(), dL = new Map();
+    for (const l of ((sA && sA.labels) || [])) sL.set(l.id, l);
+    for (const l of ((dA && dA.labels) || [])) dL.set(l.id, l);
+    const ids = [...new Set([...sL.keys(), ...dL.keys()])].sort((a, b) => a - b);
+    for (const lid of ids) {
+      const s = sL.get(lid), d = dL.get(lid);
+      const nm = (d && d.text) || (s && s.text) || ('#' + lid);
+      if (s && !d) {
+        out.labelDel.push({ type:'DELETE_LABEL', areaId:aid, snapshot: JSON.parse(JSON.stringify(s)),
+          label:`Usunięcie etykiety "${nm}" (#${lid})` });
+        stats.delLabel++;
+      } else if (!s && d) {
+        out.labelAdd.push({ type:'ADD_LABEL', areaId:aid, snapshot: JSON.parse(JSON.stringify(d)),
+          label:`Dodanie etykiety "${nm}" (#${lid})` });
+        stats.addLabel++;
+      } else if (!_diffEq(s, d)) {
+        const posCh  = (s.x !== d.x) || (s.y !== d.y);
+        const sizeCh = (s.width !== d.width) || (s.height !== d.height);
+        const restCh = !_diffEq(_diffExcept(s, ['x','y','width','height']), _diffExcept(d, ['x','y','width','height']));
+        if (restCh) {
+          out.labelEdit.push({ type:'EDIT_LABEL', areaId:aid, labelId:lid,
+            before: JSON.parse(JSON.stringify(s)), after: JSON.parse(JSON.stringify(d)),
+            label:`Edycja etykiety "${nm}" (#${lid})` });
+          stats.editLabel++;
+        } else if (sizeCh) {
+          out.labelEdit.push({ type:'RESIZE_LABEL', areaId:aid, labelId:lid,
+            fromW:s.width, fromH:s.height, fromX:s.x, fromY:s.y, toW:d.width, toH:d.height, toX:d.x, toY:d.y,
+            label:`Resize etykiety "${nm}" (#${lid})` });
+          stats.resizeLabel++;
+        } else if (posCh) {
+          out.labelEdit.push({ type:'MOVE_LABEL', areaId:aid, labelId:lid,
+            fromX:s.x, fromY:s.y, toX:d.x, toY:d.y,
+            label:`Przesunięcie etykiety "${nm}" (#${lid})` });
+          stats.moveLabel++;
+        }
+      }
+    }
+  }
+
+  // ── kolejnosc emisji (topologiczna, deterministyczna) ──
+  const entries = [
+    ...out.addArea, ...out.editArea, ...out.envColor,
+    ...out.addRoom, ...out.moveArea, ...out.delRoom,
+    ...moveOps, ...out.roomOps, ...paintOps,
+    ...out.labelAdd, ...out.labelEdit, ...out.labelDel,
+    ...out.delArea,
+  ];
+  return { entries, stats, overlap, srcRooms: srcRooms.size, dstRooms: dstRooms.size };
+}
+
+// ── F1 UI: dialog „Stwórz kalkę mapy" ──
+// Wczytane mapy NIE trafiaja do state — narzedzie standalone (D7/D8).
+const _kalka = { src: null, dst: null, srcName: '', dstName: '', text: null, fname: '' };
+let _kalkaOl = null;   // { base, index } — resolve online wspoldzielone w dialogu (testy moga podstawic)
+
+function _kalkaStatus(side, html, isErr) {
+  const el = document.getElementById('dk-status-' + side);
+  if (el) { el.innerHTML = html; el.classList.toggle('err', !!isErr); }
+}
+function _kalkaResetResult() {
+  _kalka.text = null;
+  const r = document.getElementById('dk-result'); if (r) r.style.display = 'none';
+  const sv = document.getElementById('dk-save'); if (sv) sv.style.display = 'none';
+  const w = document.getElementById('dk-warn'); if (w) w.style.display = 'none';
+}
+function _kalkaUpdateCreate() {
+  const b = document.getElementById('dk-create');
+  if (b) b.disabled = !(_kalka.src && _kalka.dst);
+}
+function _kalkaSetMap(side, map, label) {
+  const rooms = (map.areas || []).reduce((n, a) => n + ((a.rooms || []).length), 0);
+  if (side === 'src') { _kalka.src = map; _kalka.srcName = label; }
+  else { _kalka.dst = map; _kalka.dstName = label; }
+  const base = _computeBaseInfo(map);
+  _kalkaStatus(side, '✓ ' + label + '<br><span class="dk-dim">' + rooms + ' pokoi' +
+    (base && base.crc ? ' · crc ' + String(base.crc).slice(0, 8) : '') + '</span>');
+  _kalkaResetResult();
+  _kalkaUpdateCreate();
+}
+
+// Wspolna walidacja wejscia: fatalne bledy formatu → odmowa; ostrzezenia → notka przy nazwie.
+function _kalkaValidateInput(map) {
+  const res = validate(map);
+  const fatal = !res.ok && res.errors.some(e => e.path === 'format' || e.path === 'version');
+  const warns = (!res.ok) || ((res.warnings || []).length > 0);
+  return { fatal, warns };
+}
+
+async function _kalkaLoadFile(side, file) {
+  _kalkaStatus(side, 'Wczytuję ' + file.name + '…');
+  try {
+    let map;
+    if (/\.dat$/i.test(file.name)) map = datToArkmap(await file.arrayBuffer());
+    else map = JSON.parse(await file.text());
+    if (!map || typeof map !== 'object' || !Array.isArray(map.areas)) throw new Error('to nie jest obiekt mapy');
+    const v = _kalkaValidateInput(map);
+    if (v.fatal) { _kalkaStatus(side, '✗ Nie można odczytać — uszkodzony lub niepoprawny format', true); return; }
+    _kalkaSetMap(side, map, file.name + (v.warns ? ' ⚠' : ''));
+  } catch (e) {
+    _kalkaStatus(side, '✗ Błąd wczytywania: ' + e.message, true);
+  }
+}
+
+async function _kalkaOlEnsure(side) {
+  if (_kalkaOl) return true;
+  _kalkaStatus(side, 'Sprawdzanie kopii online…');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 30000);
+  try {
+    const base = await olResolveBaseUrl(ctrl.signal);
+    const resp = await fetch(base + 'index.json?_=' + Date.now(), { cache: 'no-cache', signal: ctrl.signal });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const index = await resp.json();
+    if (!index || typeof index.revision !== 'string') throw new Error('niepoprawny index.json');
+    _kalkaOl = { base, index };
+    return true;
+  } catch (e) {
+    _kalkaStatus(side, e.name === 'AbortError' ? '⚠ Serwer nie odpowiada (timeout 30 s)' : '⚠ Nie można pobrać informacji o kopii', true);
+    return false;
+  } finally { clearTimeout(timer); }
+}
+
+async function _kalkaOnlineLoad(side, fmt) {
+  if (!_kalkaOl) return;
+  const fname = fmt === 'dat' ? 'map_master3.dat' : 'map_master3.arkmap';
+  const expected = fmt === 'dat' ? _kalkaOl.index.dat_size : _kalkaOl.index.arkmap_size;
+  const statusEl = document.getElementById('dk-status-' + side);
+  try {
+    const buf = await olFetchFile(_kalkaOl.base + fname, fname, expected, { prg: statusEl, bar: null });
+    let map;
+    if (fmt === 'dat') {
+      map = datToArkmap(buf.buffer);
+      if (!map.meta) map.meta = {};
+      if (!map.meta.user_data) map.meta.user_data = {};
+      if (_kalkaOl.index.version)  map.meta.user_data.version  = _kalkaOl.index.version;
+      if (_kalkaOl.index.revision) map.meta.user_data.revision = _kalkaOl.index.revision;
+    } else map = JSON.parse(new TextDecoder().decode(buf));
+    const v = _kalkaValidateInput(map);
+    if (v.fatal) { _kalkaStatus(side, '✗ Kopia online ma niepoprawny format', true); return; }
+    _kalkaSetMap(side, map, '🌐 online · ' + fname + (v.warns ? ' ⚠' : ''));
+  } catch (e) {
+    _kalkaStatus(side, '✗ Online — ' + (e.name === 'AbortError' ? 'przekroczono limit czasu (180 s)' : 'błąd: ' + e.message), true);
+  }
+}
+
+function _kalkaSuggestName() {
+  const clean = str => (str || 'mapa').replace(/^🌐 online · /, '').replace(/\.(dat|arkmap|json)$/i, '')
+    .toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'mapa';
+  return 'kalka-' + clean(_kalka.srcName) + '-' + clean(_kalka.dstName) + '.arkdelta';
+}
+
+function _kalkaSummaryHtml(stats, total, bytes) {
+  const rows = [];
+  const add = (n, label) => { if (n) rows.push(n + ' × ' + label); };
+  add(stats.addArea, 'dodanie obszaru'); add(stats.editArea, 'edycja obszaru'); add(stats.delArea, 'usunięcie obszaru');
+  add(stats.addRoom, 'dodanie pokoju'); add(stats.editRoom, 'edycja pokoju'); add(stats.delRoom, 'usunięcie pokoju');
+  add(stats.moveRoom, 'przesunięcie pokoju'); add(stats.moveArea, 'przeniesienie do innego obszaru');
+  add(stats.addExit, 'dodanie wyjścia'); add(stats.editExit, 'edycja wyjść'); add(stats.delExit, 'usunięcie wyjścia');
+  add(stats.paintRooms, 'malowanie pokoi');
+  add(stats.addCL, 'dodanie custom line'); add(stats.editCL, 'edycja custom line'); add(stats.delCL, 'usunięcie custom line');
+  add(stats.addLabel, 'dodanie etykiety'); add(stats.editLabel, 'edycja etykiety'); add(stats.delLabel, 'usunięcie etykiety');
+  add(stats.moveLabel, 'przesunięcie etykiety'); add(stats.resizeLabel, 'zmiana rozmiaru etykiety');
+  add(stats.envColor, 'zmiana koloru środowiska');
+  return '✓ Kalka gotowa: <strong>' + total + ' ' + plPl(total, 'zmiana', 'zmiany', 'zmian') + '</strong> (' +
+    (bytes / 1024).toFixed(0) + ' KB)<br>' + rows.join(' · ');
+}
+
+function kalkaCreate() {
+  if (!(_kalka.src && _kalka.dst)) return;
+  const r = diffMaps(_kalka.src, _kalka.dst);
+  const warn = document.getElementById('dk-warn');
+  // D6: straznik pokrewienstwa — ostrzezenie, nie blokada
+  if (r.overlap < 0.5 && r.srcRooms > 0 && r.dstRooms > 0) {
+    warn.textContent = '⚠ Te mapy wyglądają na niespokrewnione (wspólne pokoje: ' + Math.round(r.overlap * 100) +
+      '%). Kalka będzie ogromna i raczej bezużyteczna.';
+    warn.style.display = '';
+  } else warn.style.display = 'none';
+  const result = document.getElementById('dk-result');
+  const summary = document.getElementById('dk-summary');
+  const saveBtn = document.getElementById('dk-save');
+  result.style.display = '';
+  saveBtn.style.display = 'none';
+  if (r.entries.length === 0) {
+    summary.innerHTML = '✓ Mapy są identyczne — nie ma czego zapisywać.';
+    return;
+  }
+  const text = buildDelta(r.entries, _computeBaseInfo(_kalka.src));
+  const bytes = new Blob([text]).size;
+  // D6: pre-flight limitow walidatora — twarda blokada
+  if (r.entries.length > 5000 || bytes > 8 * 1024 * 1024) {
+    summary.innerHTML = '✗ Kalka przekracza limity formatu (' + r.entries.length + ' zmian, ' +
+      (bytes / 1024 / 1024).toFixed(1) + ' MB; maks. 5000 zmian / 8 MB). Mapy są zbyt różne.';
+    return;
+  }
+  if (!validateDeltaText(text).ok) {
+    summary.innerHTML = '✗ Wygenerowana kalka nie przeszła autowalidacji — to błąd generatora, zgłoś go.';
+    return;
+  }
+  _kalka.text = text;
+  _kalka.fname = _kalkaSuggestName();
+  summary.innerHTML = _kalkaSummaryHtml(r.stats, r.entries.length, bytes);
+  saveBtn.style.display = '';
+}
+
+function kalkaSave() {
+  if (!_kalka.text) return;
+  download(_kalka.fname, _kalka.text, 'application/json');
+  toast('✓ Zapisano kalkę: ' + _kalka.fname);
+}
+
 // Budowa pliku delty z state.deltaLog (netto). Zwraca tekst kanoniczny.
 // sid "d:N" przypisywane w locie, w kolejnosci logu — define-before-use z konstrukcji
 // (edytor nie moze odwolac sie do obiektu, ktory jeszcze nie istnieje).
 // Mapy ZYWYCH obiektow: DELETE zdejmuje wpis, wiec ponowne uzycie tego samego id
 // przez edytor (add po delete — edytor liczy max+1 z aktualnego stanu) dostaje NOWY sid.
-function buildDelta() {
-  const log = state.deltaLog || [];
+function buildDelta(log, base) {
+  // F1: parametry opcjonalne — domyslnie log/baza z state (eksport z sesji edycji);
+  // generator kalki z diffu podaje syntetyczne wpisy i baseInfo mapy zrodlowej.
+  if (!log) log = state.deltaLog || [];
+  if (!base) base = state.baseInfo || {};
   let counter = 0;
   const liveRoom = new Map(), liveArea = new Map(), liveLabel = new Map();
   const rId = id => (typeof id === 'number' && liveRoom.has(id)) ? liveRoom.get(id) : id;
@@ -18003,7 +18636,7 @@ function buildDelta() {
     format: ARKDELTA_FORMAT,
     format_version: ARKDELTA_FORMAT_VERSION,
     ops_count: ops.length,
-    base: state.baseInfo || {},
+    base: base,
     app_version: APP_VERSION,
   };
   const checksums = {
@@ -20123,6 +20756,31 @@ fiArkdelta.addEventListener('change', async e => {
   else openDeltaReview(res.delta);
 });
 btnSaveArkdelta.addEventListener('click', saveDelta);
+
+// F1: generator kalki z diffu map — przycisk zawsze aktywny (standalone, D7)
+{
+  const btnDiffKalka = document.getElementById('btn-diff-kalka');
+  btnDiffKalka.addEventListener('click', () => openDialog('dlg-kalka'));
+  document.getElementById('dk-create').addEventListener('click', kalkaCreate);
+  document.getElementById('dk-save').addEventListener('click', kalkaSave);
+  for (const side of ['src', 'dst']) {
+    document.getElementById('dk-' + side + '-file').addEventListener('click', () =>
+      document.getElementById('dk-fi-' + side).click());
+    document.getElementById('dk-fi-' + side).addEventListener('change', e => {
+      const f = e.target.files[0];
+      e.target.value = '';
+      if (f) _kalkaLoadFile(side, f);
+    });
+    document.getElementById('dk-' + side + '-online').addEventListener('click', async () => {
+      if (await _kalkaOlEnsure(side)) {
+        const fmt = document.getElementById('dk-fmt-' + side);
+        if (fmt) fmt.style.display = '';
+      }
+    });
+  }
+  document.querySelectorAll('#dlg-kalka .dk-fmt button').forEach(b =>
+    b.addEventListener('click', () => _kalkaOnlineLoad(b.dataset.side, b.dataset.fmt)));
+}
 
 // Panel recenzji: filtry, apply, rebase, zamkniecie, drag
 {

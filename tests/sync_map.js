@@ -205,8 +205,11 @@ console.log('— v1.5.41: progres pobierania + modal O programie (struktura) —
 {
   // Bug: raw.githubusercontent gzipuje tekstowy .arkmap — content-length jest rozmiarem
   // skompresowanym, reader liczy bajty po dekompresji → procent > 100%. Fix: total z index.json.
-  ok(HTML.includes('async function olFetchFile(url, label, expectedSize)'),
-    'progres: olFetchFile przyjmuje expectedSize (rozmiar z index.json)');
+  ok(HTML.includes('async function olFetchFile(url, label, expectedSize, prog)'),
+    'progres: olFetchFile przyjmuje expectedSize (rozmiar z index.json); prog = cel postepu (F1)');
+  ok(HTML.includes('const _prg = (prog && prog.prg) || olConfirmPrg;') &&
+     HTML.includes('const _bar = prog ? (prog.bar || null) : olConfirmBar;'),
+    'progres: bez prog cel postepu = ol-confirm (zachowanie domyslne zachowane)');
   ok(HTML.includes('Number.isFinite(expectedSize) ? expectedSize : (contentLength ? parseInt(contentLength) : null)'),
     'progres: expectedSize nadrzędne względem content-length (fallback zostaje)');
   ok(HTML.includes('Math.min(100, Math.round(loaded / total * 100))'),
@@ -217,8 +220,8 @@ console.log('— v1.5.41: progres pobierania + modal O programie (struktura) —
   ok(HTML.includes('<div id="ol-confirm-bar"><div id="ol-confirm-bar-fill"></div></div>') &&
      /#ol-confirm-bar-fill\s*{[^}]*background:\s*var\(--accent\)/.test(HTML),
     'progres: pasek postępu (markup + CSS)');
-  ok(HTML.includes("olConfirmBar.style.width = pct + '%';"),
-    'progres: pasek aktualizowany w pętli pobierania');
+  ok(HTML.includes("if (_bar) _bar.style.width = pct + '%';"),
+    'progres: pasek aktualizowany w pętli pobierania (przez _bar — domyslnie olConfirmBar)');
 
   // Modal O programie: łamanie tekstu
   ok(/#about-modal\s*{[^}]*width:\s*520px/.test(HTML), 'O programie: szerokość 520px');
