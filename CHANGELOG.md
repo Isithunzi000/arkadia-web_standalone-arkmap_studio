@@ -2,6 +2,33 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.43.0 — PWA: instalowalnosc (manifest + no-op service worker + ikony)
+
+ArkMap Studio jako Progressive Web App, wariant A (wzorcowy no-op, jak w kliencie
+Delwinga): aplikacje da sie zainstalowac z poziomu przegladarki (Chrome/Edge/Android,
+Dodaj do ekranu glownego na iOS) i uruchamiac w osobnym oknie bez paska adresu.
+Swiadomie BEZ offline: service worker nie cache'uje nic, wiec produkcja zawsze
+serwuje najswiezsza wersje, a testy empiryczne (headless Chromium) nie sa narazone
+na serwowanie starego HTML z cache. Zero nowych pinow wersji — manifest i sw.js
+celowo nie zawieraja numeru wersji.
+
+- **manifest.webmanifest** (root repo): name „ArkMap Studio", short_name „ArkMap",
+  start_url ./arkmap_studio.html, display standalone, theme/background = --bg
+  (#0d0f12) z CSS apki, ikony 192/512 + maskable 512 (bezpieczna strefa 72%).
+- **sw.js** (root repo): no-op — install -> skipWaiting, activate -> clients.claim.
+  Zero cache, zero handlera fetch (od Chrome 108 instalowalnosc nie wymaga fetch).
+- **arkmap_studio.html**: <head> — link manifest, theme-color, apple-touch-icon 180,
+  apple-mobile-web-app-capable, favicony 16/32 (pierwszy favicon w historii apki);
+  rejestracja SW z cichym catch, bez gate na hostname (SW nic nie robi — empiryka
+  go nie zauwaza, file:// failuje w catch).
+- **icons/**: nowa ikona „AMS z korytarzy" (litery zlozone z korytarzy i swiecacych
+  wezlow mapy, bursztyn na #0f1116), eksporty 512/192/180/maskable-512/favicon-32/16.
+- **tests/pwa.js**: nowy harness (24 asercje) — parsowanie i kompletnosc manifestu,
+  wymiary plikow ikon (IHDR), skladnia sw.js (node --check), straznik no-op
+  (brak caches./fetch), tagi w <head>, rejestracja SW, zgodnosc theme_color z --bg.
+  Dopisany do run-all.sh (22 harnesy Node).
+- **docs/arkmap_manual.html**: nowy akapit „Instalacja jako aplikacja (PWA)".
+
 ## v1.42.2 — audyt dokumentacji vs kod (kimi-k2.7-code) + fixy
 
 Audyt zgodnosci trzech dokumentow (manual PL, spec .arkmap EN, spec .arkdelta EN)

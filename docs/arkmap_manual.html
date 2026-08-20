@@ -105,6 +105,7 @@
   <li><a href="#github">Integracja z GitHub</a></li>
   <li><a href="#keyboard">Skróty klawiaturowe — pełna lista</a></li>
   <li><a href="#mobile">Wersja mobilna</a></li>
+  <li><a href="#pwa">Instalacja jako aplikacja (PWA)</a></li>
   <li><a href="#formats">Obsługiwane formaty plików</a></li>
   <li><a href="#faq">FAQ — pytania i odpowiedzi</a></li>
 </ol>
@@ -853,7 +854,18 @@
 </ul>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="formats">25. Obsługiwane formaty plików</h2>
+<h2 id="pwa">25. Instalacja jako aplikacja (PWA)</h2>
+
+<p>ArkMap Studio można zainstalować jak zwykłą aplikację — dostaje wtedy własną ikonę (monogram <strong>AMS</strong> zbudowany z korytarzy i węzłów mapy) i otwiera się w osobnym oknie, bez paska adresu przeglądarki:</p>
+<ul>
+  <li><strong>Chrome / Edge (desktop):</strong> ikona instalacji w prawej części paska adresu (albo menu ⋮ → <em>Zainstaluj ArkMap Studio…</em>)</li>
+  <li><strong>Android (Chrome):</strong> menu ⋮ → <em>Dodaj do ekranu głównego</em> — aplikacja ląduje na pulpicie z ikoną AMS</li>
+  <li><strong>iOS (Safari):</strong> przycisk <em>Udostępnij</em> → <em>Dodaj do ekranu początkowego</em></li>
+</ul>
+<p>Świadoma decyzja projektowa: aplikacja <strong>nie działa offline</strong> — service worker jest celowo pusty (no-op) i niczego nie cache'uje. Dzięki temu po każdej aktualizacji produkcji masz zawsze najświeższą wersję, a stare pliki nigdy nie zalegają w cache przeglądarki. Jeśli potrzebujesz pracy bez sieci, pobierz plik <code>arkmap_studio.html</code> na dysk i otwórz go lokalnie — cała aplikacja jest w jednym pliku.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="formats">26. Obsługiwane formaty plików</h2>
 
 <h3>.arkmap</h3>
 <p>Autorski format projektu ArkMap Studio. Plik JSON z deterministyczną serializacją (posortowane klucze, inline arrays prymitywów). Zawiera:</p>
@@ -873,7 +885,7 @@
 <p>Binarny format map klienta Mudlet (QDataStream). Odczyt obsługuje wersje 17–22. Zapis zawsze w wersji 20 (standard Arkadii). Roundtrip .dat → .arkmap → .dat daje byte-identyczny wynik dla plików w wersji 20 (potwierdzone testami SHA-256). Pliki w innych wersjach (17–19, 21–22) są odczytywane poprawnie, ale zapisywane jako wersja 20.</p>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="faq">26. FAQ — pytania i odpowiedzi</h2>
+<h2 id="faq">27. FAQ — pytania i odpowiedzi</h2>
 
 <h4>Czy kalka .arkdelta zadziała na nowszej wersji mapy?</h4>
 <p>Tak — to jej główne zastosowanie. Po wczytaniu kalki na innej wersji mapy otwiera się okno recenzji: każda operacja zostaje sklasyfikowana (do naniesienia / konflikt / naniesione / niewykonalne) i nic nie nanosi się automatycznie.</p>

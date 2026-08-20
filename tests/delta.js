@@ -457,7 +457,7 @@ ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo 
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.42.2';"), 'wersja: v1.42.2');
+ok(HTML.includes("const APP_VERSION = 'v1.43.0';"), 'wersja: v1.43.0');
 
 // — W3 (v1.35.0): etykiety kalki zachowane przez 6 niskopoziomowych sciezek commit —
 {
@@ -824,7 +824,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
   ok(HTML.includes('const _DELTA_TYPE_PL = {') && HTML.includes("MOVE_ROOM: 'przesunięcie pokoju'")
     && HTML.includes("AUTO_FIX_SUPPRESSORS: 'automatyczna naprawa podwójnych linii'"),
     'W1 karta: typy opów po polsku (_DELTA_TYPE_PL)');
-  ok(HTML.includes("const APP_VERSION = 'v1.42.2';"), 'wersja v1.42.2');
+  ok(HTML.includes("const APP_VERSION = 'v1.43.0';"), 'wersja v1.43.0');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -860,7 +860,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.42.2';"), 'wersja v1.42.2 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.43.0';"), 'wersja v1.43.0 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji
@@ -869,8 +869,8 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
   ok((MANUAL.match(/arkdelta/g) || []).length >= 8, 'manual: kalka opisana (>= 8 wzmianek)');
   ok(MANUAL.includes('<li><a href="#arkdelta">Kalka zmian .arkdelta</a></li>'), 'manual: wpis w TOC');
   const nums = [...MANUAL.matchAll(/<h2 id="[^"]+">(\d+)\./g)].map(m => +m[1]);
-  const ciagle = nums.length === 26 && nums.every((n, i) => n === i + 1);
-  ok(ciagle, 'manual: numeracja sekcji ciągła 1–26 (26 sekcji)');
+  const ciagle = nums.length === 27 && nums.every((n, i) => n === i + 1);
+  ok(ciagle, 'manual: numeracja sekcji ciągła 1–27 (27 sekcji)');
   ok(MANUAL.includes('<h3>.arkdelta (kalka zmian)</h3>'), 'manual: podsekcja w Formatach');
   ok(MANUAL.includes('Czy kalka .arkdelta zadziała na nowszej wersji mapy?')
     && MANUAL.includes('Co jeśli pole docelowe operacji z kalki jest zajęte?'), 'manual: 2 pytania FAQ');
@@ -964,7 +964,7 @@ console.log('— T11: audyt T1 — klasyfikator ≡ apply —');
   ok(HTML.includes("if (aid <= 0) { items.push(_deltaClsItem(op, 'impossible', 'obszar domyślny"), 'T1: klasyfikator guard DELETE_AREA <= 0');
   ok(HTML.includes('kierunek przeciwny u pokoju docelowego jest zajęty'), 'T1: klasyfikator ADD_EXIT guard przeciwnego kierunku');
   ok(HTML.includes('return false;  // audyt T1/W15'), 'T1: commitDeleteArea jawny zwrot false');
-  ok(HTML.includes("const APP_VERSION = 'v1.42.2';"), 'wersja v1.42.2');
+  ok(HTML.includes("const APP_VERSION = 'v1.43.0';"), 'wersja v1.43.0');
 }
 
 
