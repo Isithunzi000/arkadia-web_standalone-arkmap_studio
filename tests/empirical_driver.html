@@ -3838,6 +3838,90 @@ scenario('E17.olSerialize', async () => {
   ex('window.fetch = window.__e17fetch; delete window.__e17; delete window.__e17fetch;');
 });
 
+
+// ═══ GRUPA E18 — uniwersalne kolory: mapa obca (nie-arkadiaska) ═══
+// Syntetyczny .arkmap bez zadnych sygnatur Arkadii (brak map_sync_version,
+// brak „arkadia" w nazwie/pliku, brak sygnaturowych envId >255): render z ANSI
+// + kolorow pliku, legenda z generycznymi nazwami, stub solid jasnoszary 1:1
+// z rendererem Delwinga (mudlet-map-renderer: computeStubs, lineColor, 0.5
+// jednostki poza krawedz pokoju, bez dash). Potem powrot do fixture .dat
+// i asercje, ze detekcja przywraca pelny tryb arkadiaski.
+
+scenario('E18.universal', async () => {
+  const FOREIGN = {
+    format: 'arkmap', version: 1,
+    meta: {
+      map_name: 'Obca Kraina',
+      symbol_font: { family: 'Sans', point_size: 12, pixel_size: 12, style_hint: 0,
+                     weight: 50, style_setting: false, underline: false,
+                     strike_out: false, fixed_pitch: false },
+      symbol_font_fudge_factor: 1, use_only_map_font: false
+    },
+    colors: { env_colors: { 11: 2 }, custom_env_colors: { 4000: [1, 2, 3] } },
+    areas: [{ id: 1, name: 'Cudzy Obszar', rooms: [
+      { id: 1, x: 0, y: 0, z: 0, env: 10, weight: 1, stubs: ['n'],
+        exits: {}, special_exits: {}, custom_lines: {}, exit_locks: [],
+        exit_weights: {}, doors: {}, user_data: {} },
+      { id: 2, x: 4, y: 0, z: 0, env: 20, weight: 1,
+        exits: {}, special_exits: {}, custom_lines: {}, exit_locks: [],
+        exit_weights: {}, doors: {}, user_data: {} }
+    ] }]
+  };
+  ex('window.__e18text = ' + JSON.stringify(JSON.stringify(FOREIGN)) + ';');
+  const lr = await eva('loadArkmap(window.__e18text, "obca.arkmap")');
+  AEV('E18.load', lr, 'zaladowanie syntetycznej mapy obcej');
+  A('E18.detect', ev('state.isArkadia === false').val === true,
+    'mapa obca: state.isArkadia === false');
+  EQ('E18.name', ev('state.map.meta.map_name').val, 'Obca Kraina', 'nazwa mapy bez wymuszenia „Arkadia"');
+
+  // Kolory: ANSI zamiast tabeli arkadianskiej + kolory z pliku
+  EQ('E18.col.ansi10', ev('envColorCss(10)').val, 'rgb(0,255,0)',
+    'env 10 -> ANSI bright green (tabela arkadiaska NIE zastosowana)');
+  EQ('E18.col.ansi20', ev('envColorCss(20)').val, 'rgb(0,0,215)', 'env 20 -> kostka xterm');
+  EQ('E18.col.custom', ev('envColorCss(4000)').val, 'rgb(1,2,3)',
+    'custom_env_colors z pliku obcej mapy dziala');
+  EQ('E18.col.gated', ev('envColorCss(266)').val, 'rgb(114,1,0)',
+    'env 266 (w tabeli Arkadii = rgb(0,255,0)) -> DEFAULT: tabela za bramka');
+
+  // Legenda: generyczne nazwy, zero arkadianskich
+  const leg = AEV('E18.legend.r', ev('document.getElementById("legend-env").textContent'), 'odczyt legendy');
+  if (leg !== undefined) {
+    A('E18.legend.generic', leg.indexOf('env 10') !== -1 && leg.indexOf('env 20') !== -1,
+      'legenda mapy obcej: generyczne „env N"');
+    A('E18.legend.noArkadia', leg.indexOf('Las') === -1, 'legenda mapy obcej: bez „Las"');
+  }
+
+  // Stub: solid, jasnoszary rgb(225,225,225), bez dash (parity z Delwingiem)
+  ex('centerViewOnMap(2, 0);');
+  ex('window.__e18strokes = [];'
+   + ' window.__e18orig = CanvasRenderingContext2D.prototype.stroke;'
+   + ' CanvasRenderingContext2D.prototype.stroke = function(){'
+   + '   window.__e18strokes.push({ style: String(this.strokeStyle), dash: this.getLineDash().length });'
+   + '   return window.__e18orig.call(this); };'
+   + ' draw();'
+   + ' CanvasRenderingContext2D.prototype.stroke = window.__e18orig;');
+  const strokes = AEV('E18.stub.r', ev('window.__e18strokes'), 'odczyt instrumentacji stroke');
+  if (strokes) {
+    // canvas normalizuje rgb() do hex przy odczycie strokeStyle
+    const s225 = strokes.filter(s => s.style === 'rgb(225,225,225)' || s.style === '#e1e1e1');
+    A('E18.stub.drawn', s225.length > 0, 'stub narysowany jasnoszarym lineColor [strokes225=' + s225.length + ']');
+    A('E18.stub.solid', s225.length > 0 && s225.every(s => s.dash === 0),
+      'stub solid (getLineDash puste) — zadna kreskowana kreska 225');
+  }
+  ex('delete window.__e18strokes; delete window.__e18orig; delete window.__e18text;');
+
+  // Powrot do fixture .dat: detekcja przywraca tryb arkadiaski 1:1
+  const st = AEV('E18.restore', loadBase('dat'), 'powrot do fixture .dat');
+  if (!st) return;
+  A('E18.restore.arkadia', ev('state.isArkadia === true').val === true,
+    'fixture .dat: state.isArkadia === true (map_sync_version)');
+  EQ('E18.restore.color', ev('envColorCss(258)').val, 'rgb(0,179,0)',
+    'fixture: env 258 z tabeli arkadianskiej');
+  const leg2 = AEV('E18.restore.legend.r', ev('document.getElementById("legend-env").textContent'), 'legenda po restore');
+  if (leg2 !== undefined)
+    A('E18.restore.legend', leg2.indexOf('Las') !== -1, 'fixture: legenda znowu z „Las"');
+});
+
 // ═══ Runner ═══
 function appReady() {
   return new Promise(res => {

@@ -60,12 +60,14 @@ function makeCtx() {
   const fn = new Function(
     'state', 'document', 'localStorage', 'searchIn', 'btnSaveArkmap', 'btnSaveDat', 'btnSaveAs2',
     'buildColorCache', 'buildAreaList', '_recomputeAstarParams', 'selectArea', 'escHtml',
+    'rebuildLegend',
     '_pixmapCache', '_hopViaCache',
     pipeCode
   );
   const api = fn(
     state, documentStub, localStorageStub, dummyEl(), dummyEl(), dummyEl(), dummyEl(),
     () => { state.colorCache = {}; }, () => {}, () => {}, () => {}, (s) => String(s),
+    () => {},
     new Map(), new Map()
   );
   return { state, api };

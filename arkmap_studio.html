@@ -4310,6 +4310,35 @@ function envPaletteList() {
 const ARKADIA_ENV = Object.fromEntries(
   envPaletteList().map(e => [e.envId, { name: e.name, rgb: e.rgb }])
 );
+
+// ── Detekcja Arkadii (v1.43.3) ──────────────────────────────────────────────
+// Mapy niosa wlasne kolory srodowisk (.dat v17+ w mCustomEnvColors / .arkmap
+// colors.*), wiec tabela ARKADIA_ENVS/ARKADIA_SYMBOLS to override TYLKO dla map
+// arkadianskich. true gdy: user_data.map_sync_version (marka mapsync) LUB
+// 'arkadia' w nazwie mapy/pliku LUB >=2 sygnaturowe envId (>255, z tabeli)
+// wsrod uzywanych envow pokoi albo kluczy kolorow z pliku. Czysta funkcja
+// danych — ta sama mapa daje zawsze ten sam wynik.
+const ARKADIA_SIGNATURE_ENVS = Object.keys(ARKADIA_ENVS).map(Number).filter(k => k > 255);
+function isArkadiaMap(map, filename) {
+  if (!map || typeof map !== 'object') return false;
+  const ud = (map.meta && map.meta.user_data) || {};
+  if (ud.map_sync_version !== undefined) return true;
+  if (/arkadia/i.test(String(ud.map_name || '') + ' ' + String(filename || ''))) return true;
+  const sig = new Set(ARKADIA_SIGNATURE_ENVS);
+  const seen = new Set();
+  let hits = 0;
+  const bump = (k) => {
+    k = Number(k);
+    if (!sig.has(k) || seen.has(k)) return false;
+    seen.add(k);
+    return ++hits >= 2;
+  };
+  const cols = map.colors || {};
+  for (const k of Object.keys(cols.custom_env_colors || {})) if (bump(k)) return true;
+  for (const k of Object.keys(cols.env_colors || {})) if (bump(k)) return true;
+  for (const a of map.areas || []) for (const r of a.rooms || []) if (bump(r.env)) return true;
+  return false;
+}
 // ARKADIA_SYMBOLS already defined above in arkadia-env.js
 
 // ── validate.js ──
@@ -5911,6 +5940,15 @@ function _datConvertLabel(raw) {
   return label;
 }
 
+// v1.43.3: neutralny fallback nazwy mapy — 'Arkadia' tylko dla map arkadianskich
+function _datFallbackMapName(raw) {
+  const probe = {
+    meta:   { user_data: raw.mUserData || {} },
+    colors: { env_colors: raw.envColors || {}, custom_env_colors: raw.mCustomEnvColors || {} },
+    areas:  [{ id: -1, rooms: Object.values(raw.rooms || {}).map(r => ({ env: r.environment })) }],
+  };
+  return isArkadiaMap(probe, null) ? 'Arkadia' : 'Mapa';
+}
 function datToArkmap(arrayBuffer) {
   const raw = readMudletDat(arrayBuffer);
 
@@ -5953,7 +5991,7 @@ function datToArkmap(arrayBuffer) {
   return {
     format: FORMAT, version: VERSION,
     meta: {
-      map_name:                 raw.mUserData?.map_name || (raw.areaNames?.[-1] !== 'Default Area' ? raw.areaNames?.[-1] : null) || 'Arkadia',
+      map_name:                 raw.mUserData?.map_name || (raw.areaNames?.[-1] !== 'Default Area' ? raw.areaNames?.[-1] : null) || _datFallbackMapName(raw),
       symbol_font:              qfont(raw.mapSymbolFont),
       symbol_font_fudge_factor: raw.mapFontFudgeFactor ?? 1.0,
       use_only_map_font:        raw.useOnlyMapFont ?? false,
@@ -6175,6 +6213,7 @@ const DIR_VEC = {
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
 const state = {
+  isArkadia:   false, // v1.43.3: detekcja przy applyMap — gate tabel arkadianskich
   showGrid:    true,
   showMinimap: true,
   showSuppressors: false,
@@ -6278,6 +6317,7 @@ function applyMap(map) {
     }
   } catch(_) {}
   state.map = map;
+  state.isArkadia = isArkadiaMap(map, state.filename); // v1.43.3
   _pixmapCache.clear();
   _hopViaCache.clear(); // v1.5.41
   state.areas = new Map();
@@ -6291,6 +6331,10 @@ function applyMap(map) {
     }
   }
   buildColorCache(map.colors || {});
+  rebuildLegend(); // v1.43.3: legenda per mapa
+  // v1.43.3: palety env/symboli sa per-mapa — reset, by initRpPalette wypelnial ponownie
+  ['rp-env-palette','rp-sym-palette','dtp-env-palette','dtp-sym-palette']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ''; });
   // P3: Warn about rooms with envIds not covered by any color source
   {
     const uncovered = new Set();
@@ -6385,8 +6429,9 @@ function buildColorCache(colors) {
     const rgb = ANSI_PAL[ansiIdx];
     if (rgb) state.colorCache[eid] = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
   }
-  // ARKADIA_ENVS: hardcoded Arkadia environment table (overrides implicit ANSI for Arkadia envIds)
-  if (typeof ARKADIA_ENVS !== 'undefined') {
+  // ARKADIA_ENVS: hardcoded Arkadia environment table (override implicit ANSI) —
+  // v1.43.3: TYLKO dla map arkadianskich; mapy obce renderuja sie z ANSI + kolorow pliku
+  if (state.isArkadia && typeof ARKADIA_ENVS !== 'undefined') {
     for (const [k, info] of Object.entries(ARKADIA_ENVS)) {
       if (info.rgb) state.colorCache[parseInt(k)] = `rgb(${info.rgb[0]},${info.rgb[1]},${info.rgb[2]})`;
     }
@@ -6432,6 +6477,31 @@ function envColorRgb(envId) {
   return [...DEFAULT_ROOM_RGB];
 }
 
+// ── v1.43.3: uniwersalne env-y — listy/nazwy per mapa ──────────────────────
+// Arkadia (albo brak mapy) → pelna tabela z nazwami; mapa obca → env-y
+// faktycznie zdefiniowane w pliku lub uzywane na mapie, nazwy generyczne.
+function envListForUi() {
+  if (!state.map || state.isArkadia) return envPaletteList();
+  const ids = new Set();
+  const cols = state.map.colors || {};
+  for (const k of Object.keys(cols.custom_env_colors || {})) ids.add(+k);
+  for (const k of Object.keys(cols.env_colors || {})) ids.add(+k);
+  for (const a of state.map.areas || []) for (const r of a.rooms || []) if (r.env > 0) ids.add(r.env);
+  return [...ids].sort((a, b) => a - b)
+    .map(id => ({ envId: id, name: 'env ' + id, rgb: envColorRgb(id) }));
+}
+// Symbole faktycznie uzywane na wczytanej mapie (legenda map obcych)
+function usedSymbolsOnMap() {
+  const set = new Set();
+  for (const a of (state.map && state.map.areas) || []) {
+    for (const r of a.rooms || []) {
+      const s = r.symbol || (r.user_data && r.user_data['system.fallback_symbol']) || '';
+      if (s) set.add(s);
+    }
+  }
+  return [...set].sort().map(s => [s, '']);
+}
+
 // Zwraca kolor tekstu (#000 lub #fff) dający max kontrast na tle roomColor
 const _ccCache = {};
 function contrastColor(cssColor) {
@@ -6466,25 +6536,32 @@ function symbolFillFor(r) {            // wariant z alpha 0.6 — pod trójkąty
 }
 
 // ─── LEGENDA ──────────────────────────────────────────────────────────────────
-(function initLegend() {
+// v1.43.3: legenda per mapa — Arkadia (lub brak mapy): pelne tabele z nazwami;
+// mapa obca: env-y i symbole faktycznie zdefiniowane/uzywane, nazwy generyczne
+function rebuildLegend() {
   const envEl  = document.getElementById('legend-env');
   const symEl  = document.getElementById('legend-sym');
+  if (!envEl || !symEl) return;
+  envEl.innerHTML = '';
+  symEl.innerHTML = '';
 
   // Wypełnij środowiska
-  for (const [id, info] of Object.entries(ARKADIA_ENV)) {
-    const [r,g,b] = info.rgb;
+  for (const e of envListForUi()) {
+    const [r,g,b] = e.rgb;
     const el = document.createElement('div');
     el.className = 'leg-env';
-    el.title = `env ${id}`;
-    el.innerHTML = `<span class="leg-swatch" data-env="${id}" style="background:rgb(${r},${g},${b})"></span>`
-                 + `<span class="leg-env-id">${id}</span>`
-                 + `<span class="leg-env-name">${info.name}</span>`;
+    el.title = `env ${e.envId}`;
+    el.innerHTML = `<span class="leg-swatch" data-env="${e.envId}" style="background:rgb(${r},${g},${b})"></span>`
+                 + `<span class="leg-env-id">${e.envId}</span>`
+                 + `<span class="leg-env-name">${escHtml(e.name)}</span>`;
     envEl.appendChild(el);
   }
 
   // Wypełnij symbole
-  for (const [sym, name] of Object.entries(ARKADIA_SYMBOLS)) {
-    const defEnv = SYMBOL_DEFAULT_ENV[sym];
+  const arkadiaMode = !state.map || state.isArkadia;
+  const symEntries = arkadiaMode ? Object.entries(ARKADIA_SYMBOLS) : usedSymbolsOnMap();
+  for (const [sym, name] of symEntries) {
+    const defEnv = arkadiaMode ? SYMBOL_DEFAULT_ENV[sym] : undefined;
     const el = document.createElement('div');
     el.className = 'leg-sym';
     const swatchHtml = defEnv !== undefined
@@ -6492,10 +6569,11 @@ function symbolFillFor(r) {            // wariant z alpha 0.6 — pod trójkąty
       : `<span class="leg-swatch" style="background:transparent;border-color:transparent"></span>`;
     el.innerHTML = swatchHtml
                  + `<span class="leg-sym-key">${escHtml(sym)}</span>`
-                 + `<span class="leg-sym-name">${name}</span>`;
+                 + `<span class="leg-sym-name">${escHtml(name)}</span>`;
     symEl.appendChild(el);
   }
-})();
+}
+rebuildLegend();
 
 // Odśwież kolory w legendzie i paletkach po buildColorCache / edycji koloru env
 function refreshEnvColors() {
@@ -7295,22 +7373,22 @@ function drawExits(rooms, rs) {
 // ── drawStubs() — render stub tick marks at room edges ────────────────────────
 function drawStubs(rooms, rs) {
   const half = rs / 2;
-  const tickLen = Math.max(3, rs * 0.35);
-  ctx.strokeStyle = 'rgba(100,140,180,0.55)';
-  ctx.lineWidth = Math.max(1, state.zoom * 1.2);
-  ctx.setLineDash([Math.max(2, state.zoom * 2), Math.max(1, state.zoom * 1.5)]);
+  // v1.43.3: stuby 1:1 z Delwingiem — pelna linia w lineColor wyjsc (bez dash),
+  // dlugosc 0.5 jednostki mapy za krawedz pokoju, grubosc jak linie wyjsc
+  const tickLen = 0.5 * cpx();
+  ctx.strokeStyle = 'rgb(225,225,225)';
+  ctx.lineWidth = Math.max(0.4, state.zoom * 0.4875);
   for (const r of rooms) {
     if (!r.stubs || !r.stubs.length) continue;
     const cx = wx(r.x), cy = wy(r.y);
     for (const dir of r.stubs) {
       const vec = DIR_VEC[dir];
-      if (!vec || (!vec[0] && !vec[1])) continue; // skip up/down/in/out
+      if (!vec || (!vec[0] && !vec[1])) continue; // up/down/in/out bez geometrii liniowej (jak u Delwinga)
       const [ex, ey] = edgePt(cx, cy, half, vec);
       const tx = ex + vec[0] * tickLen, ty = ey + vec[1] * tickLen;
       ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(tx, ty); ctx.stroke();
     }
   }
-  ctx.setLineDash([]);
 }
 
 // ── drawPendingExitLines() — preview przerywanych linii dla pending exits ─────
@@ -8386,7 +8464,7 @@ function handleClick(sx, sy) {
       const newY = Math.round(my);
       const newRoom = {
         id: newId, area: areaId, x: newX, y: newY, z: state.z,
-        name: '', env: 258, weight: 1,  // §07d: env=258 (Las) — domyślny biom Arkadii
+        name: '', env: state.isArkadia ? 258 : 1, weight: 1,  // §07d: domyslny biom (v1.43.3: 258=Las tylko dla Arkadii)
         exits: {}, special_exits: {}, custom_lines: {}, stubs: [],
         exit_locks: [], exit_weights: {}, doors: {}, user_data: {},
       };
@@ -8939,14 +9017,14 @@ function showRoomInfo(r) {
 
   rpTitle.textContent = '#' + r.id + (r.name ? ' — ' + r.name : '');
 
-  const envInfo  = ARKADIA_ENV[r.env];
+  const envInfo  = state.isArkadia ? ARKADIA_ENV[r.env] : null; // v1.43.3
   const envColor = envColorCss(r.env);
   const swatchHtml = `<span class="env-swatch-lg" style="background:${envColor}"></span>`;
   const envLabel = envInfo ? `${swatchHtml}${escHtml(r.env)} — ${escHtml(envInfo.name)}` : `${swatchHtml}${escHtml(r.env)}`;
 
   const sym = r.symbol || '';
   const symLabel = sym
-    ? (ARKADIA_SYMBOLS[sym] ? `${escHtml(sym)} — ${ARKADIA_SYMBOLS[sym]}` : escHtml(sym))
+    ? ((state.isArkadia && ARKADIA_SYMBOLS[sym]) ? `${escHtml(sym)} — ${ARKADIA_SYMBOLS[sym]}` : escHtml(sym)) // v1.43.3
     : null;
 
   // Build exits html — clickable to jump to room
@@ -9047,8 +9125,9 @@ function populateEditForm(r) {
   // Populate env select with known envs
   if (envIn) {
     const curEnv = r.env || 1;
-    // Build options from ARKADIA_ENV + current env
-    const envMap = Object.assign({}, ARKADIA_ENV || {});
+    // v1.43.3: opcje z listy per mapa (Arkadia: pelna tabela; obca: env-y z pliku) + biezacy env
+    const envMap = {};
+    for (const e of envListForUi()) envMap[e.envId] = { name: e.name };
     if (!envMap[curEnv]) envMap[curEnv] = { name: String(curEnv) };
     const opts = Object.entries(envMap)
       .sort((a, b) => Number(a[0]) - Number(b[0]))
@@ -13024,7 +13103,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.43.2';
+const APP_VERSION = 'v1.43.3';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -15410,7 +15489,8 @@ function initRpPalette() {
     if (!envPal || !symPal) continue;
     if (envPal.children.length > 0) continue; // już wypełnione
 
-    for (const [id, info] of Object.entries(ARKADIA_ENV || {})) {
+    for (const e of envListForUi()) { // v1.43.3: paleta per mapa
+      const id = e.envId, info = { name: e.name, rgb: e.rgb };
       const [r,g,b] = info.rgb || DEFAULT_ROOM_RGB;
       const chip = document.createElement('button');
       chip.className = forRoom ? 'pal-chip' : 'env-chip';
@@ -15439,7 +15519,7 @@ function initRpPalette() {
       }
       envPal.appendChild(chip);
     }
-    for (const [sym, name] of Object.entries(ARKADIA_SYMBOLS || {})) {
+    for (const [sym, name] of Object.entries(state.isArkadia ? (ARKADIA_SYMBOLS || {}) : {})) { // v1.43.3: symbole tylko Arkadia
       const defEnv = SYMBOL_DEFAULT_ENV[sym];
       const chip = document.createElement('button');
       chip.className = forRoom ? 'pal-chip' : 'sym-chip';
@@ -16881,7 +16961,7 @@ function addRoomAtPosition(mx, my) {
   if (occ) { toast(`⚠ Pole (${newX}, ${newY}) zajęte przez pokój #${occ.id} — wybierz wolną komórkę`); return; }
   const newRoom = {
     id: newId, area: areaId, x: newX, y: newY, z: state.z,
-    name: '', env: 258, weight: 1,
+    name: '', env: state.isArkadia ? 258 : 1, weight: 1, // v1.43.3: domyslny env per mapa
     exits: {}, special_exits: {}, custom_lines: {}, stubs: [],
     exit_locks: [], exit_weights: {}, doors: {}, user_data: {},
   };
@@ -17658,7 +17738,7 @@ let _decEnvId = null;
 function openEnvColorDialog(envId) {
   if (!state.editMode || !state.map) return;
   _decEnvId = envId;
-  const envInfo  = (typeof ARKADIA_ENVS !== 'undefined' ? ARKADIA_ENVS : {})[envId] || {};
+  const envInfo  = (state.isArkadia && typeof ARKADIA_ENVS !== 'undefined' ? ARKADIA_ENVS : {})[envId] || {}; // v1.43.3
   const envName  = envInfo.name || `env ${envId}`;
   const defRgb   = envColorRgb(envId);
   const custom   = state.map.colors?.custom_env_colors?.[envId];

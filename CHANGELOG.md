@@ -2,6 +2,34 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.43.3 — uniwersalne kolory + parity wizualny 1:1 z Delwingiem (Arc 13)
+
+ArkMap Studio otwiera teraz dowolna mape Mudlet (v17-22) z dowolnego MUD-a,
+zachowujac pelne bezpieczenstwo renderu Arkadii. Weryfikacja 1:1 wzgledem
+ekosystemu Delwinga (mudlet-map-binary-reader, mudlet-map-renderer,
+mudlet-web w org Mudleta): paleta xterm-256, mapowanie envId 8->ANSI 0 /
+16->ANSI 8, fallback rgb(114,1,0), kolor symboli z luminancji, drzwi
+zielone/zolte/czerwone, strzalki jednokierunkowe, custom lines — wszystko
+zgodne; stuby od tej wersji tez 1:1 (pelna linia jasnoszara, 0.5 jednostki
+za krawedz pokoju, bez dash).
+
+- Detekcja isArkadiaMap(): map_sync_version w user_data, „arkadia" w nazwie
+  mapy/pliku albo >=2 sygnaturowe envId (>255). Tabela ARKADIA_ENVS za bramka
+  — mapy obce renderuja sie z ANSI + env_colors/custom_env_colors z pliku.
+  Mapa arkadiaska .dat sama nosi wszystkie swoje kolory (mCustomEnvColors
+  51/51 == ARKADIA_ENVS), wiec bramka nic nie zmienia dla realnej Arkadii
+  (golden bit-for-bit: 51 envId 1:1).
+- UI per mapa: legenda, palety malowania, selecty env i dialog kolorow
+  pokazuja arkadiaska tabele tylko dla Arkadii; dla map obcych — uzywane/
+  zdefiniowane envId z generycznymi nazwami „env N".
+- Nowy pokoj: domyslne env 258 tylko dla Arkadii, dla map obcych 1.
+- Nazwa mapy z .dat: fallback „Arkadia" tylko gdy detekcja pozytywna, inaczej
+  „Mapa Mudlet".
+- Testy: nowy harness tests/universal_colors.js (30 asercji: macierz
+  detekcji, golden 51 envId, mapa obca, piny strukturalne) + E18 empiria
+  (syntetyczna mapa obca przez realny loadArkmap: kolory ANSI, legenda bez
+  „Las", stub solid #e1e1e1, powrot do fixture .dat w trybie arkadiaskim).
+
 ## v1.43.2 — serializacja pobran online (Arc 12)
 
 Wariant 2 (blokada + toast): rownolegle pobierania mapy online mogly sie
