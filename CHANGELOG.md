@@ -28,6 +28,9 @@ alg i liczyl zawsze formulami v2 — obszary i plik „niezgodne", pokoje OK
   manual: notka o starszych plikach.
 - run-all.sh: domknieta luka od Arc 13 (universal_colors.js nie byl w
   petli!) + legacy_crc.js — regresja to teraz 27 harnessow.
+- Docs (Arc 17): spec §15 — usunieta stara nota o legacy mismatch
+  (sprzeczna z dispatchem alg) + odeslanie w „Verification"; §22 Format
+  Changelog: wiersz o wersjonowaniu alg; README: punkt o PWA.
 
 ## v1.43.6 — szersze ciasne okna aktywne (Arc 15)
 
