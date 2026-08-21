@@ -3683,6 +3683,126 @@ scenario('E15.swReload', async () => {
   A('E15.reload.caches', r.keys === 0, 'caches nadal puste po reload');
 });
 
+
+// ═══ GRUPA E16 — eksport PNG/SVG + walidacja dialogu nowego obszaru ═══
+// buildComposite* i triggerDownload sa prywatne (IIFE), wiec jedziemy prawdziwa
+// sciezka UI (klik w ep-do-btn) i przechwytujemy blob na URL.createObjectURL.
+// W headless toBlob/toDataURL dzialaja na SwiftShader; download jest wychwytywany
+// przez stub zamiast trafiac na dysk.
+
+scenario('E16.exportPngPanels', async () => {
+  await loadBase('dat');
+  ex('window.__e16 = null; window.__e16err = null;'
+   + ' window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };'
+   + ' console.error = function(){ window.__e16err = Array.from(arguments).map(String).join(" "); };'
+   + ' URL.createObjectURL = function(b){ window.__e16 = b; return "blob:e16"; };'
+   + ' document.getElementById("ep-toggle-panels").checked = true;'
+   + ' document.getElementById("ep-fmt-png").click();'
+   + ' document.getElementById("ep-do-btn").click();');
+  const r = AEV('E16.pngP.r', await eva('(async function(){'
+   + ' for (var i = 0; i < 240 && !window.__e16; i++) await new Promise(function(res){ setTimeout(res, 50); });'
+   + ' var b = window.__e16;'
+   + ' if (!b) return null;'
+   + ' var buf = new Uint8Array(await b.arrayBuffer());'
+   + ' return { type: b.type, size: b.size, sig: [buf[0], buf[1], buf[2], buf[3]] };'
+   + '})()'), 'blob PNG (z panelami)');
+  A('E16.pngP.blob', r !== null, 'eksport PNG z panelami wyprodukowal blob ' + JSON.stringify(r)
+    + ' [err=' + ev('String(window.__e16err)').val + ']');
+  if (!r) return;
+  A('E16.pngP.type', r !== null && r.type === 'image/png', 'typ blobu image/png');
+  A('E16.pngP.sig', r !== null && JSON.stringify(r.sig) === '[137,80,78,71]', 'sygnatura PNG (89 50 4E 47)');
+  A('E16.pngP.size', r !== null && r.size > 5000, 'blob nietrywalny (size=' + (r && r.size) + ')');
+});
+
+scenario('E16.exportSvgPanels', async () => {
+  ex('window.__e16 = null; window.__e16err = null;'
+   + ' window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };'
+   + ' console.error = function(){ window.__e16err = Array.from(arguments).map(String).join(" "); };'
+   + ' document.getElementById("ep-fmt-svg").click();'
+   + ' document.getElementById("ep-do-btn").click();');
+  const r = AEV('E16.svgP.r', await eva('(async function(){'
+   + ' for (var i = 0; i < 240 && !window.__e16; i++) await new Promise(function(res){ setTimeout(res, 50); });'
+   + ' var b = window.__e16;'
+   + ' if (!b) return null;'
+   + ' var t = await b.text();'
+   + ' return { type: b.type, size: b.size, head: t.slice(0, 200),'
+   + '   hasImage: t.indexOf("<image") >= 0, hasSvg: t.indexOf("<svg") >= 0 };'
+   + '})()'), 'blob SVG (z panelami)');
+  A('E16.svgP.blob', r !== null, 'eksport SVG z panelami wyprodukowal blob ' + JSON.stringify(r && { type: r.type, size: r.size })
+    + ' [err=' + ev('String(window.__e16err)').val + ']');
+  if (!r) return;
+  A('E16.svgP.type', r !== null && r.type === 'image/svg+xml', 'typ blobu image/svg+xml');
+  A('E16.svgP.struct', r !== null && r.hasSvg === true && r.hasImage === true, 'struktura: root svg + image base64');
+  A('E16.svgP.size', r !== null && r.size > 5000, 'blob nietrywalny (size=' + (r && r.size) + ')');
+});
+
+scenario('E16.exportBare', async () => {
+  ex('window.__e16 = null; window.__e16err = null;'
+   + ' window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };'
+   + ' document.getElementById("ep-toggle-panels").checked = false;'
+   + ' document.getElementById("ep-fmt-png").click();'
+   + ' document.getElementById("ep-do-btn").click();');
+  const png = AEV('E16.bare.png', await eva('(async function(){'
+   + ' for (var i = 0; i < 240 && !window.__e16; i++) await new Promise(function(res){ setTimeout(res, 50); });'
+   + ' var b = window.__e16;'
+   + ' if (!b) return null;'
+   + ' var buf = new Uint8Array(await b.arrayBuffer());'
+   + ' return { type: b.type, size: b.size, sig: [buf[0], buf[1], buf[2], buf[3]] };'
+   + '})()'), 'sciezka finalize (bez paneli, PNG)');
+  A('E16.bare.png.blob', png !== null && png !== undefined, 'blob PNG bez paneli dotarl [err='
+    + ev('String(window.__e16err)').val + ']');
+  if (png) A('E16.bare.pngOk', png.type === 'image/png' && JSON.stringify(png.sig) === '[137,80,78,71]' && png.size > 5000,
+    'PNG bez paneli: typ + sygnatura + rozmiar ' + JSON.stringify(png));
+  ex('window.__e16 = null;'
+   + ' document.getElementById("ep-fmt-svg").click();'
+   + ' document.getElementById("ep-do-btn").click();');
+  const svg = AEV('E16.bare.svg', await eva('(async function(){'
+   + ' for (var i = 0; i < 240 && !window.__e16; i++) await new Promise(function(res){ setTimeout(res, 50); });'
+   + ' var b = window.__e16;'
+   + ' if (!b) return null;'
+   + ' var t = await b.text();'
+   + ' return { type: b.type, size: b.size, hasImage: t.indexOf("<image") >= 0 };'
+   + '})()'), 'sciezka finalize (bez paneli, SVG)');
+  A('E16.bare.svg.blob', svg !== null && svg !== undefined, 'blob SVG bez paneli dotarl [err='
+    + ev('String(window.__e16err)').val + ']');
+  if (svg) A('E16.bare.svgOk', svg.type === 'image/svg+xml' && svg.hasImage === true && svg.size > 5000,
+    'SVG bez paneli: typ + osadzony image + rozmiar ' + JSON.stringify(svg));
+  ex('URL.createObjectURL = URL.createObjectURL;');  // no-op dokumentacyjny; profil i tak ginie z launch
+});
+
+scenario('E16.newArea', async () => {
+  await loadBase('dat');
+  ex('openDialog("dlg-new-area")');
+  await eva('new Promise(function(res){ setTimeout(res, 100); })');  // MutationObserver: reset inputa
+  const dupe = AEV('E16.na.dupe.r', ev('(function(){'
+   + ' var name = Array.from(state.areas.values())[0].name;'
+   + ' var inp = document.getElementById("dna-input");'
+   + ' inp.value = name; inp.dispatchEvent(new Event("input"));'
+   + ' var btn = document.querySelector("#dlg-new-area .btn-primary");'
+   + ' var err = document.getElementById("dna-error");'
+   + ' return { disabled: btn.disabled, errShown: err.style.display === "block",'
+   + '   errText: err.textContent };'
+   + '})()'), 'duplikat nazwy obszaru');
+  if (dupe) A('E16.na.dupe', dupe.disabled === true && dupe.errShown === true && dupe.errText.indexOf('istnieje') >= 0,
+    'duplikat: przycisk zablokowany + komunikat ' + JSON.stringify(dupe));
+  const uniq = AEV('E16.na.uniq.r', ev('(function(){'
+   + ' var inp = document.getElementById("dna-input");'
+   + ' inp.value = "E16-Obszar-Test"; inp.dispatchEvent(new Event("input"));'
+   + ' var btn = document.querySelector("#dlg-new-area .btn-primary");'
+   + ' var err = document.getElementById("dna-error");'
+   + ' return { disabled: btn.disabled, errShown: err.style.display === "block" };'
+   + '})()'), 'unikalna nazwa obszaru');
+  if (uniq) A('E16.na.uniq', uniq.disabled === false && uniq.errShown === false,
+    'unikalna nazwa: przycisk odblokowany, bez bledu ' + JSON.stringify(uniq));
+  const empty = AEV('E16.na.empty.r', ev('(function(){'
+   + ' var inp = document.getElementById("dna-input");'
+   + ' inp.value = "   "; inp.dispatchEvent(new Event("input"));'
+   + ' return { disabled: document.querySelector("#dlg-new-area .btn-primary").disabled };'
+   + '})()'), 'pusta nazwa (same spacje)');
+  if (empty) A('E16.na.empty', empty.disabled === true, 'pusta nazwa: przycisk zablokowany ' + JSON.stringify(empty));
+  ex('closeDialog("dlg-new-area")');
+});
+
 // ═══ Runner ═══
 function appReady() {
   return new Promise(res => {
