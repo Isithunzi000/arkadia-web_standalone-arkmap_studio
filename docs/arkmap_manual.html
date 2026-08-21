@@ -175,7 +175,7 @@
 <div class="note">Przy wczytywaniu pliku .arkmap uruchamiana jest <strong>walidacja</strong> (sprawdzenie struktury JSON) i <strong>weryfikacja checksumów CRC-32</strong>. Jeśli wykryte zostaną problemy, zobaczysz dialog z listą błędów (czerwone) i/lub ostrzeżeń (żółte — np. kolizje nazw wyjść specjalnych z kierunkami) z wyborem: „Załaduj mimo to" lub „Anuluj".</div>
 
 <h3>Konwersja</h3>
-<p>Wczytanie pliku <code>.dat</code> automatycznie konwertuje go do wewnętrznego formatu .arkmap. Dla plików w wersji 20 konwersja jest bezstratna i odwracalna. Obsługiwane wersje formatu Mudlet: 17–22. Zapis odbywa się zawsze w wersji 20 (standard Arkadii).</p>
+<p>Wczytanie pliku <code>.dat</code> automatycznie konwertuje go do wewnętrznego formatu .arkmap. Dla plików w wersji 20 konwersja jest bezstratna i odwracalna. Obsługiwane wersje formatu Mudlet: 17–22. Zapis odbywa się zawsze w wersji 20 (standard Arkadii). Edytor otwiera też mapy Mudlet z innych gier (dowolny MUD): Arkadia jest rozpoznawana automatycznie (po znaczniku synchronizacji, nazwie mapy/pliku albo charakterystycznych środowiskach) i tylko wtedy stosowana jest wbudowana tabela kolorów Arkadii — mapy obce renderują się z domyślnej palety ANSI Mudleta oraz kolorów zapisanych w pliku, dokładnie tak samo jak w oficjalnym rendererze Mudleta.</p>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="nav">5. Nawigacja po mapie</h2>
@@ -384,7 +384,7 @@
 <p>Legenda znajduje się w dolnej części panelu <strong>Skróty klawiaturowe</strong> — otwórz go klikając przycisk <strong>?</strong> w toolbarze po prawej stronie ekranu. Zawiera trzy sekcje:</p>
 
 <h4>Środowiska</h4>
-<p>Lista wszystkich kolorów środowisk używanych w Arkadii (las, trakt, miasto, wieś itd.) z kolorowym próbnikiem i numerem envId. Kolory odświeżają się automatycznie po załadowaniu mapy z nadpisanymi kolorami (<code>custom_env_colors</code>).</p>
+<p>Lista wszystkich kolorów środowisk używanych w Arkadii (las, trakt, miasto, wieś itd.) z kolorowym próbnikiem i numerem envId. Kolory odświeżają się automatycznie po załadowaniu mapy z nadpisanymi kolorami (<code>custom_env_colors</code>). Dla map spoza Arkadii legenda pokazuje wyłącznie środowiska używane lub zdefiniowane na tej mapie, z generycznymi nazwami „env N".</p>
 
 <h4>Symbole</h4>
 <p>Lista symboli pokojów (P = Poczta, K = Kowal, S = Sklep, T = Karczma itd.). Przy symbolach z przypisanym domyślnym środowiskiem wyświetlany jest kolorowy próbnik.</p>
