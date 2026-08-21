@@ -1,4 +1,4 @@
-// Harness — uniwersalne kolory env + parity wizualny z Delwingiem (Arc 13, v1.43.3).
+// Harness — uniwersalne kolory env + parity wizualny z Delwingiem (Arc 13, v1.43.4).
 // Kontrakt: ARKADIA_ENVS/ARKADIA_SYMBOLS to override TYLKO dla map arkadianskich
 // (isArkadiaMap — map_sync_version / 'arkadia' w nazwie / >=2 sygnaturowe envId>255).
 // Mapy obce renderuja sie z palety ANSI + kolorow z pliku (jak mudlet-web/Delwing).
@@ -111,7 +111,7 @@ ok(count("rgba(100,140,180,0.55)") === 0, 'stary styl stubow (niebieski dash) us
   ok(!body.includes('setLineDash'), 'stuby: pelna linia (zero dash)');
   ok(body.includes('0.5 * cpx()'), 'stuby: dlugosc 0.5 jednostki mapy (Delwing 1:1)');
 }
-ok(count("const APP_VERSION = 'v1.43.3';") === 1, 'APP_VERSION v1.43.3');
+ok(count("const APP_VERSION = 'v1.43.4';") === 1, 'APP_VERSION v1.43.4');
 
 console.log('');
 console.log('universal_colors: ' + pass + ' OK, ' + fail + ' FAIL');

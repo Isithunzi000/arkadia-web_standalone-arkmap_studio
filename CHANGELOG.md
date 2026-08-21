@@ -2,6 +2,28 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.43.4 — poprawki jezykowe PL (ortografia/gramatyka) + hardening E15
+
+Audyt jezyka polskiego w dokumentacji i UI (zgloszenie usera):
+
+- „nanos" → „nanies" (README, kalka .arkdelta) — forma „nanóś" nie istnieje;
+  imperfektywne „nanoś" / perfektywne „nanieś"; w UI obowiazuje slownictwo
+  „do naniesienia", stad „nanieś".
+- „pokojów" → „pokoi" (dopelniacz l.mn. od „pokój") — 7x manual + 2x UI
+  aplikacji (okno O programie, lista niezgodnych sum) + 4x komentarze.
+- „dylizans" → „dyliżans" (manual, nawigacja). Uwaga: regex klasyfikacji
+  transportow w kodzie (`/woz|dylizans|powoz/`) to DANE upstream w ASCII —
+  swiadomie nietkniety (pin planner_ui.js).
+- „pod warunkiem że" → „pod warunkiem, że" (przecinek).
+- Podtytul manuala bez numeru wersji (byl nieaktualny: 1.5.42) — juz sie
+  nie zestarzeje.
+- FAQ: z miekkie sformulowania o integracji GitHub (uśpiona na zawsze —
+  decyzja usera 2026-08-21): pytanie o prace offline i o wspolprace.
+
+Tooling (commit 0993729): hardening flake E15 w run-all.sh — blok
+dedykowany poza glowna lista grup, retry tylko na zawieche (BRAK SUMMARY
+bez R|FAIL), potwierdzone zielonym runem CI 0993729.
+
 ## v1.43.3 — uniwersalne kolory + parity wizualny 1:1 z Delwingiem (Arc 13)
 
 ArkMap Studio otwiera teraz dowolna mape Mudlet (v17-22) z dowolnego MUD-a,
