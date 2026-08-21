@@ -9,6 +9,7 @@ Samowystarczalna aplikacja przeglądarkowa do podglądu i edycji map gry MUD **A
 ## Co to robi
 
 - **Podgląd i edycja mapy Arkadii** — pokoje, wyjścia, etykiety, poziomy, kolory, wyszukiwanie, drag & drop, undo/redo.
+- **Uniwersalność** — otwiera też mapy Mudlet (v17–22) z dowolnego MUD-a: Arkadia jest rozpoznawana automatycznie, mapy obce renderują się z domyślnej palety ANSI i kolorów zapisanych w pliku (1:1 z oficjalnym rendererem Mudleta).
 - **Import i eksport Mudlet `.dat`** — binarna zgodność z formatem map Mudleta w obie strony.
 - **Własny format `.arkmap`** — czytelny JSON przyjazny gitowi (stabilna serializacja, sumy kontrolne CRC).
 - **Działa offline** — mapa trzymana lokalnie w przeglądarce, zapis do pliku na dysku.

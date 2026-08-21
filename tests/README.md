@@ -38,6 +38,11 @@ node tests/tier5_audit.js     # Tier 5 (v1.40.0): fixy audytu AI — __proto__-s
 node tests/tier6_ux.js       # Tier 6 (v1.41.0): UX — dirty przy re-wejsciu (D1), Przywroc-ostatni-zapis + bufor pristineArkmap (D2-c), wiazania dlg-unsaved-exit przy uspionym GitHub (D4), bramka importu trasy (#18), touch w canvasMode (#8); empiria: grupa E12
 node tests/delta.js          # ARKDELTA: deltaLog, applyDelta/classifyDelta, buildDelta, semantyka sid/id, piny wersji
 node tests/diff_kalka.js    # F1 (v1.42.0): generator kalki z diffu map — klasyfikacja zmian, kolejnosc topologiczna, straznicy, piny UI; empiria: grupa E13
+node tests/pwa.js            # PWA (v1.43.0): manifest, ikony, rejestracja no-op SW, straznik zakazu cache/fetch
+node tests/xss_sinks.js      # XSS (v1.43.1): escHtml na interpolacjach danych z pliku (showRoomInfo, dlg-refs-list)
+node tests/malformed_dat.js  # negatywne .dat: obciecia, granice readQString, uszkodzone chunki pixmapy
+node tests/validate_full.js  # walidator .arkmap: validateFont/UserData/Label/Area/top-level
+node tests/universal_colors.js # uniwersalne kolory (v1.43.3): detekcja Arkadii, golden 51 envId, mapa obca
 ```
 
 albo wszystkie naraz:
@@ -53,12 +58,13 @@ Kod wyjścia: 0 = wszystko OK, 1 = są FAIL-e, 2 = brak fixture.
 Oprócz harnessów Node.js regresja obejmuje testy empiryczne: `tests/empirical.sh` odpala
 pełną aplikację w headless Chromium (driver: `tests/empirical_driver.html` — iframe z
 `arkmap_studio.html`, scenariusze przez eval) i wykonuje scenariusze pogrupowane w
-`SMOKE` oraz `E0`–`E14` (m.in. kalka .arkdelta end-to-end, generator kalki z diffu map, roundtrip .dat, planer,
-walidacja kierunków, UI — a od Tier 6 także syntetyczne zdarzenia dotyku).
+`SMOKE` oraz `E0`–`E18` (m.in. kalka .arkdelta end-to-end, generator kalki z diffu map, roundtrip .dat, planer,
+walidacja kierunków, UI, syntetyczne zdarzenia dotyku, a także: PWA runtime (E15), eksport PNG/SVG przez
+prawdziwe UI (E16), serializacja pobrań online (E17), uniwersalne kolory dla map spoza Arkadii (E18)).
 `run-all.sh` odpala je automatycznie po harnessach Node.js.
 
 ```bash
-ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13 E14" \
+ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13 E14 E15 E16 E17 E18" \
 ARKTEST_BUDGET=300000 ARKTEST_TIMEOUT=420 bash tests/empirical.sh
 ```
 
