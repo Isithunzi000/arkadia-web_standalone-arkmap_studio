@@ -214,9 +214,9 @@ console.log('— v1.5.41: progres pobierania + modal O programie (struktura) —
     'progres: expectedSize nadrzędne względem content-length (fallback zostaje)');
   ok(HTML.includes('Math.min(100, Math.round(loaded / total * 100))'),
     'progres: procent clampowany do 100%');
-  ok(HTML.includes("olFetchFile(olBaseUrl + 'map_master3.arkmap', 'map_master3.arkmap', olIndex?.arkmap_size)") &&
-     HTML.includes("olFetchFile(olBaseUrl + 'map_master3.dat', 'map_master3.dat', olIndex?.dat_size)"),
-    'progres: oba loadery przekazują rozmiary z olIndex');
+  ok(HTML.includes("olFetchFile(olBaseUrl + OL_F, OL_F, olIndex?.arkmap_size)") &&
+     HTML.includes("olFetchFile(olBaseUrl + OL_F, OL_F, olIndex?.dat_size)"),
+    'progres: oba loadery przekazują rozmiary z olIndex (nazwa pliku z const OL_F — v1.43.2)');
   ok(HTML.includes('<div id="ol-confirm-bar"><div id="ol-confirm-bar-fill"></div></div>') &&
      /#ol-confirm-bar-fill\s*{[^}]*background:\s*var\(--accent\)/.test(HTML),
     'progres: pasek postępu (markup + CSS)');
@@ -258,6 +258,21 @@ console.log('— Arc 9: sync-transports.yml / brama / olFetchFile —');
   const j = HTML.indexOf('\n}\n', i);
   const OL = HTML.slice(i, j);
   ok(/finally[\s\S]*releaseLock/.test(OL), 'olFetchFile: reader.releaseLock() w finally');
+}
+
+// ── v1.43.2: serializacja pobrań online (Arc 12, wariant 2: blokada + toast) ──
+console.log('— v1.43.2: serializacja pobran online —');
+{
+  ok((HTML.match(/let _olActiveLabel = null;/g) || []).length === 1,
+    'serializacja: flaga _olActiveLabel zadeklarowana raz (null = wolne)');
+  ok((HTML.match(/if \(_olActiveLabel !== null\)/g) || []).length === 3,
+    'serializacja: guard na wejściu wszystkich 3 loaderów (olLoadArkmap/olLoadDat/_kalkaOnlineLoad)');
+  ok((HTML.match(/finally \{ _olActiveLabel = null; \}/g) || []).length === 3,
+    'serializacja: flaga zdejmowana w finally ×3 (sukces/błąd/abort/przerwanie walidacji)');
+  ok((HTML.match(/toast\('⚠ Trwa pobieranie: ' \+ _olActiveLabel \+ ' — poczekaj na zakończenie'\)/g) || []).length === 3,
+    'serializacja: komunikat z dynamiczną nazwą pliku ×3 (zero hardcode)');
+  ok(HTML.includes("const OL_F = 'map_master3.arkmap';") && HTML.includes("const OL_F = 'map_master3.dat';"),
+    'serializacja: nazwa pliku z jednego źródła (const OL_F) w obu loaderach dialogu online');
 }
 
 // ── Posprzątanie ────────────────────────────────────────────────────────────

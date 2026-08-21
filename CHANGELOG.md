@@ -2,6 +2,19 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.43.2 — serializacja pobran online (Arc 12)
+
+Wariant 2 (blokada + toast): rownolegle pobierania mapy online mogly sie
+wyscigowac — dwa kliki (dialog online / dwie strony kalki) odpalaly dwa
+transfery naraz, a wskazniki postepu nadpisywaly sie wzajemnie. Fix:
+globalna flaga _olActiveLabel (etykieta aktywnego transferu) + guard na
+wejsciu wszystkich 3 loaderow (olLoadArkmap, olLoadDat, _kalkaOnlineLoad) —
+drugie pobieranie w trakcie trwania pierwszego jest odmawiane pomaranczowym
+toastem z dynamiczna nazwa pliku („Trwa pobieranie: <plik> — poczekaj na
+zakonczenie"); flaga zdejmowana w finally (sukces, blad, abort, przerwanie
+walidacji). Repro-first: E17 najpierw FAIL 1/6, po fixie PASS 6/6. Nazwa
+pliku z jednego zrodla (const OL_F) — zero hardcode w komunikacie.
+
 ## v1.43.1 — fixy z wielkiego audytu k2.7-code (Arc 9: XSS + sync + PWA docs)
 
 Wielki run audytowy (13 partii, 5 tematow: PWA, XSS/injection, pokrycie testowe,
