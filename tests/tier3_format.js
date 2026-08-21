@@ -221,9 +221,9 @@ console.log('── T6 (W18 v2): exitEditMode — undo/redo czyszczone, deltaLog
 // ═══ T7: strazniki strukturalne + piny wersji ═══
 console.log('── T7: strazniki strukturalne Tier 3 + piny wersji ──');
 {
-  ok(NEW.includes("const APP_VERSION = 'v1.43.3';"), 'pin: APP_VERSION v1.43.3');
+  ok(NEW.includes("const APP_VERSION = 'v1.43.4';"), 'pin: APP_VERSION v1.43.4');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok((deltaSrc.match(/v1\.43\.3/g) || []).length === 8, 'pin: delta.js 8x v1.43.3 (4 linie x includes+label)');
+  ok((deltaSrc.match(/v1\.43\.4/g) || []).length === 8, 'pin: delta.js 8x v1.43.4 (4 linie x includes+label)');
   ok(NEW.includes("arkmap.meta.checksums = { alg: 'v2',"), 'straznik: addChecksums alg v2');
   ok(NEW.includes('function _crcArea(area, roomCrcs)') && NEW.includes('function _crcFile(areaCrcs, colors)'),
      'straznik: sygnatury CRC v2');

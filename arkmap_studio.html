@@ -2849,7 +2849,7 @@
       <div class="about-desc">
         Przeglądarka i edytor map świata Arkadia MUD. Umożliwia wczytywanie map
         w formatach <strong>ArkMap Studio .arkmap</strong> i <strong>Mudlet .dat</strong>,
-        edycję danych pokojów, eksport z powrotem do każdego formatu oraz planowanie
+        edycję danych pokoi, eksport z powrotem do każdego formatu oraz planowanie
         tras między lokacjami z automatycznym wyliczaniem najkrótszej ścieżki.
       </div>
       <div>
@@ -4190,7 +4190,7 @@ function crc32str(str) {
 /**
  * arkadia-env.js
  *
- * Słownik środowisk (envId → kolor + nazwa) i symboli pokojów dla świata Arkadia.
+ * Słownik środowisk (envId → kolor + nazwa) i symboli pokoi dla świata Arkadia.
  * Wyprowadzony z projektu arkadia-crowdmap (Delwing/Dargoth) — de facto standard
  * używany przez kartografów Arkadii od lat.
  *
@@ -7462,7 +7462,7 @@ function drawPendingExitLines(rs) {
 
 let _lastCrossExits = [];
 
-// Rysuj TYLKO strzałki i ticki (bez etykiet) — wewnątrz warstwy pokojów
+// Rysuj TYLKO strzałki i ticki (bez etykiet) — wewnątrz warstwy pokoi
 function drawCrossAreaArrows(exits, rs) {
   if (!exits.length) return;
   const minZoom = 0.25;
@@ -10022,7 +10022,7 @@ function _computeHopVia(hop) {
   return full;
 }
 
-// Dijkstra: najkrótsza ścieżka uwzględniająca wagi pokojów i wyjść
+// Dijkstra: najkrótsza ścieżka uwzględniająca wagi pokoi i wyjść
 function dijkstraPath(fromId, toId) {
   if (fromId === toId) return [fromId];
   if (!state.roomById[fromId] || !state.roomById[toId]) return null;
@@ -10866,7 +10866,7 @@ function wpUpdateOverview() {
   octx.fillRect(0, 0, W, H);
 
   // ── Buduj polyline kierunkową z DELTA X/Y każdego kroku ──
-  // Zamiast używać współrzędnych pokojów (które mają teleport-jumpy),
+  // Zamiast używać współrzędnych pokoi (które mają teleport-jumpy),
   // każdy krok = dx/dy między sąsiednimi pokojami na ścieżce Dijkstra/A*.
   const pts = [];      // cumulative positions
   const segHop = [];   // segHop[i] = segment pts[i]→pts[i+1] jest hopem (statek/dyliżans)
@@ -12294,7 +12294,7 @@ resize();
           for (const a of chkRes.badAreas.slice(0, 5)) lines.push('  Obszar: ' + a.name + ' (id=' + a.id + ')');
           for (const r of chkRes.badRooms.slice(0, 10)) lines.push('  Pokój: ' + r.roomId + ' (' + r.areaName + ')');
           const extra = chkRes.badRooms.length - 10;
-          if (extra > 0) lines.push('  … i ' + extra + ' więcej pokojów');
+          if (extra > 0) lines.push('  … i ' + extra + ' więcej pokoi');
           if ((chkRes.missingRooms || []).length) lines.push('⚠ Pokoje bez sumy kontrolnej: ' + chkRes.missingRooms.length + ' (plik zmieniony bez przeliczenia sum)');  // audyt T3/W3
           list.textContent = lines.join('\n') || '⚠ Niezgodne sumy kontrolne';
           sec.appendChild(list);
@@ -13103,7 +13103,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.43.3';
+const APP_VERSION = 'v1.43.4';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
