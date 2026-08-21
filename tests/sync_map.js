@@ -128,7 +128,7 @@ console.log('— timeouty (struktura) —');
   ok((OL.match(/new AbortController\(\)/g) || []).length === 2, 'UI: AbortController ×2 (index.json + pliki)');
   ok(OL.includes('ctrl.abort(), 30000'), 'UI: timeout 30 s na index.json');
   ok(OL.includes('ctrl.abort(), 180000'), 'UI: timeout 180 s na pobieranie plików');
-  ok((OL.match(/finally \{ clearTimeout\(timer\); \}/g) || []).length === 2, 'UI: clearTimeout w finally ×2 (bez wycieku timerów)');
+  ok((OL.match(/finally \{ clearTimeout\(timer\);/g) || []).length === 2, 'UI: clearTimeout w finally ×2 (bez wycieku timerów; olFetchFile dodatkowo releaseLock — Arc 9)');
   ok((OL.match(/e\.name === 'AbortError'/g) || []).length === 4, 'UI: AbortError → 3 czytelne komunikaty + rethrow w resolve SHA');
 }
 
@@ -235,6 +235,29 @@ console.log('— v1.5.41: progres pobierania + modal O programie (struktura) —
     'O programie: licencja bez sztywnego <br> (naturalny flow)');
   ok(/\.about-link\s*{[^}]*align-items:\s*flex-start/.test(HTML),
     'O programie: ikona linku przy pierwszej linii (flex-start)');
+}
+
+// ── Arc 9: fixy audytu sync (v1.43.1) ──────────────────────────────────────
+console.log('— Arc 9: sync-transports.yml / brama / olFetchFile —');
+{
+  const WT = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'sync-transports.yml'), 'utf8');
+  // komentarz # wewnatrz $(...) polyka zamykajacy nawias -> bash EOF error (Arc 9, sync HIGH)
+  for (const line of WT.split('\n')) {
+    const open = line.indexOf('$(');
+    if (open < 0) continue;
+    // # poza cudzyslowami po $( = komentarz polykajacy reszte linii (bash)
+    const bare = line.slice(open).replace(/'[^']*'/g, "''").replace(/"[^"]*"/g, '""');
+    ok(!/\s#/.test(bare), 'sync-transports.yml: brak komentarza # wewnatrz $() — linia: ' + line.trim().slice(0, 60));
+  }
+  const WM = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'sync-map.yml'), 'utf8');
+  ok(/curl[^\n]*Authorization: Bearer \$\{\{ secrets\.GITHUB_TOKEN \}\}/.test(WM) || /Authorization: Bearer/.test(WM),
+    'sync-map.yml: brama releases/latest uwierzytelniona GITHUB_TOKEN (limit 60/h -> 1000/h)');
+  ok(/timeout 120 git push/.test(WT), 'sync-transports.yml: push opakowany timeout 120 (fail-fast)');
+  // olFetchFile: releaseLock w finally (higiena strumienia przy abort/timeout)
+  const i = HTML.indexOf('async function olFetchFile');
+  const j = HTML.indexOf('\n}\n', i);
+  const OL = HTML.slice(i, j);
+  ok(/finally[\s\S]*releaseLock/.test(OL), 'olFetchFile: reader.releaseLock() w finally');
 }
 
 // ── Posprzątanie ────────────────────────────────────────────────────────────

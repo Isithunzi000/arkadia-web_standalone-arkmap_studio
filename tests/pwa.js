@@ -67,5 +67,15 @@ const MANUAL = fs.readFileSync(path.join(ROOT, 'docs', 'arkmap_manual.html'), 'u
 ok(MANUAL.includes('<h2 id="pwa">25. Instalacja jako aplikacja (PWA)</h2>'), 'manual: sekcja 25 PWA');
 ok(MANUAL.includes('<li><a href="#pwa">Instalacja jako aplikacja (PWA)</a></li>'), 'manual: wpis PWA w TOC');
 
+// ── Arc 9: dopięcia po audycie k2.7 (v1.43.1) ─────────────────────────────
+if (manifest) {
+  ok(manifest.id === './arkmap_studio.html', 'manifest: id (stabilna tozsamosc PWA)');
+  ok(manifest.lang === 'pl', 'manifest: lang = pl');
+}
+ok(HTML.includes('<meta name="apple-mobile-web-app-title" content="ArkMap">'), 'head: apple-mobile-web-app-title = ArkMap');
+ok(MANUAL.includes('max-age=600'), 'manual: szczera notka o cache HTTP GitHub Pages (max-age=600)');
+ok(MANUAL.includes('Zainstaluj aplikacj'), 'manual: Android — sciezka „Zainstaluj aplikacje"');
+ok(/HTTPS|bezpieczn/i.test(MANUAL.split('<h2 id="pwa">')[1].split('<h2')[0]), 'manual: notka o HTTPS/secure context w sekcji PWA');
+
 console.log('\npwa.js: ' + pass + ' PASS, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

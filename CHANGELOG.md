@@ -2,6 +2,55 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.43.1 — fixy z wielkiego audytu k2.7-code (Arc 9: XSS + sync + PWA docs)
+
+Wielki run audytowy (13 partii, 5 tematow: PWA, XSS/injection, pokrycie testowe,
+sync online, mobile UX): 41 znalezisk -> 14 realnych po triage (weryfikacja pelnym
+odczytem funkcji; 27 falszywych, m.in. halucynacja CSS hamburgera, „statyczna
+paleta env z pliku", „writer .dat bez testow" — golden T2b istnieje).
+
+- **XSS — showRoomInfo (medium x4)**: panel pokoju interpolowal dane z niezaufanego
+  pliku RAW do innerHTML: klucze wyjsc, drzwi, wagi, exit_locks, stubs, r.env
+  (obie galezie envLabel). Wektor: spreparowany .arkmap + non-fatal walidacja
+  kierunkow (user moze wczytac mimo bledow). Fix: escHtml na wszystkich 6
+  interpolacjach. .dat nie podatny (kierunki z tabeli binarnej).
+- **XSS — dlg-refs-list (high model -> realne medium)**: model mylil zmienna
+  (sn JEST escapowane), ale pelny odczyt wykazal raw ${r.dir} — komenda
+  special exit z cudzego pliku w innerHTML listy pokoi przychodzacych.
+  Fix: escHtml(r.dir).
+- **sync-transports.yml (high)**: komentarz `# sync-F1 ...` wewnatrz $(...)
+  polykal zamykajacy nawias i reszte linii (bash: unexpected EOF — potwierdzone
+  empirycznie). Kroki auto-issue/auto-close byly zepsute od narodzin; nie
+  wykryte, bo biegna tylko przy anomalii danych upstream. Fix: komentarz na
+  wlasnej linii (2x). Pin regexowy w sync_map.js (kazda linia z $( bez # poza
+  cudzyslowami).
+- **sync-map.yml (medium)**: brama releases/latest bez uwierzytelnienia —
+  limit 60/h per IP na wspoldzielonych runnerach mogl falszywie zglosic brak
+  release. Fix: Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}.
+- **olFetchFile (low)**: finally czyszcil tylko timer; dodane
+  reader.releaseLock() (reader wyniesiony do zasiegu finally).
+- **dlg-load-during-edit (low)**: przyciski po kolejnosci DOM -> stabilne id
+  (btn-lde-cancel/discard/save), oba call-site (online + lokalny) po
+  getElementById.
+- **PWA (low x3)**: manifest +id (stabilna tozsamosc) i +lang: pl; head
+  +apple-mobile-web-app-title „ArkMap" (iOS: krotka etykieta ikony).
+- **Manual sekcja 25 (docs x3)**: doprecyzowanie „zawsze najswiezsza wersja" —
+  Pages serwuje max-age=600 (do ~10 min HTTP cache, twardy reload Ctrl+Shift+R);
+  notka o wymogu HTTPS przy instalacji; Android — sciezka „Zainstaluj
+  aplikacje" obok „Dodaj do ekranu glownego".
+- **Falszywy alarm (wyroznic)**: „push bez timeout w sync-transports.yml" —
+  push MA timeout 120 (linia 76). „Przycisk Zapisz bez await/catch" —
+  saveArkmap ma wewnetrzne try/catch z toastem (Arc 7).
+- **Testy**: nowy harness tests/xss_sinks.js (repro-first: verbatim-extrakcja
+  showRoomInfo/showDeleteRoomDialog + zlosliwy pokoj w Node ze stubami DOM,
+  11 asercji) w run-all.sh (23 harnesy). Piny: sync_map.js (+4), tier6_ux.js
+  (+5 LDE), pwa.js (+6). Aktualizacja pinu clearTimeout w sync_map.js
+  (nowy ksztalt finally).
+- Odroczone swiadomie: screenshots w manifescie, serializacja rownoleglych
+  olFetchFile (wymaga decyzji UX), negatywne testy malformed .dat/pixmapa,
+  harnesy validate()/eksportu PNG/SVG — lista dziur z pokrycia w
+  /mnt/agents/work/audyt-arc9/triage.md.
+
 ## v1.43.0 — PWA: instalowalnosc (manifest + no-op service worker + ikony)
 
 ArkMap Studio jako Progressive Web App, wariant A (wzorcowy no-op, jak w kliencie
