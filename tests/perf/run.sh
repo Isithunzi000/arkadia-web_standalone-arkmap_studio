@@ -98,7 +98,7 @@ for name, datp, arkp, rooms in ladder:
         if stopped[fmt]:
             continue
         if path is None:
-            print(f'{name:<10} {fmt:<7} BRAK-PLIKU (pominiety — generator nie dolal)')
+            print(f'{name:<10} {fmt:<7} BRAK-PLIKU (pominieto — plik nie zostal wygenerowany)')
             stopped[fmt] = True
             continue
         d, v = run_one(path, fmt, '1' if fmt == 'arkmap' else '0')
