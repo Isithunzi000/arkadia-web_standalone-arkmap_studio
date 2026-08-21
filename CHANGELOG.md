@@ -2,6 +2,18 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.43.5 — szersze okienko tworzenia kalki (Arc 14)
+
+Dialog „Stworz kalke mapy" renderowal sie na 420 px mimo zamierzonych
+740 px: boks mial inline `max-width:740px`, ale klasa `.dlg-box` ustawia
+sztywne `width:420px`, wiec max-width nigdy nie zadzialal (martwy zamysl).
+Fix: inline `width:740px` — klasowe `max-width:90vw` dalej chroni waskie
+ekrany i mobile. Tytuly kart z notkami w nawiasach, rzad przyciskow
+i wiersz formatu mieszcza sie teraz w jednej linii; dlugie komunikaty
+statusu zawijaja sie czysto do 2 linii (min-height statusu projektowo
+na 2 linie). Pin strukturalny w tests/diff_kalka.js strzeze szerokosci
+przed regresem.
+
 ## v1.43.4 — poprawki jezykowe PL (ortografia/gramatyka) + hardening E15
 
 Audyt jezyka polskiego w dokumentacji i UI (zgloszenie usera):

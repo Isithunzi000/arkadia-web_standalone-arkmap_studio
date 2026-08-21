@@ -308,6 +308,9 @@ console.log('— D5: piny UI (standalone, D7) —');
                     'id="dk-warn"', 'id="dk-summary"', 'id="dk-fi-src"', 'id="dk-fi-dst"',
                     'id="dk-src-online"', 'id="dk-dst-online"', 'id="dk-fmt-src"', 'id="dk-fmt-dst"'])
     ok(HTML.indexOf(id) !== -1, 'markup: ' + id);
+  const dkBox = HTML.slice(HTML.indexOf('id="dlg-kalka"'), HTML.indexOf('id="dk-cards"'));
+  ok(/class="dlg-box" style="width:740px"/.test(dkBox), 'dlg-kalka: szerokosc 740px (nie max-width — bug 420px)');
+  ok(dkBox.indexOf('max-width') === -1, 'dlg-kalka: brak max-width na boksie (chroni klasowe 90vw)');
   ok(HTML.indexOf('<button id="dk-create" class="btn-primary" disabled>Stwórz kalkę</button>') !== -1,
     'dk-create startowo disabled (czeka na obie mapy)');
   ok(HTML.indexOf("openDialog('dlg-kalka')") !== -1, 'wiring: otwarcie dialogu');
