@@ -7,6 +7,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0d0f12">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ArkMap">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
@@ -3340,9 +3341,9 @@
       <div class="dlg-info warn">Lock zostanie zwolniony. Wszelkie niezapisane zmiany przepadną, chyba że je najpierw zapiszesz.</div>
     </div>
     <div class="dlg-ftr">
-      <button class="dlg-cancel" onclick="closeDialog('dlg-load-during-edit')">Anuluj</button>
-      <button class="btn-err" onclick="closeDialog('dlg-load-during-edit')">Wczytaj bez zapisu</button>
-      <button class="btn-primary" onclick="closeDialog('dlg-load-during-edit')">Zapisz .arkmap</button>
+      <button id="btn-lde-cancel" class="dlg-cancel" onclick="closeDialog('dlg-load-during-edit')">Anuluj</button>
+      <button id="btn-lde-discard" class="btn-err" onclick="closeDialog('dlg-load-during-edit')">Wczytaj bez zapisu</button>
+      <button id="btn-lde-save" class="btn-primary" onclick="closeDialog('dlg-load-during-edit')">Zapisz .arkmap</button>
     </div>
   </div>
 </div>
@@ -8941,7 +8942,7 @@ function showRoomInfo(r) {
   const envInfo  = ARKADIA_ENV[r.env];
   const envColor = envColorCss(r.env);
   const swatchHtml = `<span class="env-swatch-lg" style="background:${envColor}"></span>`;
-  const envLabel = envInfo ? `${swatchHtml}${r.env} — ${envInfo.name}` : `${swatchHtml}${r.env}`;
+  const envLabel = envInfo ? `${swatchHtml}${escHtml(r.env)} — ${escHtml(envInfo.name)}` : `${swatchHtml}${escHtml(r.env)}`;
 
   const sym = r.symbol || '';
   const symLabel = sym
@@ -8954,7 +8955,7 @@ function showRoomInfo(r) {
     ? `<div class="rp-exits">${exitEntries.map(([d, id]) => {
         const t = state.roomById[id];
         const sameZ = t && t.z === state.z;
-        return `<span class="rp-exit" onclick="jumpToRoom(${id})" title="${t ? escHtml(t.name||String(id)) : 'nieznany'}">${d}</span>`;
+        return `<span class="rp-exit" onclick="jumpToRoom(${id})" title="${t ? escHtml(t.name||String(id)) : 'nieznany'}">${escHtml(d)}</span>`;
       }).join('')}</div>`
     : '<span style="color:var(--dim)">—</span>';
 
@@ -8981,10 +8982,10 @@ function showRoomInfo(r) {
   sections.push(`<div class="rp-section">
     <div class="rp-section-title">Wyjścia</div>
     ${exitsHtml}
-    ${(r.stubs||[]).length ? rpRow('Stubs', r.stubs.join(', ')) : ''}
-    ${Object.keys(r.doors||{}).length ? rpRow('Drzwi', Object.entries(r.doors).map(([d,s])=>`${d}:${s}`).join(', ')) : ''}
-    ${Object.keys(r.exit_weights||{}).length ? rpRow('Wagi', Object.entries(r.exit_weights).map(([d,w])=>`${d}:${w}`).join(', ')) : ''}
-    ${(r.exit_locks||[]).length ? rpRow('Zablok.', r.exit_locks.join(', ')) : ''}
+    ${(r.stubs||[]).length ? rpRow('Stubs', r.stubs.map(escHtml).join(', ')) : ''}
+    ${Object.keys(r.doors||{}).length ? rpRow('Drzwi', Object.entries(r.doors).map(([d,s])=>escHtml(d)+':'+escHtml(s)).join(', ')) : ''}
+    ${Object.keys(r.exit_weights||{}).length ? rpRow('Wagi', Object.entries(r.exit_weights).map(([d,w])=>escHtml(d)+':'+escHtml(w)).join(', ')) : ''}
+    ${(r.exit_locks||[]).length ? rpRow('Zablok.', r.exit_locks.map(escHtml).join(', ')) : ''}
     ${Object.keys(r.special_exits||{}).length ? rpRow('Spec.', Object.entries(r.special_exits).map(([c,id])=>`"${escHtml(c)}"→${id}`).join(', ')) : ''}
   </div>`);
 
@@ -9573,7 +9574,9 @@ btnLoadOnline.addEventListener('click', () => {
   if (state.editMode && state.dirty) {
     const dlgLDE = document.getElementById('dlg-load-during-edit');
     if (dlgLDE) {
-      const [cancelBtn, discardBtn, saveBtn] = dlgLDE.querySelectorAll('button');
+      const cancelBtn  = document.getElementById('btn-lde-cancel');
+      const discardBtn = document.getElementById('btn-lde-discard');
+      const saveBtn    = document.getElementById('btn-lde-save');
       if (cancelBtn) cancelBtn.onclick = () => closeDialog('dlg-load-during-edit');
       if (discardBtn) discardBtn.onclick = () => {
         closeDialog('dlg-load-during-edit');
@@ -9603,6 +9606,7 @@ async function olFetchFile(url, label, expectedSize, prog) {
   const _bar = prog ? (prog.bar || null) : olConfirmBar;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 180000);
+  let reader = null;  // Arc 9: w zasiegu finally dla releaseLock (higiena strumienia przy abort)
   try {
   const resp = await fetch(url + '?_=' + Date.now(), { cache: 'no-cache', signal: ctrl.signal });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -9611,7 +9615,7 @@ async function olFetchFile(url, label, expectedSize, prog) {
   // rozmiarem SKOMPRESOWANYM, a reader liczy bajty po dekompresji (procent leciał > 100%).
   // Prawdziwy rozmiar znamy z index.json (olIndex) — on jest źródłem prawdy.
   const total = Number.isFinite(expectedSize) ? expectedSize : (contentLength ? parseInt(contentLength) : null);
-  const reader = resp.body.getReader();
+  reader = resp.body.getReader();
   const chunks = [];
   let loaded = 0;
   while (true) {
@@ -9632,7 +9636,7 @@ async function olFetchFile(url, label, expectedSize, prog) {
   let offset = 0;
   for (const ch of chunks) { buf.set(ch, offset); offset += ch.length; }
   return buf;
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer); if (reader) { try { reader.releaseLock(); } catch {} } }
 }
 
 async function olLoadArkmap() {
@@ -11574,7 +11578,9 @@ function checkLocalLoadDuringEdit(loadCallback) {
   if (state.editMode && state.dirty) {
     const dlgLDE = document.getElementById('dlg-load-during-edit');
     if (dlgLDE) {
-      const [cancelBtn, discardBtn, saveBtn] = dlgLDE.querySelectorAll('button');
+      const cancelBtn  = document.getElementById('btn-lde-cancel');
+      const discardBtn = document.getElementById('btn-lde-discard');
+      const saveBtn    = document.getElementById('btn-lde-save');
       if (cancelBtn) cancelBtn.onclick = () => closeDialog('dlg-load-during-edit');
       if (discardBtn) discardBtn.onclick = () => {
         closeDialog('dlg-load-during-edit');
@@ -13011,7 +13017,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.43.0';
+const APP_VERSION = 'v1.43.1';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -15961,7 +15967,7 @@ function showDeleteRoomDialog(roomId) {
     if (msg) msg.innerHTML = `Pokój <strong>${escHtml(name)}</strong> (#${roomId}) jest celem wyjść z <strong>${incoming.length} ${incoming.length === 1 ? 'innego pokoju' : 'innych pokoi'}</strong>:`;
     if (list) list.innerHTML = incoming.slice(0, 10).map(r => {
       const sn = state.roomById[r.srcId]?.name || '';
-      return `<div class="supp-item"><span>#${r.srcId}</span>${sn ? ' ' + escHtml(sn) : ''} (${r.dir}) → #${roomId}</div>`;
+      return `<div class="supp-item"><span>#${r.srcId}</span>${sn ? ' ' + escHtml(sn) : ''} (${escHtml(r.dir)}) → #${roomId}</div>`;
     }).join('') + (incoming.length > 10 ? `<div class="supp-item">… i ${incoming.length - 10} więcej</div>` : '');
     if (btn) btn.onclick = () => { closeDialog('dlg-delete-room-refs'); deleteRoom(roomId); };
     openDialog('dlg-delete-room-refs');

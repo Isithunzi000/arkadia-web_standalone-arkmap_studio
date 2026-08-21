@@ -859,10 +859,10 @@
 <p>ArkMap Studio można zainstalować jak zwykłą aplikację — dostaje wtedy własną ikonę (monogram <strong>AMS</strong> zbudowany z korytarzy i węzłów mapy) i otwiera się w osobnym oknie, bez paska adresu przeglądarki:</p>
 <ul>
   <li><strong>Chrome / Edge (desktop):</strong> ikona instalacji w prawej części paska adresu (albo menu ⋮ → <em>Zainstaluj ArkMap Studio…</em>)</li>
-  <li><strong>Android (Chrome):</strong> menu ⋮ → <em>Dodaj do ekranu głównego</em> — aplikacja ląduje na pulpicie z ikoną AMS</li>
+  <li><strong>Android (Chrome):</strong> menu ⋮ → <em>Zainstaluj aplikację</em> (dla instalowalnych PWA; w starszych wydaniach: <em>Dodaj do ekranu głównego</em>) — aplikacja ląduje na pulpicie z ikoną AMS</li>
   <li><strong>iOS (Safari):</strong> przycisk <em>Udostępnij</em> → <em>Dodaj do ekranu początkowego</em></li>
 </ul>
-<p>Świadoma decyzja projektowa: aplikacja <strong>nie działa offline</strong> — service worker jest celowo pusty (no-op) i niczego nie cache'uje. Dzięki temu po każdej aktualizacji produkcji masz zawsze najświeższą wersję, a stare pliki nigdy nie zalegają w cache przeglądarki. Jeśli potrzebujesz pracy bez sieci, pobierz plik <code>arkmap_studio.html</code> na dysk i otwórz go lokalnie — cała aplikacja jest w jednym pliku.</p>
+<p>Świadoma decyzja projektowa: aplikacja <strong>nie działa offline</strong> — service worker jest celowo pusty (no-op) i niczego nie cache'uje. Dzięki temu stare pliki nigdy nie zalegają w cache service workera. Uwaga: sam GitHub Pages serwuje pliki z HTTP cache <code>max-age=600</code>, więc po aktualizacji produkcji nowa wersja może pojawić się z opóźnieniem do ~10 minut (twardy reload: Ctrl+Shift+R). Instalacja jako aplikacja wymaga bezpiecznego kontekstu (HTTPS) — czyli działa z adresu produkcyjnego na GitHub Pages, ale nie z pliku otwartego lokalnym <code>file://</code>. Jeśli potrzebujesz pracy bez sieci, pobierz plik <code>arkmap_studio.html</code> na dysk i otwórz go lokalnie — cała aplikacja jest w jednym pliku.</p>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="formats">26. Obsługiwane formaty plików</h2>

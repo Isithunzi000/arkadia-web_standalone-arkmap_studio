@@ -1,4 +1,6 @@
 {
+  "id": "./arkmap_studio.html",
+  "lang": "pl",
   "name": "ArkMap Studio",
   "short_name": "ArkMap",
   "description": "Viewer i edytor map Arkadia MUD (.dat / .arkmap / .arkdelta)",

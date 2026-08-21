@@ -52,6 +52,7 @@ jobs:
           set -euo pipefail
           FORCE="${{ github.event.inputs.force }}"
           REL=$(curl -sf --retry 3 --connect-timeout 30 --max-time 90 \
+                -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
                 https://api.github.com/repos/Delwing/arkadia-mapa/releases/latest) \
             || { echo "::error::brak releases/latest upstream — fail-closed"; exit 1; }
           TAG=$(printf '%s' "$REL" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const t=JSON.parse(s).tag_name; if(typeof t!=='string'||!t) process.exit(1); console.log(t)})")

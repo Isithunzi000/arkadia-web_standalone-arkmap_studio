@@ -85,7 +85,8 @@ jobs:
         run: |
           set -euo pipefail
           gh label create sync-transports --force --description "Anomalia danych transportów z upstream" 2>/dev/null || true
-          NUM=$(gh issue list --label sync-transports --state open --json number --jq '.[0].number // empty'  # sync-F1: pusta lista → null(string) → -n zawsze true 2>/dev/null || true)
+          # sync-F1: pusta lista → null(string) → -n zawsze true; komentarz NIE moze byc wewnatrz $() — bash polyka reszte linii (Arc 9)
+          NUM=$(gh issue list --label sync-transports --state open --json number --jq '.[0].number // empty') 2>/dev/null || true
           RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           BODY="Generator tools/sync-transports.mjs odrzucił dane z Delwing/arkadia-web-client-extension (bramka semantyczna: etykiety przystanków). Dane NIE trafiły do arkmap_studio.html (fail-closed). Szczegóły w logu runu: ${RUN_URL} — kolejne runy ponawiają automatycznie; po ustaniu anomalii to issue zamknie się samo."
           if [ -n "$NUM" ]; then
@@ -100,7 +101,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          NUM=$(gh issue list --label sync-transports --state open --json number --jq '.[0].number // empty'  # sync-F1: pusta lista → null(string) → -n zawsze true 2>/dev/null || true)
+          # sync-F1: pusta lista → null(string) → -n zawsze true; komentarz NIE moze byc wewnatrz $() — bash polyka reszte linii (Arc 9)
+          NUM=$(gh issue list --label sync-transports --state open --json number --jq '.[0].number // empty') 2>/dev/null || true
           if [ -n "$NUM" ]; then
             gh issue comment "$NUM" --body "Dane upstream znów przechodzą walidację — zamykam." || true
             gh issue close "$NUM" || true

@@ -180,8 +180,18 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
     'E8: cheat sheet — wariant viewer menu kontekstowego');
 }
 
+// ── Arc 9: dlg-load-during-edit — przyciski po id, nie po kolejnosci DOM ──
+{
+  for (const id of ['btn-lde-cancel', 'btn-lde-discard', 'btn-lde-save'])
+    ok(HTML.includes('id="' + id + '"'), 'LDE: przycisk ' + id + ' ma stabilne id w HTML');
+  ok(!HTML.includes("dlgLDE.querySelectorAll('button')"),
+    'LDE: JS nie destrukturyzuje przyciskow po kolejnosci DOM');
+  ok((HTML.match(/getElementById\('btn-lde-save'\)/g) || []).length === 2,
+    'LDE: oba call-site (online + lokalny) selektuja saveBtn po id');
+}
+
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.43.0';"), 'V1: pin APP_VERSION v1.43.0');
+ok(HTML.includes("const APP_VERSION = 'v1.43.1';"), 'V1: pin APP_VERSION v1.43.1');
 
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);
