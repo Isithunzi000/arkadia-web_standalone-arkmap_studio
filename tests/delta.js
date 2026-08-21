@@ -994,6 +994,86 @@ console.log('— T12: audyt T3 — baseInfo widzi etykiety/kolory (CRC v2), base
   ok(c.api._arkdeltaBaseNote({}).includes('bez informacji'), '_arkdeltaBaseNote: kalka bez base → uczciwy komunikat');
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// T13 (Arc 11 WS4): seedSids — stany brzegowe.
+// ═══════════════════════════════════════════════════════════════════════════
+console.log('— T13: seedSids — pusta mapa, luki, pusty seed, egzekucja > seed —');
+{
+  // S1: pusta mapa bazowa — wszystko rozstrzygane wewnatrz delty, zero seed
+  const c = makeDeltaCtx();
+  const { state, api } = c;
+  state.map.areas = []; state.areas.clear(); state.roomById = {}; state.roomArea = {};
+  const delta = { meta: { format: 'arkdelta', format_version: 1 }, ops: [
+    { seq: 1, type: 'ADD_AREA', target: { areaId: 'd:1' }, payload: { area: { id: 'd:1', name: 'Pusta' } }, label: 'a' },
+    { seq: 2, type: 'ADD_ROOM', target: { roomId: 'd:2', areaId: 'd:1' }, payload: { room: { id: 'd:2', x: 0, y: 0, z: 0, name: 'E13A', env: 262 } }, label: 'r' },
+    { seq: 3, type: 'ADD_ROOM', target: { roomId: 'd:3', areaId: 'd:1' }, payload: { room: { id: 'd:3', x: 1, y: 0, z: 0, name: 'E13B', env: 262 } }, label: 'r' },
+    { seq: 4, type: 'ADD_EXIT', target: { sourceId: 'd:2', dir: 'e' }, payload: { targetId: 'd:3', bidirectional: true }, label: 'x' },
+  ] };
+  const res = api.applyDelta(delta);
+  ok(res.applied === 4 && res.skipped.length === 0,
+    'S1: pusta mapa — 4 opy naniesione bez seed [applied=' + res.applied + ' skipped=' + res.skipped.length + ']');
+  const ra = Object.values(state.roomById).find(r => r.name === 'E13A');
+  const rb = Object.values(state.roomById).find(r => r.name === 'E13B');
+  const ar = [...state.areas.values()].find(a => a.name === 'Pusta');
+  ok(!!ra && !!rb && !!ar, 'S1: obszar i oba pokoje istnieja po apply');
+  ok(ra && rb && ra.exits && ra.exits.e === rb.id && rb.exits && rb.exits.w === ra.id,
+    'S1: exit bidi miedzy swiezymi pokojami (sid -> sid wewnatrz delty)');
+  ok(ar && ra && ar.rooms.some(r => r.id === ra.id) && state.roomArea[ra.id] === ar.id,
+    'S1: spojnosc area.rooms i roomArea dla swiezych id');
+}
+{
+  // S2: seed wskazuje LUKE (zywe id nie istnieje) — kontrolowany skip, zero mutacji
+  const c = makeDeltaCtx();
+  const { state, api } = c;
+  const delta = { meta: { format: 'arkdelta', format_version: 1 }, ops: [
+    { seq: 1, type: 'ADD_EXIT', target: { sourceId: 10, dir: 's' }, payload: { targetId: 'd:9' }, label: 'x' },
+  ] };
+  const res = api.applyDelta(delta, undefined, undefined, new Map([['d:9', 777]]));
+  ok(res.applied === 0 && res.skipped.length === 1 && res.skipped[0].reason.includes('nie istnieje'),
+    'S2: seed -> luka (777) => kontrolowany skip [reason=' + (res.skipped[0] && res.skipped[0].reason) + ']');
+  ok(!state.roomById[10].exits || state.roomById[10].exits.s === undefined, 'S2: zero mutacji pokoju zrodlowego');
+}
+{
+  // S3: seed NIE nadpisuje sid definiowanego przez sama delte (egzekucja wygrywa)
+  const c = makeDeltaCtx();
+  const { state, api } = c;
+  const delta = { meta: { format: 'arkdelta', format_version: 1 }, ops: [
+    { seq: 1, type: 'ADD_ROOM', target: { roomId: 'd:1', areaId: 1 }, payload: { room: { id: 'd:1', x: 9, y: 9, z: 0, name: 'E13Fresh', env: 262 } }, label: 'r' },
+    { seq: 2, type: 'EDIT_ROOM', target: { roomId: 'd:1' }, payload: { before: {}, after: { id: 'd:1', x: 9, y: 9, z: 0, name: 'E13Renamed', env: 262 } }, label: 'e' },
+  ] };
+  const res = api.applyDelta(delta, undefined, undefined, new Map([['d:1', 11]]));
+  ok(res.applied === 2 && res.skipped.length === 0, 'S3: oba opy naniesione [applied=' + res.applied + ']');
+  ok(state.roomById[11].name === 'R11', 'S3: pokoj z seeda (11) nietkniety — seed nie wygrywa z egzekucja');
+  const fresh = Object.values(state.roomById).find(r => r.x === 9 && r.y === 9);
+  ok(!!fresh && fresh.id !== 11 && fresh.name === 'E13Renamed',
+    'S3: EDIT_ROOM trafil w SWIEZY pokoj (nie w 11) [freshId=' + (fresh && fresh.id) + ']');
+}
+{
+  // S4: pusty seed (new Map()) zachowuje sie jak brak seed
+  const mk = () => ({ meta: { format: 'arkdelta', format_version: 1 }, ops: [
+    { seq: 1, type: 'ADD_AREA', target: { areaId: 'd:1' }, payload: { area: { id: 'd:1', name: 'Area Two' } }, label: 'a' },
+    { seq: 2, type: 'ADD_ROOM', target: { roomId: 'd:2', areaId: 'd:1' }, payload: { room: { id: 'd:2', x: 7, y: 7, z: 0, name: 'Dep', env: 262 } }, label: 'r' },
+  ] });
+  const only = new Set([2]);
+  const r1 = makeDeltaCtx().api.applyDelta(mk(), only);
+  const r2 = makeDeltaCtx().api.applyDelta(mk(), only, undefined, new Map());
+  ok(r1.applied === 0 && r1.skipped.length === 1 && r2.applied === 0 && r2.skipped.length === 1
+    && r1.skipped[0].reason === r2.skipped[0].reason,
+    'S4: pusty seed === brak seed (identyczny skip zaleznego opu)');
+}
+{
+  // S5: osierocony sid w TARGET (nie payload) — defensywny skip
+  const c = makeDeltaCtx();
+  const { api } = c;
+  const delta = { meta: { format: 'arkdelta', format_version: 1 }, ops: [
+    { seq: 1, type: 'EDIT_ROOM', target: { roomId: 'd:7' }, payload: { before: {}, after: { id: 'd:7' } }, label: 'e' },
+  ] };
+  const res = api.applyDelta(delta);
+  ok(res.applied === 0 && res.skipped.length === 1 && res.skipped[0].reason.includes('d:7'),
+    'S5: sid w target bez definicji i bez seed => skip [reason=' + (res.skipped[0] && res.skipped[0].reason) + ']');
+}
+
 console.log('');
 console.log('delta: ' + pass + ' OK, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);
