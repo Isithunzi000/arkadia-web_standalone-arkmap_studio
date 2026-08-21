@@ -3285,7 +3285,7 @@
 
 <!-- ✎ DIALOG: NIEZAPISANE ZMIANY — tryb lokalny -->
 <div id="dlg-unsaved-local" class="dlg-bg">
-  <div class="dlg-box narrow">
+  <div class="dlg-box narrow" style="width:600px">
     <div class="dlg-hdr">
       <div class="dlg-icon">⚠</div>
       <div class="dlg-hdr-text">
@@ -3306,7 +3306,7 @@
 
 <!-- ✎ DIALOG: NIEZAPISANE ZMIANY — wyjście z edycji -->
 <div id="dlg-unsaved-exit" class="dlg-bg">
-  <div class="dlg-box narrow">
+  <div class="dlg-box narrow" style="width:700px">
     <div class="dlg-hdr">
       <div class="dlg-icon">⚠</div>
       <div class="dlg-hdr-text">
@@ -3472,7 +3472,7 @@
 
 <!-- ✎ DIALOG: WYJŚCIE JEDNO- VS DWUSTRONNE -->
 <div id="dlg-exit-bidirectional" class="dlg-bg">
-  <div class="dlg-box narrow">
+  <div class="dlg-box narrow" style="width:400px">
     <div class="dlg-hdr">
       <div class="dlg-icon">→</div>
       <div class="dlg-hdr-text">
@@ -13103,7 +13103,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.43.5';
+const APP_VERSION = 'v1.43.6';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
