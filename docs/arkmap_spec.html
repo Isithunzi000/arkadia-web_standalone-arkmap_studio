@@ -189,7 +189,7 @@
 <ol>
   <li><code>custom_env_colors[envId]</code> — direct RGB, highest priority</li>
   <li><code>env_colors[envId]</code> → ANSI 256-color palette lookup (explicit override)</li>
-  <li>Hardcoded Arkadia environment table (<code>ARKADIA_ENVS</code>, 51 entries covering all known Arkadia envIds) — overrides implicit ANSI for Arkadia-specific envIds (200+)</li>
+  <li>Hardcoded Arkadia environment table (<code>ARKADIA_ENVS</code>, 51 entries covering all known Arkadia envIds) — overrides implicit ANSI for Arkadia-specific envIds (200+). Applied <strong>only when the loaded map is detected as an Arkadia map</strong> (map-level <code>user_data.map_sync_version</code> present, "arkadia" in the map/file name, or ≥2 signature envIds &gt;255 in use); maps from other MUDs skip this layer entirely and render from the ANSI palette plus their own <code>env_colors</code> / <code>custom_env_colors</code> — matching the official Mudlet renderer behavior.</li>
   <li>Implicit ANSI mapping: envId 1–255 → ANSI palette (lowest priority). Mudlet offset applies: envId 8 → ANSI index 0, envId 16 → ANSI index 8, all others → ANSI index = envId.</li>
 </ol>
 <p>If none of the four layers provides a color for a given envId, the room renders with the Mudlet default color (<code>rgb(114,1,0)</code>).</p>
