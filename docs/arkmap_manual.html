@@ -702,6 +702,7 @@
 <p>W trybie edycji dostępny jest dodatkowy przycisk <strong>Zapisz jako…</strong> — pozwala zapisać mapę do nowego pliku niezależnie od ustawionego uchwytu File System Access.</p>
 
 <div class="note">Przed zapisem obliczane są <strong>hierarchiczne checksums CRC-32</strong> (pokoje → obszary → plik). Tablice sortowane są deterministycznie (ID rosnąco) aby plik był przyjazny dla systemów kontroli wersji (git diff).</div>
+<div class="note">Pliki zapisane starszą wersją aplikacji (przed v1.38.0) mają starszy format sum (v1) — przy wczytaniu weryfikowane są starym wzorem i raportowane jako „OK (starszy format v1)"; przy najbliższym zapisie sumy same podniosą się do obecnego formatu.</div>
 
 <h3>Eksportuj Mudlet .dat</h3>
 <p>Konwertuje mapę z formatu .arkmap do binarnego formatu Mudlet i pobiera plik. Eksport .dat jest dostępny tylko poza trybem edycji — przycisk jest zablokowany gdy edycja jest aktywna.</p>

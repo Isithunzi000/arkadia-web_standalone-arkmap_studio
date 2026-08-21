@@ -32,6 +32,8 @@ const code = [
   extract(NEW, 'function _stripAreaForCrc(area) {'),
   extract(NEW, 'function _crcArea(area, roomCrcs) {'),
   extract(NEW, 'function _crcFile(areaCrcs, colors) {'),
+  extract(NEW, 'function _crcAreaV1(roomCrcs) {'),  // Arc 16: verifyChecksums wolaje formuly v1
+  extract(NEW, 'function _crcFileV1(areaCrcs) {'),
   extract(NEW, 'function addChecksums(arkmap) {'),
   extract(NEW, 'function verifyChecksums(arkmap) {'),
   extract(NEW, 'function _hash8(s) {'),
@@ -50,7 +52,7 @@ function makeCtx() {
     'state', 'toast', 'draw', 'updateEditUI', 'updateUndoRedoUI', 'hideBanners', 'closeCtxMenu',
     'cv', 'document', '_paintStrokeRevert', '_paintDisarm',
     'let _paintStroke = null, _lockInterval = null;\n' +
-    code + '\n;return { _stripRoomDefaults, _stripAreaForCrc, _crcRoom, _crcArea, _crcFile,' +
+    code + '\n;return { _stripRoomDefaults, _stripAreaForCrc, _crcRoom, _crcArea, _crcFile, _crcAreaV1, _crcFileV1,' +
     ' addChecksums, verifyChecksums, _hash8, _datConvertRoom, buildRoom, pushUndo, exitEditMode, crc32str, stableStringify };'
   );
   const api = fn(
@@ -128,14 +130,19 @@ console.log('── T2 (W3): addChecksums/verifyChecksums — v2, badAreas, miss
   ok(res3.ok === false && res3.missingRooms.length === 1 && res3.missingRooms[0] === 2,
      'brak wpisu w stored.rooms → missingRooms + ok:false (Claude#5)');
 
-  // stary plik: sumy liczone ALGORYTMEM v1 (emulacja), bez alg — raportowany mismatch (decyzja: olać migracje)
+  // Arc 16: decyzja „olać migracje" ODWOŁANA — sumy v1 (bez alg) sa weryfikowane zamrozonymi
+  // formulami v1. Powod: lustro online nioslo v1 i straszylo userow falszywym „plik uszkodzony".
   const map4 = mkMap([{ id: 5, name: 'A5', rooms: [mkRoom(1)] }]);
   const v1Room = api._crcRoom(map4.areas[0].rooms[0]);
   const v1Area = api.crc32str([v1Room].join(''));
   map4.meta.checksums = { file: api.crc32str([v1Area].join('')), areas: { '5': v1Area }, rooms: { '1': v1Room } };
   const res4 = api.verifyChecksums(map4);
-  ok(res4.ok === false && res4.fileOk === false,
-     'plik z sumami v1 (bez alg) → zgloszony mismatch (jednorazowa konsekwencja, udokumentowana)');
+  ok(res4.ok === true && res4.legacy === true,
+     'plik z sumami v1 (bez alg) → weryfikowany formulami v1, legacy:true (Arc 16)');
+  map4.areas[0].rooms[0].x = 999;
+  const res4b = api.verifyChecksums(map4);
+  ok(res4b.ok === false && res4b.badRooms.length === 1,
+     'v1: reczna mutacja pokoju nadal wykrywana (Arc 16)');
 }
 
 // ═══ T3 (W4/Q2): konwerter i buildRoom — hidden + symbolColor fallback ═══
@@ -221,9 +228,9 @@ console.log('── T6 (W18 v2): exitEditMode — undo/redo czyszczone, deltaLog
 // ═══ T7: strazniki strukturalne + piny wersji ═══
 console.log('── T7: strazniki strukturalne Tier 3 + piny wersji ──');
 {
-  ok(NEW.includes("const APP_VERSION = 'v1.43.6';"), 'pin: APP_VERSION v1.43.6');
+  ok(NEW.includes("const APP_VERSION = 'v1.43.7';"), 'pin: APP_VERSION v1.43.7');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok((deltaSrc.match(/v1\.43\.6/g) || []).length === 8, 'pin: delta.js 8x v1.43.6 (4 linie x includes+label)');
+  ok((deltaSrc.match(/v1\.43\.7/g) || []).length === 8, 'pin: delta.js 8x v1.43.7 (4 linie x includes+label)');
   ok(NEW.includes("arkmap.meta.checksums = { alg: 'v2',"), 'straznik: addChecksums alg v2');
   ok(NEW.includes('function _crcArea(area, roomCrcs)') && NEW.includes('function _crcFile(areaCrcs, colors)'),
      'straznik: sygnatury CRC v2');
