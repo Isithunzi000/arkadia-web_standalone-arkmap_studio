@@ -31,6 +31,16 @@ alg i liczyl zawsze formulami v2 — obszary i plik „niezgodne", pokoje OK
 - Docs (Arc 17): spec §15 — usunieta stara nota o legacy mismatch
   (sprzeczna z dispatchem alg) + odeslanie w „Verification"; §22 Format
   Changelog: wiersz o wersjonowaniu alg; README: punkt o PWA.
+- Perf lab (Arc 18): tests/perf/ — generator drabinki syntetykow
+  (54k-864k pokoi, deterministyczny, sumy v2 funkcjami aplikacji),
+  benchmark parse Node, driver przegladarki na CDP (realny zegar),
+  orkiestrator run.sh, generator raportu. Wynik referencyjny
+  (Athlon Silver 3050U 2C/2T): .arkmap laduje sie 1,6-2,6x wolniej niz
+  .dat — ale wylacznie przez weryfikacje CRC (sam JSON.parse jest ~3,4x
+  SZYBSZY niz parser binarny); renderer plaski do 108k pokoi (draw
+  21-25 ms, kamera p95 14-37 ms); oba formaty OK do 4x realnej mapy.
+  Raport: docs/perf_report.html + surowe dane tests/perf/results/.
+  Bez zmian w aplikacji (same testy + docs).
 
 ## v1.43.6 — szersze ciasne okna aktywne (Arc 15)
 

@@ -128,3 +128,11 @@ Uwagi:
 - `map_master3.dat` — produkcyjna mapa (release 0.205.0 z Delwing/arkadia-mapa),
   **untracked** (`.gitignore`), pobierana skryptem `fetch-fixture.sh`.
 - `fixtures/tiny.png` — minimalny PNG 2×2 (79 B), commitowany, dla testów pixmapy.
+
+## Perf lab (`tests/perf/`)
+
+Benchmark wydajności i stress test skalowania (`.dat` vs `.arkmap`, renderer,
+limity pamięci) — **nie należy do regresji** (`run-all.sh` go nie odpala;
+pomiar jest czasochłonny i wymaga przeglądarki). Uruchomienie ręczne:
+`bash tests/perf/run.sh`. Szczegóły, wynik referencyjny i generator raportu:
+[tests/perf/README.md](perf/README.md); raport: `docs/perf_report.html`.
