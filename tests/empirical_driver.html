@@ -3567,6 +3567,122 @@ scenario('E14.wpImportSync', async () => {
   ex('if (wpState.visible) wpToggle();');
 });
 
+
+// ═══ GRUPA E15 — PWA runtime: manifest po HTTP, no-op SW, ikony ═══
+// SW rejestruje sie naprawde (127.0.0.1 = secure context), profil Chromium
+// jest swiezy per launch, wiec rejestracja nie przecieka miedzy grupami.
+
+scenario('E15.manifest', async () => {
+  const r = AEV('E15.manifest.r', await eva('(async function(){'
+   + ' var resp = await fetch("manifest.webmanifest", { cache: "no-store" });'
+   + ' if (!resp.ok) return { status: resp.status };'
+   + ' var m = await resp.json();'
+   + ' var ics = m.icons || [];'
+   + ' return { status: resp.status, name: m.name, short: m.short_name, start: m.start_url,'
+   + '   display: m.display, icons: ics.length,'
+   + '   has192: ics.some(function(i){ return (i.sizes || "").indexOf("192") >= 0; }),'
+   + '   has512: ics.some(function(i){ return (i.sizes || "").indexOf("512") >= 0; }),'
+   + '   hasMask: ics.some(function(i){ return (i.purpose || "").indexOf("maskable") >= 0; }) };'
+   + '})()'), 'fetch manifestu po HTTP');
+  if (!r) return;
+  A('E15.manifest.fetch', r.status === 200, 'manifest.webmanifest osiagalny po HTTP ' + JSON.stringify(r));
+  A('E15.manifest.fields', r.name === 'ArkMap Studio' && r.short === 'ArkMap' && r.display === 'standalone'
+    && r.has192 === true && r.has512 === true && r.hasMask === true,
+    'pola wymagane + ikony 192/512/maskable ' + JSON.stringify(r));
+});
+
+scenario('E15.headTags', async () => {
+  const r = AEV('E15.headTags.r', await eva('(async function(){'
+   + ' var link = document.querySelector("link[rel=manifest]");'
+   + ' var theme = document.querySelector("meta[name=theme-color]");'
+   + ' var apple = document.querySelector("meta[name=apple-mobile-web-app-title]");'
+   + ' var href = link ? link.getAttribute("href") : null;'
+   + ' var st = null;'
+   + ' if (href) { var resp = await fetch(href, { cache: "no-store" }); st = resp.status; }'
+   + ' return { href: href, status: st, theme: theme && theme.getAttribute("content"),'
+   + '   apple: apple && apple.getAttribute("content") };'
+   + '})()'), 'tagi head w runtime DOM');
+  if (!r) return;
+  A('E15.headTags.link', r.href !== null && r.status === 200, 'link[rel=manifest] resolve do 200 ' + JSON.stringify(r));
+  A('E15.headTags.theme', r.theme === '#0d0f12', 'theme-color = --bg #0d0f12 ' + JSON.stringify(r));
+  A('E15.headTags.apple', r.apple === 'ArkMap', 'apple-mobile-web-app-title = ArkMap ' + JSON.stringify(r));
+});
+
+scenario('E15.swRegister', async () => {
+  const r = AEV('E15.swReg.r', await eva('(async function(){'
+   + ' if (!("serviceWorker" in navigator)) return { api: false };'
+   + ' var reg = null;'
+   + ' for (var i = 0; i < 100; i++) {'
+   + '   reg = await navigator.serviceWorker.getRegistration();'
+   + '   if (reg && reg.active) break;'
+   + '   await new Promise(function(res){ setTimeout(res, 100); });'
+   + ' }'
+   + ' return { api: true, reg: !!reg, active: !!(reg && reg.active),'
+   + '   scope: reg ? reg.scope : null,'
+   + '   script: (reg && reg.active) ? reg.active.scriptURL : null };'
+   + '})()'), 'rejestracja service workera (polling do 10 s)');
+  if (!r) return;
+  A('E15.swReg.api', r.api === true, 'navigator.serviceWorker dostepny (secure context 127.0.0.1)');
+  A('E15.swReg.active', r.reg === true && r.active === true, 'SW zarejestrowany i aktywny ' + JSON.stringify(r));
+  A('E15.swReg.scope', typeof r.scope === 'string' && /\/$/.test(r.scope) && /sw\.js$/.test(r.script || ''),
+    'scope = root, script = sw.js ' + JSON.stringify(r));
+});
+
+scenario('E15.swNoop', async () => {
+  const before = AEV('E15.noop.b', await eva('(async function(){'
+   + ' var resp = await fetch("manifest.webmanifest", { cache: "no-store" });'
+   + ' return await resp.text();'
+   + '})()'), 'manifest przed kontrola');
+  const r = AEV('E15.noop.r', await eva('(async function(){'
+   + ' var keys = await caches.keys();'
+   + ' await navigator.serviceWorker.ready;'
+   + ' var keys2 = await caches.keys();'
+   + ' var resp = await fetch("manifest.webmanifest");'
+   + ' var txt = await resp.text();'
+   + ' return { keys: keys.length, keys2: keys2.length, status: resp.status, body: txt };'
+   + '})()'), 'kontrola cache i fetch po aktywacji SW');
+  if (!r) return;
+  A('E15.noop.caches', r.keys === 0 && r.keys2 === 0,
+    'caches.keys() puste przed i po aktywacji SW (no-op potwierdzony) keys=' + r.keys + ' keys2=' + r.keys2);
+  A('E15.noop.fetch', r.status === 200 && before !== undefined && r.body === before,
+    'fetch po aktywacji SW: brak przechwytywania (status 200, tresc identyczna)');
+});
+
+scenario('E15.swIcons', async () => {
+  const r = AEV('E15.icons.r', await eva('(async function(){'
+   + ' var resp = await fetch("manifest.webmanifest", { cache: "no-store" });'
+   + ' var m = await resp.json();'
+   + ' var out = [];'
+   + ' for (var i = 0; i < (m.icons || []).length; i++) {'
+   + '   var ic = await fetch(m.icons[i].src, { cache: "no-store" });'
+   + '   out.push({ src: m.icons[i].src, status: ic.status, type: ic.headers.get("content-type") });'
+   + ' }'
+   + ' return out;'
+   + '})()'), 'osiagalnosc ikon z manifestu');
+  if (!r) return;
+  A('E15.icons.count', r.length === 3, 'manifest deklaruje 3 ikony (192/512/maskable-512) [actual=' + r.length + ']');
+  A('E15.icons.all', r.every(function(x){ return x.status === 200 && /image\/png/.test(x.type || ''); }),
+    'wszystkie ikony 200 + image/png ' + JSON.stringify(r));
+});
+
+scenario('E15.swReload', async () => {
+  const loaded = new Promise(res => { $f.addEventListener('load', res, { once: true }); });
+  $f.src = $f.src;
+  await loaded;
+  await appReady();
+  A('E15.reload.boot', ev('typeof datToArkmap === "function" && typeof applyMap === "function"'
+    + ' && typeof startLocalEditMode === "function"').val === true,
+    'apka bootuje po reload iframe');
+  const r = AEV('E15.reload.r', await eva('(async function(){'
+   + ' var reg = await navigator.serviceWorker.getRegistration();'
+   + ' var keys = await caches.keys();'
+   + ' return { reg: !!reg, active: !!(reg && reg.active), keys: keys.length };'
+   + '})()'), 'stan SW po reload');
+  if (!r) return;
+  A('E15.reload.sw', r.reg === true && r.active === true, 'SW przetrwal reload w profilu sesji ' + JSON.stringify(r));
+  A('E15.reload.caches', r.keys === 0, 'caches nadal puste po reload');
+});
+
 // ═══ Runner ═══
 function appReady() {
   return new Promise(res => {
