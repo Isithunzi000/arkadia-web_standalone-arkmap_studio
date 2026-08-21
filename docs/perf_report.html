@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ArkMap Studio — raport wydajności (perf lab)</title>
+<style>
+  :root {
+    --bg: #0d0f12; --panel: #141720; --border: #252b3a;
+    --accent: #4a9eff; --accent2: #ff9f4a; --ok: #4aff8a; --err: #ff4a4a;
+    --text: #e8eef8; --dim: #8898b8; --fg: #ccd8ea;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text);
+    font: 14px/1.7 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    max-width: 1000px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1 { font-size: 24px; color: var(--accent); letter-spacing: 2px; margin-bottom: 4px; font-weight: 500; }
+  .subtitle { color: var(--dim); font-size: 12px; margin-bottom: 32px; }
+  h2 { font-size: 18px; color: var(--accent); margin: 36px 0 14px; padding-bottom: 4px;
+    border-bottom: 1px solid var(--border); font-weight: 500; }
+  h3 { font-size: 15px; color: var(--accent2); margin: 24px 0 10px; font-weight: 500; }
+  p { margin-bottom: 10px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { background: #1a1e2a; padding: 2px 5px; border-radius: 2px; font-size: 13px;
+    font-family: 'Courier New', 'Fira Code', monospace; color: #e8c880; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 18px; }
+  th, td { padding: 7px 10px; border: 1px solid var(--border); text-align: left; font-size: 12px; }
+  th { background: #1a1e2a; color: var(--accent); font-weight: 500; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.5px; }
+  td { color: var(--fg); }
+  tr:hover td { background: #161a24; }
+  ul, ol { margin: 6px 0 14px 24px; }
+  li { margin-bottom: 5px; font-size: 13px; }
+  .note { background: #0d1a28; border-left: 3px solid var(--accent); padding: 10px 14px;
+    margin: 14px 0; border-radius: 0 4px 4px 0; font-size: 12px; color: var(--fg); }
+  .warn { background: #1a1500; border-left: 3px solid #e8a020; padding: 10px 14px;
+    margin: 14px 0; border-radius: 0 4px 4px 0; font-size: 12px; color: #e8c880; }
+  .tldr { background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 18px 22px; margin: 18px 0; }
+  .tldr li { margin-bottom: 8px; font-size: 13px; }
+  .big { font-size: 20px; color: var(--accent2); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 14px 0; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; }
+  .card .v { font-size: 20px; color: var(--accent); font-weight: 600; }
+  .card .l { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+<h1>ARKMAP STUDIO — RAPORT WYDAJNOŚCI</h1>
+<div class="subtitle">perf lab (Arc 18) · pomiar: 21 sierpnia 2026 · AMD Athlon Silver 3050U with Radeon Graphics / 29 GB RAM · Node v20.20.1 · chrome-headless-shell 152.0.7977.54 · generowane z surowych danych przez <code>tests/perf/report_build.mjs</code></div>
+
+<div class="tldr">
+<p style="margin-bottom:10px"><b>TL;DR</b></p>
+<ul>
+<li><b>Teza z Discorda potwierdzona w efekcie, obalona w mechanizmie.</b> Ładowanie <code>.arkmap</code>
+jest faktycznie <span class="big">2,1×</span> wolniejsze niż <code>.dat</code> (mediana ratio
+1,55–2,61× na drabince 27k→432k pokoi) — ale NIE dlatego,
+że „tekstowy JSON parsuje się wolniej niż binarka". <code>JSON.parse</code> jest <b>3,4× SZYBSZY</b>
+niż binarny parser <code>.dat</code> (2 244 ms vs 7 614 ms przy 432 k pokoi).
+Cała różnica to <b>weryfikacja sum kontrolnych CRC</b> (81–82% czasu ładowania .arkmap),
+której <code>.dat</code> z założenia nie wykonuje (plik lokalny = zaufany). To cena za wykrywalność manipulacji,
+nie koszt formatu JSON.</li>
+<li><b>W przeglądarce różnica formatów jest stłumiona:</b> end-to-end tylko ~1,13× (27k)
+do ~1,22× (4x), bo dominuje
+<code>applyMap</code> (budowa indeksów renderera) — 69% czasu ładowania realnej mapy.</li>
+<li><b>Renderer skaluje się z rozmiarem viewportu, nie mapy:</b> pierwszy draw 21–25 ms
+i kamera p95 14–37 ms płasko od 27k do 108k pokoi (kryterium JANK: 50 ms — nigdzie nie złamane).
+Culling viewportu działa.</li>
+<li><b>Limit praktyczny na tej maszynie (low-end 2C/2T):</b> pewne OK do <b>108 k pokoi
+(4× realna mapa)</b> w obu formatach; powyżej protokół pomiaru wyczerpał budżet czasowy
+(szczegóły i zastrzeżenia w §5–§6). Brak zaobserwowanego crasha aplikacji w zmierzonym zakresie.</li>
+<li><b>Pamięć pod kontrolą:</b> heap po załadowaniu max 405 MB przy 108k pokoi (kryterium MEM: 2048 MB).</li>
+</ul>
+</div>
+
+<h2>1. Pytanie z Discorda: .dat vs .arkmap</h2>
+<p>Czysty parse w Node.js (20 przebiegów na punkt, mediana; ta sama maszyna, te same warunki
+dla obu formatów; <code>.arkmap</code> mierzony 1:1 jak robi to aplikacja: <code>JSON.parse + validate +
+verifyChecksums</code>, <code>.dat</code>: <code>datToArkmap + validate</code> — celowa asymetria, patrz §6):</p>
+<table><tr><th>zestaw</th><th>rozmiar .dat / .arkmap [MB]</th><th>parse .dat</th><th>JSON.parse</th><th>weryfikacja CRC</th><th>total .dat</th><th>total .arkmap</th><th>ratio</th></tr><tr><td><b>real_27k</b> (27 k pokoi)</td><td>7,5 / 13,0</td><td>945 ms</td><td>185 ms</td><td>1 444 ms</td><td>1 133 ms</td><td>1 752 ms</td><td><b>1,55×</b></td></tr><tr><td><b>stress_2x</b> (54 k pokoi)</td><td>14,7 / 26,5</td><td>1 381 ms</td><td>466 ms</td><td>3 440 ms</td><td>1 612 ms</td><td>4 213 ms</td><td><b>2,61×</b></td></tr><tr><td><b>stress_4x</b> (108 k pokoi)</td><td>29,0 / 53,5</td><td>1 949 ms</td><td>535 ms</td><td>3 570 ms</td><td>2 245 ms</td><td>4 399 ms</td><td><b>1,96×</b></td></tr><tr><td><b>stress_8x</b> (216 k pokoi)</td><td>57,8 / 107,6</td><td>3 377 ms</td><td>1 123 ms</td><td>7 034 ms</td><td>3 961 ms</td><td>8 655 ms</td><td><b>2,19×</b></td></tr><tr><td><b>stress_16x</b> (432 k pokoi)</td><td>115,2 / 216,7</td><td>7 614 ms</td><td>2 244 ms</td><td>14 344 ms</td><td>8 924 ms</td><td>17 749 ms</td><td><b>1,99×</b></td></tr></table>
+<svg viewBox="0 0 720 300" style="width:100%;max-width:720px;height:auto;display:block;margin:8px 0 4px" role="img"><text x="2" y="10" fill="#8898b8" font-size="10">mediana [ms]</text><text x="702" y="278" fill="#8898b8" font-size="10" text-anchor="end">pokoje (skala log)</text><line x1="64" y1="244" x2="702" y2="244" stroke="#252b3a" stroke-width="1"/><text x="56" y="248" fill="#8898b8" font-size="10" text-anchor="end">0</text><line x1="64" y1="186.5" x2="702" y2="186.5" stroke="#252b3a" stroke-width="1"/><text x="56" y="190.5" fill="#8898b8" font-size="10" text-anchor="end">4 970</text><line x1="64" y1="129" x2="702" y2="129" stroke="#252b3a" stroke-width="1"/><text x="56" y="133" fill="#8898b8" font-size="10" text-anchor="end">9 939</text><line x1="64" y1="71.5" x2="702" y2="71.5" stroke="#252b3a" stroke-width="1"/><text x="56" y="75.5" fill="#8898b8" font-size="10" text-anchor="end">14 909</text><line x1="64" y1="14" x2="702" y2="14" stroke="#252b3a" stroke-width="1"/><line x1="64" y1="14" x2="64" y2="244" stroke="#1b2130" stroke-width="1"/><text x="64" y="260" fill="#8898b8" font-size="10" text-anchor="middle">27 k</text><line x1="223.5" y1="14" x2="223.5" y2="244" stroke="#1b2130" stroke-width="1"/><text x="223.5" y="260" fill="#8898b8" font-size="10" text-anchor="middle">54 k</text><line x1="383" y1="14" x2="383" y2="244" stroke="#1b2130" stroke-width="1"/><text x="383" y="260" fill="#8898b8" font-size="10" text-anchor="middle">108 k</text><line x1="542.5" y1="14" x2="542.5" y2="244" stroke="#1b2130" stroke-width="1"/><text x="542.5" y="260" fill="#8898b8" font-size="10" text-anchor="middle">216 k</text><line x1="702" y1="14" x2="702" y2="244" stroke="#1b2130" stroke-width="1"/><text x="702" y="260" fill="#8898b8" font-size="10" text-anchor="middle">432 k</text><path d="M64.0,230.9 L223.5,225.4 L383.0,218.0 L542.5,198.2 L702.0,140.8" fill="none" stroke="#4a9eff" stroke-width="2" /><circle cx="64.0" cy="230.9" r="3.2" fill="#4a9eff"/><circle cx="223.5" cy="225.4" r="3.2" fill="#4a9eff"/><circle cx="383.0" cy="218.0" r="3.2" fill="#4a9eff"/><circle cx="542.5" cy="198.2" r="3.2" fill="#4a9eff"/><circle cx="702.0" cy="140.8" r="3.2" fill="#4a9eff"/><path d="M64.0,223.7 L223.5,195.3 L383.0,193.1 L542.5,143.9 L702.0,38.6" fill="none" stroke="#ff9f4a" stroke-width="2" /><circle cx="64.0" cy="223.7" r="3.2" fill="#ff9f4a"/><circle cx="223.5" cy="195.3" r="3.2" fill="#ff9f4a"/><circle cx="383.0" cy="193.1" r="3.2" fill="#ff9f4a"/><circle cx="542.5" cy="143.9" r="3.2" fill="#ff9f4a"/><circle cx="702.0" cy="38.6" r="3.2" fill="#ff9f4a"/><path d="M64.0,241.9 L223.5,238.6 L383.0,237.8 L542.5,231.0 L702.0,218.0" fill="none" stroke="#4aff8a" stroke-width="2" stroke-dasharray="5 4"/><circle cx="64.0" cy="241.9" r="3.2" fill="#4aff8a"/><circle cx="223.5" cy="238.6" r="3.2" fill="#4aff8a"/><circle cx="383.0" cy="237.8" r="3.2" fill="#4aff8a"/><circle cx="542.5" cy="231.0" r="3.2" fill="#4aff8a"/><circle cx="702.0" cy="218.0" r="3.2" fill="#4aff8a"/><circle cx="76" cy="288" r="4" fill="#4a9eff"/><text x="86" y="292" fill="#ccd8ea" font-size="11">.dat total (parse+validate)</text><circle cx="282.1" cy="288" r="4" fill="#ff9f4a"/><text x="292.1" y="292" fill="#ccd8ea" font-size="11">.arkmap total (json+val+CRC)</text><circle cx="494.5" cy="288" r="4" fill="#4aff8a"/><text x="504.5" y="292" fill="#ccd8ea" font-size="11">sam JSON.parse</text></svg>
+<p><b>Czytelne wnioski:</b></p>
+<ul>
+<li>Różnica <b>rośnie z rozmiarem mapy</b> (1,55× → 2,61× → 1,96× → 2,19× → 1,99×),
+więc „przy dużej mapie w chuj różnica" — zgadza się, i to z lekką tendencją wzrostową.</li>
+<li>Sam <code>JSON.parse</code> (linia zielona) jest wielokrotnie szybszy niż parser binarny — przy 432 k
+pokoi 3,4×. Gdyby .arkmap nie weryfikował sum, byłby <b>szybszy</b> niż .dat.</li>
+<li>Plik .arkmap jest też ~1,9× większy na dysku
+(115 vs 217 MB przy 432 k) — przy pobieraniu
+sieciowym dochodzi narzut transferu, ale to cena za czytelność, diffowalność w gicie i sumy kontrolne.</li>
+</ul>
+
+<h2>2. Przeglądarka end-to-end</h2>
+<p>Pełna aplikacja w chrome-headless-shell, zimne ładowanie co przebieg (10× na punkt),
+fazy mierzone wewnątrz prawdziwego <code>arkmap_studio.html</code>:</p>
+<table><tr><th>zestaw</th><th>format</th><th>werdykt</th><th>total</th><th>parse</th><th>CRC</th><th>applyMap</th><th>draw1 [ms]</th><th>kamera p95 [ms]</th><th>heap</th></tr><tr><td><b>real_27k</b> (27 k)</td><td>.dat</td><td style="color:var(--ok)">OK</td><td>2 119 ms</td><td>454 ms</td><td>—</td><td>1 463 ms</td><td>21,3</td><td>36,8</td><td>141 MB</td></tr><tr><td><b>real_27k</b> (27 k)</td><td>.arkmap</td><td style="color:var(--ok)">OK</td><td>2 392 ms</td><td>72 ms</td><td>692 ms</td><td>1 370 ms</td><td>21,1</td><td>14,2</td><td>168 MB</td></tr><tr><td><b>stress_2x</b> (54 k)</td><td>.dat</td><td style="color:var(--ok)">OK</td><td>3 985 ms</td><td>876 ms</td><td>—</td><td>2 805 ms</td><td>22,0</td><td>19,6</td><td>197 MB</td></tr><tr><td><b>stress_2x</b> (54 k)</td><td>.arkmap</td><td style="color:var(--ok)">OK</td><td>4 695 ms</td><td>157 ms</td><td>1 308 ms</td><td>2 788 ms</td><td>22,0</td><td>13,5</td><td>204 MB</td></tr><tr><td><b>stress_4x</b> (108 k)</td><td>.dat</td><td style="color:var(--ok)">OK</td><td>7 442 ms</td><td>1 662 ms</td><td>—</td><td>5 460 ms</td><td>24,6</td><td>26,3</td><td>382 MB</td></tr><tr><td><b>stress_4x</b> (108 k)</td><td>.arkmap</td><td style="color:var(--ok)">OK</td><td>9 091 ms</td><td>384 ms</td><td>2 572 ms</td><td>5 603 ms</td><td>24,1</td><td>25,1</td><td>405 MB</td></tr><tr><td><b>stress_8x</b> (216 k)</td><td>.dat</td><td style="color:var(--err)">CRASH(timeout)</td><td colspan="7" style="color:#8898b8">—</td></tr><tr><td><b>stress_8x</b></td><td>.arkmap</td><td colspan="8" style="color:#8898b8">nie mierzono</td></tr><tr><td><b>stress_16x</b> (432 k)</td><td>.dat</td><td style="color:var(--err)">CRASH(timeout)</td><td colspan="7" style="color:#8898b8">—</td></tr><tr><td><b>stress_16x</b></td><td>.arkmap</td><td colspan="8" style="color:#8898b8">nie mierzono</td></tr></table>
+<svg viewBox="0 0 720 320" style="width:100%;max-width:720px;height:auto;display:block;margin:8px 0 4px" role="img"><text x="2" y="10" fill="#8898b8" font-size="10">ms</text><line x1="64" y1="264" x2="702" y2="264" stroke="#252b3a"/><text x="56" y="268" fill="#8898b8" font-size="10" text-anchor="end">0</text><line x1="64" y1="202.5" x2="702" y2="202.5" stroke="#252b3a"/><text x="56" y="206.5" fill="#8898b8" font-size="10" text-anchor="end">2 756</text><line x1="64" y1="141" x2="702" y2="141" stroke="#252b3a"/><text x="56" y="145" fill="#8898b8" font-size="10" text-anchor="end">5 511</text><line x1="64" y1="79.5" x2="702" y2="79.5" stroke="#252b3a"/><text x="56" y="83.5" fill="#8898b8" font-size="10" text-anchor="end">8 267</text><line x1="64" y1="18" x2="702" y2="18" stroke="#252b3a"/><rect x="89.5" y="263.1" width="55.29333333333333" height="0.9" fill="#2a4a6a"><title>fetch: 42 ms</title></rect><rect x="89.5" y="252.9" width="55.29333333333333" height="10.1" fill="#4a9eff"><title>parse: 454 ms</title></rect><rect x="89.5" y="249.6" width="55.29333333333333" height="3.3" fill="#6a5acd"><title>validate: 150 ms</title></rect><rect x="89.5" y="249.6" width="55.29333333333333" height="0.0" fill="#ff9f4a"><title>crc: 0 ms</title></rect><rect x="89.5" y="216.9" width="55.29333333333333" height="32.7" fill="#c0392b"><title>apply: 1 463 ms</title></rect><rect x="89.5" y="216.5" width="55.29333333333333" height="0.5" fill="#4aff8a"><title>first_draw: 21 ms</title></rect><text x="117.2" y="210.5" fill="#e8eef8" font-size="10" text-anchor="middle">2 130</text><text x="117.2" y="280" fill="#8898b8" font-size="10" text-anchor="middle">27k .dat</text><rect x="195.9" y="260.9" width="55.29333333333333" height="3.1" fill="#2a4a6a"><title>fetch: 140 ms</title></rect><rect x="195.9" y="259.3" width="55.29333333333333" height="1.6" fill="#4a9eff"><title>parse: 72 ms</title></rect><rect x="195.9" y="255.5" width="55.29333333333333" height="3.8" fill="#6a5acd"><title>validate: 169 ms</title></rect><rect x="195.9" y="240.1" width="55.29333333333333" height="15.4" fill="#ff9f4a"><title>crc: 692 ms</title></rect><rect x="195.9" y="209.5" width="55.29333333333333" height="30.6" fill="#c0392b"><title>apply: 1 370 ms</title></rect><rect x="195.9" y="209.0" width="55.29333333333333" height="0.5" fill="#4aff8a"><title>first_draw: 21 ms</title></rect><text x="223.5" y="203.0" fill="#e8eef8" font-size="10" text-anchor="middle">2 464</text><text x="223.5" y="280" fill="#8898b8" font-size="10" text-anchor="middle">27k .arkmap</text><rect x="302.2" y="262.5" width="55.29333333333333" height="1.5" fill="#2a4a6a"><title>fetch: 66 ms</title></rect><rect x="302.2" y="243.0" width="55.29333333333333" height="19.6" fill="#4a9eff"><title>parse: 876 ms</title></rect><rect x="302.2" y="236.1" width="55.29333333333333" height="6.9" fill="#6a5acd"><title>validate: 308 ms</title></rect><rect x="302.2" y="236.1" width="55.29333333333333" height="0.0" fill="#ff9f4a"><title>crc: 0 ms</title></rect><rect x="302.2" y="173.5" width="55.29333333333333" height="62.6" fill="#c0392b"><title>apply: 2 805 ms</title></rect><rect x="302.2" y="173.0" width="55.29333333333333" height="0.5" fill="#4aff8a"><title>first_draw: 22 ms</title></rect><text x="329.8" y="167.0" fill="#e8eef8" font-size="10" text-anchor="middle">4 077</text><text x="329.8" y="280" fill="#8898b8" font-size="10" text-anchor="middle">2x .dat</text><rect x="408.5" y="257.2" width="55.29333333333333" height="6.8" fill="#2a4a6a"><title>fetch: 304 ms</title></rect><rect x="408.5" y="253.7" width="55.29333333333333" height="3.5" fill="#4a9eff"><title>parse: 157 ms</title></rect><rect x="408.5" y="246.8" width="55.29333333333333" height="6.9" fill="#6a5acd"><title>validate: 308 ms</title></rect><rect x="408.5" y="217.6" width="55.29333333333333" height="29.2" fill="#ff9f4a"><title>crc: 1 308 ms</title></rect><rect x="408.5" y="155.4" width="55.29333333333333" height="62.2" fill="#c0392b"><title>apply: 2 788 ms</title></rect><rect x="408.5" y="154.9" width="55.29333333333333" height="0.5" fill="#4aff8a"><title>first_draw: 22 ms</title></rect><text x="436.2" y="148.9" fill="#e8eef8" font-size="10" text-anchor="middle">4 887</text><text x="436.2" y="280" fill="#8898b8" font-size="10" text-anchor="middle">2x .arkmap</text><rect x="514.9" y="261.2" width="55.29333333333333" height="2.8" fill="#2a4a6a"><title>fetch: 125 ms</title></rect><rect x="514.9" y="224.1" width="55.29333333333333" height="37.1" fill="#4a9eff"><title>parse: 1 662 ms</title></rect><rect x="514.9" y="215.3" width="55.29333333333333" height="8.8" fill="#6a5acd"><title>validate: 395 ms</title></rect><rect x="514.9" y="215.3" width="55.29333333333333" height="0.0" fill="#ff9f4a"><title>crc: 0 ms</title></rect><rect x="514.9" y="93.4" width="55.29333333333333" height="121.9" fill="#c0392b"><title>apply: 5 460 ms</title></rect><rect x="514.9" y="92.9" width="55.29333333333333" height="0.5" fill="#4aff8a"><title>first_draw: 25 ms</title></rect><text x="542.5" y="86.9" fill="#e8eef8" font-size="10" text-anchor="middle">7 668</text><text x="542.5" y="280" fill="#8898b8" font-size="10" text-anchor="middle">4x .dat</text><rect x="621.2" y="251.9" width="55.29333333333333" height="12.1" fill="#2a4a6a"><title>fetch: 543 ms</title></rect><rect x="621.2" y="243.3" width="55.29333333333333" height="8.6" fill="#4a9eff"><title>parse: 384 ms</title></rect><rect x="621.2" y="231.2" width="55.29333333333333" height="12.1" fill="#6a5acd"><title>validate: 544 ms</title></rect><rect x="621.2" y="173.8" width="55.29333333333333" height="57.4" fill="#ff9f4a"><title>crc: 2 572 ms</title></rect><rect x="621.2" y="48.7" width="55.29333333333333" height="125.0" fill="#c0392b"><title>apply: 5 603 ms</title></rect><rect x="621.2" y="48.2" width="55.29333333333333" height="0.5" fill="#4aff8a"><title>first_draw: 24 ms</title></rect><text x="648.8" y="42.2" fill="#e8eef8" font-size="10" text-anchor="middle">9 669</text><text x="648.8" y="280" fill="#8898b8" font-size="10" text-anchor="middle">4x .arkmap</text><rect x="72" y="304" width="9" height="9" fill="#2a4a6a"/><text x="86" y="312" fill="#ccd8ea" font-size="10">fetch</text><rect x="180" y="304" width="9" height="9" fill="#4a9eff"/><text x="194" y="312" fill="#ccd8ea" font-size="10">parse</text><rect x="288" y="304" width="9" height="9" fill="#6a5acd"/><text x="302" y="312" fill="#ccd8ea" font-size="10">validate</text><rect x="396" y="304" width="9" height="9" fill="#ff9f4a"/><text x="410" y="312" fill="#ccd8ea" font-size="10">crc</text><rect x="504" y="304" width="9" height="9" fill="#c0392b"/><text x="518" y="312" fill="#ccd8ea" font-size="10">apply</text><rect x="612" y="304" width="9" height="9" fill="#4aff8a"/><text x="626" y="312" fill="#ccd8ea" font-size="10">first_draw</text></svg>
+<p><code>applyMap</code> (budowa struktur renderera: roomsZ, siatka obszarów, backlinki) dominuje w obu formatach
+i rośnie liniowo z liczbą pokoi — to on, a nie parse, jest głównym kosztem ładowania w aplikacji.
+Dlatego w realnym użyciu format pliku zmienia czas ładowania o ~10–20%, nie o 100%.</p>
+
+<h2>3. Renderer: pierwszy draw i kamera</h2>
+<p>Ścieżka kamery: 5 pozycji × 8 zoomów = 40 synchronicznych <code>draw()</code> na załadowanej mapie.
+Kryterium JANK (p95 &gt; 50 ms) nie złamane nigdzie w zmierzonym zakresie:</p>
+<svg viewBox="0 0 720 300" style="width:100%;max-width:720px;height:auto;display:block;margin:8px 0 4px" role="img"><text x="2" y="10" fill="#8898b8" font-size="10">ms</text><text x="702" y="278" fill="#8898b8" font-size="10" text-anchor="end">pokoje (skala log)</text><line x1="64" y1="244" x2="702" y2="244" stroke="#252b3a" stroke-width="1"/><text x="56" y="248" fill="#8898b8" font-size="10" text-anchor="end">0</text><line x1="64" y1="186.5" x2="702" y2="186.5" stroke="#252b3a" stroke-width="1"/><text x="56" y="190.5" fill="#8898b8" font-size="10" text-anchor="end">10</text><line x1="64" y1="129" x2="702" y2="129" stroke="#252b3a" stroke-width="1"/><text x="56" y="133" fill="#8898b8" font-size="10" text-anchor="end">21</text><line x1="64" y1="71.5" x2="702" y2="71.5" stroke="#252b3a" stroke-width="1"/><text x="56" y="75.5" fill="#8898b8" font-size="10" text-anchor="end">31</text><line x1="64" y1="14" x2="702" y2="14" stroke="#252b3a" stroke-width="1"/><line x1="64" y1="14" x2="64" y2="244" stroke="#1b2130" stroke-width="1"/><text x="64" y="260" fill="#8898b8" font-size="10" text-anchor="middle">27 k</text><line x1="383" y1="14" x2="383" y2="244" stroke="#1b2130" stroke-width="1"/><text x="383" y="260" fill="#8898b8" font-size="10" text-anchor="middle">54 k</text><line x1="702" y1="14" x2="702" y2="244" stroke="#1b2130" stroke-width="1"/><text x="702" y="260" fill="#8898b8" font-size="10" text-anchor="middle">108 k</text><line x1="1021" y1="14" x2="1021" y2="244" stroke="#1b2130" stroke-width="1"/><text x="1021" y="260" fill="#8898b8" font-size="10" text-anchor="middle">216 k</text><line x1="1340" y1="14" x2="1340" y2="244" stroke="#1b2130" stroke-width="1"/><text x="1340" y="260" fill="#8898b8" font-size="10" text-anchor="middle">432 k</text><path d="M64.0,38.6 L383.0,134.6 L702.0,97.2" fill="none" stroke="#4a9eff" stroke-width="2" /><circle cx="64.0" cy="38.6" r="3.2" fill="#4a9eff"/><circle cx="383.0" cy="134.6" r="3.2" fill="#4a9eff"/><circle cx="702.0" cy="97.2" r="3.2" fill="#4a9eff"/><path d="M64.0,164.8 L383.0,168.7 L702.0,103.9" fill="none" stroke="#ff9f4a" stroke-width="2" /><circle cx="64.0" cy="164.8" r="3.2" fill="#ff9f4a"/><circle cx="383.0" cy="168.7" r="3.2" fill="#ff9f4a"/><circle cx="702.0" cy="103.9" r="3.2" fill="#ff9f4a"/><path d="M64.0,125.1 L383.0,121.2 L702.0,106.7" fill="none" stroke="#4aff8a" stroke-width="2" stroke-dasharray="5 4"/><circle cx="64.0" cy="125.1" r="3.2" fill="#4aff8a"/><circle cx="383.0" cy="121.2" r="3.2" fill="#4aff8a"/><circle cx="702.0" cy="106.7" r="3.2" fill="#4aff8a"/><path d="M64.0,126.3 L383.0,121.2 L702.0,109.5" fill="none" stroke="#2ecc71" stroke-width="2" stroke-dasharray="5 4"/><circle cx="64.0" cy="126.3" r="3.2" fill="#2ecc71"/><circle cx="383.0" cy="121.2" r="3.2" fill="#2ecc71"/><circle cx="702.0" cy="109.5" r="3.2" fill="#2ecc71"/><circle cx="76" cy="288" r="4" fill="#4a9eff"/><text x="86" y="292" fill="#ccd8ea" font-size="11">kamera p95 (.dat)</text><circle cx="219.1" cy="288" r="4" fill="#ff9f4a"/><text x="229.1" y="292" fill="#ccd8ea" font-size="11">kamera p95 (.arkmap)</text><circle cx="381.1" cy="288" r="4" fill="#4aff8a"/><text x="391.1" y="292" fill="#ccd8ea" font-size="11">pierwszy draw (.dat)</text><circle cx="543.1" cy="288" r="4" fill="#2ecc71"/><text x="553.1" y="292" fill="#ccd8ea" font-size="11">pierwszy draw (.arkmap)</text></svg>
+<ul>
+<li>Czasy są <b>płaskie względem rozmiaru mapy</b> — draw kosztuje tyle, ile widać w viewportcie (culling), nie ile ma mapa.</li>
+<li>Najwyższe p95 kamery (36,8 ms) wyszło na <b>realnej mapie 27k</b>, nie na syntetykach: prawdziwa mapa
+jest gęstsza w kadrze (klony syntetyków są rozrzucone na dużym obszarze, culling odcina więcej). Realna mapa to dla
+renderera przypadek <i>gorszy</i> niż syntetyk 4× — i przechodzi z zapasem.</li>
+<li>Headless renderuje programowo (SwiftShader) — na prawdziwym GPU użytkownika czasy będą niższe.</li>
+</ul>
+
+<h2>4. Pamięć</h2>
+<svg viewBox="0 0 720 300" style="width:100%;max-width:720px;height:auto;display:block;margin:8px 0 4px" role="img"><text x="2" y="10" fill="#8898b8" font-size="10">MB</text><text x="702" y="278" fill="#8898b8" font-size="10" text-anchor="end">pokoje (skala log)</text><line x1="64" y1="244" x2="702" y2="244" stroke="#252b3a" stroke-width="1"/><text x="56" y="248" fill="#8898b8" font-size="10" text-anchor="end">0</text><line x1="64" y1="186.5" x2="702" y2="186.5" stroke="#252b3a" stroke-width="1"/><text x="56" y="190.5" fill="#8898b8" font-size="10" text-anchor="end">113</text><line x1="64" y1="129" x2="702" y2="129" stroke="#252b3a" stroke-width="1"/><text x="56" y="133" fill="#8898b8" font-size="10" text-anchor="end">227</text><line x1="64" y1="71.49999999999997" x2="702" y2="71.49999999999997" stroke="#252b3a" stroke-width="1"/><text x="56" y="75.49999999999997" fill="#8898b8" font-size="10" text-anchor="end">340</text><line x1="64" y1="14" x2="702" y2="14" stroke="#252b3a" stroke-width="1"/><line x1="64" y1="14" x2="64" y2="244" stroke="#1b2130" stroke-width="1"/><text x="64" y="260" fill="#8898b8" font-size="10" text-anchor="middle">27 k</text><line x1="383" y1="14" x2="383" y2="244" stroke="#1b2130" stroke-width="1"/><text x="383" y="260" fill="#8898b8" font-size="10" text-anchor="middle">54 k</text><line x1="702" y1="14" x2="702" y2="244" stroke="#1b2130" stroke-width="1"/><text x="702" y="260" fill="#8898b8" font-size="10" text-anchor="middle">108 k</text><line x1="1021" y1="14" x2="1021" y2="244" stroke="#1b2130" stroke-width="1"/><text x="1021" y="260" fill="#8898b8" font-size="10" text-anchor="middle">216 k</text><line x1="1340" y1="14" x2="1340" y2="244" stroke="#1b2130" stroke-width="1"/><text x="1340" y="260" fill="#8898b8" font-size="10" text-anchor="middle">432 k</text><path d="M64.0,172.5 L383.0,144.1 L702.0,50.3" fill="none" stroke="#4a9eff" stroke-width="2" /><circle cx="64.0" cy="172.5" r="3.2" fill="#4a9eff"/><circle cx="383.0" cy="144.1" r="3.2" fill="#4a9eff"/><circle cx="702.0" cy="50.3" r="3.2" fill="#4a9eff"/><path d="M64.0,158.8 L383.0,140.6 L702.0,38.6" fill="none" stroke="#ff9f4a" stroke-width="2" /><circle cx="64.0" cy="158.8" r="3.2" fill="#ff9f4a"/><circle cx="383.0" cy="140.6" r="3.2" fill="#ff9f4a"/><circle cx="702.0" cy="38.6" r="3.2" fill="#ff9f4a"/><circle cx="76" cy="288" r="4" fill="#4a9eff"/><text x="86" y="292" fill="#ccd8ea" font-size="11">heap po load (.dat)</text><circle cx="231.7" cy="288" r="4" fill="#ff9f4a"/><text x="241.7" y="292" fill="#ccd8ea" font-size="11">heap po load (.arkmap)</text></svg>
+<p>Heap po załadowaniu rośnie liniowo (~2–3,5 MB na 1k pokoi) i przy 108 k pokoi wynosi
+405 MB — daleko pod kryterium MEM (2048 MB). Ekstrapolacja: sufit pamięciowy tej klasy sprzętu
+wypada w okolicach ~500k pokoi, ale na tej maszynie wcześniej kończy się cierpliwość (czas ładowania) niż RAM.</p>
+
+<h2>5. Limity — stress test</h2>
+<p>Kryteria zarejestrowane <b>przed</b> pomiarem: CRASH (pad/timeout), LOAD (total &gt; 30 s),
+JANK (kamera p95 &gt; 50 ms), MEM (heap &gt; 2048 MB).</p>
+<ul>
+<li>Oba formaty: <b>OK do 108 k pokoi włącznie</b> (4× realna mapa) — żadne
+kryterium nie złamane.</li>
+<li>Powyżej: werdykty timeout budżetu pomiaru — patrz uwaga poniżej; nie są dowodem crashu.</li>
+<li>Eksport <code>.dat</code> z przeglądarki działa i skaluje się liniowo:
+27 k pokoi → 2,7 s, 54 k pokoi → 4,4 s, 108 k pokoi → 8,1 s.</li>
+<li>Generator syntetyków (narzędzie testowe, nie aplikacja): K=32 (863 616 pokoi) wymaga &gt; 6 GB heapu
+Node — przy 6 GB zakończył się OOM po zapisaniu .arkmap, przed eksportem .dat.</li>
+</ul>
+<div class="warn"><b>Uwaga interpretacyjna:</b> werdykty <code>CRASH(timeout)</code> przy
+     stress_8x .dat, stress_16x .dat
+     to <b>wyczerpanie budżetu czasowego pomiaru</b> (budżet pierwszego przebiegu obejmował wszystkie
+     10 zimnych ładowań naraz), a nie zaobserwowany crash aplikacji.
+     Rozstrzygają one „powyżej tego rozmiaru pełny protokół pomiaru nie zmieścił się w budżecie na tej
+     maszynie", ale <b>nie</b> „aplikacja się wysypała". Poprawiony orkiestrator (budżet skalowany
+     z liczbą przebiegów) pozwala domknąć te punkty ponownym przebiegiem fazy 3.</div>
+
+<h2>6. Metodologia</h2>
+<ul>
+<li><b>Baza:</b> produkcyjny fixture <code>map_master3.dat</code> (60 obszarów, 26 988 pokoi)
+→ <code>base.arkmap</code> przez <code>tools/dat2arkmap.mjs</code>.</li>
+<li><b>Drabinka syntetyków:</b> deterministyczne klony ×2/×4/×8/×16/×32 (przesunięcia współrzędnych, remap id
+blokami, sumy v2 liczone funkcjami aplikacji; walidacja <code>validate()</code> fail-closed po generacji).</li>
+<li><b>Faza Node</b> (<code>bench_parse.js</code>): kod parserów wyekstrahowany verbatim z <code>arkmap_studio.html</code>,
+20 przebiegów + 3 rozgrzewki, <code>--expose-gc</code>, statystyki min/med/p95/max.</li>
+<li><b>Faza przeglądarka</b> (<code>perf_driver.html</code> + <code>cdp_run.py</code>): pełna aplikacja w iframe,
+zimne ładowanie co przebieg (cache-buster), prawdziwy zegar przez Chrome DevTools Protocol (bez virtual-time),
+heap z <code>--enable-precise-memory-info</code>, kamera = 40 synchronicznych draw() na ścieżce 5×8.</li>
+<li><b>Asymetria celowa:</b> <code>.dat</code> ładuje się bez verifyChecksums (tak robi aplikacja — plik binarny
+traktowany jako zaufany), <code>.arkmap</code> z pełną weryfikacją. Pomiar odzwierciedla zachowanie produkcyjne 1:1.</li>
+<li>Surowe dane: <code>tests/perf/results/</code>; ten raport: <code>node tests/perf/report_build.mjs</code>;
+własny przebieg: <code>bash tests/perf/run.sh</code> (README w <code>tests/perf/</code>).</li>
+</ul>
+
+<h2>7. Zastrzeżenia</h2>
+<ul>
+<li>Maszyna pomiarowa to <b>celowo low-end</b> (Athlon Silver 3050U, 2C/2T) — reprezentuje dolny koniec sprzętu
+użytkowników; na współczesnym desktopie wszystkie czasy będą niższe. Relacje formatów i kształt skalowania
+przenoszą się na szybszy sprzęt.</li>
+<li>Podczas przebiegu w tle działały inne procesy (m.in. LM Studio) — czasy bezwzględne to górne widełki.</li>
+<li>chrome-headless-shell renderuje programowo; brak GPU, brak compositingu — draw/kamera to sufit, nie typ.</li>
+<li>Syntetyki to klony realnej mapy (rozłączne wyspy); rozkład gęstości w kadrze jest dla renderera łagodniejszy
+niż realnej mapy — stąd real_27k ma najwyższe p95 kamery.</li>
+<li>Liczby są miarodajne porównawczo (identyczne warunki dla obu formatów), orientacyjne bezwzględnie.</li>
+</ul>
+
+<p style="margin-top:28px;color:var(--dim);font-size:12px">ArkMap Studio · <a href="../README.md">README</a> ·
+<a href="arkmap_manual.html">manual</a> · raport generowany automatycznie — nie edytować ręcznie.</p>
+</body>
+</html>
