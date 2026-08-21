@@ -43,6 +43,7 @@ node tests/xss_sinks.js      # XSS (v1.43.1): escHtml na interpolacjach danych z
 node tests/malformed_dat.js  # negatywne .dat: obciecia, granice readQString, uszkodzone chunki pixmapy
 node tests/validate_full.js  # walidator .arkmap: validateFont/UserData/Label/Area/top-level
 node tests/universal_colors.js # uniwersalne kolory (v1.43.3): detekcja Arkadii, golden 51 envId, mapa obca
+node tests/legacy_crc.js      # legacy sumy v1 (v1.43.7): verifyChecksums honoruje alg, replika lustra online
 ```
 
 albo wszystkie naraz:

@@ -2,6 +2,33 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.43.7 — legacy sumy v1 + przeliczone lustro online (Arc 16)
+
+Zgloszenie usera: „Pobierz online → .arkmap" pokazywalo falszywe
+„Suma kontrolna pliku: niezgodna" (60/60 obszarow, 0 pokoi). Przyczyna:
+produkcyjne lustro (sync 2026-08-19 07:36, tooling sprzed v1.38.0) nioslo
+legacy sumy v1 (meta.checksums bez pola alg), a verifyChecksums ignorowal
+alg i liczyl zawsze formulami v2 — obszary i plik „niezgodne", pokoje OK
+(formuła pokoju identyczna v1/v2). Repro bitowe na pliku produkcyjnym.
+
+- verifyChecksums rozdziela po stored.alg: v2 jak dotad; brak alg →
+  zamrozone formuly v1 (_crcAreaV1/_crcFileV1 verbatim z 41671a7^ — NIE
+  ZMIENIAC) z flaga legacy; nieznany alg → neutralne pominiecie.
+  Korupcja w pliku v1 nadal wykrywana (pokoje, rollup obszarow); limit
+  formatu: v1 nie kryl pol obszaru — zapis podnosi sumy do v2.
+- Dialog: legacy-OK → „OK (starszy format v1 — przeliczy sie przy
+  zapisie)"; toast „[✓ suma kontrolna v1]"; nieznany alg → notka.
+- Lustro: map_master3.arkmap na galezi mapa przeliczony toolingiem v2
+  (commit 904653e; zawartosc mapy identyczna poza meta.checksums,
+  index.json: arkmap_size + synced_at). Produkcja serwuje alg v2.
+- sync-map.yml: krok self-check — opublikowany .arkmap musi przechodzic
+  wlasny verifyChecksums (fail-closed; symulowany krok CI zielony).
+- Nowy harness tests/legacy_crc.js (18 asercji, repro-first: 9 FAIL →
+  fix → PASS). Piny self-checka w sync_map.js. Spec §15: semantyka alg;
+  manual: notka o starszych plikach.
+- run-all.sh: domknieta luka od Arc 13 (universal_colors.js nie byl w
+  petli!) + legacy_crc.js — regresja to teraz 27 harnessow.
+
 ## v1.43.6 — szersze ciasne okna aktywne (Arc 15)
 
 Audyt UX okien (kontynuacja Arc 14): przyciski stopki nie miescily sie

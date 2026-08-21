@@ -593,6 +593,10 @@
 
 <p>All CRC values are stored as 8-character lowercase hexadecimal strings.</p>
 
+<h3>Algorithm versioning (<code>alg</code>)</h3>
+<p>Files saved before ArkMap Studio v1.38.0 carry <em>legacy v1 checksums</em> with no <code>alg</code> field: the area CRC was a plain rollup — CRC-32 of the concatenated room CRCs — and the file CRC was CRC-32 of the concatenated area CRCs (no <code>"a2:"</code>/<code>"f2:"</code> prefixes, no area attributes, no <code>colors</code> in scope). The room CRC formula is identical in v1 and v2.</p>
+<p>Verifiers MUST dispatch on <code>alg</code>: <code>"v2"</code> → v2 formulas; <em>absent</em> → the frozen v1 formulas; any other value → skip verification silently (never report a mismatch). Legacy scope note: v1 does not cover area attributes (name, labels, user_data), so it cannot detect their modification — re-saving the file upgrades its checksums to v2.</p>
+
 <h3>Verification</h3>
 <p>On load, recompute from bottom up and compare. Mismatches indicate the file was modified externally (hand-edited JSON, merge conflict resolution, etc.). Mismatches are warnings, not fatal errors.</p>
 

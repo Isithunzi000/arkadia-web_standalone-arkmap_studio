@@ -111,6 +111,24 @@ jobs:
           node tools/dat2arkmap.mjs map_master3.dat map_master3.arkmap \
             --version "${{ steps.gate.outputs.tag }}" --revision "${{ steps.gate.outputs.rev }}"
 
+      # Arc 16: opublikowany plik MUSI przechodzic wlasny verifyChecksums z main —
+      # lustro z sumami v1 (sprzed v1.38.0) straszylo userow falszywym „plik uszkodzony".
+      - name: Self-check .arkmap wlasnym verifierem (fail-closed)
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs = require("fs");
+            const html = fs.readFileSync("arkmap_studio.html", "utf8");
+            const fn = n => { const m = html.match(new RegExp("function " + n + "\\b[\\s\\S]*?\\n\\}", "m")); if (!m) throw new Error("brak funkcji: " + n); return m[0]; };
+            const tbl = html.match(/const CRC32_TABLE = \(\(\) => \{[\s\S]*?\}\)\(\);/)[0];
+            eval(tbl + "\n" + ["crc32str", "stableStringify", "_stripRoomDefaults", "_crcRoom", "_stripAreaForCrc", "_crcArea", "_crcFile", "_crcAreaV1", "_crcFileV1", "verifyChecksums"].map(fn).join("\n"));
+            const m = JSON.parse(fs.readFileSync("map_master3.arkmap", "utf8"));
+            const r = verifyChecksums(m);
+            if (!r.ok) { console.error("SELF-CHECK FAIL:", JSON.stringify({ fileOk: r.fileOk, badAreas: r.badAreas.length, badRooms: r.badRooms.length })); process.exit(1); }
+            console.log("self-check OK: alg=" + (m.meta.checksums.alg || "v1-legacy") + ", verifyChecksums ok");
+          '
+
       - name: index.json
         if: steps.gate.outputs.changed == 'true'
         run: |

@@ -123,6 +123,13 @@ console.log('— timeouty (struktura) —');
   ok(WF.includes('timeout 90 git fetch'), 'workflow: timeout na fetch gałęzi mapa');
   ok(WF.includes('timeout 120 git push'), 'workflow: timeout na force-push');
   ok(WF.includes('timeout-minutes: 10'), 'workflow: siatka job-level 10 min');
+  // Arc 16: self-check opublikowanego .arkmap wlasnym verifierem (lustro z sumami v1
+  // straszylo userow falszywym „plik uszkodzony" — nigdy wiecej)
+  ok(WF.includes('Self-check .arkmap wlasnym verifierem (fail-closed)'), 'workflow: krok self-check obecny');
+  ok(WF.indexOf('Self-check .arkmap wlasnym verifierem') > WF.indexOf('Konwersja do .arkmap')
+     && WF.indexOf('Self-check .arkmap wlasnym verifierem') < WF.indexOf('- name: index.json'),
+     'workflow: self-check PO konwersji, PRZED index.json');
+  ok(WF.includes('_crcAreaV1') && WF.includes('verifyChecksums'), 'workflow: self-check ekstrahuje verifier + formuly v1');
   const a = HTML.indexOf('// ─── ONLINE LOAD'), b = HTML.indexOf('// ─── WAYPOINT PLANNER');
   const OL = HTML.slice(a, b);
   ok((OL.match(/new AbortController\(\)/g) || []).length === 2, 'UI: AbortController ×2 (index.json + pliki)');

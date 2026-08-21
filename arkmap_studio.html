@@ -4789,11 +4789,25 @@ function addChecksums(arkmap) {
   return arkmap;
 }
 
+// Zamrozone formuly CRC v1 (pliki zapisane przed v1.38.0 — meta.checksums bez pola alg).
+// NIE ZMIENIAC: musza pozostac zgodne z 41671a7^, inaczej wszystkie stare pliki dostana
+// falszywe ostrzezenie o uszkodzeniu (Arc 16 — lustro online nioslo v1, straszylo userow).
+function _crcAreaV1(roomCrcs) {
+  return crc32str(roomCrcs.join(''));
+}
+function _crcFileV1(areaCrcs) {
+  return crc32str(areaCrcs.join(''));
+}
+
 // verifyChecksums(arkmap) — weryfikuje checksums hierarchicznie.
 // Zwraca: { present, ok, fileOk, badAreas:[{id,name}], badRooms:[{roomId,areaId,areaName}] }
 function verifyChecksums(arkmap) {
   const stored = arkmap.meta?.checksums;
   if (!stored?.file) return { present: false, ok: true, fileOk: true, badAreas: [], badRooms: [], missingRooms: [] };
+  // Arc 16: rozdzial po alg — nieznany alg = neutralne pominiecie (nie straszymy).
+  if (stored.alg && stored.alg !== 'v2')
+    return { present: false, ok: true, fileOk: true, badAreas: [], badRooms: [], missingRooms: [], unknownAlg: String(stored.alg) };
+  const legacy = !stored.alg;  // Arc 16: pliki sprzed v1.38.0 nie mialy pola alg → zamrozone formuly v1
 
   const badAreas = [], badRooms = [], missingRooms = [];  // audyt T3/W3: pokoje bez wpisu w stored.rooms = plik mutowany bez przeliczenia sum
   const sortedAreas = [...(arkmap.areas || [])].sort((a, b) => a.id - b.id);
@@ -4813,7 +4827,7 @@ function verifyChecksums(arkmap) {
       }
     }
 
-    const computedArea = _crcArea(area, computedRoomCrcs);  // audyt T3/W3
+    const computedArea = legacy ? _crcAreaV1(computedRoomCrcs) : _crcArea(area, computedRoomCrcs);  // audyt T3/W3 + Arc 16
     computedAreaCrcs.push(computedArea);
     const storedA = stored.areas?.[String(area.id)];
     if (storedA && computedArea !== storedA) {
@@ -4821,10 +4835,10 @@ function verifyChecksums(arkmap) {
     }
   }
 
-  const computedFile = _crcFile(computedAreaCrcs, arkmap.colors);  // audyt T3/W3
+  const computedFile = legacy ? _crcFileV1(computedAreaCrcs) : _crcFile(computedAreaCrcs, arkmap.colors);  // audyt T3/W3 + Arc 16
   const fileOk = computedFile === stored.file;
   const ok = fileOk && badAreas.length === 0 && badRooms.length === 0 && missingRooms.length === 0;
-  return { present: true, ok, fileOk, badAreas, badRooms, missingRooms };
+  return { present: true, ok, fileOk, badAreas, badRooms, missingRooms, legacy };
 }
 
 
@@ -6292,7 +6306,7 @@ async function loadArkmap(text, filename) {
 
   state.filename = filename || null;
   applyMap(map);
-  const label = chkRes.present ? (chkRes.ok ? ' [✓ suma kontrolna]' : ' [⚠ suma kontrolna]') : '';
+  const label = chkRes.present ? (chkRes.ok ? (chkRes.legacy ? ' [✓ suma kontrolna v1]' : ' [✓ suma kontrolna]') : ' [⚠ suma kontrolna]') : '';
   const allOk = valRes.ok && !hasWarnings && (!chkRes.present || chkRes.ok);
   toast((allOk ? '✓' : '⚠') + ' Wczytano: ' + (filename || 'plik') + fmtSz(text.length) + ' [.arkmap]' + label);
 }
@@ -12281,7 +12295,9 @@ resize();
       if (chkRes.present) {
         if (chkRes.ok) {
           const ok = document.createElement('div'); ok.className = 'val-ok-line';
-          ok.textContent = '✓ Suma kontrolna pliku: OK';
+          ok.textContent = chkRes.legacy
+            ? '✓ Suma kontrolna pliku: OK (starszy format v1 — przeliczy się przy zapisie)'
+            : '✓ Suma kontrolna pliku: OK';
           body.appendChild(ok);
         } else {
           const sec = document.createElement('div');
@@ -12304,7 +12320,9 @@ resize();
         // Brak checksumów w pliku — stary format lub ręcznie edytowany
         const note = document.createElement('div');
         note.style.cssText = 'font-size: 11px;color:var(--dim)';
-        note.textContent = '(brak sum kontrolnych — plik bez weryfikacji spójności)';
+        note.textContent = chkRes.unknownAlg
+          ? '(nieznany format sum kontrolnych: alg ' + chkRes.unknownAlg + ' — pominięto weryfikację)'
+          : '(brak sum kontrolnych — plik bez weryfikacji spójności)';
         body.appendChild(note);
       }
 
@@ -13103,7 +13121,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.43.6';
+const APP_VERSION = 'v1.43.7';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
