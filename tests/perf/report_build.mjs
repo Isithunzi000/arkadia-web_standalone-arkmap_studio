@@ -303,13 +303,13 @@ const html = `<!DOCTYPE html>
 <div class="tldr">
 <p style="margin-bottom:10px"><b>TL;DR</b></p>
 <ul>
-<li><b>Teza z Discorda potwierdzona w efekcie, obalona w mechanizmie.</b> Ładowanie <code>.arkmap</code>
-jest faktycznie <span class="big">${num(avgRatio, 1)}×</span> wolniejsze niż <code>.dat</code> (mediana ratio
-${num(Math.min(...ratios), 2)}–${num(Math.max(...ratios), 2)}× na drabince 27k→432k pokoi) — ale NIE dlatego,
-że „tekstowy JSON parsuje się wolniej niż binarka". <code>JSON.parse</code> jest <b>${num(jsonVsDat, 1)}× SZYBSZY</b>
-niż binarny parser <code>.dat</code> (${ms(BS.arkmap.json.med)} vs ${ms(BS.dat.parse.med)} przy ${krooms(BS.rooms)} pokoi).
-Cała różnica to <b>weryfikacja sum kontrolnych CRC</b> (${num(crcShareMin, 0)}–${num(crcShareMax, 0)}% czasu ładowania .arkmap),
-której <code>.dat</code> z założenia nie wykonuje (plik lokalny = zaufany). To cena za wykrywalność manipulacji,
+<li><b>Różnica czasu ładowania .arkmap vs .dat wynika z weryfikacji CRC, nie z parsowania JSON.</b>
+Ładowanie <code>.arkmap</code> jest <span class="big">${num(avgRatio, 1)}×</span> wolniejsze niż <code>.dat</code>
+(mediana ratio ${num(Math.min(...ratios), 2)}–${num(Math.max(...ratios), 2)}× na drabince 27k→432k pokoi) — ale sam
+<code>JSON.parse</code> jest <b>${num(jsonVsDat, 1)}× szybszy</b> niż binarny parser <code>.dat</code>
+(${ms(BS.arkmap.json.med)} vs ${ms(BS.dat.parse.med)} przy ${krooms(BS.rooms)} pokoi). Cała różnica to
+<b>weryfikacja sum kontrolnych CRC</b> (${num(crcShareMin, 0)}–${num(crcShareMax, 0)}% czasu ładowania .arkmap),
+której <code>.dat</code> z założenia nie wykonuje (plik lokalny = zaufany). To koszt wykrywalności manipulacji,
 nie koszt formatu JSON.</li>
 <li><b>W przeglądarce różnica formatów jest stłumiona:</b> end-to-end tylko ~${num(browserRatio27, 2)}× (27k)
 do ~${num(browserRatioBig, 2)}× (${esc(bigOkBoth.replace('stress_', '').replace('real_', ''))}), bo dominuje
@@ -324,16 +324,16 @@ Culling viewportu działa.</li>
 </ul>
 </div>
 
-<h2>1. Pytanie z Discorda: .dat vs .arkmap</h2>
+<h2>1. Czysty parse: .dat vs .arkmap</h2>
 <p>Czysty parse w Node.js (${nodeRes.meta.n_runs} przebiegów na punkt, mediana; ta sama maszyna, te same warunki
 dla obu formatów; <code>.arkmap</code> mierzony 1:1 jak robi to aplikacja: <code>JSON.parse + validate +
 verifyChecksums</code>, <code>.dat</code>: <code>datToArkmap + validate</code> — celowa asymetria, patrz §6):</p>
 ${nodeTable()}
 ${parseChart}
-<p><b>Czytelne wnioski:</b></p>
+<p><b>Wnioski:</b></p>
 <ul>
-<li>Różnica <b>rośnie z rozmiarem mapy</b> (${setNames.map(s => num(nodeRes.sets[s].ratio_total, 2) + '×').join(' → ')}),
-więc „przy dużej mapie w chuj różnica" — zgadza się, i to z lekką tendencją wzrostową.</li>
+<li>Różnica <b>utrzymuje się w całym zakresie</b> (${setNames.map(s => num(nodeRes.sets[s].ratio_total, 2) + '×').join(' → ')}),
+a bezwzględna jest największa przy największej mapie (${ms(nodeRes.sets[biggest].arkmap.total.med - nodeRes.sets[biggest].dat.total.med)} przy ${krooms(BS.rooms)} pokoi).</li>
 <li>Sam <code>JSON.parse</code> (linia zielona) jest wielokrotnie szybszy niż parser binarny — przy ${krooms(BS.rooms)}
 pokoi ${num(jsonVsDat, 1)}×. Gdyby .arkmap nie weryfikował sum, byłby <b>szybszy</b> niż .dat.</li>
 <li>Plik .arkmap jest też ~${num(nodeRes.sets[biggest].size_mb.arkmap / nodeRes.sets[biggest].size_mb.dat, 1)}× większy na dysku

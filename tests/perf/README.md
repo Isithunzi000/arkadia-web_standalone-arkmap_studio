@@ -75,6 +75,6 @@ node tests/perf/report_build.mjs tests/perf/out docs/perf_report.html
 
 - Skrypty nie modyfikują repo poza `tests/perf/out/` i nie wysyłają nic nigdzie —
   serwer http to `python3 -m http.server` na localhost, tylko na czas fazy 3.
-- Generator przy dużych K potrafi zająć kilka-kilkanaście minut i zeżreć pamięć
-  (OOM przy K=32 z heapem 6 GB — to samo w sobie wynik stress testu narzędzia).
+- Generator przy dużych K potrafi zająć kilka-kilkanaście minut i zużyć dużo
+  pamięci (OOM przy K=32 z heapem 6 GB — to również wynik stress testu narzędzia).
 - Na czyste liczby zamknij na czas testu ciężkie programy.

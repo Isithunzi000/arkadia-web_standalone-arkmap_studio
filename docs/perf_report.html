@@ -53,13 +53,13 @@
 <div class="tldr">
 <p style="margin-bottom:10px"><b>TL;DR</b></p>
 <ul>
-<li><b>Teza z Discorda potwierdzona w efekcie, obalona w mechanizmie.</b> Ładowanie <code>.arkmap</code>
-jest faktycznie <span class="big">2,1×</span> wolniejsze niż <code>.dat</code> (mediana ratio
-1,55–2,61× na drabince 27k→432k pokoi) — ale NIE dlatego,
-że „tekstowy JSON parsuje się wolniej niż binarka". <code>JSON.parse</code> jest <b>3,4× SZYBSZY</b>
-niż binarny parser <code>.dat</code> (2 244 ms vs 7 614 ms przy 432 k pokoi).
-Cała różnica to <b>weryfikacja sum kontrolnych CRC</b> (81–82% czasu ładowania .arkmap),
-której <code>.dat</code> z założenia nie wykonuje (plik lokalny = zaufany). To cena za wykrywalność manipulacji,
+<li><b>Różnica czasu ładowania .arkmap vs .dat wynika z weryfikacji CRC, nie z parsowania JSON.</b>
+Ładowanie <code>.arkmap</code> jest <span class="big">2,1×</span> wolniejsze niż <code>.dat</code>
+(mediana ratio 1,55–2,61× na drabince 27k→432k pokoi) — ale sam
+<code>JSON.parse</code> jest <b>3,4× szybszy</b> niż binarny parser <code>.dat</code>
+(2 244 ms vs 7 614 ms przy 432 k pokoi). Cała różnica to
+<b>weryfikacja sum kontrolnych CRC</b> (81–82% czasu ładowania .arkmap),
+której <code>.dat</code> z założenia nie wykonuje (plik lokalny = zaufany). To koszt wykrywalności manipulacji,
 nie koszt formatu JSON.</li>
 <li><b>W przeglądarce różnica formatów jest stłumiona:</b> end-to-end tylko ~1,13× (27k)
 do ~1,22× (4x), bo dominuje
@@ -74,16 +74,16 @@ Culling viewportu działa.</li>
 </ul>
 </div>
 
-<h2>1. Pytanie z Discorda: .dat vs .arkmap</h2>
+<h2>1. Czysty parse: .dat vs .arkmap</h2>
 <p>Czysty parse w Node.js (20 przebiegów na punkt, mediana; ta sama maszyna, te same warunki
 dla obu formatów; <code>.arkmap</code> mierzony 1:1 jak robi to aplikacja: <code>JSON.parse + validate +
 verifyChecksums</code>, <code>.dat</code>: <code>datToArkmap + validate</code> — celowa asymetria, patrz §6):</p>
 <table><tr><th>zestaw</th><th>rozmiar .dat / .arkmap [MB]</th><th>parse .dat</th><th>JSON.parse</th><th>weryfikacja CRC</th><th>total .dat</th><th>total .arkmap</th><th>ratio</th></tr><tr><td><b>real_27k</b> (27 k pokoi)</td><td>7,5 / 13,0</td><td>945 ms</td><td>185 ms</td><td>1 444 ms</td><td>1 133 ms</td><td>1 752 ms</td><td><b>1,55×</b></td></tr><tr><td><b>stress_2x</b> (54 k pokoi)</td><td>14,7 / 26,5</td><td>1 381 ms</td><td>466 ms</td><td>3 440 ms</td><td>1 612 ms</td><td>4 213 ms</td><td><b>2,61×</b></td></tr><tr><td><b>stress_4x</b> (108 k pokoi)</td><td>29,0 / 53,5</td><td>1 949 ms</td><td>535 ms</td><td>3 570 ms</td><td>2 245 ms</td><td>4 399 ms</td><td><b>1,96×</b></td></tr><tr><td><b>stress_8x</b> (216 k pokoi)</td><td>57,8 / 107,6</td><td>3 377 ms</td><td>1 123 ms</td><td>7 034 ms</td><td>3 961 ms</td><td>8 655 ms</td><td><b>2,19×</b></td></tr><tr><td><b>stress_16x</b> (432 k pokoi)</td><td>115,2 / 216,7</td><td>7 614 ms</td><td>2 244 ms</td><td>14 344 ms</td><td>8 924 ms</td><td>17 749 ms</td><td><b>1,99×</b></td></tr></table>
 <svg viewBox="0 0 720 300" style="width:100%;max-width:720px;height:auto;display:block;margin:8px 0 4px" role="img"><text x="2" y="10" fill="#8898b8" font-size="10">mediana [ms]</text><text x="702" y="278" fill="#8898b8" font-size="10" text-anchor="end">pokoje (skala log)</text><line x1="64" y1="244" x2="702" y2="244" stroke="#252b3a" stroke-width="1"/><text x="56" y="248" fill="#8898b8" font-size="10" text-anchor="end">0</text><line x1="64" y1="186.5" x2="702" y2="186.5" stroke="#252b3a" stroke-width="1"/><text x="56" y="190.5" fill="#8898b8" font-size="10" text-anchor="end">4 970</text><line x1="64" y1="129" x2="702" y2="129" stroke="#252b3a" stroke-width="1"/><text x="56" y="133" fill="#8898b8" font-size="10" text-anchor="end">9 939</text><line x1="64" y1="71.5" x2="702" y2="71.5" stroke="#252b3a" stroke-width="1"/><text x="56" y="75.5" fill="#8898b8" font-size="10" text-anchor="end">14 909</text><line x1="64" y1="14" x2="702" y2="14" stroke="#252b3a" stroke-width="1"/><line x1="64" y1="14" x2="64" y2="244" stroke="#1b2130" stroke-width="1"/><text x="64" y="260" fill="#8898b8" font-size="10" text-anchor="middle">27 k</text><line x1="223.5" y1="14" x2="223.5" y2="244" stroke="#1b2130" stroke-width="1"/><text x="223.5" y="260" fill="#8898b8" font-size="10" text-anchor="middle">54 k</text><line x1="383" y1="14" x2="383" y2="244" stroke="#1b2130" stroke-width="1"/><text x="383" y="260" fill="#8898b8" font-size="10" text-anchor="middle">108 k</text><line x1="542.5" y1="14" x2="542.5" y2="244" stroke="#1b2130" stroke-width="1"/><text x="542.5" y="260" fill="#8898b8" font-size="10" text-anchor="middle">216 k</text><line x1="702" y1="14" x2="702" y2="244" stroke="#1b2130" stroke-width="1"/><text x="702" y="260" fill="#8898b8" font-size="10" text-anchor="middle">432 k</text><path d="M64.0,230.9 L223.5,225.4 L383.0,218.0 L542.5,198.2 L702.0,140.8" fill="none" stroke="#4a9eff" stroke-width="2" /><circle cx="64.0" cy="230.9" r="3.2" fill="#4a9eff"/><circle cx="223.5" cy="225.4" r="3.2" fill="#4a9eff"/><circle cx="383.0" cy="218.0" r="3.2" fill="#4a9eff"/><circle cx="542.5" cy="198.2" r="3.2" fill="#4a9eff"/><circle cx="702.0" cy="140.8" r="3.2" fill="#4a9eff"/><path d="M64.0,223.7 L223.5,195.3 L383.0,193.1 L542.5,143.9 L702.0,38.6" fill="none" stroke="#ff9f4a" stroke-width="2" /><circle cx="64.0" cy="223.7" r="3.2" fill="#ff9f4a"/><circle cx="223.5" cy="195.3" r="3.2" fill="#ff9f4a"/><circle cx="383.0" cy="193.1" r="3.2" fill="#ff9f4a"/><circle cx="542.5" cy="143.9" r="3.2" fill="#ff9f4a"/><circle cx="702.0" cy="38.6" r="3.2" fill="#ff9f4a"/><path d="M64.0,241.9 L223.5,238.6 L383.0,237.8 L542.5,231.0 L702.0,218.0" fill="none" stroke="#4aff8a" stroke-width="2" stroke-dasharray="5 4"/><circle cx="64.0" cy="241.9" r="3.2" fill="#4aff8a"/><circle cx="223.5" cy="238.6" r="3.2" fill="#4aff8a"/><circle cx="383.0" cy="237.8" r="3.2" fill="#4aff8a"/><circle cx="542.5" cy="231.0" r="3.2" fill="#4aff8a"/><circle cx="702.0" cy="218.0" r="3.2" fill="#4aff8a"/><circle cx="76" cy="288" r="4" fill="#4a9eff"/><text x="86" y="292" fill="#ccd8ea" font-size="11">.dat total (parse+validate)</text><circle cx="282.1" cy="288" r="4" fill="#ff9f4a"/><text x="292.1" y="292" fill="#ccd8ea" font-size="11">.arkmap total (json+val+CRC)</text><circle cx="494.5" cy="288" r="4" fill="#4aff8a"/><text x="504.5" y="292" fill="#ccd8ea" font-size="11">sam JSON.parse</text></svg>
-<p><b>Czytelne wnioski:</b></p>
+<p><b>Wnioski:</b></p>
 <ul>
-<li>Różnica <b>rośnie z rozmiarem mapy</b> (1,55× → 2,61× → 1,96× → 2,19× → 1,99×),
-więc „przy dużej mapie w chuj różnica" — zgadza się, i to z lekką tendencją wzrostową.</li>
+<li>Różnica <b>utrzymuje się w całym zakresie</b> (1,55× → 2,61× → 1,96× → 2,19× → 1,99×),
+a bezwzględna jest największa przy największej mapie (8 825 ms przy 432 k pokoi).</li>
 <li>Sam <code>JSON.parse</code> (linia zielona) jest wielokrotnie szybszy niż parser binarny — przy 432 k
 pokoi 3,4×. Gdyby .arkmap nie weryfikował sum, byłby <b>szybszy</b> niż .dat.</li>
 <li>Plik .arkmap jest też ~1,9× większy na dysku
