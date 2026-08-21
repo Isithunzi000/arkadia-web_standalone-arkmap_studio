@@ -2,6 +2,23 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.43.6 — szersze ciasne okna aktywne (Arc 15)
+
+Audyt UX okien (kontynuacja Arc 14): przyciski stopki nie miescily sie
+w jednym rzedzie w trzech oknach narrow (360 px). Fix inline `width`
+(wzorzec z Arc 14 — klasowe `max-width:90vw` dalej chroni mobile):
+
+- `dlg-exit-bidirectional` → 400 px (przyciski 334 px — dotad drugi
+  spadal o ~6 px);
+- `dlg-unsaved-local` → 600 px (3 przyciski, 551 px);
+- `dlg-unsaved-exit` → 700 px (4 przyciski, 653 px; dialog dormant —
+  tylko sesja GitHub, ktora jest uspiona; fix czysto kosmetyczny,
+  zero ingerencji w logike integracji).
+
+Piny strukturalne w tests/tier6_ux.js (szerokosc + brak max-width
+na boksach) strzega przed regresem. Reszta okien audytu czysta:
+stopki maja flex-wrap, sinki dynamiczne maja word-break/ellipsis.
+
 ## v1.43.5 — szersze okienko tworzenia kalki (Arc 14)
 
 Dialog „Stworz kalke mapy" renderowal sie na 420 px mimo zamierzonych

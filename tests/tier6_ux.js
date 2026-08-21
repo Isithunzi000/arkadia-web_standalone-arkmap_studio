@@ -95,6 +95,15 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
   ok(count('edlg-gh-disabled') >= 1 && HTML.includes('pointer-events:none')
     && count('githubSession = true') === 0,
     'B14: GitHub dalej uspiony — zero sciezek githubSession=true, kafelki zablokowane');
+  // Arc 15: szerokosci ciasnych aktywnych okien (straznik przed regresem)
+  for (const [did, w] of [['dlg-exit-bidirectional', 'width:400px'],
+                          ['dlg-unsaved-local', 'width:600px'],
+                          ['dlg-unsaved-exit', 'width:700px']]) {
+    const box = HTML.slice(HTML.indexOf('id="' + did + '"'), HTML.indexOf('id="' + did + '"') + 200);
+    ok(box.includes('class="dlg-box narrow" style="' + w + '"'), did + ': ' + w + ' (przyciski w 1 rzedzie)');
+    ok(!box.includes('max-width'), did + ': brak max-width na boksie (chroni klasowe 90vw)');
+  }
+
 }
 
 // ═══ Sekcja C: #18 — bramka potwierdzenia importu trasy ═══
@@ -191,7 +200,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.43.5';"), 'V1: pin APP_VERSION v1.43.5');
+ok(HTML.includes("const APP_VERSION = 'v1.43.6';"), 'V1: pin APP_VERSION v1.43.6');
 
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);
