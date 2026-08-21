@@ -3803,6 +3803,41 @@ scenario('E16.newArea', async () => {
   ex('closeDialog("dlg-new-area")');
 });
 
+
+// ═══ GRUPA E17 — serializacja pobierania online (wariant 2, Arc 12) ═══
+// Repro-first: przed fixem drugie pobranie przechodzi (fetch x2) i toastu nie ma.
+// fetch stubowany na kontrolowany pending — zero sieci.
+
+scenario('E17.olSerialize', async () => {
+  ex('window.__e17 = { calls: 0, rej: null };'
+   + ' window.__e17fetch = window.fetch;'
+   + ' window.fetch = function(u){ window.__e17.calls++;'
+   + '   return new Promise(function(res, rej){ window.__e17.rej = rej; }); };');
+  ex('olLoadDat();');  // pierwsze pobieranie — startuje i wisi na fetchu
+  A('E17.ol.first', ev('window.__e17.calls').val === 1, 'pierwsze pobranie ruszylo (fetch x1)');
+  ex('olLoadArkmap();');  // drugie — ma zostac odmowione z tostem
+  await eva('new Promise(function(r){ setTimeout(r, 50); })');
+  A('E17.ol.refused', ev('window.__e17.calls').val === 1,
+    'drugie pobranie odmowione — fetch nadal x1 [calls=' + ev('window.__e17.calls').val + ']');
+  const tv = AEV('E17.ol.toast.r', ev('({ text: document.getElementById("toast").textContent,'
+   + ' cls: document.getElementById("toast").className,'
+   + ' shown: document.getElementById("toast").style.display })'), 'odczyt toasta');
+  if (tv) {
+    A('E17.ol.toastText', tv.text === '⚠ Trwa pobieranie: map_master3.dat — poczekaj na zakończenie',
+      'komunikat z dynamiczna nazwa pliku [actual=' + JSON.stringify(tv.text) + ']');
+    A('E17.ol.toastWarn', tv.cls === 'warn' && tv.shown === 'block', 'toast warn (pomaranczowy), widoczny');
+  }
+  ex('window.__e17.rej(new Error("net down"));');  // zwolnienie pierwszego (jak blad sieci)
+  await eva('new Promise(function(r){ setTimeout(r, 100); })');
+  A('E17.ol.released', ev('typeof _olActiveLabel !== "undefined" && _olActiveLabel === null').val === true,
+    'flaga zdjeta po bledzie (finally)');
+  ex('olLoadDat();');  // kolejne pobranie przechodzi
+  A('E17.ol.after', ev('window.__e17.calls').val === 2, 'po zwolnieniu kolejne pobranie przechodzi (fetch x2)');
+  ex('window.__e17.rej(new Error("cleanup"));');
+  await eva('new Promise(function(r){ setTimeout(r, 100); })');
+  ex('window.fetch = window.__e17fetch; delete window.__e17; delete window.__e17fetch;');
+});
+
 // ═══ Runner ═══
 function appReady() {
   return new Promise(res => {

@@ -9525,6 +9525,7 @@ const olBtnCancel  = document.getElementById('ol-btn-cancel');
 const btnLoadOnline = document.getElementById('btn-load-online');
 
 let olIndex = null; // index.json z gałęzi mapa (null = kopia jeszcze nie gotowa)
+let _olActiveLabel = null; // v1.43.2: serializacja pobrań online — etykieta aktywnego transferu (null = wolne)
 
 function olSetBusy(busy) {
   olBtnArkmap.disabled = busy || !olIndex;
@@ -9640,9 +9641,12 @@ async function olFetchFile(url, label, expectedSize, prog) {
 }
 
 async function olLoadArkmap() {
+  if (_olActiveLabel !== null) { toast('⚠ Trwa pobieranie: ' + _olActiveLabel + ' — poczekaj na zakończenie'); return; }
+  const OL_F = 'map_master3.arkmap';
+  _olActiveLabel = OL_F;
   olSetBusy(true);
   try {
-    const buf = await olFetchFile(olBaseUrl + 'map_master3.arkmap', 'map_master3.arkmap', olIndex?.arkmap_size);
+    const buf = await olFetchFile(olBaseUrl + OL_F, OL_F, olIndex?.arkmap_size);
     closeOnlineConfirm();
     // Ta sama ścieżka co „Wczytaj .arkmap…" z dysku (validate + checksumy + applyMap)
     loadArkmap(new TextDecoder().decode(buf), '🌐 online · map_master3.arkmap');
@@ -9652,13 +9656,16 @@ async function olLoadArkmap() {
     olSetBusy(false);
     olConfirmPrg.textContent = '';
     olConfirmBar.style.width = '0%';
-  }
+  } finally { _olActiveLabel = null; }
 }
 
 async function olLoadDat() {
+  if (_olActiveLabel !== null) { toast('⚠ Trwa pobieranie: ' + _olActiveLabel + ' — poczekaj na zakończenie'); return; }
+  const OL_F = 'map_master3.dat';
+  _olActiveLabel = OL_F;
   olSetBusy(true);
   try {
-    const buf = await olFetchFile(olBaseUrl + 'map_master3.dat', 'map_master3.dat', olIndex?.dat_size);
+    const buf = await olFetchFile(olBaseUrl + OL_F, OL_F, olIndex?.dat_size);
     olConfirmPrg.textContent = 'Konwertowanie .dat…';
     const arkmap = datToArkmap(buf.buffer);
     const r = validate(arkmap);
@@ -9683,7 +9690,7 @@ async function olLoadDat() {
     olSetBusy(false);
     olConfirmPrg.textContent = '';
     olConfirmBar.style.width = '0%';
-  }
+  } finally { _olActiveLabel = null; }
 }
 
 olBtnArkmap.addEventListener('click', olLoadArkmap);
@@ -13017,7 +13024,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.43.1';
+const APP_VERSION = 'v1.43.2';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -18412,8 +18419,10 @@ async function _kalkaOlEnsure(side) {
 }
 
 async function _kalkaOnlineLoad(side, fmt) {
+  if (_olActiveLabel !== null) { toast('⚠ Trwa pobieranie: ' + _olActiveLabel + ' — poczekaj na zakończenie'); return; }
   if (!_kalkaOl) return;
   const fname = fmt === 'dat' ? 'map_master3.dat' : 'map_master3.arkmap';
+  _olActiveLabel = fname;
   const expected = fmt === 'dat' ? _kalkaOl.index.dat_size : _kalkaOl.index.arkmap_size;
   const statusEl = document.getElementById('dk-status-' + side);
   try {
@@ -18431,7 +18440,7 @@ async function _kalkaOnlineLoad(side, fmt) {
     _kalkaSetMap(side, map, '🌐 online · ' + fname + (v.warns ? ' ⚠' : ''));
   } catch (e) {
     _kalkaStatus(side, '✗ Online — ' + (e.name === 'AbortError' ? 'przekroczono limit czasu (180 s)' : 'błąd: ' + escHtml(e.message)), true);
-  }
+  } finally { _olActiveLabel = null; }
 }
 
 function _kalkaSuggestName() {
