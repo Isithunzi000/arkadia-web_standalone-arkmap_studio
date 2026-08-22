@@ -2,6 +2,37 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.44.3 — perf lab: przebieg v3 + raporty, konwencja .json, generator data-driven, fix lepkiej flagi minimapki
+
+Drugi przebieg laboratorium wydajnosci (2026-08-22, ta sama maszyna co
+referencja: Athlon Silver 3050U, Node v20.20.1, chrome-headless-shell 152,
+bez obciazenia w tle) — pierwszy pomiar aplikacji z silnikiem sum v3.
+
+- Aplikacja: kasowanie lepkiej flagi _mmDragging przy ruchu z puszczonym
+  przyciskiem (audyt A23 — guard przycisku z v1.44.2 zwracal bez czyszczenia;
+  kosmetyka, zero zmiany zachowania w normalnym torze).
+- tests/perf/results/: przebiegi w podkatalogach per data (2026-08-21 =
+  referencja v2, 2026-08-22 = nowy pomiar v3) + META.json (wersja aplikacji,
+  silnik sum, tlo pomiaru) + MASZYNA.md per przebieg.
+- run.sh: wyniki przegladarki jako results_browser.json (tablica JSON
+  nadpisywana przyrostowo po kazdym rekordzie) zamiast .jsonl — koniec
+  recznego zmieniania rozszerzenia przy zalaczaniu. Generator czyta oba
+  formaty (fallback .jsonl dla starych katalogow).
+- report_build.mjs: w pelni data-driven (werdykty, limity, powody stopu
+  drabinki, notki tla/OOM z META.json — zero twardych twierdzen) + tryb
+  porownawczy --compare (tabela werdyktow, metryki REF->NEW z klasyfikacja
+  ±5%, analiza CRC/JSON.parse odporna na obciazenie tla). Deterministyczny
+  (dwa przebiegi = identyczne bajty).
+- docs/: regeneracja perf_report.html (liczby bez zmian, kod generujacy
+  nowy) + nowe raporty: raport_wydajnosci_2026-08-22.html (niezalezny)
+  i porownanie_wydajnosci_2026-08-21_vs_2026-08-22.html.
+- Wynik porownania (skrot): 77 metryk lepiej / 3 gorzej / 3 bez zmian;
+  CRC Node 14,3 s -> 7,8 s przy 432k pokoi (v2 -> v3); ratio formatow
+  1,55-2,61x -> 1,24-1,50x; jedyne przekroczenie progu: kamera p95
+  stress_4x .dat 26,3 -> 54,8 ms (renderer nietkniety — do weryfikacji
+  przy kolejnym przebiegu).
+- Regresja: 28 harnessow Node + empiria SMOKE-E18, wszystko PASS.
+
 ## v1.44.2 — fixy z audytu zewnetrznego Arc 21/22 (rdzen, zapis, kalka, planer, input)
 
 Audyty zewnetrzne (DeepInfra; Qwen3-Coder-30B + DeepSeek-V4-Pro, rownolegle):

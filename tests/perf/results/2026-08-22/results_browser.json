@@ -1,0 +1,497 @@
+[
+ {
+  "set": "real_27k",
+  "fmt": "dat",
+  "rooms": 26988,
+  "verdict": "OK",
+  "file": "../../map_master3.dat",
+  "runs": 10,
+  "phases": {
+   "fetch": {
+    "n": 10,
+    "min": 31,
+    "med": 36,
+    "p95": 86.1,
+    "max": 86.1
+   },
+   "parse": {
+    "n": 10,
+    "min": 305.5,
+    "med": 331.3,
+    "p95": 402.3,
+    "max": 402.3
+   },
+   "validate": {
+    "n": 10,
+    "min": 94.4,
+    "med": 105.6,
+    "p95": 214.4,
+    "max": 214.4
+   },
+   "crc": {
+    "n": 10,
+    "min": 0,
+    "med": 0,
+    "p95": 0,
+    "max": 0
+   },
+   "apply": {
+    "n": 10,
+    "min": 1162,
+    "med": 1236,
+    "p95": 1318.5,
+    "max": 1318.5
+   },
+   "first_draw": {
+    "n": 10,
+    "min": 10.5,
+    "med": 12.4,
+    "p95": 71,
+    "max": 71
+   },
+   "total": {
+    "n": 10,
+    "min": 1602.5,
+    "med": 1720.2,
+    "p95": 1871,
+    "max": 1871
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 1.4,
+   "med": 4.1,
+   "p95": 22.7,
+   "max": 23.8
+  },
+  "export_dat": null,
+  "heap_mb_med": 123,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.54 Safari/537.36"
+ },
+ {
+  "set": "real_27k",
+  "fmt": "arkmap",
+  "rooms": 26988,
+  "verdict": "OK",
+  "file": "../../tests/perf/out/base.arkmap",
+  "runs": 10,
+  "phases": {
+   "fetch": {
+    "n": 10,
+    "min": 99.2,
+    "med": 119.8,
+    "p95": 136.8,
+    "max": 136.8
+   },
+   "parse": {
+    "n": 10,
+    "min": 55.1,
+    "med": 58.2,
+    "p95": 86.5,
+    "max": 86.5
+   },
+   "validate": {
+    "n": 10,
+    "min": 101.6,
+    "med": 133,
+    "p95": 188.7,
+    "max": 188.7
+   },
+   "crc": {
+    "n": 10,
+    "min": 558.4,
+    "med": 641.5,
+    "p95": 905.2,
+    "max": 905.2
+   },
+   "apply": {
+    "n": 10,
+    "min": 1246.2,
+    "med": 1322.9,
+    "p95": 1428.9,
+    "max": 1428.9
+   },
+   "first_draw": {
+    "n": 10,
+    "min": 10.5,
+    "med": 11.7,
+    "p95": 18.6,
+    "max": 18.6
+   },
+   "total": {
+    "n": 10,
+    "min": 2080.5,
+    "med": 2177.5,
+    "p95": 2457.9,
+    "max": 2457.9
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 1.6,
+   "med": 5.1,
+   "p95": 18.2,
+   "max": 27.8
+  },
+  "export_dat": {
+   "ms": 2153.1,
+   "mb": 7.5
+  },
+  "heap_mb_med": 125,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.54 Safari/537.36"
+ },
+ {
+  "set": "stress_2x",
+  "fmt": "dat",
+  "rooms": 53976,
+  "verdict": "OK",
+  "file": "../../tests/perf/out/stress_2k.dat",
+  "runs": 10,
+  "phases": {
+   "fetch": {
+    "n": 10,
+    "min": 44.4,
+    "med": 57.7,
+    "p95": 138.8,
+    "max": 138.8
+   },
+   "parse": {
+    "n": 10,
+    "min": 590.1,
+    "med": 641.9,
+    "p95": 773.8,
+    "max": 773.8
+   },
+   "validate": {
+    "n": 10,
+    "min": 182,
+    "med": 219,
+    "p95": 308.8,
+    "max": 308.8
+   },
+   "crc": {
+    "n": 10,
+    "min": 0,
+    "med": 0,
+    "p95": 0,
+    "max": 0
+   },
+   "apply": {
+    "n": 10,
+    "min": 2365.9,
+    "med": 2525.5,
+    "p95": 2928,
+    "max": 2928
+   },
+   "first_draw": {
+    "n": 10,
+    "min": 11.4,
+    "med": 12.3,
+    "p95": 87.6,
+    "max": 87.6
+   },
+   "total": {
+    "n": 10,
+    "min": 3240,
+    "med": 3527.1,
+    "p95": 3928.7,
+    "max": 3928.7
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 1.8,
+   "med": 3.6,
+   "p95": 15.9,
+   "max": 28.7
+  },
+  "export_dat": null,
+  "heap_mb_med": 202,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.54 Safari/537.36"
+ },
+ {
+  "set": "stress_2x",
+  "fmt": "arkmap",
+  "rooms": 53976,
+  "verdict": "OK",
+  "file": "../../tests/perf/out/stress_2k.arkmap",
+  "runs": 10,
+  "phases": {
+   "fetch": {
+    "n": 10,
+    "min": 211,
+    "med": 230.8,
+    "p95": 369,
+    "max": 369
+   },
+   "parse": {
+    "n": 10,
+    "min": 109.6,
+    "med": 133.7,
+    "p95": 141.1,
+    "max": 141.1
+   },
+   "validate": {
+    "n": 10,
+    "min": 215.2,
+    "med": 256,
+    "p95": 397.1,
+    "max": 397.1
+   },
+   "crc": {
+    "n": 10,
+    "min": 1044.8,
+    "med": 1171.2,
+    "p95": 1427.3,
+    "max": 1427.3
+   },
+   "apply": {
+    "n": 10,
+    "min": 2310,
+    "med": 2555.5,
+    "p95": 3413.7,
+    "max": 3413.7
+   },
+   "first_draw": {
+    "n": 10,
+    "min": 10.9,
+    "med": 11.9,
+    "p95": 30.2,
+    "max": 30.2
+   },
+   "total": {
+    "n": 10,
+    "min": 3785.3,
+    "med": 4096.5,
+    "p95": 5172.2,
+    "max": 5172.2
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 1.8,
+   "med": 3.7,
+   "p95": 11.8,
+   "max": 24.2
+  },
+  "export_dat": {
+   "ms": 3149.2,
+   "mb": 14.7
+  },
+  "heap_mb_med": 226,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.54 Safari/537.36"
+ },
+ {
+  "set": "stress_4x",
+  "fmt": "dat",
+  "rooms": 107952,
+  "verdict": "JANK",
+  "file": "../../tests/perf/out/stress_4k.dat",
+  "runs": 10,
+  "phases": {
+   "fetch": {
+    "n": 10,
+    "min": 82.6,
+    "med": 88.1,
+    "p95": 309.7,
+    "max": 309.7
+   },
+   "parse": {
+    "n": 10,
+    "min": 1044.4,
+    "med": 1106.7,
+    "p95": 1425.8,
+    "max": 1425.8
+   },
+   "validate": {
+    "n": 10,
+    "min": 260.9,
+    "med": 300.6,
+    "p95": 496.8,
+    "max": 496.8
+   },
+   "crc": {
+    "n": 10,
+    "min": 0,
+    "med": 0,
+    "p95": 0,
+    "max": 0
+   },
+   "apply": {
+    "n": 10,
+    "min": 4466.2,
+    "med": 4891.7,
+    "p95": 5542.8,
+    "max": 5542.8
+   },
+   "first_draw": {
+    "n": 10,
+    "min": 11.6,
+    "med": 13.3,
+    "p95": 17,
+    "max": 17
+   },
+   "total": {
+    "n": 10,
+    "min": 5805.5,
+    "med": 6355.1,
+    "p95": 7354.5,
+    "max": 7354.5
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 2.3,
+   "med": 7.4,
+   "p95": 54.8,
+   "max": 75.1
+  },
+  "export_dat": null,
+  "heap_mb_med": 386,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.54 Safari/537.36"
+ },
+ {
+  "set": "stress_4x",
+  "fmt": "arkmap",
+  "rooms": 107952,
+  "verdict": "OK",
+  "file": "../../tests/perf/out/stress_4k.arkmap",
+  "runs": 10,
+  "phases": {
+   "fetch": {
+    "n": 10,
+    "min": 398.5,
+    "med": 469.2,
+    "p95": 746,
+    "max": 746
+   },
+   "parse": {
+    "n": 10,
+    "min": 216.4,
+    "med": 254.7,
+    "p95": 466.3,
+    "max": 466.3
+   },
+   "validate": {
+    "n": 10,
+    "min": 313.9,
+    "med": 347.4,
+    "p95": 762.8,
+    "max": 762.8
+   },
+   "crc": {
+    "n": 10,
+    "min": 1853.9,
+    "med": 2090.6,
+    "p95": 3293.3,
+    "max": 3293.3
+   },
+   "apply": {
+    "n": 10,
+    "min": 4424.9,
+    "med": 5117.5,
+    "p95": 7798.9,
+    "max": 7798.9
+   },
+   "first_draw": {
+    "n": 10,
+    "min": 11.4,
+    "med": 12.5,
+    "p95": 19.8,
+    "max": 19.8
+   },
+   "total": {
+    "n": 10,
+    "min": 7156.6,
+    "med": 7954.1,
+    "p95": 11128.4,
+    "max": 11128.4
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 1.7,
+   "med": 2.6,
+   "p95": 7.2,
+   "max": 20.3
+  },
+  "export_dat": {
+   "ms": 5527.6,
+   "mb": 29
+  },
+  "heap_mb_med": 367,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.54 Safari/537.36"
+ },
+ {
+  "set": "stress_8x",
+  "fmt": "arkmap",
+  "rooms": 215904,
+  "verdict": "JANK",
+  "file": "../../tests/perf/out/stress_8k.arkmap",
+  "runs": 10,
+  "phases": {
+   "fetch": {
+    "n": 10,
+    "min": 940.3,
+    "med": 1148,
+    "p95": 2638.9,
+    "max": 2638.9
+   },
+   "parse": {
+    "n": 10,
+    "min": 462.5,
+    "med": 492.2,
+    "p95": 786.3,
+    "max": 786.3
+   },
+   "validate": {
+    "n": 10,
+    "min": 440.3,
+    "med": 523.8,
+    "p95": 986,
+    "max": 986
+   },
+   "crc": {
+    "n": 10,
+    "min": 3617,
+    "med": 4155.4,
+    "p95": 6264.9,
+    "max": 6264.9
+   },
+   "apply": {
+    "n": 10,
+    "min": 8642.5,
+    "med": 10269.2,
+    "p95": 13442.5,
+    "max": 13442.5
+   },
+   "first_draw": {
+    "n": 10,
+    "min": 12.6,
+    "med": 15,
+    "p95": 53.5,
+    "max": 53.5
+   },
+   "total": {
+    "n": 10,
+    "min": 13389.3,
+    "med": 15599.2,
+    "p95": 18876,
+    "max": 18876
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 2,
+   "med": 4.4,
+   "p95": 120.2,
+   "max": 157.6
+  },
+  "export_dat": {
+   "ms": 13539,
+   "mb": 57.8
+  },
+  "heap_mb_med": 841,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.54 Safari/537.36"
+ }
+]

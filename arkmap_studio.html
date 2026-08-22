@@ -7381,7 +7381,11 @@ minimapEl.addEventListener('mousedown', e => {
 document.addEventListener('mousemove', e => {
   // audyt A22/D2: guard przycisku — mouseup poza oknem przegladarki nie dociera do
   // dokumentu, bez guarda _mmDragging zostawalo zawieszone i viewport jechal za kursorem.
-  if (!_mmDragging || !(e.buttons & 1)) return;
+  // audyt A23: gdy flaga i tak zostala zawieszona (np. upuszczono poza oknem przed
+  // wprowadzeniem guarda albo w egzotycznym stanie focusa), kasuj ja przy pierwszym
+  // ruchu z puszczonym przyciskiem — bez tego guard sam sie uwiecznil (return bez czyszczenia).
+  if (!_mmDragging) return;
+  if (!(e.buttons & 1)) { _mmDragging = false; return; }
   const c = minimapMapCoords(e);
   if (!c) return;
   state.ox = cv.width  / 2 - c.mapX * CELL * state.zoom;
@@ -13544,7 +13548,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.44.2';
+const APP_VERSION = 'v1.44.3';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)

@@ -57,7 +57,7 @@ python3 - "$RUNS" "$PORT" << 'PYEOF'
 import json, os, subprocess, sys
 RUNS, PORT = int(sys.argv[1]), sys.argv[2]
 OUT = 'tests/perf/out'
-RES = os.path.join(OUT, 'results_browser.jsonl')
+RES = os.path.join(OUT, 'results_browser.json')   # tablica JSON (nie JSONL) — latwiejsze zalaczanie
 # Budzet punktu pomiaru musi objac WSZYSTKIE zimne przebiegi + kamere + eksport:
 # baza 60 s (boot) + 30 s na przebieg; zewnetrzny timeout = budzet + 60 s.
 BUDGET_MS = 60000 + RUNS * 30000
@@ -90,7 +90,8 @@ def run_one(path, fmt, exportdat):
     if line.startswith('PERFERR'):     return None, 'ERR(' + line[8:80] + ')'
     return None, 'CRASH(' + line[10:70] + ')'
 
-open(RES, 'w').close()
+recs = []
+json.dump(recs, open(RES, 'w'))   # inicjalizacja: pusta tablica
 stopped = {'dat': False, 'arkmap': False}
 print(f'{"rozmiar":<10} {"fmt":<7} {"verdict":<14} {"total":>8} {"parse":>7} {"crc":>7} {"apply":>7} {"draw1":>6} {"camP95":>7} {"heap":>6} {"expDat":>10}')
 for name, datp, arkp, rooms in ladder:
@@ -112,8 +113,11 @@ for name, datp, arkp, rooms in ladder:
                   f'{ph["apply"]["med"]:>7} {(ph["first_draw"]["med"] or 0):>6.1f} {d["camera"]["p95"]:>7} {d.get("heap_mb_med"):>6} {expS:>10}')
         else:
             print(f'{name:<10} {fmt:<7} {v:<14}')
-        with open(RES, 'a') as f:
-            f.write(json.dumps(rec) + '\n')
+        recs.append(rec)
+        # zapis przyrostowy: po kazdym rekordzie nadpisz cala tablice —
+        # crash w polowie fazy nie gubi zebranych wynikow
+        with open(RES, 'w') as f:
+            json.dump(recs, f, ensure_ascii=False, indent=1)
         if v != 'OK':
             stopped[fmt] = True
             print(f'  ^ {fmt}: STOP drabinki tego formatu (ostatni zielony = poprzedni rozmiar)')
@@ -121,5 +125,5 @@ print('wyniki: ' + RES)
 PYEOF
 
 echo "=== KONIEC ==="
-echo "Wyniki: $OUT/results_node.json + $OUT/results_browser.jsonl"
+echo "Wyniki: $OUT/results_node.json + $OUT/results_browser.json"
 echo "Wklej oba pliki do czatu — dostaniesz ladny raport HTML."
