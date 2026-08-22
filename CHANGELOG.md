@@ -2,6 +2,35 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.44.2 — fixy z audytu zewnetrznego Arc 21/22 (rdzen, zapis, kalka, planer, input)
+
+Audyty zewnetrzne (DeepInfra; Qwen3-Coder-30B + DeepSeek-V4-Pro, rownolegle):
+Arc 21 — renderer/edycja/undo/.dat/applyMap/share-link (73 findingsy,
+0 realnych defektow); Arc 22 — zapis-eksport/kalka-apply/planer-A*/input
+(64 findingsy, 3 realne defekty). Lacznie 232 surowe findingsy w 4 rundach
+-> 4 realne defekty. Fixy i utwardzenia z Arc 22:
+
+- A22/D1: zawieszony drag pokoju — guard (e.buttons & 1) w mousemove +
+  dokumentowy mouseup anuluje drag zamiast commitowac z niewiarygodnej
+  pozycji kursora (pokrywa tez Delete w trakcie dragu).
+- A22/D2: zawieszony drag minimapy — guard (e.buttons & 1) w mousemove
+  (mouseup poza oknem przegladarki nie dociera do dokumentu).
+- A22/D3: wpRemove dekrementuje activeIdx przy usuwaniu waypointa sprzed
+  aktywnego (splice przesuwa ogony).
+- A22/C1: wpDecodeRoute — twardy limit dlugosci kodu ARKMAP2 (64k),
+  fail-closed przed atob.
+- A22/C2: commitRoomEdit — nieblokujacy toast przy kolizji wspolrzednych
+  z formularza (spojnie z commitMoveRoomToArea).
+- A22/C3: fallback zapisu .arkmap — catch z toastem (brak unhandled
+  rejection; dirty zostaje — bezpieczny kierunek).
+- Dopiski-decyzje w kodzie: legalnosc kolizji miedzyobszarowych,
+  izolacja per-op w applyDelta (zamiast rollbacku), eksport .dat nie
+  jest punktem kontrolnym dirty.
+- Testy: nowy T7 w checksums_v3 — pin NaN-kanoniczny (NaN/undefined w
+  custom lines -> bajtowo identyczne kodowanie; straznik klasy bledu
+  z Arc 19). Spec: tolerancja pol labeli (CANONICAL_V3.md), doprecyzowanie
+  "16 lowercase hex" (arkdelta_spec).
+
 ## v1.44.1 — korekta zakresu a3: user_data obszaru w sumie (Arc 20)
 
 Audyt zewnetrzny silnika v3 (DeepInfra, Qwen3-Coder-30B, 8 partii):

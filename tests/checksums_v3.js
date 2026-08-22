@@ -182,7 +182,29 @@ console.log('── T6: piny strukturalne ──');
     ok(JSON.stringify(diffOrder) === JSON.stringify(api._V3_DIR_ORDER),
        '_V3_DIR_ORDER === _DIFF_DIR_ORDER (strażnik rozjazdu)');
   }
-  ok(HTML.includes("const APP_VERSION = 'v1.44.1';"), 'pin: APP_VERSION v1.44.1');
+  ok(HTML.includes("const APP_VERSION = 'v1.44.2';"), 'pin: APP_VERSION v1.44.2');
+}
+
+// ═══ T7: pin NaN-kanoniczny — klasa błędu z Arc 19 (NaN-payload provenance) ═══
+// Dowolny NaN / undefined / nie-liczba we polu f64 MUSI dac identyczne bajty
+// kanoniczne (cichy NaN 7ff8000000000000) — bez wzgledu na provenance danych
+// (DAT vs JSON.parse). Regresja tej rownowaznosci = powrot buga z Arc 19 f3b.
+console.log('── T7: pin NaN-kanoniczny (NaN/undefined w CL → identyczne bajty) ──');
+{
+  const mk = v => ({ id: 900, x: 1, y: 2, z: 0, env: 1, weight: 1, name: 'nan-pin',
+    custom_lines: { n: { points: [[3.25, v], [4, 5]], color: [255, 0, 0], style: 'dash', arrow: true } } });
+  const encNaN  = api._encodeRoomCanonical(mk(NaN));
+  const encUnd  = api._encodeRoomCanonical(mk(undefined));
+  const hexNaN = Array.from(encNaN, b => b.toString(16).padStart(2, '0')).join('');
+  const hexUnd = Array.from(encUnd, b => b.toString(16).padStart(2, '0')).join('');
+  ok(hexNaN === hexUnd, 'CL z NaN i CL z undefined → bajtowo identyczne kodowanie');
+  ok(hexNaN.includes('0000000000f87f'), 'kodowanie zawiera kanoniczny cichy NaN (7ff8000000000000 LE)');
+  // hash rowniez stabilny: dwie mapy rozniace sie tylko NaN vs undefined → ta sama suma pokoju
+  const mN = freshMap(); mN.areas[0].rooms.push(mk(NaN));
+  const mU = freshMap(); mU.areas[0].rooms.push(mk(undefined));
+  api.addChecksums(mN); api.addChecksums(mU);
+  ok(mN.meta.checksums.rooms['900'] === mU.meta.checksums.rooms['900'],
+     'suma pokoju odporna na provenance NaN (DAT vs JSON.parse)');
 }
 
 console.log('checksums_v3: ' + pass + ' OK, ' + fail + ' FAIL');
