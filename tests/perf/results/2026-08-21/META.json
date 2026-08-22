@@ -1,0 +1,6 @@
+{
+  "app_version": "przed v1.44.0",
+  "checksum_alg": "v2",
+  "background": "Podczas pomiaru działały inne obciążające procesy (m.in. LM Studio). Czasy bezwzględne = górne widełki.",
+  "gen_oom": "K=32 (863 616 pokoi): OOM generatora przy heap 6 GB Node, po zapisaniu .arkmap, przed eksportem .dat."
+}

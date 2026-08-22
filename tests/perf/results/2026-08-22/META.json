@@ -1,0 +1,6 @@
+{
+  "app_version": "v1.44.2",
+  "checksum_alg": "v3",
+  "background": "Maszyna bez innego obciążenia w trakcie pomiaru.",
+  "gen_oom": "K=32 (863 616 pokoi): OOM generatora przy heap 6 GB Node, po zapisaniu .arkmap, przed eksportem .dat."
+}

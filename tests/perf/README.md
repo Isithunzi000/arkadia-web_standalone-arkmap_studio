@@ -4,11 +4,23 @@ Narzędzia pomiarowe ArkMap Studio: porównanie formatów `.dat` vs `.arkmap` or
 drabinka stress testu (limit skalowania). **Nie są częścią regresji** (`run-all.sh`
 ich nie odpala — to pomiar czasochłonny, do uruchomienia ręcznie).
 
-Wyniki przebiegu referencyjnego (2026-08-21, AMD Athlon Silver 3050U 2C/2T, 30 GB RAM,
-Node v20.20.1, chrome-headless-shell 152): [`results/`](results/) + opis maszyny
-[`results/MASZYNA.md`](results/MASZYNA.md). Wygenerowany z nich raport:
-[`docs/perf_report.html`](../../docs/perf_report.html)
-([online](https://isithunzi000.github.io/arkadia-web_standalone-arkmap_studio/docs/perf_report.html)).
+Zacommitowane przebiegi (ta sama maszyna: AMD Athlon Silver 3050U 2C/2T, 30 GB RAM,
+Node v20.20.1, chrome-headless-shell 152):
+
+- **2026-08-21** (referencyjny, aplikacja przed v1.44.0, silnik sum v2):
+  [`results/2026-08-21/`](results/2026-08-21/) — raport:
+  [`docs/perf_report.html`](../../docs/perf_report.html)
+  ([online](https://isithunzi000.github.io/arkadia-web_standalone-arkmap_studio/docs/perf_report.html)).
+- **2026-08-22** (aplikacja v1.44.2, silnik sum v3):
+  [`results/2026-08-22/`](results/2026-08-22/) — raporty:
+  [`docs/raport_wydajnosci_2026-08-22.html`](../../docs/raport_wydajnosci_2026-08-22.html)
+  (niezależny) oraz
+  [`docs/porownanie_wydajnosci_2026-08-21_vs_2026-08-22.html`](../../docs/porownanie_wydajnosci_2026-08-21_vs_2026-08-22.html)
+  (porównawczy).
+
+Każdy katalog przebiegu zawiera `results_node.json`, `results_browser.json`
+(starsze: `.jsonl`), `MASZYNA.md` (opis maszyny) i `META.json` (wersja aplikacji,
+silnik sum, tło pomiaru — czytane przez generator raportu).
 
 ## Co mierzą fazy
 
@@ -20,8 +32,9 @@ Node v20.20.1, chrome-headless-shell 152): [`results/`](results/) + opis maszyny
    (fetch/parse/walidacja/CRC/applyMap/pierwszy render), trasa kamery
    (5 pozycji × 8 zoomów, p95 klatki), heap, eksport `.dat`.
 3. **Drabinka stress** — syntetyczne mapy 54k → 864k pokoi (deterministyczne klony
-   produkcyjnej Arkadii, remap id blokami, sumy v2). Stop per format przy pierwszym
-   złamanym kryterium (zarejestrowane przed pomiarem):
+   produkcyjnej Arkadii, remap id blokami, sumy liczone funkcjami aplikacji — wersja
+   silnika zależy od wersji aplikacji: przebieg 2026-08-21 = v2, 2026-08-22 = v3).
+   Stop per format przy pierwszym złamanym kryterium (zarejestrowane przed pomiarem):
    CRASH (pad/timeout) · LOAD > 30 s · JANK p95 > 50 ms · MEM > 2 GB.
 
 ## Pliki
@@ -34,9 +47,11 @@ Node v20.20.1, chrome-headless-shell 152): [`results/`](results/) + opis maszyny
 - `cdp_run.py` — launcher Chrome DevTools Protocol (czeka na koniec pomiaru,
   wykrywa pad karty)
 - `run.sh` — orkiestrator faz 0–3
-- `report_build.mjs` — generator raportu HTML z surowych wyników (żadna liczba
-  w raporcie nie jest wpisana ręcznie)
-- `results/` — zacommitowany przebieg referencyjny (surowe dane + opis maszyny)
+- `report_build.mjs` — generator raportów HTML z surowych wyników (żadna liczba
+  ani twierdzenie o werdyktach nie jest wpisane ręcznie; tryb porównawczy
+  `--compare`; deterministyczny — dwa przebiegi dają identyczne bajty)
+- `results/` — zacommitowane przebiegi (podkatalogi per data: surowe dane,
+  opis maszyny, META.json)
 - `out/` — artefakty lokalnych przebiegów (gitignored; mapy stress do ~450 MB)
 
 ## Uruchomienie
@@ -67,9 +82,17 @@ albo `CHROMIUM_BIN=/sciezka/do/binarki`).
 
 ```bash
 node tests/perf/report_build.mjs tests/perf/out docs/perf_report.html
+# raport porownawczy z zacommitowanym przebiegiem referencyjnym:
+node tests/perf/report_build.mjs tests/perf/out docs/porownanie.html \
+  --compare tests/perf/results/2026-08-21
 ```
 
-(bez argumentów generator używa zacommitowanego przebiegu `tests/perf/results/`).
+(bez argumentów generator używa zacommitowanego przebiegu `tests/perf/results/2026-08-22/`).
+`run.sh` zapisuje wyniki przeglądarki jako `results_browser.json` (tablica JSON,
+nadpisywana przyrostowo po każdym rekordzie); generator czyta też starsze pliki
+`.jsonl`. Do `tests/perf/out/` warto dorzucić własne `META.json` (wzór:
+`results/2026-08-22/META.json`) — generator wplecie wersję aplikacji, silnik sum
+i warunki tła w raport.
 
 ## Uwagi
 
