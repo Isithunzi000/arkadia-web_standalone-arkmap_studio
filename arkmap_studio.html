@@ -5118,6 +5118,12 @@ function _encodeAreaCanonical(area, roomRawList) {
     B.u32(sorted.length);
     for (const lb of sorted) _encodeLabelCanonical(B, lb);
   }
+  const aud = area.user_data;
+  if (aud && Object.keys(aud).length) {
+    const ks = _utf8SortArr(Object.keys(aud));
+    B.u32(ks.length);
+    for (const k of ks) { B.str(k); B.str(aud[k]); }
+  }
   B.u32(roomRawList.length);
   for (const h of roomRawList) B.u64raw(h);
   return B.bytes();
@@ -13500,7 +13506,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.44.0';
+const APP_VERSION = 'v1.44.1';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)

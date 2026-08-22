@@ -229,6 +229,8 @@
     }
    ],
    "user_data": {
+    "zz": "1",
+    "ą-key": "wartość 🧭",
     "area-key": "area-val"
    }
   },

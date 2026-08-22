@@ -113,6 +113,17 @@ console.log('── T4: verifyChecksums — OK / korupcja pokoju / obszaru / col
   ok(r2.ok === false && r2.badAreas.length === 1 && r2.badAreas[0].id === 1 && r2.badRooms.length === 0,
      'zmiana nazwy obszaru → badAreas=[1], pokoje czyste');
 
+  const mAud = freshMap(); api.addChecksums(mAud);
+  mAud.areas[0].user_data['area-key'] = 'zmieniona wartosc';
+  const r2b = api.verifyChecksums(mAud);
+  ok(r2b.ok === false && r2b.badAreas.length === 1 && r2b.badAreas[0].id === 1 && r2b.badRooms.length === 0,
+     'zmiana user_data obszaru → badAreas=[1] (zakres a3 obejmuje user_data, v1.44.1)');
+  const mAud2 = freshMap(); api.addChecksums(mAud2);
+  delete mAud2.areas[0].user_data;
+  const r2c = api.verifyChecksums(mAud2);
+  ok(r2c.ok === false && r2c.badAreas.length === 1,
+     'usunięcie user_data obszaru → badAreas (obecność też objęta sumą)');
+
   const mCol = freshMap(); api.addChecksums(mCol);
   mCol.colors.env_colors['2'] = 99;
   const r3 = api.verifyChecksums(mCol);
@@ -171,7 +182,7 @@ console.log('── T6: piny strukturalne ──');
     ok(JSON.stringify(diffOrder) === JSON.stringify(api._V3_DIR_ORDER),
        '_V3_DIR_ORDER === _DIFF_DIR_ORDER (strażnik rozjazdu)');
   }
-  ok(HTML.includes("const APP_VERSION = 'v1.44.0';"), 'pin: APP_VERSION v1.44.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.44.1';"), 'pin: APP_VERSION v1.44.1');
 }
 
 console.log('checksums_v3: ' + pass + ' OK, ' + fail + ' FAIL');

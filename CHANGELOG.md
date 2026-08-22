@@ -2,6 +2,35 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.44.1 — korekta zakresu a3: user_data obszaru w sumie (Arc 20)
+
+Audyt zewnetrzny silnika v3 (DeepInfra, Qwen3-Coder-30B, 8 partii):
+17 findingsow, z czego 16 falszywych (udowodnionych kodem/repro —
+m.in. rzekome bledy XXH3 obalone wektorami golden na granicach sciezek
+129/240/241/512/1024/2048/2368 B). W triage wykryty realny defekt:
+kodowanie a3 pomijalo user_data obszaru, a v2 (_stripAreaForCrc)
+hashowal caly obiekt obszaru bez rooms — cicha redukcja zakresu
+plus niescisle twierdzenia w docs (§15 Scope, CHANGELOG v1.44.0).
+
+- _encodeAreaCanonical: + user_data obszaru (klucze UTF-8 bajtowo,
+  str+str, pomijane gdy puste) — pozycja po labels, przed rollupem.
+  Pelna parzystosc zakresu z v2: model obszaru .arkmap to wylacznie
+  id, name, labels, user_data, rooms.
+- CANONICAL_V3.md §4: nowy punkt 5 (user_data), rollup -> 6, nota
+  o zakresie sprostowana (v2 hashowal wszystko poza rooms).
+- Oracle + zloty fixture: obszar 1 ma user_data z kluczami
+  wymuszajacymi porzadek bajtowy (a < zz < ą-key); regeneracja
+  wektorow (zmienily sie tylko hash obszaru 1 i pliku).
+- Wektory sanity XXH3: +136/200/224 (wnetrze zakresu 129–240) —
+  27 wektorow, xxh3_golden 56 OK.
+- checksums_v3 T4: +2 asercje (mutacja i usuniecie user_data obszaru
+  -> badAreas) — dziura domknieta w regresji na stale (43 OK).
+- Konsekwencja jawna: pliki v3 zapisane przez v1.44.0 (istnialo
+  wylacznie lustro online, zero uzytkownikow) przeliczone nowym
+  kodowaniem — lustro gałęzi mapa opublikowane ponownie.
+- Docs: arkmap_spec §15 pkt 2 + nota Scope + wiersz §22 o korekcie.
+- Regresja: 28 harnessow Node + empiria SMOKE–E18, wszystko PASS.
+
 ## v1.44.0 — silnik sum kontrolnych v3: XXH3-64 + kodowanie kanoniczne (Arc 19)
 
 Wymiana całego silnika sum kontrolnych na podstawie pomiarow z laboratorium
