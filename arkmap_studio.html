@@ -9648,9 +9648,13 @@ async function saveWithDialog(defaultName, mimeType, dataFn) {
     // Determine accept type from extension
     const ext = defaultName.split('.').pop().toLowerCase();
     const acceptMap = {
-      'arkmap': { 'application/json': ['.arkmap'] },
-      'json':   { 'application/json': ['.json'] },
-      'dat':    { 'application/octet-stream': ['.dat'] },
+      'arkmap':   { 'application/json': ['.arkmap'] },
+      'arkdelta': { 'application/json': ['.arkdelta'] },
+      'json':     { 'application/json': ['.json'] },
+      'dat':      { 'application/octet-stream': ['.dat'] },
+      'md':       { 'text/markdown': ['.md'] },
+      'png':      { 'image/png': ['.png'] },
+      'svg':      { 'image/svg+xml': ['.svg'] },
     };
     try {
       const fh = await window.showSaveFilePicker({
@@ -12884,16 +12888,20 @@ resize();
   }
 
   // ── Eksport bez paneli — sam canvas ────────────────────────
+  // Zapis przez saveWithDialog (okno z edytowalna nazwa; fallback = klasyczny download).
+  // Uwaga: przy wolnym renderze Chromium moze uniewaznic gest uzytkownika —
+  // helper sam spada wtedy na klasyczny download (dotychczasowe zachowanie).
   function finalize(canvas, fmt, basename) {
     const ts = new Date().toISOString().slice(0,16).replace(/[T:]/g,'-');
     const filename = `${basename}_${ts}`;
     if (fmt === 'png') {
-      canvas.toBlob(blob => triggerDownload(blob, filename + '.png'), 'image/png');
+      saveWithDialog(filename + '.png', 'image/png',
+        () => new Promise(res => canvas.toBlob(res, 'image/png')));
     } else {
       const url = canvas.toDataURL('image/png');
       const w = canvas.width, h = canvas.height;
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><image href="${url}" x="0" y="0" width="${w}" height="${h}"/></svg>`;
-      triggerDownload(new Blob([svg], { type: 'image/svg+xml' }), filename + '.svg');
+      saveWithDialog(filename + '.svg', 'image/svg+xml', () => svg);
     }
   }
 
@@ -13369,7 +13377,7 @@ resize();
     const serializer = new XMLSerializer();
     const svgSrc = serializer.serializeToString(root);
     const ts = new Date().toISOString().slice(0,16).replace(/[T:]/g,'-');
-    triggerDownload(new Blob([svgSrc], { type: 'image/svg+xml' }), `arkmap_hud_${ts}.svg`);
+    saveWithDialog(`arkmap_hud_${ts}.svg`, 'image/svg+xml', () => svgSrc);
   }
 
   // ── Helper: pasek obszaru w SVG ─────────────────────────────────────────
@@ -13433,17 +13441,6 @@ resize();
     }
   }
 
-  // ── Download ───────────────────────────────────────────────
-  function triggerDownload(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-  }
 })();
 
 /* =====================================================
@@ -13548,7 +13545,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.44.3';
+const APP_VERSION = 'v1.44.4';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -15234,7 +15231,17 @@ function _vdReportText(){
   return L.join('\n');
 }
 function vdCopyReport(){ navigator.clipboard.writeText(_vdReportText()).then(()=>toast('✓ Skopiowano raport')).catch(()=>toast('⚠ Nie udało się skopiować')); }
-function vdDownloadMd(){ if(typeof download==='function') download('walidacja_kierunkow.md', '```\n'+_vdReportText()+'\n```\n', 'text/markdown'); }
+// Smart-nazwa eksportow walidacji: walidacja-kierunkow-<mapa>-<ts>.<ext>
+// (<mapa> = sanityzowane state.map.meta.map_name, fallback "mapa"; <ts> = ISO slice jak w finalize).
+function _vdMapName(){
+  const raw = (state.map && state.map.meta && typeof state.map.meta.map_name === 'string' && state.map.meta.map_name) || 'mapa';
+  return raw.replace(/\.(dat|arkmap|json)$/i, '').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'mapa';
+}
+function _vdSuggestedName(ext){
+  const ts = new Date().toISOString().slice(0,16).replace(/[T:]/g,'-');
+  return 'walidacja-kierunkow-' + _vdMapName() + '-' + ts + '.' + ext;
+}
+function vdDownloadMd(){ saveWithDialog(_vdSuggestedName('md'), 'text/markdown', () => '```\n'+_vdReportText()+'\n```\n'); }
 
 function _vdWrap(ctx, text, maxW){
   const out=[]; let line='';
@@ -15265,7 +15272,7 @@ function vdDownloadPng(){
   const cv2=document.createElement('canvas'); cv2.width=W*DPR; cv2.height=H*DPR;
   const ctx=cv2.getContext('2d'); ctx.scale(DPR,DPR); ctx.textBaseline='top';
   ctx.fillStyle='#0d1117'; ctx.fillRect(0,0,W,H);
-  ctx.fillStyle='#e6edf3'; ctx.font='bold 17px "DejaVu Sans Mono",monospace'; ctx.fillText('Niespojne kierunki — map_master3', PAD, PAD);
+  ctx.fillStyle='#e6edf3'; ctx.font='bold 17px "DejaVu Sans Mono",monospace'; ctx.fillText('Niespojne kierunki — ' + _vdMapName(), PAD, PAD);
   ctx.fillStyle='#8b949e'; ctx.font='12px "DejaVu Sans Mono",monospace'; ctx.fillText((res.tf.length+res.db.length)+' pokoi · skroty i polskie nazwy OK', PAD, PAD+24);
   ctx.font=font;
   for (const L of lay){
@@ -15283,7 +15290,7 @@ function vdDownloadPng(){
     if (it.badge){ ctx.fillStyle='#f0883e'; ctx.fillText(it.badge, colX[2], L.y+2+L.c3.length*LH); }
     ctx.strokeStyle='#21262d'; ctx.beginPath(); ctx.moveTo(PAD,L.y+L.rh-3); ctx.lineTo(W-PAD,L.y+L.rh-3); ctx.stroke();
   }
-  cv2.toBlob(b=>{ const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download='walidacja_kierunkow.png'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),10000); toast('✓ Zapisano PNG'); }, 'image/png');
+  cv2.toBlob(b=>{ saveWithDialog(_vdSuggestedName('png'), 'image/png', () => b); }, 'image/png');
 }
 
 // ── Wiring panelu + drag ─────────────────────────────────────────────────────
@@ -18976,9 +18983,15 @@ async function _kalkaOnlineLoad(side, fmt) {
 }
 
 function _kalkaSuggestName() {
-  const clean = str => (str || 'mapa').replace(/^🌐 online · /, '').replace(/\.(dat|arkmap|json)$/i, '')
+  // Format łapany z rozszerzenia SUROWEJ nazwy (po odpiciu prefiksu online, PRZED clean()).
+  const raw = str => (str || '').replace(/^🌐 online · /, '');
+  const ext = str => { const m = raw(str).toLowerCase().match(/\.(dat|arkmap|json)$/); return m ? m[1] : null; };
+  const clean = str => (raw(str) || 'mapa').replace(/\.(dat|arkmap|json)$/i, '')
     .toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'mapa';
-  return 'kalka-' + clean(_kalka.srcName) + '-' + clean(_kalka.dstName) + '.arkdelta';
+  const fmtA = ext(_kalka.srcName), fmtB = ext(_kalka.dstName);
+  const base = 'kalka-' + clean(_kalka.srcName) + '-' + clean(_kalka.dstName);
+  // Regula awaryjna (deterministyczna): rozszerzenie brak/spoza {dat, arkmap, json} → wzorzec bez sufiksu.
+  return (fmtA && fmtB) ? base + '--' + fmtA + '-do-' + fmtB + '.arkdelta' : base + '.arkdelta';
 }
 
 function _kalkaSummaryHtml(stats, total, bytes) {
@@ -19036,8 +19049,7 @@ function kalkaCreate() {
 
 function kalkaSave() {
   if (!_kalka.text) return;
-  download(_kalka.fname, _kalka.text, 'application/json');
-  toast('✓ Zapisano kalkę: ' + _kalka.fname);
+  saveWithDialog(_kalka.fname, 'application/json', () => _kalka.text);  // toast w helperze
 }
 
 // Budowa pliku delty z state.deltaLog (netto). Zwraca tekst kanoniczny.
@@ -19227,8 +19239,7 @@ function _arkdeltaSuggestedName() {
 function saveDelta() {
   if (!state.deltaLog || state.deltaLog.length === 0) { toast('Brak zmian do zapisania', true); return; }
   const text = buildDelta();
-  download(_arkdeltaSuggestedName(), text, 'application/json');
-  toast('✓ Zapisano kalkę (' + state.deltaLog.length + ' ' + (state.deltaLog.length === 1 ? 'zmiana' : 'zmian') + ')');
+  saveWithDialog(_arkdeltaSuggestedName(), 'application/json', () => text);  // toast w helperze
 }
 
 // Serializacja kalki z zadanych opow (meta + checksumy liczone na nowo).
@@ -19269,8 +19280,8 @@ function saveDeltaRemainder() {
   const ops = _deltaRemainderOps();
   if (!ops.length) { toast('Brak reszty — cała kalka naniesiona.', true); return; }
   const base = (_deltaReview.delta.meta && _deltaReview.delta.meta.base) || state.baseInfo || {};
-  download(_arkdeltaSuggestedName().replace(/\.arkdelta$/, '-reszta.arkdelta'), _deltaSerializeOps(ops, base), 'application/json');
-  toast('✓ Zapisano resztę kalki (' + plPl(ops.length, 'operacja', 'operacje', 'operacji') + ')');
+  saveWithDialog(_arkdeltaSuggestedName().replace(/\.arkdelta$/, '-reszta.arkdelta'), 'application/json',
+    () => _deltaSerializeOps(ops, base));  // toast w helperze
 }
 
 // ── Walidacja pliku (fail-closed, strict refuse z diagnostyką) ───────────────

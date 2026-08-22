@@ -45,6 +45,7 @@ node tests/validate_full.js  # walidator .arkmap: validateFont/UserData/Label/Ar
 node tests/universal_colors.js # uniwersalne kolory (v1.43.3): detekcja Arkadii, golden 51 envId, mapa obca
 node tests/checksums_v3.js    # sumy v3 (v1.44.0): XXH3-64 + kodowanie kanoniczne przeciw oracle, korupcje, skip nie-v3
 node tests/checksums/xxh3_golden.js  # XXH3-64 pure-JS przeciw wektorom oracle (dev + blok w HTML)
+node tests/save_dialogs.js   # dialogi zapisu (v1.44.4): 7 sciezek przez saveWithDialog, smart-nazwy, macierz 16 przypadkow checkSuppressors
 ```
 
 ### tests/checksums/ — laboratorium sum kontrolnych v3
