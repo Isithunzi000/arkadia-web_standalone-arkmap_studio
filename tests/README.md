@@ -1,7 +1,7 @@
 # Testy ArkMap Studio
 
 Harnessy Node.js dla krytycznych ścieżek `arkmap_studio.html`. Powstały przy fixach audytowych
-(A7–A17, szczegóły w dzienniku fixów) i służą jako regresja na przyszłość.
+(A7–A17 i kolejne, szczegóły w CHANGELOG.md) i służą jako regresja na przyszłość.
 
 ## Wymagania
 
@@ -72,15 +72,20 @@ Kod wyjścia: 0 = wszystko OK, 1 = są FAIL-e, 2 = brak fixture.
 Oprócz harnessów Node.js regresja obejmuje testy empiryczne: `tests/empirical.sh` odpala
 pełną aplikację w headless Chromium (driver: `tests/empirical_driver.html` — iframe z
 `arkmap_studio.html`, scenariusze przez eval) i wykonuje scenariusze pogrupowane w
-`SMOKE` oraz `E0`–`E18` (m.in. kalka .arkdelta end-to-end, generator kalki z diffu map, roundtrip .dat, planer,
+`SMOKE` oraz `E0`–`E21` (m.in. kalka .arkdelta end-to-end, generator kalki z diffu map, roundtrip .dat, planer,
 walidacja kierunków, UI, syntetyczne zdarzenia dotyku, a także: PWA runtime (E15), eksport PNG/SVG przez
-prawdziwe UI (E16), serializacja pobrań online (E17), uniwersalne kolory dla map spoza Arkadii (E18)).
+prawdziwe UI (E16), serializacja pobrań online (E17), uniwersalne kolory dla map spoza Arkadii (E18),
+edycja punktów istniejącej custom line (E19), guard toBlob-null przy eksporcie widoku (E20),
+rejection file.text() przy wczytywaniu pliku (E21)).
 `run-all.sh` odpala je automatycznie po harnessach Node.js.
 
 ```bash
-ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13 E14 E15 E16 E17 E18" \
+ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13 E14 E16 E17 E18 E19 E20 E21" \
 ARKTEST_BUDGET=300000 ARKTEST_TIMEOUT=420 bash tests/empirical.sh
 ```
+
+`run-all.sh` odpala grupę E15 dedykowanie (osobny proces, budżet ×2, retry przy zawiesze) —
+dlatego nie ma jej na powyższej liście.
 
 Zmienne: `ARKTEST_GROUPS` (domyślnie `SMOKE`), `ARKTEST_BUDGET` (budżet virtual-time
 przeglądarki, ms), `ARKTEST_TIMEOUT` (limit sekund na grupę, domyślnie 420),

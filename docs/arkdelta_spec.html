@@ -115,7 +115,7 @@
   <li><strong>Self-describing base</strong> — the file records the identity (file checksum) of the map variant it was created from, plus optional version/revision metadata</li>
 </ul>
 
-<div class="note"><strong>Relationship to .arkmap:</strong> A delta never stores a full map — only operations. The base identity is the hierarchical file checksum of the <code>.arkmap</code> canonical form of the map that was loaded when the edits were made (including the reduced-information variant derived from a Mudlet <code>.dat</code> file, where base identity is the file checksum of that derived .arkmap form). The checksum algorithm is the one defined by the .arkmap spec (currently v3 — XXH3-64, 16-hex); deltas written against older map checksum generations (CRC-32, 8-hex) do not match re-saved maps and are refused at the base gate.</div>
+<div class="note"><strong>Relationship to .arkmap:</strong> A delta never stores a full map — only operations. The base identity is the hierarchical file checksum of the <code>.arkmap</code> canonical form of the map that was loaded when the edits were made (including the reduced-information variant derived from a Mudlet <code>.dat</code> file, where base identity is the file checksum of that derived .arkmap form). The checksum algorithm is the one defined by the .arkmap spec (currently v3 — XXH3-64, 16-hex); deltas written against older map checksum generations (CRC-32, 8-hex) never match re-saved maps, so the base gate always reports a mismatch for them (informational dialog — the user may continue; see §4 and §9).</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="top-level">2. Top-Level Structure</h2>

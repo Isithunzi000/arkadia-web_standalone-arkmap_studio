@@ -2,6 +2,26 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## Korekta dokumentacji (2026-08-23, bez zmian w kodzie)
+
+Audyt aktualnosci calej dokumentacji wzgledem kodu v1.44.5 wykryl 11 rozjazdow;
+wszystkie poprawione wylacznie w tekstach (aplikacja bez zmian, wersja zostaje):
+
+- tests/README.md: grupy empiryczne E0–E18 -> E0–E21 (opisy E19/E20/E21),
+  przykladowa komenda ARKTEST_GROUPS zgodna z run-all.sh (E15 dedykowane),
+  wiszaca referencja „dziennik fixow" -> CHANGELOG.md.
+- NOTICE.md: synchronizacja lustra „codziennie" -> 2x dziennie (sync-map.yml).
+- tests/checksums/CANONICAL_V3.md §4: zakres hasha obszaru opisany zgodnie
+  z kodem (grid_mode/is_zone/zone_area_ref/pos poza hashem; notka o v2).
+- docs/arkmap_spec.html: §14.1 team_follow_link dzielone na PIERWSZYM `*`
+  (1:1 z klientem arkadia-web, jak w kodzie); §15 — precyzyjny zakres hasha
+  obszaru zamiast zbyt szerokiego „everything except rooms".
+- docs/arkdelta_spec.html §1: brama bazy nie odrzuca — mismatch to dialog
+  informacyjny z mozliwoscia kontynuacji (spojne z §4).
+- docs/arkmap_manual.html: symbol dowolnej dlugosci (nie „max 2 znaki");
+  41 linii transportowych (27 statkow + 14 ladowych, nie 28/13); eksport .dat
+  dziala takze w trybie edycji (nie „wymaga wyjscia").
+
 ## v1.44.5 — fixy z audytu zewnetrznego Arc 26 + kosmetyka z Arc 25 (R1, K1, K2, K3)
 
 Jeden realny defekt i trzy pozycje kosmetyczne — wszystkie z audytu zewnetrznego

@@ -329,7 +329,7 @@
 <p>Filtr działa na oba algorytmy. Przy ograniczonych trybach trasa może być dłuższa lub nie istnieć („brak trasy"), jeśli jedynym połączeniem jest wyjście specjalne.</p>
 
 <h3>Transporty (statki i dyliżanse)</h3>
-<p>Przełącznik <strong>Pieszo / Statki-dyliżanse</strong> dokłada do grafu wirtualne krawędzie linii transportowych Arkadii (28 statków i 13 dyliżansów). Koszt przejazdu to zmierzony czas w sekundach × przelicznik + kara za wejście na pokład (średnie oczekiwanie na odjazd), więc planer sam waży, czy szybciej iść na piechotę, czy czekać na transport.</p>
+<p>Przełącznik <strong>Pieszo / Statki-dyliżanse</strong> dokłada do grafu wirtualne krawędzie linii transportowych Arkadii (41 linii: 27 statków i 14 transportów lądowych — dyliżans, wóz, powóz). Koszt przejazdu to zmierzony czas w sekundach × przelicznik + kara za wejście na pokład (średnie oczekiwanie na odjazd), więc planer sam waży, czy szybciej iść na piechotę, czy czekać na transport.</p>
 <table>
 <tr><th>Tryb</th><th>Opis</th></tr>
 <tr><td><strong>Normalny</strong></td><td>Kara 30, czas × 0.5 — transport wybierany, gdy wyraźnie się opłaca</td></tr>
@@ -413,7 +413,7 @@
 <p>Tryb edycji pozwala modyfikować mapę — dodawać, usuwać i edytować pokoje, wyjścia, obszary, etykiety i custom lines.</p>
 
 <h3>Włączanie trybu edycji</h3>
-<p>Naciśnij <kbd>Ctrl+E</kbd> lub kliknij przycisk <strong>✎ Edycja</strong> w pasku statusu. Edytor wchodzi od razu w <strong>edycję lokalną</strong> — edycja offline, zapis do .arkmap w dowolnym momencie (eksport .dat wymaga wyjścia z trybu edycji).</p>
+<p>Naciśnij <kbd>Ctrl+E</kbd> lub kliknij przycisk <strong>✎ Edycja</strong> w pasku statusu. Edytor wchodzi od razu w <strong>edycję lokalną</strong> — edycja offline, zapis do .arkmap w dowolnym momencie (eksport .dat działa także w trybie edycji — z aktualnego stanu mapy; niezatwierdzone zmiany z otwartego formularza pokoju nie wejdą do pliku, o czym ostrzega toast).</p>
 <div class="note">Istnieje też wariant <strong>⬡ Sesja GitHub</strong> (edycja z synchronizacją z repozytorium, lock, Pull Request) — obecnie ukryty i nieaktywny; szczegóły w sekcji <a href="#github">Integracja z GitHub</a>.</div>
 
 <h3>Sygnalizacja trybu edycji</h3>
@@ -466,7 +466,7 @@
 <ul>
   <li><strong>Nazwa</strong> — nazwa pokoju (nie może być pusta)</li>
   <li><strong>Środowisko</strong> — dropdown z listą środowisk (envId)</li>
-  <li><strong>Symbol</strong> — max 2 znaki (np. „P" dla Poczty, „[]" dla Tablicy)</li>
+  <li><strong>Symbol</strong> — dowolna długość (Mudlet nie ma limitu; czcionka dopasuje się do kwadratu pokoju, a zbyt długie symbole nie są rysowane). Krótkie symbole (1–2 znaki, np. „P" dla Poczty, „[]" dla Tablicy) są zalecane dla czytelności</li>
   <li><strong>Waga</strong> — koszt wejścia do pokoju dla pathfindingu (≥ 1, domyślnie 1)</li>
   <li><strong>Obrys</strong> — własna ramka pokoju: zaznacz „własny", wybierz kolor i grubość (1–10). Odznaczenie przywraca domyślny obrys.</li>
   <li><strong>Ukryty</strong> — oznacza pokój jako ukryty; sposób renderu zależy od ustawienia „Ukryte pokoje" (Przygaszony / Przerywany / Pokaż / Ukryj)</li>
