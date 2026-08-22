@@ -1,4 +1,4 @@
-// Harness — save_dialogs.js: dialogi zapisu (saveWithDialog) + smart-nazwy + checkSuppressors (v1.44.4).
+// Harness — save_dialogs.js: dialogi zapisu (saveWithDialog) + smart-nazwy + checkSuppressors (v1.44.5).
 // Sekcja A: checkSuppressors — macierz 16 przypadkow (ekstrakcja verbatim, mock state).
 // Sekcja B: piny strukturalne — 7 sciezek zapisu przez saveWithDialog, wpisy acceptMap,
 //           kotwice smart-nazw, zero golych download( poza helperem, brak triggerDownload.
@@ -219,7 +219,7 @@ console.log('— Sekcja B: piny strukturalne —');
 
 // ═══ Sekcja C — pin wersji ═══
 console.log('— Sekcja C: pin wersji —');
-ok(HTML.includes("const APP_VERSION = 'v1.44.4';"), 'C1 APP_VERSION = v1.44.4');
+ok(HTML.includes("const APP_VERSION = 'v1.44.5';"), 'C1 APP_VERSION = v1.44.5');
 
 console.log(`\n═══ save_dialogs.js: PASS ${pass} / FAIL ${fail} ═══`);
 process.exit(fail ? 1 : 0);

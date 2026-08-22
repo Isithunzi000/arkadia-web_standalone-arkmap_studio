@@ -2,6 +2,29 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.44.5 — fixy z audytu zewnetrznego Arc 26 + kosmetyka z Arc 25 (R1, K1, K2, K3)
+
+Jeden realny defekt i trzy pozycje kosmetyczne — wszystkie z audytu zewnetrznego
+dwoma silnikami (Arc 25: 60 findings -> 0 realnych; Arc 26: 91 findings -> 1 realny).
+Audyt Arc 26 domknal pokrycie: cala powierzchnia aplikacji (520 funkcji) zostala
+przeaudytowana zewnetrznie; nieaudytowana pozostaje wylacznie uspiona integracja
+GitHub (swiadomie nietknieta).
+
+- R1 (realny): startClDrawingExisting nie ustawialo state.clRoom — edycja punktow
+  istniejacej custom line na canvasie byla martwa (drawCLInProgress i
+  commitCLDrawing odrzucaly przez guard clRoom). Fix: jedna linia.
+- K1: saveWithDialog — guard na null z dataFn (np. toBlob) w obu galeziach
+  (FSAPI + fallback): toast bledu zamiast zapisu pliku o tresci „null".
+- K2: handlery odczytu plikow (fiArkmap, drag&drop, fiArkdelta) — rejection
+  file.text() konczy sie toastem z nazwa pliku zamiast ciszy w konsoli.
+- K3: hideExitDetail czysci tez state._activeSpecialExit — podswietlenie
+  wyjscia specjalnego nie zostaje na mapie po zamknieciu szczegolow.
+
+Testy: nowy harness tests/fix_batch_v1445.js (24 asercje: ekstrakty verbatim
++ piny strukturalne), nowe scenariusze empiryczne E19 (pelny flow edycji CL:
+punkt -> commit -> undo), E20 (toBlob null), E21 (rejection file.text()).
+Regresja: 30 harnessow Node + empiria SMOKE–E21.
+
 ## v1.44.4 — dialogi zapisu dla wszystkich plikow + smart-nazwy + harness checkSuppressors
 
 Kazdy plik wychodzacy z aplikacji zapisuje sie przez okno z edytowalna nazwa
