@@ -20,7 +20,7 @@ function block(a, b) {
   return HTML.slice(i, j);
 }
 
-// Przepis ekstrakcji jak tools/dat2arkmap.mjs + DEPS + stableStringify (wola go _crcArea).
+// Przepis ekstrakcji jak tools/dat2arkmap.mjs + DEPS + stableStringify (serializacja zapisu).
 const code =
   block('// ── constants.js ──', '// ── validate.js ──') + '\n' +
   block('// ── validate.js ──', '// ── checksum.js ──') + '\n' +

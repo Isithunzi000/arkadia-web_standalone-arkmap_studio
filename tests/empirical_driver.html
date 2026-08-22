@@ -103,7 +103,7 @@ scenario('SMOKE.load', async () => {
   A('SMOKE.load.rooms', st.rooms > 1000, 'rooms=' + st.rooms);
   A('SMOKE.load.areas', st.areas > 10, 'areas=' + st.areas);
   A('SMOKE.load.deltalog', st.deltaLog === 0, 'deltaLog pusty po applyMap');
-  A('SMOKE.load.crc', typeof st.crc === 'string' && /^[0-9a-f]{8}$/i.test(st.crc), 'baseInfo.crc=' + st.crc);
+  A('SMOKE.load.crc', typeof st.crc === 'string' && /^[0-9a-f]{16}$/i.test(st.crc), 'baseInfo.crc=' + st.crc);
   A('SMOKE.load.edit', ev('state.editMode === true').val === true, 'tryb edycji aktywny');
 });
 
@@ -2055,21 +2055,21 @@ scenario('E9.exitreset', async () => {
   EQ('E9.exitreset.ops2', n.n, 2, 'kalka po re-wejsciu kompletna: sesja1+sesja2 (W18 v2)');
 });
 
-scenario('E9.crc-v2-export', async () => {
+scenario('E9.crc-v3-export', async () => {
   await loadBase('dat');
   ex('_prepareArkmapForSave()');
-  EQ('E9.crc-v2-export.alg', ev('state.map.meta.checksums.alg').val, 'v2', 'eksport .arkmap zapisuje alg v2');
-  A('E9.crc-v2-export.ok', ev('verifyChecksums(state.map).ok').val === true, 'verify swiezego eksportu: ok');
+  EQ('E9.crc-v3-export.alg', ev('state.map.meta.checksums.alg').val, 'v3', 'eksport .arkmap zapisuje alg v3');
+  A('E9.crc-v3-export.ok', ev('verifyChecksums(state.map).ok').val === true, 'verify swiezego eksportu: ok');
   const r = JSON.parse(ev('(function(){ const a = state.map.areas.find(a => (a.labels || []).length);'
     + ' if (!a) return JSON.stringify({ skip: true });'
     + ' a.labels[0].text = a.labels[0].text + " X";'
     + ' const v = verifyChecksums(state.map); return JSON.stringify({ ok: v.ok, bad: v.badAreas.length }); })()').val);
-  A('E9.crc-v2-export.label', r.skip || (r.ok === false && r.bad >= 1),
+  A('E9.crc-v3-export.label', r.skip || (r.ok === false && r.bad >= 1),
     'mutacja etykiety po zapisie sum → badAreas (W3 widzi etykiety)');
   const r2 = JSON.parse(ev('(function(){ const ks = Object.keys(state.map.meta.checksums.rooms);'
     + ' delete state.map.meta.checksums.rooms[ks[0]];'
     + ' const v = verifyChecksums(state.map); return JSON.stringify({ ok: v.ok, miss: v.missingRooms.length }); })()').val);
-  A('E9.crc-v2-export.missing', r2.ok === false && r2.miss >= 1, 'pokoj bez sumy → missingRooms + ok:false');
+  A('E9.crc-v3-export.missing', r2.ok === false && r2.miss >= 1, 'pokoj bez sumy → missingRooms + ok:false');
 });
 
 scenario('E9.hidden-roundtrip', async () => {

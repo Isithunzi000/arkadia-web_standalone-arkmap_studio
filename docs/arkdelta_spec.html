@@ -112,10 +112,10 @@
   <li><strong>Anonymous additions</strong> — rooms, areas and labels created by the delta carry no numeric IDs in the file; they use symbolic IDs (<code>d:N</code>) and receive fresh numbers on apply, like an overlay</li>
   <li><strong>Fail-closed</strong> — a corrupted or tampered file is refused outright, with precise diagnostics; nothing is loaded</li>
   <li><strong>Non-destructive</strong> — applying a delta goes through the normal undo machinery: every applied operation enters the undo history as a regular edit, and undo/redo behavior is unchanged</li>
-  <li><strong>Self-describing base</strong> — the file records the identity (CRC) of the map variant it was created from, plus optional version/revision metadata</li>
+  <li><strong>Self-describing base</strong> — the file records the identity (file checksum) of the map variant it was created from, plus optional version/revision metadata</li>
 </ul>
 
-<div class="note"><strong>Relationship to .arkmap:</strong> A delta never stores a full map — only operations. The base identity is the CRC-32 of the <code>.arkmap</code> canonical form of the map that was loaded when the edits were made (including the reduced-information variant derived from a Mudlet <code>.dat</code> file, where base identity is the CRC of that derived .arkmap form).</div>
+<div class="note"><strong>Relationship to .arkmap:</strong> A delta never stores a full map — only operations. The base identity is the hierarchical file checksum of the <code>.arkmap</code> canonical form of the map that was loaded when the edits were made (including the reduced-information variant derived from a Mudlet <code>.dat</code> file, where base identity is the file checksum of that derived .arkmap form). The checksum algorithm is the one defined by the .arkmap spec (currently v3 — XXH3-64, 16-hex); deltas written against older map checksum generations (CRC-32, 8-hex) do not match re-saved maps and are refused at the base gate.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="top-level">2. Top-Level Structure</h2>
@@ -147,12 +147,12 @@
 
 <table>
   <tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr>
-  <tr><td><code>crc</code></td><td>string</td><td class="req">REQ</td><td>CRC-32 (hex) of the canonical .arkmap form of the base map — the hierarchical file checksum as defined by the .arkmap spec</td></tr>
+  <tr><td><code>crc</code></td><td>string</td><td class="req">REQ</td><td>File checksum (hex) of the canonical .arkmap form of the base map — the hierarchical file checksum as defined by the .arkmap spec §15 (algorithm v3: XXH3-64, 16 hex characters)</td></tr>
   <tr><td><code>version</code></td><td>string</td><td class="opt">OPT</td><td>Map version, copied from <code>meta.user_data.version</code> when present</td></tr>
   <tr><td><code>revision</code></td><td>string</td><td class="opt">OPT</td><td>Source revision (commit SHA), copied from <code>meta.user_data.revision</code> when present</td></tr>
 </table>
 
-<p>The CRC is computed <strong>once, at map load time</strong> — not at export time. The computation clones the loaded map, sorts areas/rooms/labels by id, sorts per-room array fields (<code>stubs</code>, <code>exit_locks</code>, <code>special_exit_locks</code>), drops the internal <code>room.area</code> field, and takes the hierarchical <code>meta.checksums.file</code> of the clone. This makes the identity independent of in-memory ordering and of transient editing state.</p>
+<p>The base checksum is computed <strong>once, at map load time</strong> — not at export time. The computation clones the loaded map, sorts areas/rooms/labels by id, sorts per-room array fields (<code>stubs</code>, <code>exit_locks</code>, <code>special_exit_locks</code>), drops the internal <code>room.area</code> field, and takes the hierarchical <code>meta.checksums.file</code> of the clone. This makes the identity independent of in-memory ordering and of transient editing state.</p>
 
 <div class="note"><strong>Why at load:</strong> the base identity must describe the map the user <em>started from</em>, not the map after edits. Computing it at load keeps it stable no matter what the session does afterwards.</div>
 

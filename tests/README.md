@@ -32,7 +32,7 @@ node tests/transports_sync.js   # sync transportów: bramka semantyczna generato
 node tests/ui_strings.js        # watchdog jezyka UI: zero zargonu (payload/checksum/op/seq) w komunikatach
 node tests/ci_workflow.js       # watchdog CI: cache Playwright + sufit timeoutu + pinning w ci-tests.yml
 node tests/tier2_state.js       # Tier 2 (v1.37.0): dirty-guard K2/K3, rename SE Q4, W10/W11/W12 + strazniki
-node tests/tier3_format.js     # Tier 3 (v1.38.0): CRC v2 W3, hidden/symbolColor W4/Q2, piksmapy W9, cap W17, granica sesji W18
+node tests/tier3_format.js     # Tier 3: sumy v3 (XXH3-64) W3, hidden/symbolColor W4/Q2, piksmapy W9, cap W17, granica sesji W18
 node tests/tier4_hardening.js  # Tier 4 (v1.39.0): walidator kalki K6/K7/S8, kodek .dat W1/W2, C-K5 reszta wg P2, C-locks, S7 undo, W6/W8 planer, piny P1/P3
 node tests/tier5_audit.js     # Tier 5 (v1.40.0): fixy audytu AI — __proto__-safe mapy (F1), backlink room.area (F2), suppressor przy addExit (F3), rp-env pendingEnv (F4), placeCtx sid-area + spojnosc classify/apply (F5)
 node tests/tier6_ux.js       # Tier 6 (v1.41.0): UX — dirty przy re-wejsciu (D1), Przywroc-ostatni-zapis + bufor pristineArkmap (D2-c), wiazania dlg-unsaved-exit przy uspionym GitHub (D4), bramka importu trasy (#18), touch w canvasMode (#8); empiria: grupa E12
@@ -43,8 +43,19 @@ node tests/xss_sinks.js      # XSS (v1.43.1): escHtml na interpolacjach danych z
 node tests/malformed_dat.js  # negatywne .dat: obciecia, granice readQString, uszkodzone chunki pixmapy
 node tests/validate_full.js  # walidator .arkmap: validateFont/UserData/Label/Area/top-level
 node tests/universal_colors.js # uniwersalne kolory (v1.43.3): detekcja Arkadii, golden 51 envId, mapa obca
-node tests/legacy_crc.js      # legacy sumy v1 (v1.43.7): verifyChecksums honoruje alg, replika lustra online
+node tests/checksums_v3.js    # sumy v3 (v1.44.0): XXH3-64 + kodowanie kanoniczne przeciw oracle, korupcje, skip nie-v3
+node tests/checksums/xxh3_golden.js  # XXH3-64 pure-JS przeciw wektorom oracle (dev + blok w HTML)
 ```
+
+### tests/checksums/ — laboratorium sum kontrolnych v3
+
+- `CANONICAL_V3.md` — spec normatywny kanonicznego kodowania binarnego (layout bajtowy),
+- `oracle_v3.py` — referencyjny enkoder (Python + modul `xxhash`), generuje wektory,
+- `vectors_v3.json` — wektory: sanity XXH3-64 + golden fixture + kotwice bajtowe,
+- `golden_fixture.arkmap` — fixture 2 obszary / 12 pokoi pokrywajacy wszystkie pola,
+- `xxh3.js` — dev-kopia implementacji JS (produkcyjna: blok `====XXH3-64====` w arkmap_studio.html).
+
+Regeneracja wektorow po zmianie specu: `python3 tests/checksums/oracle_v3.py`.
 
 albo wszystkie naraz:
 

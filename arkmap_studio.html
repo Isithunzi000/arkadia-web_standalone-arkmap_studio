@@ -4703,13 +4703,15 @@ function validate(map) {
 
 
 // ── checksum.js ──────────────────────────────────────────────────────────────
-// Hierarchiczne checksums CRC-32 dla integralności pliku .arkmap
+// Hierarchiczne sumy kontrolne XXH3-64 (alg v3) dla integralności pliku .arkmap
 // Struktura: plik → obszary → pokoje
-// Przechowywane w meta.checksums = { file, areas: {id→hex}, rooms: {id→hex} }
+// Zapis: meta.checksums = { alg:'v3', file, areas:{id→hex16}, rooms:{id→hex16} }
+// Kodowanie kanoniczne wg spec: tests/checksums/CANONICAL_V3.md
+// Weryfikacja wyłącznie alg 'v3'; każdy inny (brak/v1/v2/nieznany) → pominięcie.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // _stripRoomDefaults(room) — usuwa puste kontenery i wartości domyślne z obiektu pokoju.
-// Modyfikuje room in-place. Używane przez _crcRoom (na kopii) i _serializeMap (na klonie).
+// Modyfikuje room in-place. Używane przez _serializeMap (na klonie).
 // Odpowiada spec §6 omission convention: optional fields omitted when carrying no information.
 function _stripRoomDefaults(room) {
   // Empty containers → omit
@@ -4742,104 +4744,483 @@ function _stripRoomDefaults(room) {
   return room;
 }
 
-function _crcRoom(room) {
-  // CRC-32 danych pokoju — na znormalizowanej kopii (strip phantom fields)
-  return crc32str(stableStringify(_stripRoomDefaults(JSON.parse(JSON.stringify(room)))));
+// ====XXH3-64-BEGIN====
+// XXH3-64 (seed 0), czysty JS (BigInt), port referencji xxHash v0.8.3.
+// Weryfikowany wektorami: tests/checksums/xxh3_golden.js + vectors_v3.json.
+const XXH3_SECRET = Uint8Array.from([
+  0xb8, 0xfe, 0x6c, 0x39, 0x23, 0xa4, 0x4b, 0xbe, 0x7c, 0x01, 0x81, 0x2c, 0xf7, 0x21, 0xad, 0x1c,
+  0xde, 0xd4, 0x6d, 0xe9, 0x83, 0x90, 0x97, 0xdb, 0x72, 0x40, 0xa4, 0xa4, 0xb7, 0xb3, 0x67, 0x1f,
+  0xcb, 0x79, 0xe6, 0x4e, 0xcc, 0xc0, 0xe5, 0x78, 0x82, 0x5a, 0xd0, 0x7d, 0xcc, 0xff, 0x72, 0x21,
+  0xb8, 0x08, 0x46, 0x74, 0xf7, 0x43, 0x24, 0x8e, 0xe0, 0x35, 0x90, 0xe6, 0x81, 0x3a, 0x26, 0x4c,
+  0x3c, 0x28, 0x52, 0xbb, 0x91, 0xc3, 0x00, 0xcb, 0x88, 0xd0, 0x65, 0x8b, 0x1b, 0x53, 0x2e, 0xa3,
+  0x71, 0x64, 0x48, 0x97, 0xa2, 0x0d, 0xf9, 0x4e, 0x38, 0x19, 0xef, 0x46, 0xa9, 0xde, 0xac, 0xd8,
+  0xa8, 0xfa, 0x76, 0x3f, 0xe3, 0x9c, 0x34, 0x3f, 0xf9, 0xdc, 0xbb, 0xc7, 0xc7, 0x0b, 0x4f, 0x1d,
+  0x8a, 0x51, 0xe0, 0x4b, 0xcd, 0xb4, 0x59, 0x31, 0xc8, 0x9f, 0x7e, 0xc9, 0xd9, 0x78, 0x73, 0x64,
+  0xea, 0xc5, 0xac, 0x83, 0x34, 0xd3, 0xeb, 0xc3, 0xc5, 0x81, 0xa0, 0xff, 0xfa, 0x13, 0x63, 0xeb,
+  0x17, 0x0d, 0xdd, 0x51, 0xb7, 0xf0, 0xda, 0x49, 0xd3, 0x16, 0x55, 0x26, 0x29, 0xd4, 0x68, 0x9e,
+  0x2b, 0x16, 0xbe, 0x58, 0x7d, 0x47, 0xa1, 0xfc, 0x8f, 0xf8, 0xb8, 0xd1, 0x7a, 0xd0, 0x31, 0xce,
+  0x45, 0xcb, 0x3a, 0x8f, 0x95, 0x16, 0x04, 0x28, 0xaf, 0xd7, 0xfb, 0xca, 0xbb, 0x4b, 0x40, 0x7e,
+]);
+
+const _M64 = (1n << 64n) - 1n;
+const _P64_1 = 0x9E3779B185EBCA87n, _P64_2 = 0xC2B2AE3D27D4EB4Fn;
+const _P64_3 = 0x165667B19E3779F9n, _P64_4 = 0x85EBCA77C2B2AE63n;
+const _P64_5 = 0x27D4EB2F165667C5n;
+const _P32_1 = 0x9E3779B1n, _P32_2 = 0x85EBCA77n, _P32_3 = 0xC2B2AE3Dn;
+const _MX1 = 0x165667919E3779F9n, _MX2 = 0x9FB21C651E98DF25n;
+
+function _r32(b, o) {
+  return (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
+}
+function _r64(b, o) {
+  return (BigInt(_r32(b, o + 4)) << 32n) | BigInt(_r32(b, o));
+}
+function _swap64(x) {
+  x &= _M64;
+  return (((x & 0xFFn) << 56n) | ((x & 0xFF00n) << 40n) |
+          ((x & 0xFF0000n) << 24n) | ((x & 0xFF000000n) << 8n) |
+          ((x >> 8n) & 0xFF000000n) | ((x >> 24n) & 0xFF0000n) |
+          ((x >> 40n) & 0xFF00n) | ((x >> 56n) & 0xFFn));
+}
+function _rotl64(x, r) {
+  x &= _M64;
+  return ((x << BigInt(r)) | (x >> BigInt(64 - r))) & _M64;
+}
+function _mul128fold64(a, b) {
+  const p = (a & _M64) * (b & _M64);
+  return ((p & _M64) ^ (p >> 64n)) & _M64;
+}
+function _avalanche(h) {
+  h = (h ^ (h >> 37n)) & _M64;
+  h = (h * _MX1) & _M64;
+  h = (h ^ (h >> 32n)) & _M64;
+  return h;
+}
+function _avalanche64(h) {
+  h = (h ^ (h >> 33n)) & _M64;
+  h = (h * _P64_2) & _M64;
+  h = (h ^ (h >> 29n)) & _M64;
+  h = (h * _P64_3) & _M64;
+  h = (h ^ (h >> 32n)) & _M64;
+  return h;
+}
+function _rrmxmx(h, len) {
+  h &= _M64;
+  h = (h ^ _rotl64(h, 49) ^ _rotl64(h, 24)) & _M64;
+  h = (h * _MX2) & _M64;
+  h = (h ^ ((h >> 35n) + BigInt(len))) & _M64;
+  h = (h * _MX2) & _M64;
+  h = (h ^ (h >> 28n)) & _M64;
+  return h;
+}
+function _mix16B(input, ioff, soff) {
+  const lo = _r64(input, ioff) ^ _r64(XXH3_SECRET, soff);
+  const hi = _r64(input, ioff + 8) ^ _r64(XXH3_SECRET, soff + 8);
+  return _mul128fold64(lo, hi);
 }
 
-// audyt T3/W3: v2 — CRC obszaru nad kanonicznymi polami obszaru (id, nazwa,
-// user_data, etykiety) + CRC pokoi; puste obszary rozróżnialne po id.
-function _stripAreaForCrc(area) {
-  const c = JSON.parse(JSON.stringify(area));
-  delete c.rooms;                       // pokoje wchodzą przez roomCrcs
-  if (Array.isArray(c.labels)) c.labels.sort((a, b) => a.id - b.id);
-  return c;
+function _len0to16(input, len) {
+  if (len > 8) {
+    const bitflip1 = _r64(XXH3_SECRET, 24) ^ _r64(XXH3_SECRET, 32);
+    const bitflip2 = _r64(XXH3_SECRET, 40) ^ _r64(XXH3_SECRET, 48);
+    const lo = _r64(input, 0) ^ bitflip1;
+    const hi = _r64(input, len - 8) ^ bitflip2;
+    const acc = (BigInt(len) + _swap64(lo) + hi + _mul128fold64(lo, hi)) & _M64;
+    return _avalanche(acc);
+  }
+  if (len >= 4) {
+    const input1 = _r32(input, 0), input2 = _r32(input, len - 4);
+    const bitflip = (_r64(XXH3_SECRET, 8) ^ _r64(XXH3_SECRET, 16)) & _M64;
+    const input64 = (BigInt(input2) + (BigInt(input1) << 32n)) & _M64;
+    return _rrmxmx(input64 ^ bitflip, len);
+  }
+  if (len) {
+    const c1 = input[0], c2 = input[len >> 1], c3 = input[len - 1];
+    const combined = ((c1 << 16) | (c2 << 24) | c3 | (len << 8)) >>> 0;
+    const bitflip = BigInt((_r32(XXH3_SECRET, 0) ^ _r32(XXH3_SECRET, 4)) >>> 0);
+    return _avalanche64(BigInt(combined) ^ bitflip);
+  }
+  return _avalanche64(_r64(XXH3_SECRET, 56) ^ _r64(XXH3_SECRET, 64));
 }
 
-function _crcArea(area, roomCrcs) {   // audyt T3/W3: sygnatura v2 (było: tylko roomCrcs)
-  return crc32str('a2:' + area.id + ':' + stableStringify(_stripAreaForCrc(area)) + ':' + roomCrcs.join(''));
+function _len17to128(input, len) {
+  let acc = (BigInt(len) * _P64_1) & _M64;
+  if (len > 32) {
+    if (len > 64) {
+      if (len > 96) {
+        acc = (acc + _mix16B(input, 48, 96) + _mix16B(input, len - 64, 112)) & _M64;
+      }
+      acc = (acc + _mix16B(input, 32, 64) + _mix16B(input, len - 48, 80)) & _M64;
+    }
+    acc = (acc + _mix16B(input, 16, 32) + _mix16B(input, len - 32, 48)) & _M64;
+  }
+  acc = (acc + _mix16B(input, 0, 0) + _mix16B(input, len - 16, 16)) & _M64;
+  return _avalanche(acc);
 }
 
-function _crcFile(areaCrcs, colors) { // audyt T3/W3: v2 — wplecione tabele kolorów
-  return crc32str('f2:' + stableStringify(colors ?? {}) + ':' + areaCrcs.join(''));
+function _len129to240(input, len) {
+  const nbRounds = Math.floor(len / 16);
+  let acc = (BigInt(len) * _P64_1) & _M64;
+  for (let i = 0; i < 8; i++) {
+    acc = (acc + _mix16B(input, 16 * i, 16 * i)) & _M64;
+  }
+  let accEnd = _mix16B(input, len - 16, 136 - 17);
+  acc = _avalanche(acc);
+  for (let i = 8; i < nbRounds; i++) {
+    accEnd = (accEnd + _mix16B(input, 16 * i, 16 * (i - 8) + 3)) & _M64;
+  }
+  return _avalanche((acc + accEnd) & _M64);
 }
 
-// addChecksums(arkmap) — oblicza i wstawia checksums do meta.
-// Modyfikuje arkmap in-place, zwraca arkmap.
+function _accumulate512(acc, input, ioff, soff) {
+  for (let lane = 0; lane < 8; lane++) {
+    const dataVal = _r64(input, ioff + lane * 8);
+    const dataKey = dataVal ^ _r64(XXH3_SECRET, soff + lane * 8);
+    acc[lane ^ 1] = (acc[lane ^ 1] + dataVal) & _M64;
+    acc[lane] = (acc[lane] + ((dataKey & 0xFFFFFFFFn) * (dataKey >> 32n))) & _M64;
+  }
+}
+function _scramble(acc, soff) {
+  for (let lane = 0; lane < 8; lane++) {
+    let a = acc[lane];
+    a = (a ^ (a >> 47n)) & _M64;
+    a = (a ^ _r64(XXH3_SECRET, soff + lane * 8)) & _M64;
+    acc[lane] = (a * _P32_1) & _M64;
+  }
+}
+function _hashLong(input, len) {
+  const acc = [_P32_3, _P64_1, _P64_2, _P64_3, _P64_4, _P32_2, _P64_5, _P32_1];
+  const nbStripesPerBlock = (192 - 64) / 8;           // 16
+  const blockLen = 64 * nbStripesPerBlock;            // 1024
+  const nbBlocks = Math.floor((len - 1) / blockLen);
+  for (let n = 0; n < nbBlocks; n++) {
+    const base = n * blockLen;
+    for (let s = 0; s < nbStripesPerBlock; s++) {
+      _accumulate512(acc, input, base + s * 64, s * 8);
+    }
+    _scramble(acc, 192 - 64);
+  }
+  const base = nbBlocks * blockLen;
+  const nbStripes = Math.floor(((len - 1) - base) / 64);
+  for (let s = 0; s < nbStripes; s++) {
+    _accumulate512(acc, input, base + s * 64, s * 8);
+  }
+  _accumulate512(acc, input, len - 64, 192 - 64 - 7); // LASTACC_START = 7
+  let result = (BigInt(len) * _P64_1) & _M64;
+  for (let i = 0; i < 4; i++) {
+    const mix = _mul128fold64(acc[2 * i] ^ _r64(XXH3_SECRET, 11 + 16 * i),
+                              acc[2 * i + 1] ^ _r64(XXH3_SECRET, 11 + 16 * i + 8));
+    result = (result + mix) & _M64;
+  }
+  return _avalanche(result);
+}
+
+// xxh3_64(bytes: Uint8Array) -> BigInt (unsigned 64-bit), seed 0
+function xxh3_64(bytes) {
+  const len = bytes.length;
+  if (len <= 16) return _len0to16(bytes, len);
+  if (len <= 128) return _len17to128(bytes, len);
+  if (len <= 240) return _len129to240(bytes, len);
+  return _hashLong(bytes, len);
+}
+
+function xxh3_64hex(bytes) {
+  return xxh3_64(bytes).toString(16).padStart(16, '0');
+}
+// ====XXH3-64-END====
+
+// ====CANONICAL-V3-BEGIN====
+// Kanoniczne kodowanie binarne v3 — spec normatywny: tests/checksums/CANONICAL_V3.md
+const _V3_DIR_ORDER = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw', 'up', 'down', 'in', 'out'];
+const _V3_DIR_SET = new Set(_V3_DIR_ORDER);
+const _CANON_NAN_BYTES = Uint8Array.from([0, 0, 0, 0, 0, 0, 0xF8, 0x7F]); // quiet-NaN 7ff8000000000000
+const _canonAB = new ArrayBuffer(8);
+const _canonF8 = new Uint8Array(_canonAB);
+const _canonDv = new DataView(_canonAB);
+const _canonTe = new TextEncoder();
+
+class _CanonBuf {
+  constructor() { this.b = new Uint8Array(4096); this.n = 0; }
+  reset() { this.n = 0; }
+  _cap(k) {
+    if (this.n + k > this.b.length) {
+      let c = this.b.length * 2;
+      while (c < this.n + k) c *= 2;
+      const nb = new Uint8Array(c);
+      nb.set(this.b.subarray(0, this.n));
+      this.b = nb;
+    }
+  }
+  u8(v) { this._cap(1); this.b[this.n++] = v & 0xFF; }
+  u32(v) {
+    this._cap(4); const b = this.b, n = this.n;
+    b[n] = v & 0xFF; b[n + 1] = (v >>> 8) & 0xFF; b[n + 2] = (v >>> 16) & 0xFF; b[n + 3] = (v >>> 24) & 0xFF;
+    this.n = n + 4;
+  }
+  i32(v) { this.u32(v | 0); }
+  f64(v) {
+    this._cap(8);
+    if (typeof v !== 'number' || Number.isNaN(v)) { this.b.set(_CANON_NAN_BYTES, this.n); this.n += 8; return; } // undefined/nie-liczba → kanoniczny NaN (payload deterministyczny niezależnie od provenancji obiektu)
+    if (v === 0) v = 0;                                            // -0 → +0
+    _canonDv.setFloat64(0, v, true);
+    this.b.set(_canonF8, this.n); this.n += 8;
+  }
+  str(s) {
+    this._cap(4 + s.length * 3);
+    const w = _canonTe.encodeInto(s, this.b.subarray(this.n + 4)).written;
+    const n = this.n;
+    this.b[n] = w & 0xFF; this.b[n + 1] = (w >>> 8) & 0xFF; this.b[n + 2] = (w >>> 16) & 0xFF; this.b[n + 3] = (w >>> 24) & 0xFF;
+    this.n = n + 4 + w;
+  }
+  u64raw(h) {                                                      // surowy hash XXH3-64 (BigInt) jako 8 B LE — do rollupów
+    this._cap(8);
+    for (let i = 0; i < 8; i++) this.b[this.n + i] = Number((h >> BigInt(8 * i)) & 0xFFn);
+    this.n += 8;
+  }
+  bytes() { return this.b.subarray(0, this.n); }
+}
+const _canonBuf = new _CanonBuf();
+
+function _utf8cmp(a, b) {                                          // a, b: Uint8Array — porównanie bajtowe
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) { if (a[i] !== b[i]) return a[i] - b[i]; }
+  return a.length - b.length;
+}
+function _utf8SortArr(arr) {
+  return arr.map(k => [k, _canonTe.encode(k)]).sort((p, q) => _utf8cmp(p[1], q[1])).map(p => p[0]);
+}
+// Klucze mapy kierunkowej: znane wg _V3_DIR_ORDER, potem nieznane UTF-8 bajtowo
+function _v3DirKeys(m) {
+  const out = _V3_DIR_ORDER.filter(d => m[d] !== undefined);
+  const unk = Object.keys(m).filter(k => !_V3_DIR_SET.has(k));
+  return unk.length ? out.concat(_utf8SortArr(unk)) : out;
+}
+// Lista kierunków (array): jak wyżej
+function _v3DirList(arr) {
+  const out = _V3_DIR_ORDER.filter(d => arr.includes(d));
+  const unk = arr.filter(k => !_V3_DIR_SET.has(k));
+  return unk.length ? out.concat(_utf8SortArr(unk)) : out;
+}
+
+function _encodeLabelCanonical(B, lb) {
+  B.i32(lb.id); B.f64(lb.x); B.f64(lb.y); B.i32(lb.z);
+  B.f64(lb.width); B.f64(lb.height);
+  B.str(lb.text ?? '');
+  // tolerancja na uszkodzone pliki (verifyChecksums biegnie przed dialogiem walidacji):
+  // brakujace fg/bg kodowane jako [0,0,0] — deterministycznie, walidator i tak je odrzuci
+  const fg = Array.isArray(lb.fg_color) ? lb.fg_color : [0, 0, 0];
+  const bg = Array.isArray(lb.bg_color) ? lb.bg_color : [0, 0, 0];
+  B.i32(fg[0] | 0); B.i32(fg[1] | 0); B.i32(fg[2] | 0);
+  B.i32(bg[0] | 0); B.i32(bg[1] | 0); B.i32(bg[2] | 0);
+  B.u8(lb.show_on_top ? 1 : 0);
+  B.u8(lb.no_scaling ? 1 : 0);
+  const pm = lb.pixmap;
+  if (pm === undefined || pm === null || pm === '') B.u8(0);
+  else { B.u8(1); B.str(pm); }
+}
+
+// _encodeRoomCanonical(room) — kanoniczne bajty pokoju (prefix 'r3'). Bez klonowania.
+function _encodeRoomCanonical(room) {
+  const B = _canonBuf; B.reset();
+  B.u8(0x72); B.u8(0x33);                                          // 'r3'
+  B.i32(room.id); B.i32(room.x); B.i32(room.y); B.i32(room.z); B.i32(room.env);
+  if (room.weight !== undefined && room.weight !== 1) B.i32(room.weight);
+  if (room.locked) B.u8(1);
+  if (room.hidden) B.u8(1);
+  if (room.symbol) B.str(room.symbol);
+  if (room.name)   B.str(room.name);
+  if (room.notes)  B.str(room.notes);
+
+  const exits = room.exits;
+  if (exits && Object.keys(exits).length) {
+    const ks = _v3DirKeys(exits);
+    B.u32(ks.length);
+    for (const k of ks) { B.str(k); B.i32(exits[k]); }
+  }
+  const locks = room.exit_locks;
+  if (locks && locks.length) {
+    const ks = _v3DirList(locks);
+    B.u32(ks.length);
+    for (const k of ks) B.str(k);
+  }
+  const doors = room.doors;
+  if (doors && Object.keys(doors).length) {
+    const ks = _v3DirKeys(doors);
+    B.u32(ks.length);
+    for (const k of ks) { B.str(k); B.str(doors[k]); }
+  }
+  const stubs = room.stubs;
+  if (stubs && stubs.length) {
+    const ks = _v3DirList(stubs);
+    B.u32(ks.length);
+    for (const k of ks) B.str(k);
+  }
+  const se = room.special_exits;
+  if (se && Object.keys(se).length) {
+    const ks = _utf8SortArr(Object.keys(se));
+    B.u32(ks.length);
+    for (const k of ks) { B.str(k); B.i32(se[k]); }
+  }
+  const sel = room.special_exit_locks;
+  if (sel && sel.length) {
+    const ks = _utf8SortArr(sel);
+    B.u32(ks.length);
+    for (const k of ks) B.str(k);
+  }
+  const ew = room.exit_weights;
+  if (ew && Object.keys(ew).length) {
+    const ks = _v3DirKeys(ew);
+    B.u32(ks.length);
+    for (const k of ks) { B.str(k); B.i32(ew[k]); }
+  }
+  const cl = room.custom_lines;
+  if (cl && Object.keys(cl).length) {
+    const ks = _utf8SortArr(Object.keys(cl));
+    B.u32(ks.length);
+    for (const k of ks) {
+      const e = cl[k];
+      B.str(k);
+      const pts = e.points || [];
+      B.u32(pts.length);                                           // [] = supresor — licznik 0
+      for (const pt of pts) { B.f64(pt[0]); B.f64(pt[1]); }
+      const color = e.color;
+      if (color !== undefined && color !== null) {
+        B.u8(1); B.i32(color[0]); B.i32(color[1]); B.i32(color[2]);
+      }
+      const style = (e.style === undefined || e.style === null) ? 'solid' : e.style;
+      if (style !== 'solid') { B.u8(1); B.str(style); }
+      if (e.arrow) B.u8(1);
+    }
+  }
+  const tags = room.tags;
+  if (tags && tags.length) {
+    const ts = _utf8SortArr(tags);
+    B.u32(ts.length);
+    for (const t of ts) B.str(t);
+  }
+  const ud = room.user_data;
+  if (ud && Object.keys(ud).length) {
+    const ks = _utf8SortArr(Object.keys(ud));
+    B.u32(ks.length);
+    for (const k of ks) { B.str(k); B.str(ud[k]); }
+  }
+  return B.bytes();
+}
+
+// _encodeAreaCanonical(area, roomRawList) — 'a3'; roomRawList: BigInt[] w kolejności id pokoju rosnąco
+function _encodeAreaCanonical(area, roomRawList) {
+  const B = _canonBuf; B.reset();
+  B.u8(0x61); B.u8(0x33);                                          // 'a3'
+  B.i32(area.id); B.str(area.name ?? '');
+  const labels = area.labels;
+  if (labels && labels.length) {
+    const sorted = [...labels].sort((a, b) => a.id - b.id);
+    B.u32(sorted.length);
+    for (const lb of sorted) _encodeLabelCanonical(B, lb);
+  }
+  B.u32(roomRawList.length);
+  for (const h of roomRawList) B.u64raw(h);
+  return B.bytes();
+}
+
+function _encodeColorsCanonical(B, colors) {
+  const env = (colors && colors.env_colors) || {};
+  const ek = Object.keys(env).sort((a, b) => Number(a) - Number(b));
+  B.u32(ek.length);
+  for (const k of ek) { B.i32(Number(k)); B.i32(env[k]); }
+  const ce = (colors && colors.custom_env_colors) || {};
+  const ck = Object.keys(ce).sort((a, b) => Number(a) - Number(b));
+  B.u32(ck.length);
+  for (const k of ck) {
+    const comps = ce[k];
+    B.i32(Number(k)); B.u8(comps.length);
+    for (const c of comps) B.i32(c);
+  }
+}
+
+// _encodeFileCanonical(colors, areaRaw, roomRawGlobal) — 'f3';
+// areaRaw/roomRawGlobal: pary [id, BigInt] posortowane po id rosnąco
+function _encodeFileCanonical(colors, areaRaw, roomRawGlobal) {
+  const B = _canonBuf; B.reset();
+  B.u8(0x66); B.u8(0x33);                                          // 'f3'
+  _encodeColorsCanonical(B, colors);
+  B.u32(areaRaw.length);
+  for (const [, h] of areaRaw) B.u64raw(h);
+  B.u32(roomRawGlobal.length);
+  for (const [, h] of roomRawGlobal) B.u64raw(h);
+  return B.bytes();
+}
+
+function _hex64(h) { return h.toString(16).padStart(16, '0'); }
+
+// addChecksums(arkmap) — oblicza i wstawia sumy v3 do meta. In-place, zwraca arkmap.
 function addChecksums(arkmap) {
   const rooms = {}, areas = {};
   const sortedAreas = [...(arkmap.areas || [])].sort((a, b) => a.id - b.id);
-  const areaCrcList = [];
+  const areaRaw = [], allRoomRaw = [];
 
   for (const area of sortedAreas) {
     const sortedRooms = [...(area.rooms || [])].sort((a, b) => a.id - b.id);
-    const roomCrcList = [];
+    const roomRawList = [];
     for (const room of sortedRooms) {
-      const crc = _crcRoom(room);
-      rooms[String(room.id)] = crc;
-      roomCrcList.push(crc);
+      const raw = xxh3_64(_encodeRoomCanonical(room));
+      rooms[String(room.id)] = _hex64(raw);
+      roomRawList.push(raw);
+      allRoomRaw.push([room.id, raw]);
     }
-    const aCrc = _crcArea(area, roomCrcList);  // audyt T3/W3
-    areas[String(area.id)] = aCrc;
-    areaCrcList.push(aCrc);
+    const aRaw = xxh3_64(_encodeAreaCanonical(area, roomRawList));
+    areas[String(area.id)] = _hex64(aRaw);
+    areaRaw.push([area.id, aRaw]);
   }
+  allRoomRaw.sort((p, q) => p[0] - q[0]);
 
   if (!arkmap.meta) arkmap.meta = {};
-  arkmap.meta.checksums = { alg: 'v2', file: _crcFile(areaCrcList, arkmap.colors), areas, rooms };  // audyt T3/W3
+  arkmap.meta.checksums = {
+    alg: 'v3',
+    file: _hex64(xxh3_64(_encodeFileCanonical(arkmap.colors, areaRaw, allRoomRaw))),
+    areas, rooms,
+  };
   return arkmap;
 }
 
-// Zamrozone formuly CRC v1 (pliki zapisane przed v1.38.0 — meta.checksums bez pola alg).
-// NIE ZMIENIAC: musza pozostac zgodne z 41671a7^, inaczej wszystkie stare pliki dostana
-// falszywe ostrzezenie o uszkodzeniu (Arc 16 — lustro online nioslo v1, straszylo userow).
-function _crcAreaV1(roomCrcs) {
-  return crc32str(roomCrcs.join(''));
-}
-function _crcFileV1(areaCrcs) {
-  return crc32str(areaCrcs.join(''));
-}
-
-// verifyChecksums(arkmap) — weryfikuje checksums hierarchicznie.
-// Zwraca: { present, ok, fileOk, badAreas:[{id,name}], badRooms:[{roomId,areaId,areaName}] }
+// verifyChecksums(arkmap) — weryfikacja hierarchiczna alg v3.
+// Zwraca: { present, ok, fileOk, badAreas:[{id,name}], badRooms:[{roomId,areaId,areaName}], missingRooms }
+// Alg inny niż v3 (brak/v1/v2/nieznany) → present:false (ciche pominięcie, bez ostrzeżeń).
 function verifyChecksums(arkmap) {
   const stored = arkmap.meta?.checksums;
-  if (!stored?.file) return { present: false, ok: true, fileOk: true, badAreas: [], badRooms: [], missingRooms: [] };
-  // Arc 16: rozdzial po alg — nieznany alg = neutralne pominiecie (nie straszymy).
-  if (stored.alg && stored.alg !== 'v2')
-    return { present: false, ok: true, fileOk: true, badAreas: [], badRooms: [], missingRooms: [], unknownAlg: String(stored.alg) };
-  const legacy = !stored.alg;  // Arc 16: pliki sprzed v1.38.0 nie mialy pola alg → zamrozone formuly v1
+  if (!stored?.file || stored.alg !== 'v3') {
+    const skip = { present: false, ok: true, fileOk: true, badAreas: [], badRooms: [], missingRooms: [] };
+    if (stored?.file && stored.alg !== undefined && stored.alg !== 'v3') skip.unknownAlg = String(stored.alg);
+    return skip;
+  }
 
-  const badAreas = [], badRooms = [], missingRooms = [];  // audyt T3/W3: pokoje bez wpisu w stored.rooms = plik mutowany bez przeliczenia sum
+  const badAreas = [], badRooms = [], missingRooms = [];
   const sortedAreas = [...(arkmap.areas || [])].sort((a, b) => a.id - b.id);
-  const computedAreaCrcs = [];
+  const areaRaw = [], allRoomRaw = [];
 
   for (const area of sortedAreas) {
     const sortedRooms = [...(area.rooms || [])].sort((a, b) => a.id - b.id);
-    const computedRoomCrcs = [];
-
+    const roomRawList = [];
     for (const room of sortedRooms) {
-      const computed = _crcRoom(room);
-      computedRoomCrcs.push(computed);
+      const raw = xxh3_64(_encodeRoomCanonical(room));
+      roomRawList.push(raw);
+      allRoomRaw.push([room.id, raw]);
       const storedR = stored.rooms?.[String(room.id)];
-      if (!storedR) missingRooms.push(room.id);  // audyt T3/W3: brak wpisu NIE jest cichym OK
-      if (storedR && computed !== storedR) {
-        badRooms.push({ roomId: room.id, areaId: area.id, areaName: area.name });
-      }
+      if (!storedR) missingRooms.push(room.id);
+      else if (_hex64(raw) !== storedR) badRooms.push({ roomId: room.id, areaId: area.id, areaName: area.name });
     }
-
-    const computedArea = legacy ? _crcAreaV1(computedRoomCrcs) : _crcArea(area, computedRoomCrcs);  // audyt T3/W3 + Arc 16
-    computedAreaCrcs.push(computedArea);
+    const aRaw = xxh3_64(_encodeAreaCanonical(area, roomRawList));
+    areaRaw.push([area.id, aRaw]);
     const storedA = stored.areas?.[String(area.id)];
-    if (storedA && computedArea !== storedA) {
-      badAreas.push({ id: area.id, name: area.name });
-    }
+    if (storedA && _hex64(aRaw) !== storedA) badAreas.push({ id: area.id, name: area.name });
   }
+  allRoomRaw.sort((p, q) => p[0] - q[0]);
 
-  const computedFile = legacy ? _crcFileV1(computedAreaCrcs) : _crcFile(computedAreaCrcs, arkmap.colors);  // audyt T3/W3 + Arc 16
-  const fileOk = computedFile === stored.file;
+  const fileOk = _hex64(xxh3_64(_encodeFileCanonical(arkmap.colors, areaRaw, allRoomRaw))) === stored.file;
   const ok = fileOk && badAreas.length === 0 && badRooms.length === 0 && missingRooms.length === 0;
-  return { present: true, ok, fileOk, badAreas, badRooms, missingRooms, legacy };
+  return { present: true, ok, fileOk, badAreas, badRooms, missingRooms };
 }
+// ====CANONICAL-V3-END====
 
 
 // ── mudlet_dat.js ──
@@ -6306,7 +6687,7 @@ async function loadArkmap(text, filename) {
 
   state.filename = filename || null;
   applyMap(map);
-  const label = chkRes.present ? (chkRes.ok ? (chkRes.legacy ? ' [✓ suma kontrolna v1]' : ' [✓ suma kontrolna]') : ' [⚠ suma kontrolna]') : '';
+  const label = chkRes.present ? (chkRes.ok ? ' [✓ suma kontrolna]' : ' [⚠ suma kontrolna]') : '';
   const allOk = valRes.ok && !hasWarnings && (!chkRes.present || chkRes.ok);
   toast((allOk ? '✓' : '⚠') + ' Wczytano: ' + (filename || 'plik') + fmtSz(text.length) + ' [.arkmap]' + label);
 }
@@ -12295,9 +12676,7 @@ resize();
       if (chkRes.present) {
         if (chkRes.ok) {
           const ok = document.createElement('div'); ok.className = 'val-ok-line';
-          ok.textContent = chkRes.legacy
-            ? '✓ Suma kontrolna pliku: OK (starszy format v1 — przeliczy się przy zapisie)'
-            : '✓ Suma kontrolna pliku: OK';
+          ok.textContent = '✓ Suma kontrolna pliku: OK';
           body.appendChild(ok);
         } else {
           const sec = document.createElement('div');
@@ -12321,7 +12700,7 @@ resize();
         const note = document.createElement('div');
         note.style.cssText = 'font-size: 11px;color:var(--dim)';
         note.textContent = chkRes.unknownAlg
-          ? '(nieznany format sum kontrolnych: alg ' + chkRes.unknownAlg + ' — pominięto weryfikację)'
+          ? '(format sum kontrolnych alg "' + chkRes.unknownAlg + '" nie jest weryfikowany — pominięto weryfikację)'
           : '(brak sum kontrolnych — plik bez weryfikacji spójności)';
         body.appendChild(note);
       }
@@ -13121,7 +13500,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.43.7';
+const APP_VERSION = 'v1.44.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)

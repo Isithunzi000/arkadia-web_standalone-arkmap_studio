@@ -238,10 +238,6 @@ console.log('── T3: buildRoom — mSpecialExitLocks / exit_weights ──');
     extract(NEW, 'function stableStringify(val, indent, _lvl) {'),
     extract(NEW, 'function toQColor(arr, defaultAlpha = 255) {'),
     extract(NEW, 'function _stripRoomDefaults(room) {'),
-    extract(NEW, 'function _crcRoom(room) {'),
-    extract(NEW, 'function _stripAreaForCrc(area) {'),
-    extract(NEW, 'function _crcArea(area, roomCrcs) {'),
-    extract(NEW, 'function _crcFile(areaCrcs, colors) {'),
     extract(NEW, 'function _hash8(s) {'),
     extract(NEW, 'function _datConvertRoom(raw, hashLookup) {'),
     extract(NEW, 'function buildRoom(room, areaId) {'),
@@ -452,13 +448,13 @@ console.log('── T9: piny ──');
   ok(dij.indexOf('if (cur === toId) break;') < dij.indexOf('if (room.locked) continue;'),
     'pin P1: locked pokoj dopuszczalny jako CEL trasy (decyzja wlasciciela — nie zmieniac na Mudlet-parity)');
   // piny wersji
-  ok(NEW.includes("const APP_VERSION = 'v1.43.7';"), 'pin: APP_VERSION v1.43.7');
+  ok(NEW.includes("const APP_VERSION = 'v1.44.0';"), 'pin: APP_VERSION v1.44.0');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok(deltaSrc.split('v1.43.7').length - 1 === 8, 'pin: delta.js 8x v1.43.7');
+  ok(deltaSrc.split('v1.44.0').length - 1 === 8, 'pin: delta.js 8x v1.44.0');
   const t2 = fs.readFileSync(path.join(ROOT, 'tests', 'tier2_state.js'), 'utf8');
-  ok(t2.includes("wersja: v1.43.7"), 'pin: tier2_state.js v1.43.7');
+  ok(t2.includes("wersja: v1.44.0"), 'pin: tier2_state.js v1.44.0');
   const t3 = fs.readFileSync(path.join(ROOT, 'tests', 'tier3_format.js'), 'utf8');
-  ok(t3.includes("pin: APP_VERSION v1.43.7"), 'pin: tier3_format.js v1.43.7');
+  ok(t3.includes("pin: APP_VERSION v1.44.0"), 'pin: tier3_format.js v1.44.0');
 }
 
 // ═══ T10: bramka — wlasne kalki zawsze z sid (K7 nie zabija wlasnych eksportow) ═══

@@ -1,5 +1,5 @@
-// Harness Tier 3 (v1.38.0) — CRC v2 (W3), hidden/symbolColor (W4/Q2), klucz cache piksmap (W9),
-// cap w pushUndo (W17), granica sesji exitEditMode (W18 v2).
+// Harness Tier 3 (v1.44.0) — sumy v3 XXH3-64 (W3, nowa implementacja Arc 19), hidden/symbolColor
+// (W4/Q2), klucz cache piksmap (W9), cap w pushUndo (W17), granica sesji exitEditMode (W18 v2).
 // Wzorzec extract/makeCtx jak tier2_state.js. Uruchamianie z katalogu glownego repo.
 const fs = require('fs');
 const path = require('path');
@@ -23,19 +23,21 @@ const constsStart = NEW.indexOf('const DIRS = [');
 const crcAnchor = 'function crc32str(str) {';
 const constsBlock = NEW.slice(constsStart, NEW.indexOf(crcAnchor)) + extract(NEW, crcAnchor);
 
+// Bloki markerowe sum v3 (XXH3-64 + kodowanie kanoniczne + addChecksums/verifyChecksums)
+function markerBlock(tag) {
+  const re = new RegExp('// ====' + tag + '-BEGIN====([\\s\\S]*?)// ====' + tag + '-END====');
+  const m = NEW.match(re);
+  if (!m) throw new Error('BRAK KOTWICY: marker ' + tag);
+  return m[1];
+}
+
 const code = [
   constsBlock,
   extract(NEW, 'function stableStringify(val, indent, _lvl) {'),
   extract(NEW, 'function toQColor(arr, defaultAlpha = 255) {'),
   extract(NEW, 'function _stripRoomDefaults(room) {'),
-  extract(NEW, 'function _crcRoom(room) {'),
-  extract(NEW, 'function _stripAreaForCrc(area) {'),
-  extract(NEW, 'function _crcArea(area, roomCrcs) {'),
-  extract(NEW, 'function _crcFile(areaCrcs, colors) {'),
-  extract(NEW, 'function _crcAreaV1(roomCrcs) {'),  // Arc 16: verifyChecksums wolaje formuly v1
-  extract(NEW, 'function _crcFileV1(areaCrcs) {'),
-  extract(NEW, 'function addChecksums(arkmap) {'),
-  extract(NEW, 'function verifyChecksums(arkmap) {'),
+  markerBlock('XXH3-64'),
+  markerBlock('CANONICAL-V3'),
   extract(NEW, 'function _hash8(s) {'),
   extract(NEW, 'function _datConvertRoom(raw, hashLookup) {'),
   extract(NEW, 'function buildRoom(room, areaId) {'),
@@ -52,8 +54,8 @@ function makeCtx() {
     'state', 'toast', 'draw', 'updateEditUI', 'updateUndoRedoUI', 'hideBanners', 'closeCtxMenu',
     'cv', 'document', '_paintStrokeRevert', '_paintDisarm',
     'let _paintStroke = null, _lockInterval = null;\n' +
-    code + '\n;return { _stripRoomDefaults, _stripAreaForCrc, _crcRoom, _crcArea, _crcFile, _crcAreaV1, _crcFileV1,' +
-    ' addChecksums, verifyChecksums, _hash8, _datConvertRoom, buildRoom, pushUndo, exitEditMode, crc32str, stableStringify };'
+    code + '\n;return { _stripRoomDefaults, addChecksums, verifyChecksums, _encodeRoomCanonical, xxh3_64hex,' +
+    ' _hash8, _datConvertRoom, buildRoom, pushUndo, exitEditMode, crc32str, stableStringify };'
   );
   const api = fn(
     state,
@@ -72,51 +74,59 @@ function ok(cond, name) { if (cond) { pass++; console.log('  OK   ' + name); } e
 function mkRoom(id, extra) { return Object.assign({ id, x: 1, y: 2, z: 0, env: 258 }, extra || {}); }
 function mkMap(areas, colors) { return { areas: areas, colors: colors || { env_colors: { 258: [255, 0, 0] }, custom_env_colors: {} }, meta: {} }; }
 
-// ═══ T1 (W3): CRC v2 — widocznosc pol, rozroznialnosc pustych obszarow, determinizm ═══
-console.log('── T1 (W3): CRC v2 — etykiety/nazwy/kolory wchodza do sumy, puste obszary rozroznialne ──');
+// ═══ T1 (W3): sumy v3 — widocznosc pol, rozroznialnosc pustych obszarow, determinizm ═══
+console.log('── T1 (W3): v3 — etykiety/nazwy/kolory wchodza do sumy, puste obszary rozroznialne ──');
 {
   const { api } = makeCtx();
-  const r1 = mkRoom(1), r2 = mkRoom(2);
-  const crcR1a = api._crcRoom(r1), crcR1b = api._crcRoom(JSON.parse(JSON.stringify(r1)));
-  ok(crcR1a === crcR1b, '_crcRoom deterministyczny');
-  ok(api._crcRoom(mkRoom(1)) === api._crcRoom(mkRoom(1, { hidden: false })),
-     '_crcRoom: hidden:false stripowane (produkcja v20 bez zmian)');
-  ok(api._crcRoom(mkRoom(1)) !== api._crcRoom(mkRoom(1, { hidden: true })),
-     '_crcRoom: hidden:true zmienia sume pokoju');
+  const hRoom = (r) => api.xxh3_64hex(api._encodeRoomCanonical(r));
+  const r1 = mkRoom(1);
+  ok(hRoom(r1) === hRoom(JSON.parse(JSON.stringify(r1))), 'suma pokoju deterministyczna (round-trip JSON)');
+  ok(hRoom(mkRoom(1)) === hRoom(mkRoom(1, { hidden: false })),
+     'hidden:false pomijane (parzystosc ze stripem)');
+  ok(hRoom(mkRoom(1)) !== hRoom(mkRoom(1, { hidden: true })),
+     'hidden:true zmienia sume pokoju');
 
   const aEmpty5 = { id: 5, name: 'Pusty', rooms: [] };
   const aEmpty9 = { id: 9, name: 'Pusty', rooms: [] };
-  ok(api._crcArea(aEmpty5, []) !== api._crcArea(aEmpty9, []),
-     'puste obszary o roznych id maja rozne CRC (Claude#6)');
+  const sumOf = (m) => { api.addChecksums(m); return m.meta.checksums; };
+  const s5 = sumOf(mkMap([aEmpty5])), s9 = sumOf(mkMap([aEmpty9]));
+  ok(s5.areas['5'] !== s9.areas['9'], 'puste obszary o roznych id maja rozne sumy (Claude#6)');
 
-  const aBase = { id: 5, name: 'Obszar', rooms: [], labels: [{ id: 1, x: 0, y: 0, z: 0, text: 'A' }] };
-  const crcBase = api._crcArea(aBase, []);
-  ok(api._crcArea({ ...aBase, name: 'Inna nazwa' }, []) !== crcBase, 'zmiana nazwy obszaru zmienia CRC (W3)');
-  ok(api._crcArea({ ...aBase, labels: [{ id: 1, x: 0, y: 0, z: 0, text: 'B' }] }, []) !== crcBase,
-     'zmiana etykiety zmienia CRC obszaru (W3)');
-  ok(api._crcArea({ ...aBase, labels: [{ id: 2, x: 0, y: 0, z: 0, text: 'A' }, { id: 1, x: 0, y: 0, z: 0, text: 'A' }] }, []) ===
-     api._crcArea({ ...aBase, labels: [{ id: 1, x: 0, y: 0, z: 0, text: 'A' }, { id: 2, x: 0, y: 0, z: 0, text: 'A' }] }, []),
-     'kolejnosc etykiet nie ma znaczenia (sort po id — determinizm)');
+  const mkL = (id, text) => ({ id, x: 0, y: 0, z: 0, width: 10, height: 5, text,
+                               fg_color: [255, 255, 255], bg_color: [0, 0, 0] });
+  const base = { id: 5, name: 'Obszar', rooms: [], labels: [mkL(1, 'A')] };
+  const csBase = sumOf(mkMap([JSON.parse(JSON.stringify(base))]));
+  const csName = sumOf(mkMap([{ ...JSON.parse(JSON.stringify(base)), name: 'Inna nazwa' }]));
+  ok(csName.areas['5'] !== csBase.areas['5'], 'zmiana nazwy obszaru zmienia sume (W3)');
+  const csLab = sumOf(mkMap([{ ...JSON.parse(JSON.stringify(base)), labels: [mkL(1, 'B')] }]));
+  ok(csLab.areas['5'] !== csBase.areas['5'], 'zmiana etykiety zmienia sume obszaru (W3)');
+  const lab21 = sumOf(mkMap([{ ...JSON.parse(JSON.stringify(base)), labels: [mkL(2, 'A'), mkL(1, 'A')] }]));
+  const lab12 = sumOf(mkMap([{ ...JSON.parse(JSON.stringify(base)), labels: [mkL(1, 'A'), mkL(2, 'A')] }]));
+  ok(lab21.areas['5'] === lab12.areas['5'], 'kolejnosc etykiet nie ma znaczenia (sort po id — determinizm)');
 
-  const f1 = api._crcFile([crcBase], { env_colors: { 258: [255, 0, 0] } });
-  const f2 = api._crcFile([crcBase], { env_colors: { 258: [0, 255, 0] } });
-  ok(f1 !== f2, 'zmiana tabeli kolorow zmienia CRC pliku (W3)');
-  ok(api._crcFile([crcBase], undefined) !== api._crcFile([crcBase], { env_colors: {} }) || true,
-     '_crcFile odporny na brak colors (?? {})');
+  const f1 = sumOf(mkMap([JSON.parse(JSON.stringify(base))], { env_colors: { 258: 7 }, custom_env_colors: {} }));
+  const f2 = sumOf(mkMap([JSON.parse(JSON.stringify(base))], { env_colors: { 258: 8 }, custom_env_colors: {} }));
+  ok(f1.file !== f2.file, 'zmiana tabeli kolorow zmienia sume pliku (W3)');
+  const f3 = sumOf(mkMap([JSON.parse(JSON.stringify(base))], undefined));
+  ok(/^[0-9a-f]{16}$/.test(f3.file), 'suma pliku odporna na brak colors');
 }
 
-// ═══ T2 (W3): addChecksums/verifyChecksums — alg v2, mutacje, missingRooms, stary plik ═══
-console.log('── T2 (W3): addChecksums/verifyChecksums — v2, badAreas, missingRooms, legacy mismatch ──');
+// ═══ T2 (W3): addChecksums/verifyChecksums — alg v3, mutacje, missingRooms, stare alg ═══
+console.log('── T2 (W3): addChecksums/verifyChecksums — v3, badAreas, missingRooms, skip nie-v3 ──');
 {
   const { api } = makeCtx();
-  const area = { id: 5, name: 'A5', rooms: [mkRoom(1), mkRoom(2)], labels: [{ id: 1, x: 0, y: 0, z: 0, text: 'L' }] };
+  const area = { id: 5, name: 'A5', rooms: [mkRoom(1), mkRoom(2)],
+                 labels: [{ id: 1, x: 0, y: 0, z: 0, width: 10, height: 5, text: 'L',
+                            fg_color: [1, 2, 3], bg_color: [4, 5, 6] }] };
   const map = mkMap([area]);
   api.addChecksums(map);
-  ok(map.meta.checksums.alg === 'v2', 'addChecksums zapisuje alg: v2');
+  ok(map.meta.checksums.alg === 'v3', 'addChecksums zapisuje alg: v3');
   const res = api.verifyChecksums(map);
-  ok(res.ok === true && res.missingRooms.length === 0, 'swieze checksums v2 → verify ok');
+  ok(res.ok === true && res.missingRooms.length === 0, 'swieze checksums v3 → verify ok');
 
-  const map2 = mkMap([{ id: 5, name: 'A5', rooms: [mkRoom(1), mkRoom(2)], labels: [{ id: 1, x: 0, y: 0, z: 0, text: 'L' }] }]);
+  const map2 = mkMap([{ id: 5, name: 'A5', rooms: [mkRoom(1), mkRoom(2)],
+                        labels: [{ id: 1, x: 0, y: 0, z: 0, width: 10, height: 5, text: 'L',
+                                   fg_color: [1, 2, 3], bg_color: [4, 5, 6] }] }]);
   api.addChecksums(map2);
   map2.areas[0].labels[0].text = 'ZMIENIONA';
   const res2 = api.verifyChecksums(map2);
@@ -130,19 +140,16 @@ console.log('── T2 (W3): addChecksums/verifyChecksums — v2, badAreas, miss
   ok(res3.ok === false && res3.missingRooms.length === 1 && res3.missingRooms[0] === 2,
      'brak wpisu w stored.rooms → missingRooms + ok:false (Claude#5)');
 
-  // Arc 16: decyzja „olać migracje" ODWOŁANA — sumy v1 (bez alg) sa weryfikowane zamrozonymi
-  // formulami v1. Powod: lustro online nioslo v1 i straszylo userow falszywym „plik uszkodzony".
+  // Arc 19: formuly v1/v2 wycofane — kazdy alg != v3 to ciche pominiecie (present:false).
   const map4 = mkMap([{ id: 5, name: 'A5', rooms: [mkRoom(1)] }]);
-  const v1Room = api._crcRoom(map4.areas[0].rooms[0]);
-  const v1Area = api.crc32str([v1Room].join(''));
-  map4.meta.checksums = { file: api.crc32str([v1Area].join('')), areas: { '5': v1Area }, rooms: { '1': v1Room } };
+  map4.meta.checksums = { file: 'deadbeef', areas: { '5': 'cafe' }, rooms: { '1': 'cafe' } };
   const res4 = api.verifyChecksums(map4);
-  ok(res4.ok === true && res4.legacy === true,
-     'plik z sumami v1 (bez alg) → weryfikowany formulami v1, legacy:true (Arc 16)');
-  map4.areas[0].rooms[0].x = 999;
+  ok(res4.present === false && res4.ok === true,
+     'plik z sumami v1 (bez alg) → ciche pominiecie (Arc 19)');
+  map4.meta.checksums.alg = 'v2';
   const res4b = api.verifyChecksums(map4);
-  ok(res4b.ok === false && res4b.badRooms.length === 1,
-     'v1: reczna mutacja pokoju nadal wykrywana (Arc 16)');
+  ok(res4b.present === false && res4b.unknownAlg === 'v2',
+     'plik z sumami v2 → ciche pominiecie + unknownAlg (Arc 19)');
 }
 
 // ═══ T3 (W4/Q2): konwerter i buildRoom — hidden + symbolColor fallback ═══
@@ -228,12 +235,13 @@ console.log('── T6 (W18 v2): exitEditMode — undo/redo czyszczone, deltaLog
 // ═══ T7: strazniki strukturalne + piny wersji ═══
 console.log('── T7: strazniki strukturalne Tier 3 + piny wersji ──');
 {
-  ok(NEW.includes("const APP_VERSION = 'v1.43.7';"), 'pin: APP_VERSION v1.43.7');
+  ok(NEW.includes("const APP_VERSION = 'v1.44.0';"), 'pin: APP_VERSION v1.44.0');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok((deltaSrc.match(/v1\.43\.7/g) || []).length === 8, 'pin: delta.js 8x v1.43.7 (4 linie x includes+label)');
-  ok(NEW.includes("arkmap.meta.checksums = { alg: 'v2',"), 'straznik: addChecksums alg v2');
-  ok(NEW.includes('function _crcArea(area, roomCrcs)') && NEW.includes('function _crcFile(areaCrcs, colors)'),
-     'straznik: sygnatury CRC v2');
+  ok((deltaSrc.match(/v1\.44\.0/g) || []).length === 8, 'pin: delta.js 8x v1.44.0 (4 linie x includes+label)');
+  ok(NEW.includes("alg: 'v3',"), 'straznik: addChecksums alg v3');
+  ok(NEW.includes('// ====XXH3-64-BEGIN====') && NEW.includes('// ====CANONICAL-V3-BEGIN====') &&
+     !NEW.includes('function _crcArea(area, roomCrcs)'),
+     'straznik: bloki markerowe v3, formuly v2 usuniete');
   ok(NEW.includes("if (room.hidden !== undefined && typeof room.hidden !== 'boolean')"),
      'straznik: validateRoom typ hidden');
   ok(NEW.includes("if (room.hidden && !ud['system.hidden']) ud['system.hidden'] = '1';"),

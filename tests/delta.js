@@ -457,7 +457,7 @@ ok(HTML.includes('state.baseInfo = _computeBaseInfo();'), 'integracja: baseInfo 
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.43.7';"), 'wersja: v1.43.7');
+ok(HTML.includes("const APP_VERSION = 'v1.44.0';"), 'wersja: v1.44.0');
 
 // — W3 (v1.35.0): etykiety kalki zachowane przez 6 niskopoziomowych sciezek commit —
 {
@@ -824,7 +824,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
   ok(HTML.includes('const _DELTA_TYPE_PL = {') && HTML.includes("MOVE_ROOM: 'przesunięcie pokoju'")
     && HTML.includes("AUTO_FIX_SUPPRESSORS: 'automatyczna naprawa podwójnych linii'"),
     'W1 karta: typy opów po polsku (_DELTA_TYPE_PL)');
-  ok(HTML.includes("const APP_VERSION = 'v1.43.7';"), 'wersja v1.43.7');
+  ok(HTML.includes("const APP_VERSION = 'v1.44.0';"), 'wersja v1.44.0');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -860,7 +860,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.43.7';"), 'wersja v1.43.7 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.44.0';"), 'wersja v1.44.0 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji
@@ -964,15 +964,15 @@ console.log('— T11: audyt T1 — klasyfikator ≡ apply —');
   ok(HTML.includes("if (aid <= 0) { items.push(_deltaClsItem(op, 'impossible', 'obszar domyślny"), 'T1: klasyfikator guard DELETE_AREA <= 0');
   ok(HTML.includes('kierunek przeciwny u pokoju docelowego jest zajęty'), 'T1: klasyfikator ADD_EXIT guard przeciwnego kierunku');
   ok(HTML.includes('return false;  // audyt T1/W15'), 'T1: commitDeleteArea jawny zwrot false');
-  ok(HTML.includes("const APP_VERSION = 'v1.43.7';"), 'wersja v1.43.7');
+  ok(HTML.includes("const APP_VERSION = 'v1.44.0';"), 'wersja v1.44.0');
 }
 
 
-console.log('— T12: audyt T3 — baseInfo widzi etykiety/kolory (CRC v2), baseCheck, reszta kalki —');
+console.log('— T12: audyt T3 — baseInfo widzi etykiety/kolory (suma v3), baseCheck, reszta kalki —');
 {
   const c = makeDeltaCtx();
   const bi1 = c.api._computeBaseInfo();
-  ok(bi1 && typeof bi1.crc === 'string' && bi1.crc.length === 8, 'baseInfo: crc v2 obecne');
+  ok(bi1 && typeof bi1.crc === 'string' && bi1.crc.length === 16, 'baseInfo: crc v3 obecne (16 hex)');
   const a1 = c.state.map.areas[0];
   const labels0 = a1.labels;
   const colors0 = c.state.map.colors.custom_env_colors;

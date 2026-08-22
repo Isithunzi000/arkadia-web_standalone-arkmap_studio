@@ -1,0 +1,323 @@
+{
+ "format": "arkmap",
+ "format_version": 1,
+ "meta": {
+  "name": "golden-fixture-v3",
+  "source_file": "golden_fixture.dat"
+ },
+ "colors": {
+  "env_colors": {
+   "10": 7,
+   "2": 15
+  },
+  "custom_env_colors": {
+   "2": [
+    255,
+    128,
+    0
+   ],
+   "10": [
+    1,
+    2,
+    3,
+    4
+   ]
+  }
+ },
+ "areas": [
+  {
+   "id": 1,
+   "name": "Obszar Testowy ąę",
+   "rooms": [
+    {
+     "id": 1,
+     "x": 0,
+     "y": 0,
+     "z": 0,
+     "env": 1
+    },
+    {
+     "id": 2,
+     "x": -17,
+     "y": 42,
+     "z": -3,
+     "env": 260,
+     "weight": 7,
+     "locked": true,
+     "hidden": true,
+     "symbol": "@",
+     "name": "Karczma „Pod Złotym Smokiem” 🐉",
+     "notes": "zażółć gęślą jaźń — notatka testowa",
+     "exits": {
+      "n": 1,
+      "se": 3,
+      "bogusdir": 99
+     },
+     "exit_locks": [
+      "n",
+      "se"
+     ],
+     "doors": {
+      "n": "locked",
+      "se": "open"
+     },
+     "stubs": [
+      "w",
+      "up"
+     ],
+     "special_exits": {
+      "wejdź do piwnicy": 5,
+      "uciekaj": 1
+     },
+     "special_exit_locks": [
+      "uciekaj"
+     ],
+     "exit_weights": {
+      "n": 1,
+      "se": 12
+     },
+     "custom_lines": {
+      "n": {
+       "points": [
+        [
+         0.0,
+         0.0
+        ],
+        [
+         1.5,
+         2.25
+        ],
+        [
+         3.0,
+         -4.5
+        ]
+       ],
+       "color": [
+        255,
+        32,
+        0
+       ],
+       "style": "dashed",
+       "arrow": true
+      },
+      "uciekaj": {
+       "points": [],
+       "style": null,
+       "arrow": null
+      }
+     },
+     "tags": [
+      "quest",
+      "sklep",
+      "⚓"
+     ],
+     "user_data": {
+      "klucz z ogonkami ąę": "wartość 🧭",
+      "zz": "1"
+     }
+    },
+    {
+     "id": 3,
+     "x": 5,
+     "y": 5,
+     "z": 0,
+     "env": 4,
+     "exits": {
+      "nw": 2
+     },
+     "exit_weights": {
+      "nw": 3
+     }
+    },
+    {
+     "id": 4,
+     "x": 9,
+     "y": 1,
+     "z": 0,
+     "env": 2,
+     "custom_lines": {
+      "e": {
+       "points": [
+        [
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.5
+        ]
+       ]
+      }
+     },
+     "exits": {
+      "e": 1
+     }
+    },
+    {
+     "id": 5,
+     "x": -4,
+     "y": -8,
+     "z": -1,
+     "env": 3,
+     "weight": 2
+    },
+    {
+     "id": 6,
+     "x": 1,
+     "y": 2,
+     "z": 0,
+     "env": 1,
+     "exits": {},
+     "doors": {},
+     "exit_weights": {},
+     "custom_lines": {},
+     "special_exits": {},
+     "user_data": {},
+     "stubs": [],
+     "exit_locks": [],
+     "special_exit_locks": [],
+     "tags": [],
+     "weight": 1,
+     "locked": false,
+     "hidden": false,
+     "symbol": "",
+     "name": "",
+     "notes": ""
+    }
+   ],
+   "labels": [
+    {
+     "id": 2,
+     "x": 10.5,
+     "y": -20.25,
+     "z": 0,
+     "width": 100.0,
+     "height": 30.5,
+     "text": "Drugi label (sort po id)",
+     "fg_color": [
+      255,
+      255,
+      255
+     ],
+     "bg_color": [
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "id": 1,
+     "x": -0.0,
+     "y": 1.5,
+     "z": -2,
+     "width": 50.0,
+     "height": 12.25,
+     "text": "Label z -0.0 i pixmap",
+     "fg_color": [
+      255,
+      0,
+      0
+     ],
+     "bg_color": [
+      0,
+      0,
+      255
+     ],
+     "show_on_top": true,
+     "no_scaling": true,
+     "pixmap": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGM8IafBwMDAxMDAwMDAAAANcgESOXKF8gAAAABJRU5ErkJggg=="
+    }
+   ],
+   "user_data": {
+    "area-key": "area-val"
+   }
+  },
+  {
+   "id": -5,
+   "name": "Ujemny obszar",
+   "rooms": [
+    {
+     "id": 101,
+     "x": 1000000,
+     "y": -1000000,
+     "z": -2147483648,
+     "env": 0,
+     "notes": "skrajne wspolrzedne"
+    },
+    {
+     "id": 102,
+     "x": 7,
+     "y": 7,
+     "z": 7,
+     "env": 7,
+     "exits": {
+      "down": 103
+     },
+     "custom_lines": {
+      "down": {
+       "points": [
+        [
+         1.0,
+         1.0
+        ]
+       ],
+       "style": "dotted",
+       "arrow": true
+      }
+     }
+    },
+    {
+     "id": 103,
+     "x": 0,
+     "y": 0,
+     "z": 5,
+     "env": 8,
+     "special_exits": {
+      "z": 101,
+      "ą": 102,
+      "a": 5
+     },
+     "exits": {
+      "down": 101
+     }
+    },
+    {
+     "id": 104,
+     "x": 2,
+     "y": 3,
+     "z": 5,
+     "env": 8,
+     "exits": {
+      "up": 103
+     },
+     "exit_locks": [
+      "up"
+     ],
+     "stubs": [
+      "n",
+      "s"
+     ]
+    },
+    {
+     "id": 105,
+     "x": 8,
+     "y": 8,
+     "z": 5,
+     "env": 9,
+     "user_data": {
+      "10": "dziesiec",
+      "2": "dwa"
+     }
+    },
+    {
+     "id": 106,
+     "x": 11,
+     "y": 12,
+     "z": 5,
+     "env": 9
+    }
+   ],
+   "labels": []
+  }
+ ]
+}
