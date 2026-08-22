@@ -46,6 +46,7 @@ node tests/universal_colors.js # uniwersalne kolory (v1.43.3): detekcja Arkadii,
 node tests/checksums_v3.js    # sumy v3 (v1.44.0): XXH3-64 + kodowanie kanoniczne przeciw oracle, korupcje, skip nie-v3
 node tests/checksums/xxh3_golden.js  # XXH3-64 pure-JS przeciw wektorom oracle (dev + blok w HTML)
 node tests/save_dialogs.js   # dialogi zapisu (v1.44.4): 7 sciezek przez saveWithDialog, smart-nazwy, macierz 16 przypadkow checkSuppressors
+node tests/fix_batch_v1445.js # fixy v1.44.5: R1 clRoom w startClDrawingExisting, K1 guard toBlob-null w saveWithDialog, K2 rejection file.text(), K3 czyszczenie _activeSpecialExit
 ```
 
 ### tests/checksums/ — laboratorium sum kontrolnych v3

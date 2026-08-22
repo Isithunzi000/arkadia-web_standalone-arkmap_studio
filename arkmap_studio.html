@@ -9663,6 +9663,7 @@ async function saveWithDialog(defaultName, mimeType, dataFn) {
       });
       const writable = await fh.createWritable();
       const data = await dataFn();
+      if (data == null) { toast('✗ Nie udało się wygenerować danych do zapisu', true); return false; }  // audyt K1: toBlob moze zwrocic null
       if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
         await writable.write(data);
       } else {
@@ -9680,6 +9681,7 @@ async function saveWithDialog(defaultName, mimeType, dataFn) {
 
   // Fallback: standard <a download>
   const data = await dataFn();
+  if (data == null) { toast('✗ Nie udało się wygenerować danych do zapisu', true); return false; }  // audyt K1: toBlob moze zwrocic null
   if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
     downloadBinary(defaultName, data, mimeType);
   } else {
@@ -12137,10 +12139,13 @@ fiArkmap.addEventListener('change', async e => {
   if (!e.target.files[0]) return;
   const file = e.target.files[0];
   e.target.value = '';
-  if (checkLocalLoadDuringEdit(async () => {
-    await loadArkmap(await file.text(), file.name);
-  })) return;
-  await loadArkmap(await file.text(), file.name);
+  const readAndLoad = async () => {
+    let text;
+    try { text = await file.text(); } catch { toast('✗ Nie można odczytać pliku: ' + (file?.name || 'plik'), true); return; }  // audyt K2
+    await loadArkmap(text, file.name);
+  };
+  if (checkLocalLoadDuringEdit(readAndLoad)) return;
+  await readAndLoad();
 });
 
 btnLoadDat.addEventListener('click', () => fiDat.click());
@@ -12168,11 +12173,14 @@ async function handleDropFiles(files) {
     const file = files[0];
     const doLoad = async () => {
       if (file.name.endsWith('.arkmap')) {
-        await loadArkmap(await file.text(), file.name);
+        let text;
+        try { text = await file.text(); } catch { toast('✗ Nie można odczytać pliku: ' + (file?.name || 'plik'), true); return; }  // audyt K2
+        await loadArkmap(text, file.name);
       } else if (file.name.endsWith('.dat')) {
         state.filename = file.name; await loadDat(file);
       } else {
-        const text = await file.text();
+        let text;
+        try { text = await file.text(); } catch { toast('✗ Nie można odczytać pliku: ' + (file?.name || 'plik'), true); return; }  // audyt K2
         let parsed; try { parsed = JSON.parse(text); } catch { toast('✗ Nie można odczytać pliku: ' + (file?.name || 'plik'), true); return; }
         if (parsed?.format === 'arkmap') await loadArkmap(text);
         else toast('✗ Nieznany format JSON (oczekiwano .arkmap)', true);
@@ -13545,7 +13553,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.44.4';
+const APP_VERSION = 'v1.44.5';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -15354,6 +15362,7 @@ function hideExitDetail() {
   if (detail) detail.style.display = 'none';
   document.querySelectorAll('#exits-grid .ec, #exits-extra .ec').forEach(ec => ec.classList.remove('editing'));
   state._activeExitDir = null;
+  state._activeSpecialExit = null;
   draw();
 }
 
@@ -15880,6 +15889,7 @@ function startClDrawingExisting(dir) {
   if (!state.selected || !dir) return;
   const room = state.roomById[state.selected];
   if (!room || !room.custom_lines?.[dir]) return;
+  state.clRoom = room;
   state.clIsNew = false;
   state.clDir = dir;
   state.clOriginalPoints = [...(room.custom_lines[dir].points || [])];
@@ -21337,7 +21347,8 @@ fiArkdelta.addEventListener('change', async e => {
   const f = e.target.files[0];
   e.target.value = '';
   if (!f) return;
-  const text = await f.text();
+  let text;
+  try { text = await f.text(); } catch { toast('✗ Nie można odczytać pliku: ' + (f?.name || 'plik'), true); return; }  // audyt K2
   const res = validateDeltaText(text);
   if (!res.ok) { openDeltaErrors(res.errors); return; }
   const chk = _deltaBaseCheck(res.delta.meta.base);  // M4

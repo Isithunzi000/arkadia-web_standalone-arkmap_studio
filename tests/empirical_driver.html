@@ -3971,6 +3971,73 @@ function finish() {
   d.style.display = 'block';
   document.title = 'DONE p=' + _pass + ' f=' + _fail;
 }
+
+// ═══ GRUPA E19 — R1 (v1.44.5): edycja punktow istniejacej CL na canvasie ═══
+// Regresja: startClDrawingExisting nie ustawialo state.clRoom — draw i commit
+// odrzucaly (guardy), punkty cicho ginely. Fix: state.clRoom = room.
+scenario('E19.editExistingCL', async () => {
+  await loadBase('dat');
+  ex('state.editMode = true; updateEditUI();');
+  ex('(function(){ const id = Object.keys(state.roomById)[0]; const r = state.roomById[id];'
+   + ' r.custom_lines = { n: { points: [[r.x, r.y], [r.x, r.y - 2]], color: [255, 0, 0], arrow: true } };'
+   + ' state.selected = r.id; window.__e19id = r.id; draw(); })()');
+  ex('startClDrawingExisting("n")');
+  A('E19.clRoom', ev('state.clRoom !== null && state.clRoom.id === window.__e19id').val === true,
+    'startClDrawingExisting ustawia state.clRoom (fix R1)');
+  EQ('E19.mode', ev('state.canvasMode').val, 'cl-drawing', 'tryb cl-drawing aktywny');
+  EQ('E19.pts', ev('state.clPoints.length').val, 2, 'clPoints zaladowane z istniejacej CL');
+  // Dodaj punkt i zatwierdz — przed fixem commitCLDrawing odrzucal (clRoom null)
+  ex('state.clPoints.push([state.clRoom.x + 1, state.clRoom.y - 1]); commitCLDrawing();');
+  EQ('E19.committed', ev('state.roomById[window.__e19id].custom_lines.n.points.length').val, 3,
+    'commit zapisal nowy punkt w CL');
+  A('E19.reset', ev('state.clRoom === null && state.canvasMode === "normal"').val === true,
+    'po commicie: clRoom null, tryb normal');
+  ex('undoAction()');
+  EQ('E19.undo', ev('state.roomById[window.__e19id].custom_lines.n.points.length').val, 2,
+    'undo przywraca oryginalne 2 punkty');
+});
+
+// ═══ GRUPA E20 — K1 (v1.44.5): toBlob null → toast bledu, zero zapisu ═══
+scenario('E20.toBlobNull', async () => {
+  await loadBase('dat');
+  ex('window.showSaveFilePicker = undefined;'  // headless: wymuszony fallback helpera
+   + ' window.__e20dl = false; window.__e20orig = HTMLCanvasElement.prototype.toBlob;'
+   + ' HTMLCanvasElement.prototype.toBlob = function(cb){ cb(null); };'
+   + ' URL.createObjectURL = function(){ window.__e20dl = true; return "blob:e20"; };'
+   + ' document.getElementById("ep-fmt-png").click();'
+   + ' document.getElementById("ep-do-btn").click();');
+  const t = AEV('E20.toast', await eva('(async function(){'
+   + ' for (var i = 0; i < 100; i++) {'
+   + '   var tx = document.getElementById("toast").textContent;'
+   + '   if (tx.indexOf("Nie udało się wygenerować") !== -1) return tx;'
+   + '   await new Promise(function(res){ setTimeout(res, 50); });'
+   + ' } return null; })()'), 'toast po null z toBlob');
+  A('E20.toastShown', t !== null, 'null z toBlob → toast bledu (fix K1), dostano: ' + JSON.stringify(t));
+  A('E20.noDownload', ev('window.__e20dl').val === false, 'null z toBlob → zero zapisu/downloadu');
+  ex('HTMLCanvasElement.prototype.toBlob = window.__e20orig;');
+});
+
+// ═══ GRUPA E21 — K2 (v1.44.5): rejection file.text() → toast, mapa nietknieta ═══
+scenario('E21.fileReadReject', async () => {
+  await loadBase('dat');
+  const name0 = ev('state.map.meta.map_name').val;
+  ex('window.__e21orig = File.prototype.text;'
+   + ' File.prototype.text = function(){ return Promise.reject(new Error("read fail")); };'
+   + ' (function(){ var fi = document.getElementById("fi-arkmap");'
+   + '   Object.defineProperty(fi, "files", { value: [new File(["x"], "zla.arkmap")], configurable: true });'
+   + '   fi.dispatchEvent(new Event("change", { bubbles: true })); })()');
+  const t = AEV('E21.toast', await eva('(async function(){'
+   + ' for (var i = 0; i < 100; i++) {'
+   + '   var tx = document.getElementById("toast").textContent;'
+   + '   if (tx.indexOf("Nie można odczytać pliku") !== -1) return tx;'
+   + '   await new Promise(function(res){ setTimeout(res, 50); });'
+   + ' } return null; })()'), 'toast po rejection file.text()');
+  A('E21.toastShown', t !== null && t.indexOf('zla.arkmap') !== -1,
+    'rejection file.text() → toast z nazwa pliku (fix K2), dostano: ' + JSON.stringify(t));
+  EQ('E21.mapIntact', ev('state.map.meta.map_name').val, name0, 'mapa nietknieta po rejection');
+  ex('File.prototype.text = window.__e21orig;');
+});
+
 runAll();
 </script>
 </body>
