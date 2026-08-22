@@ -2,6 +2,54 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.44.0 — silnik sum kontrolnych v3: XXH3-64 + kodowanie kanoniczne (Arc 19)
+
+Wymiana całego silnika sum kontrolnych na podstawie pomiarow z laboratorium
+wydajnosci (Arc 18): weryfikacja CRC-32/stableStringify byla jedynym
+istotnym kosztem ladowania .arkmap. Nowy silnik: kodowanie kanoniczne
+binarne (deterministyczny format bajtowy, normatywnie:
+tests/checksums/CANONICAL_V3.md) + XXH3-64 (seed 0, czysty port JS
+na BigInt zgodny z referencja xxHash v0.8.3, sciezka WASM
+opcjonalna w przyszlosci). Jedyna zapisywana i weryfikowana wersja
+to alg: "v3"; formuly v1/v2 i dispatch zostaly usuniete.
+
+- Wydajnosc: weryfikacja 432k pokoi 14,3 s → ~1,4-1,7 s (~8,5x);
+  realna mapa (26988 pokoi) ~447 ms.
+- Kodowanie kanoniczne: i32/f64 little-endian (-0 → +0, kazdy NaN lub
+  nie-liczba → kanoniczny quiet-NaN 7ff8000000000000), stringi
+  length-prefixed UTF-8, klucze map w ustalonym porzadku domenowym
+  (kierunki n,ne,e,se,s,sw,w,nw,up,down,in,out; pozostale klucze UTF-8
+  bajtowo; klucze numeryczne rosnaco). Prefiksy domen r3/a3/f3;
+  rollup-y z surowych 8-bajtowych hashy LE; zapis 16 znakow hex.
+- Wartosci domyslne pomijane w kodowaniu (strip-equivalence
+  udowodnione testem T3): reprezentacja w pamieci nie wplywa na sume.
+- verifyChecksums: weryfikuje wylacznie v3; brak alg, v1, v2 i kazda
+  inna wartosc → ciche pominiecie (nigdy falszywy alarm). Toast
+  bez dopisku przy pominieciu; dialog z notka o nieznanym alg.
+- Konsekwencje akceptowane (brak uzytkownikow formatow v1/v2):
+  stare kalki .arkdelta (base.crc 8-hex) nie pasuja do map
+  przeliczonych do v3 — odmowa na bramce bazy; aplikacje >= v1.43.7
+  traktuja v3 jako nieznany alg (ciche OK); starsze zglaszalyby
+  falszywa niezgodnosc. .arkdelta zachowuje CRC-32 dla wlasnych sum
+  (checksums.file/ops) — to osobny format.
+- Lustro: map_master3.arkmap na galezi mapa przeliczone do v3
+  (self-check wlasnym verifierem OK, 60 obszarow / 26988 pokoi;
+  produkcja serwuje alg v3). sync-map.yml: self-check przepisany na
+  ekstrakcje blokow markerowych (====XXH3-64==== / ====CANONICAL-V3====)
+  — konwerter tools/dat2arkmap.mjs podaza automatycznie.
+- Testy: tests/checksums/ — laboratorium v3: spec CANONICAL_V3.md,
+  oracle referencyjny oracle_v3.py (Python, bitowa zgodnosc z JS),
+  24 wektory sanity + kotwica XXH3-64("") = 2d06800538d394c2,
+  zloty fixture (12 pokoi, wszystkie pola i przypadki brzegowe).
+  tests/checksums_v3.js (41 asercji) zastepuje tests/legacy_crc.js;
+  xxh3_golden.js weryfikuje zarowno kopie deweloperska jak i blok
+  markerowy w HTML (2 x 25). Driver empiryczny: E9.crc-v3-export,
+  SMOKE.load.crc na 16 hex. Regresja: 28/28 harnessow Node,
+  empiryczna SMOKE + E0-E18: 789 PASS / 0 FAIL.
+- Spec: arkmap_spec §15 przepisany normatywnie na v3 (+ wiersz w
+  tabeli §22); arkdelta_spec §4: identycznosc bazy wg alg v3;
+  manual: odwolania do CRC-32 zaktualizowane do XXH3-64.
+
 ## v1.43.7 — legacy sumy v1 + przeliczone lustro online (Arc 16)
 
 Zgloszenie usera: „Pobierz online → .arkmap" pokazywalo falszywe
