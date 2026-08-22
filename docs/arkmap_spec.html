@@ -587,7 +587,7 @@
 <h3>Computation algorithm (v3)</h3>
 <ol>
   <li><strong>Room hash</strong> = XXH3-64 (seed 0) of the canonical binary encoding of the room, domain prefix <code>"r3"</code>. Default values are omitted from the encoding (<code>weight: 1</code>, <code>locked: false</code>, <code>hidden: false</code>, empty strings and empty containers), internal fields (<code>area</code>) are excluded, and custom line defaults are normalized (<code>style: "solid"</code> → omit, <code>arrow: false</code> → omit). This ensures hash stability regardless of in-memory representation.</li>
-  <li><strong>Area hash</strong> = XXH3-64 of <code>"a3"</code> + the canonical encoding of the area attributes (id, name, labels sorted by <code>id</code>) + the rollup of raw 8-byte little-endian room hashes sorted by room ID. Because the area's own fields and its <code>id</code> are part of the input, two empty areas are distinguishable.</li>
+  <li><strong>Area hash</strong> = XXH3-64 of <code>"a3"</code> + the canonical encoding of the area attributes (id, name, labels sorted by <code>id</code>, <code>user_data</code> with keys in UTF-8 byte order) + the rollup of raw 8-byte little-endian room hashes sorted by room ID. Because the area's own fields and its <code>id</code> are part of the input, two empty areas are distinguishable.</li>
   <li><strong>File hash</strong> = XXH3-64 of <code>"f3"</code> + the canonical encoding of the map-level <code>colors</code> tables (env_colors, custom_env_colors; numeric keys in ascending numeric order) + the rollup of raw 8-byte little-endian area hashes sorted by area ID.</li>
 </ol>
 
@@ -600,7 +600,7 @@
 <h3>Verification</h3>
 <p>On load, recompute from bottom up — using the algorithm recorded in <code>alg</code> (see <em>Algorithm versioning</em> above) — and compare. Mismatches indicate the file was modified externally (hand-edited JSON, merge conflict resolution, etc.). Mismatches are warnings, not fatal errors.</p>
 
-<div class="note"><strong>Scope (v3):</strong> room hashes cover room data; area hashes additionally cover all canonical area attributes (everything on the area object except the <code>rooms</code> list — id, name, position, grid mode, user_data, labels); the file hash additionally covers the <code>colors</code> tables. Only <code>meta</code> itself stays outside the checksum scope. The <code>file</code> key is still a rollup (hash of area hashes + colors), not a hash of the entire document byte stream.</div>
+<div class="note"><strong>Scope (v3):</strong> room hashes cover room data; area hashes additionally cover all area attributes defined by this format (everything on the area object except the <code>rooms</code> list — id, name, user_data, labels); the file hash additionally covers the <code>colors</code> tables. Only <code>meta</code> itself stays outside the checksum scope. The <code>file</code> key is still a rollup (hash of area hashes + colors), not a hash of the entire document byte stream.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="serialization">16. Deterministic Serialization</h2>
@@ -810,6 +810,7 @@
 <tr><td><code>1</code></td><td>2026</td><td>Documentation only (no format change): terminology update — "exit suppressor" renamed to "empty custom line"; validator label updated to "double line".</td></tr>
 <tr><td><code>1</code></td><td>2026</td><td>Additive normative (no format change): algorithm versioning — <code>meta.checksums</code> records <code>"alg": "v2"</code>; verifiers MUST dispatch on <code>alg</code> (absent = frozen legacy v1 formulas; unknown = skip silently) (§15).</td></tr>
 <tr><td><code>1</code></td><td>2026</td><td>Additive normative (no format change): checksum engine v3 — <code>meta.checksums</code> records <code>"alg": "v3"</code> (XXH3-64 over canonical binary encoding, 16-hex values); v1/v2 formulas retired — treated as unknown algorithms and skipped silently (§15).</td></tr>
+<tr><td><code>1</code></td><td>2026</td><td>Normative correction (ArkMap Studio v1.44.1): the v3 area encoding gained <code>user_data</code> (UTF-8 byte-ordered keys, key+value strings), restoring the v2 area scope. Files written by v1.44.0 (v3 without area <code>user_data</code> in scope) recompute under the corrected encoding — no v3 files existed outside the project mirror at the time of the correction (§15).</td></tr>
 </table>
 
 <hr>

@@ -43,7 +43,7 @@ node tests/xss_sinks.js      # XSS (v1.43.1): escHtml na interpolacjach danych z
 node tests/malformed_dat.js  # negatywne .dat: obciecia, granice readQString, uszkodzone chunki pixmapy
 node tests/validate_full.js  # walidator .arkmap: validateFont/UserData/Label/Area/top-level
 node tests/universal_colors.js # uniwersalne kolory (v1.43.3): detekcja Arkadii, golden 51 envId, mapa obca
-node tests/checksums_v3.js    # sumy v3 (v1.44.0): XXH3-64 + kodowanie kanoniczne przeciw oracle, korupcje, skip nie-v3
+node tests/checksums_v3.js    # sumy v3 (v1.44.1): XXH3-64 + kodowanie kanoniczne przeciw oracle, korupcje, skip nie-v3
 node tests/checksums/xxh3_golden.js  # XXH3-64 pure-JS przeciw wektorom oracle (dev + blok w HTML)
 ```
 

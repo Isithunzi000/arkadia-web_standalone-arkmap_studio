@@ -198,6 +198,11 @@ def enc_area(area, room_hash_by_id):
         out += u32(len(labels))
         for lb in labels:
             out += enc_label(lb)
+    ud = area.get('user_data') or {}
+    if ud:
+        out += u32(len(ud))
+        for k in utf8_keysort(ud.keys()):
+            out += s_enc(k) + s_enc(ud[k])
     rooms = sorted(area.get('rooms') or [], key=lambda r: r['id'])
     out += u32(len(rooms))
     for r in rooms:
@@ -345,8 +350,11 @@ def build_fixture():
             'custom_env_colors': {'2': [255, 128, 0], '10': [1, 2, 3, 4]},
         },
         'areas': [
+            # user_data: klucze wymuszajace porzadek bajtowy UTF-8 (a < zz < ą)
             {'id': 1, 'name': 'Obszar Testowy ąę', 'rooms': rooms_a,
-             'labels': labels_a, 'user_data': {'area-key': 'area-val'}},
+             'labels': labels_a,
+             'user_data': {'zz': '1', 'ą-key': 'wartość 🧭',
+                           'area-key': 'area-val'}},
             {'id': -5, 'name': 'Ujemny obszar', 'rooms': rooms_b,
              'labels': []},
         ],
@@ -359,7 +367,7 @@ def build_fixture():
 def sanity_vectors():
     vecs = []
     lengths = [0, 1, 2, 3, 4, 5, 8, 16, 31, 32, 33, 64, 65, 100, 127,
-               128, 129, 240, 241, 512, 1024, 2048, 2368]
+               128, 129, 136, 200, 224, 240, 241, 512, 1024, 2048, 2368]
     for n in lengths:
         data = bytes(((i * 31 + 17) & 0xFF) for i in range(n))
         vecs.append({'name': 'bytes_%d' % n, 'input_hex': data.hex(),

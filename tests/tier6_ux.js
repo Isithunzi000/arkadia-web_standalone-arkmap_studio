@@ -200,7 +200,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.44.0';"), 'V1: pin APP_VERSION v1.44.0');
+ok(HTML.includes("const APP_VERSION = 'v1.44.1';"), 'V1: pin APP_VERSION v1.44.1');
 
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);

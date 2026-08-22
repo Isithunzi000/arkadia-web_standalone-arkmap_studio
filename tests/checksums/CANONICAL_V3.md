@@ -1,7 +1,7 @@
 # Kanoniczne kodowanie binarne v3 (sumy kontrolne .arkmap)
 
 Dokument normatywny dla `meta.checksums.alg === 'v3'` w ArkMap Studio.
-Wersja: v1.44.0. Status: wiążący.
+Wersja: v1.44.1. Status: wiążący.
 
 ## 1. Cel i właściwości
 
@@ -95,12 +95,16 @@ Hash pokoju: XXH3-64 nad bajtami 1–18, seed 0.
    - `show_on_top` bool (brak → 0); `no_scaling` bool (brak → 0)
    - `pixmap`: `u8` obecności; gdy 1 → str (brak/null → 0)
    Pomijane gdy puste.
-5. rollup pokoi: `u32` liczba + surowe hashe (8B LE) pokoi obszaru,
+5. `user_data`: klucze UTF-8 bajtowo rosnąco, wpis: klucz str +
+   wartość str. Pomijany gdy pusty.
+6. rollup pokoi: `u32` liczba + surowe hashe (8B LE) pokoi obszaru,
    kolejność po `id` pokoju numerycznie rosnąco.
 
-Hash obszaru: XXH3-64 nad bajtami 1–5. Pola `grid_mode`, `is_zone`,
-`zone_area_ref`, `user_data` obszaru nie wchodzą do sumy (parzystość
-z v2: `_stripAreaForCrc` hashował tylko id/name/labels/rooms).
+Hash obszaru: XXH3-64 nad bajtami 1–6. Zakres = parzystość z v2
+(`_stripAreaForCrc` hashował cały obiekt obszaru bez `rooms`; w modelu
+.arkmap obszaru istnieją wyłącznie `id`, `name`, `labels`, `user_data`,
+`rooms`). Korekta v1.44.1: v1.44.0 pomijał `user_data` obszaru —
+przywrócone przed jakimkolwiek użyciem v3 poza lustrem.
 
 ## 5. Plik — prefix `f3`
 
