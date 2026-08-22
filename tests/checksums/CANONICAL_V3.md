@@ -1,7 +1,7 @@
 # Kanoniczne kodowanie binarne v3 (sumy kontrolne .arkmap)
 
 Dokument normatywny dla `meta.checksums.alg === 'v3'` w ArkMap Studio.
-Wersja: v1.44.1. Status: wiążący.
+Wersja: v1.44.2. Status: wiążący.
 
 ## 1. Cel i właściwości
 
@@ -95,6 +95,11 @@ Hash pokoju: XXH3-64 nad bajtami 1–18, seed 0.
    - `show_on_top` bool (brak → 0); `no_scaling` bool (brak → 0)
    - `pixmap`: `u8` obecności; gdy 1 → str (brak/null → 0)
    Pomijane gdy puste.
+   Tolerancja (weryfikacja biegnie przed dialogiem walidacji, plik może
+   być uszkodzony): `fg_color`/`bg_color` niebędące tablicą → kodowane
+   jako `[0,0,0]`; pusty `pixmap` (`''`) → traktowany jak nieobecny.
+   Walidator takie wartości odrzuci — kodowanie jest tu wyłącznie
+   deterministyczne, nie normatywne.
 5. `user_data`: klucze UTF-8 bajtowo rosnąco, wpis: klucz str +
    wartość str. Pomijany gdy pusty.
 6. rollup pokoi: `u32` liczba + surowe hashe (8B LE) pokoi obszaru,

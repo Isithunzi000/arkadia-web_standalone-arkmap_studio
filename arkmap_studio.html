@@ -7379,7 +7379,9 @@ minimapEl.addEventListener('mousedown', e => {
 });
 
 document.addEventListener('mousemove', e => {
-  if (!_mmDragging) return;
+  // audyt A22/D2: guard przycisku — mouseup poza oknem przegladarki nie dociera do
+  // dokumentu, bez guarda _mmDragging zostawalo zawieszone i viewport jechal za kursorem.
+  if (!_mmDragging || !(e.buttons & 1)) return;
   const c = minimapMapCoords(e);
   if (!c) return;
   state.ox = cv.width  / 2 - c.mapX * CELL * state.zoom;
@@ -8382,7 +8384,10 @@ cv.addEventListener('mousemove', e => {
   if (_deltaPlacing) { _deltaUpdateHover(evX(e), evY(e)); return; }
 
   // ── EDIT MODE: drag pokoju ───────────────────────────────────────────────
-  if (state.editMode && state.editDraggingRoom && state.selected) {
+  // audyt A22/D1: guard przycisku — drag żyje tylko z wciśniętym LPM; bez niego
+  // mousemove po puszczeniu poza canvas (mouseup nie doszedł) ciągnęło pokój za
+  // kursorem bez przycisku, a kolejny klik commitował niezamierzony MOVE_ROOM.
+  if (state.editMode && state.editDraggingRoom && state.selected && (e.buttons & 1)) {
     const [mx, my] = screenToMap(evX(e), evY(e));
     state.editDragCurrentX = Math.round(mx);
     state.editDragCurrentY = Math.round(my);
@@ -8623,6 +8628,24 @@ cv.addEventListener('mouseleave', () => { if (_paintStroke !== null) _paintStrok
 
 // ── Document-level mouseup: commit label drag/resize that ended outside canvas ─
 document.addEventListener('mouseup', () => {
+  // audyt A22/D1: zawieszony drag pokoju (puszczenie poza canvas albo Delete w trakcie
+  // dragu) — ANULUJ, nie commituj: pozycja kursora poza canvas jest niewiarygodna.
+  // Pokój nigdy nie był mutowany w trakcie dragu (mutacja dopiero w commicie),
+  // więc anulowanie = czyste czyszczenie flag + powrót pól formularza.
+  if (state.editDraggingRoom) {
+    state.editDraggingRoom = false;
+    state.editDragCurrentX = 0;
+    state.editDragCurrentY = 0;
+    cv.style.cursor = '';
+    const room = state.selected ? state.roomById[state.selected] : null;
+    if (room) {
+      const rpx = document.getElementById('rp-x');
+      const rpy = document.getElementById('rp-y');
+      if (rpx) rpx.value = room.x;
+      if (rpy) rpy.value = room.y;
+    }
+    draw();
+  }
   // RESIZE_LABEL commit (mouseup outside canvas)
   if (state.labelResizing && state.selectedLabel) {
     const { areaId, labelId } = state.selectedLabel;
@@ -9825,6 +9848,11 @@ function _performArkmapSave(onSaved) {
               if (onSaved) onSaved();
             }
             _updateSaveButtonText();  // T6-F3: etykieta zgodna ze stanem handle (takze po anulowaniu)
+          })
+          .catch(err2 => {  // audyt A22/C3: odrzucony fallback — brak unhandled rejection; dirty zostaje (bezpieczny kierunek)
+            console.error(err2);
+            toast('✗ Zapis .arkmap — błąd: ' + (err2 && err2.message || err2), true);
+            _updateSaveButtonText();
           });
       }
     })();
@@ -9862,6 +9890,9 @@ function _editDirtyCount() {
 
 function _performDatExport() {
   if (!state.map) return;
+  // audyt A22/D6 (decyzja): eksport .dat NIE jest punktem kontrolnym — nie czysci
+  // dirty ani nie odswieza pristineArkmap. dirty znaczy "rozni sie od ostatniego
+  // zapisu .arkmap"; eksport do innego formatu tego nie zmienia.
   _prepareArkmapForSave();
   toast('Konwertuję do .dat…', false);
   try {
@@ -10951,6 +10982,9 @@ function wpRemove(idx) {
     wpState.waypoints[idx] = { roomId: null, label: '' };
   } else {
     wpState.waypoints.splice(idx, 1);
+    // audyt A22/D3: splice przesuwa ogony — usuniecie sprzed aktywnego wymaga
+    // dekrementacji, inaczej activeIdx wskazuje INNY waypoint niz zaznaczony.
+    if (idx < wpState.activeIdx) wpState.activeIdx--;
     if (wpState.activeIdx >= wpState.waypoints.length) {
       wpState.activeIdx = wpState.waypoints.length - 1;
     }
@@ -11461,6 +11495,10 @@ function wpDecodeRoute(code) {
   // Format ARKMAP2:<algo><dir><trans>:base64 — ścisła walidacja, bez kompatybilności wstecznej
   const raw = (code || '').trim();
   if (!raw.startsWith('ARKMAP2:')) return null;
+  // audyt A22/C1: twardy limit dlugosci kodu — fail-closed. 64k znakow base64 to
+  // ~10k waypointow, rzedy wielkosci ponad realne trasy; ogromna wklejka nie moze
+  // zawiesic zakladki na atob + split + petli.
+  if (raw.length > 64000) return null;
   const rest = raw.slice(8);
   if (rest.length < 5 || rest[3] !== ':') return null;
   const flags = rest.slice(0, 3);
@@ -13506,7 +13544,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.44.1';
+const APP_VERSION = 'v1.44.2';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -16108,6 +16146,10 @@ function commitRoomEdit() {
     if (nx !== room.x || ny !== room.y || nz !== room.z) {
       room.x = nx; room.y = ny; room.z = nz;
       buildRoomsZ();
+      // audyt A22/C2: edycja wspolrzednych z formularza nie blokuje kolizji (jawna
+      // decyzja uzytkownika), ale informuje — spojnie z commitMoveRoomToArea.
+      const occ = _roomCollisionAt(nx, ny, nz, roomId);
+      if (occ) toast(`⚠ Pole (${nx}, ${ny}, ${nz}) jest też zajęte przez pokój #${occ.id}`);
     }
   }
 
@@ -17068,6 +17110,9 @@ function commitDeleteExit(room, dir, label) {
 // ── _roomCollisionAt(x, y, z, excludeId) — pokój zajmujący pole (guard ruchu) ─
 // roomsZ jest juz zawężone do bieżącego obszaru i poziomu (buildRoomsZ);
 // warunek r.z === z zostaje defensywnie, gdyby semantyka roomsZ się zmieniła.
+// audyt A22/D3 (decyzja): guard jest swiadomie PER-AREA — nakladanie wspolrzednych
+// miedzy obszarami jest legalne w formacie Mudleta i wystepuje w realnych mapach;
+// blokowanie odrzucaloby legalne dane.
 function _roomCollisionAt(x, y, z, excludeId) {
   for (const r of state.roomsZ) {
     if (r.id !== excludeId && r.x === x && r.y === y && r.z === z) return r;
@@ -20112,6 +20157,11 @@ function applyDelta(delta, onlySeq, overrides, seedSids) {
   let applied = 0;
   const appliedSeqs = [];  // seq-e realnie naniesione (panel: warstwa "naniesione z tej kalki")
   const skipped = [];
+
+  // audyt A22/D4 (decyzja): izolacja PER-OP zamiast rollbacku — blad w jednym opie
+  // pomija ten op (skip z powodem -> panel raportuje applied/skipped), reszta delty
+  // sie nanosi. Rollback klocilby sie z aplikacja selektywna (onlySeq/overrides)
+  // i zabieral uzytkownikowi poprawna czesc kalki.
 
   for (const rawOp of delta.ops) {
     if (onlySeq && !onlySeq.has(rawOp.seq)) continue;

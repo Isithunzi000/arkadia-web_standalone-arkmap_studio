@@ -147,7 +147,7 @@
 
 <table>
   <tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr>
-  <tr><td><code>crc</code></td><td>string</td><td class="req">REQ</td><td>File checksum (hex) of the canonical .arkmap form of the base map — the hierarchical file checksum as defined by the .arkmap spec §15 (algorithm v3: XXH3-64, 16 hex characters)</td></tr>
+  <tr><td><code>crc</code></td><td>string</td><td class="req">REQ</td><td>File checksum (hex) of the canonical .arkmap form of the base map — the hierarchical file checksum as defined by the .arkmap spec §15 (algorithm v3: XXH3-64, 16 lowercase hex characters)</td></tr>
   <tr><td><code>version</code></td><td>string</td><td class="opt">OPT</td><td>Map version, copied from <code>meta.user_data.version</code> when present</td></tr>
   <tr><td><code>revision</code></td><td>string</td><td class="opt">OPT</td><td>Source revision (commit SHA), copied from <code>meta.user_data.revision</code> when present</td></tr>
 </table>
