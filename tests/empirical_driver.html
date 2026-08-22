@@ -1581,6 +1581,9 @@ scenario('E5.save-flow', async () => {
     'przycisk odblokowany po commitach');
   ex('(function(){ const orig = URL.createObjectURL.bind(URL);'
     + ' URL.createObjectURL = b => { window.__e5blob = b; return orig(b); }; })()');
+  // headless ma showSaveFilePicker — otwarty dialog wyboru pliku czekalby wiecznie;
+  // wymuszamy sciezke fallback helpera (<a download> → interceptor createObjectURL)
+  ex('window.showSaveFilePicker = undefined;');
   ex("document.getElementById('btn-save-arkdelta').click()");
   const txt = (await eva('(async()=>{ return window.__e5blob ? await window.__e5blob.text() : null; })()')).val;
   A('E5.save-flow.captured', !!txt && txt.length > 100, 'klik przechwycony (Blob z trescia)');
@@ -1588,7 +1591,7 @@ scenario('E5.save-flow', async () => {
     + ' return JSON.stringify({ ok: v.ok, n: v.ok ? v.delta.ops.length : 0 }); })()').val);
   A('E5.save-flow.valid', v.ok, 'zapisana kalka przechodzi walidacje');
   EQ('E5.save-flow.ops', v.n, 2, 'zapisana kalka: 2 operacje');
-  A('E5.save-flow.toast', (ev("document.getElementById('toast').textContent").val || '').indexOf('Zapisano kalkę') >= 0,
+  A('E5.save-flow.toast', (ev("document.getElementById('toast').textContent").val || '').indexOf('Zapisano:') >= 0,
     'toast potwierdza zapis');
 });
 
@@ -3168,7 +3171,7 @@ scenario('E13.guard', async () => {
   A('E13.guard.warn', r.warnShown && r.warn.indexOf('niespokrewnione') >= 0,
     'ostrzezenie o niespokrewnionych mapach widoczne');
   A('E13.guard.built', r.hasText && r.saveShown, 'kalka zbudowana mimo ostrzezenia (D6: nie blokada)');
-  A('E13.guard.fname', r.fname === 'kalka-obca-a-obca-b.arkdelta', 'nazwa pliku z nazw map');
+  A('E13.guard.fname', r.fname === 'kalka-obca-a-obca-b--arkmap-do-arkmap.arkdelta', 'nazwa pliku z nazw map + sufiks formatow');
 });
 
 scenario('E13.swap', async () => {
@@ -3685,14 +3688,15 @@ scenario('E15.swReload', async () => {
 
 
 // ═══ GRUPA E16 — eksport PNG/SVG + walidacja dialogu nowego obszaru ═══
-// buildComposite* i triggerDownload sa prywatne (IIFE), wiec jedziemy prawdziwa
+// buildComposite* sa prywatne (IIFE), wiec jedziemy prawdziwa
 // sciezka UI (klik w ep-do-btn) i przechwytujemy blob na URL.createObjectURL.
 // W headless toBlob/toDataURL dzialaja na SwiftShader; download jest wychwytywany
-// przez stub zamiast trafiac na dysk.
+// przez stub zamiast trafiac na dysk (showSaveFilePicker wylaczone — fallback helpera).
 
 scenario('E16.exportPngPanels', async () => {
   await loadBase('dat');
   ex('window.__e16 = null; window.__e16err = null;'
+   + ' window.showSaveFilePicker = undefined;'  // headless: picker wisialby wiecznie — wymuszony fallback helpera
    + ' window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };'
    + ' console.error = function(){ window.__e16err = Array.from(arguments).map(String).join(" "); };'
    + ' URL.createObjectURL = function(b){ window.__e16 = b; return "blob:e16"; };'
@@ -3716,6 +3720,7 @@ scenario('E16.exportPngPanels', async () => {
 
 scenario('E16.exportSvgPanels', async () => {
   ex('window.__e16 = null; window.__e16err = null;'
+   + ' window.showSaveFilePicker = undefined;'
    + ' window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };'
    + ' console.error = function(){ window.__e16err = Array.from(arguments).map(String).join(" "); };'
    + ' document.getElementById("ep-fmt-svg").click();'
@@ -3738,6 +3743,7 @@ scenario('E16.exportSvgPanels', async () => {
 
 scenario('E16.exportBare', async () => {
   ex('window.__e16 = null; window.__e16err = null;'
+   + ' window.showSaveFilePicker = undefined;'
    + ' window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };'
    + ' document.getElementById("ep-toggle-panels").checked = false;'
    + ' document.getElementById("ep-fmt-png").click();'

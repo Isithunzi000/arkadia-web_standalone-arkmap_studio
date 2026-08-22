@@ -2,6 +2,36 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.44.4 — dialogi zapisu dla wszystkich plikow + smart-nazwy + harness checkSuppressors
+
+Kazdy plik wychodzacy z aplikacji zapisuje sie przez okno z edytowalna nazwa
+(natywne showSaveFilePicker przez helper saveWithDialog; fallback poza Chromium
+= klasyczny download z sugerowana nazwa — bez zmian). Motywacja: identyczne
+sztywne nazwy kalek krzyzowych → przegladarkowe dopiski „(1)(2)" i zgubiony plik.
+
+- saveWithDialog: acceptMap +4 wpisy (arkdelta, md, png, svg); gałąz generyczna
+  zostaje jako safety-net.
+- Kalka: kalkaSave / saveDelta / saveDeltaRemainder przez saveWithDialog
+  (lokalne toasty out — toast „✓ Zapisano: …" w helperze).
+- Smart-nazwa kalki z diffu: kalka-<src>-<cel>--<fmtA>-do-<fmtB>.arkdelta
+  (formaty z rozszerzen surowych nazw, przed sanityzacja; regula awaryjna
+  deterministyczna: rozszerzenie brak/spoza {dat, arkmap, json} → wzorzec
+  bez sufiksu; zero timestampow). _arkdeltaSuggestedName() bez zmian.
+- Eksport obrazu mapy: finalize (PNG i SVG) oraz SVG z panelami przez
+  saveWithDialog; triggerDownload usuniety (po weryfikacji zerowych referencji).
+- Eksporty walidacji kierunkow: saveWithDialog + smart-nazwa
+  walidacja-kierunkow-<mapa>-<ts>.md/.png (<mapa> = sanityzowane
+  meta.map_name, fallback „mapa"); fix naglowka PNG — zahardkodowane
+  „map_master3" zastapione realna nazwa mapy.
+- Nowy harness tests/save_dialogs.js: sekcja A — macierz 16 przypadkow
+  checkSuppressors (domkniecie luki testowej), sekcja B — piny strukturalne
+  7 sciezek zapisu + wpisy acceptMap + zero golych download( poza helperem +
+  brak triggerDownload, sekcja C — pin wersji.
+- Empiria: E5.save-flow i E16.* wymuszaja fallback helpera
+  (showSaveFilePicker = undefined — headless picker wisialby wiecznie);
+  pin toastu E5 „Zapisano:"; E13.guard.fname z sufiksem formatow.
+- Regresja: 29 harnessow Node + empiria SMOKE–E18, wszystko PASS.
+
 ## v1.44.3 — perf lab: przebieg v3 + raporty, konwencja .json, generator data-driven, fix lepkiej flagi minimapki
 
 Drugi przebieg laboratorium wydajnosci (2026-08-22, ta sama maszyna co

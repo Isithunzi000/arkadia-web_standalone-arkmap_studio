@@ -56,8 +56,8 @@ ok(bannedHits === 0, 'zero zakazanych tokenow w stringach UI (' + literals.lengt
 ok(!/kałk/i.test(HTML), 'globalnie: zero wystapien "kałk" w pliku');
 
 // ── konkretne komunikaty po polsku laicku ───────────────────────────────────
-ok(HTML.includes("plPl(ops.length, 'operacja', 'operacje', 'operacji')"),
-   'tost reszty kalki: poprawna odmiana "operacja/operacje/operacji" (plPl)');
+ok(HTML.includes("toast('✓ Zapisano: ' + fh.name"),
+   'toast zapisu: helper saveWithDialog potwierdza nazwa pliku (v1.44.4: lokalne toasty sciezek zapisu usuniete)');
 ok(HTML.includes("olIndex.version ? 'v' + olIndex.version : 'wersja nieznana'"),
    'pobieranie online: fallback wersji to "wersja nieznana" (nie "master")');
 ok(HTML.includes('Kalka pasuje do wczytanej mapy ('),
