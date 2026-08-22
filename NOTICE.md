@@ -3,7 +3,7 @@
 ## Dane mapy Arkadii
 
 Pliki mapy (`map_master3.dat`, `map_master3.arkmap` na gałęzi `mapa` tego
-repozytorium) to codziennie synchronizowane, wierne lustro (bez modyfikacji)
+repozytorium) to synchronizowane 2× dziennie (workflow `sync-map.yml`), wierne lustro (bez modyfikacji)
 danych z repozytorium **Delwing/arkadia-mapa**:
 https://github.com/Delwing/arkadia-mapa
 

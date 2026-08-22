@@ -535,7 +535,7 @@
 <tr><td><code>walk_pre_cmd</code></td><td>string</td><td>Auto-traversal command issued <em>before</em> walking through the room.</td></tr>
 <tr><td><code>walk_post_cmd</code></td><td>string</td><td>Auto-traversal command issued <em>after</em> walking through the room.</td></tr>
 <tr><td><code>dir_bind</code></td><td><code>dir=cmd</code> pairs joined by <code>&amp;</code></td><td>Direction → command binds (e.g. <code>down=odsun prycze#d</code>). Each pair splits on the <strong>first</strong> <code>=</code>; surrounding whitespace is trimmed. A pair with a direction but an empty command is reported by the direction validator as an <em>empty bind</em>.</td></tr>
-<tr><td><code>team_follow_link</code></td><td><code>label*dir</code> pairs joined by <code>#</code></td><td>Team-follow links (e.g. <code>ścieżka do lasku*e</code>). Each pair splits on the <strong>last</strong> <code>*</code> (so the label may itself contain <code>*</code>). A direction that is not an existing exit of the room is reported by the direction validator as a <em>mismatch</em> (rozjazd).</td></tr>
+<tr><td><code>team_follow_link</code></td><td><code>label*dir</code> pairs joined by <code>#</code></td><td>Team-follow links (e.g. <code>ścieżka do lasku*e</code>). Each pair splits on the <strong>first</strong> <code>*</code> (1:1 with the arkadia-web client — the label therefore cannot contain <code>*</code>). A direction that is not an existing exit of the room is reported by the direction validator as a <em>mismatch</em> (rozjazd).</td></tr>
 </table>
 
 <h4>ArkMap Studio rendering (room)</h4>
@@ -600,7 +600,7 @@
 <h3>Verification</h3>
 <p>On load, recompute from bottom up — using the algorithm recorded in <code>alg</code> (see <em>Algorithm versioning</em> above) — and compare. Mismatches indicate the file was modified externally (hand-edited JSON, merge conflict resolution, etc.). Mismatches are warnings, not fatal errors.</p>
 
-<div class="note"><strong>Scope (v3):</strong> room hashes cover room data; area hashes additionally cover all area attributes defined by this format (everything on the area object except the <code>rooms</code> list — id, name, user_data, labels); the file hash additionally covers the <code>colors</code> tables. Only <code>meta</code> itself stays outside the checksum scope. The <code>file</code> key is still a rollup (hash of area hashes + colors), not a hash of the entire document byte stream.</div>
+<div class="note"><strong>Scope (v3):</strong> room hashes cover room data; area hashes additionally cover the area's own in-scope attributes (id, name, user_data, labels — the optional <code>grid_mode</code>, <code>is_zone</code>, <code>zone_area_ref</code> and <code>pos</code> fields stay outside the checksum scope); the file hash additionally covers the <code>colors</code> tables. Only <code>meta</code> itself stays outside the checksum scope. The <code>file</code> key is still a rollup (hash of area hashes + colors), not a hash of the entire document byte stream.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="serialization">16. Deterministic Serialization</h2>

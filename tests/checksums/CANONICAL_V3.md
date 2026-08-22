@@ -105,10 +105,12 @@ Hash pokoju: XXH3-64 nad bajtami 1–18, seed 0.
 6. rollup pokoi: `u32` liczba + surowe hashe (8B LE) pokoi obszaru,
    kolejność po `id` pokoju numerycznie rosnąco.
 
-Hash obszaru: XXH3-64 nad bajtami 1–6. Zakres = parzystość z v2
-(`_stripAreaForCrc` hashował cały obiekt obszaru bez `rooms`; w modelu
-.arkmap obszaru istnieją wyłącznie `id`, `name`, `labels`, `user_data`,
-`rooms`). Korekta v1.44.1: v1.44.0 pomijał `user_data` obszaru —
+Hash obszaru: XXH3-64 nad bajtami 1–6. Zakres pokrywa `id`, `name`,
+`labels`, `user_data` oraz rollup pokoi. Opcjonalne pola obszaru
+`grid_mode`, `is_zone`, `zone_area_ref` i `pos` pozostają poza zakresem
+hasha (rozjazd względem v2: `_stripAreaForCrc` hashował cały obiekt
+obszaru bez `rooms`, więc pokrywał je, gdy występowały).
+Korekta v1.44.1: v1.44.0 pomijał `user_data` obszaru —
 przywrócone przed jakimkolwiek użyciem v3 poza lustrem.
 
 ## 5. Plik — prefix `f3`
