@@ -24,6 +24,75 @@ command -v node >/dev/null || { echo "BRAK node — sudo apt install nodejs"; ex
 [ -f map_master3.dat ] || { echo "pobieram fixture…"; bash tests/fetch-fixture.sh; }
 mkdir -p "$OUT"
 
+# Finalizacja automatyczna (Arc 30): META.json + MASZYNA.md + raporty HTML
+# generuja sie same na kazdym wyjsciu (tez przy SKIP_BROWSER / braku przegladarki).
+# Idempotentne: istniejace META.json/MASZYNA.md (np. recznie nadpisane) zostaja.
+# BG="wlasny opis tla" nadpisuje domyslny background; SKIP_REPORT=1 wylacza raporty.
+finalize() {
+  rc=$?
+  [ -n "${SRV:-}" ] && kill "$SRV" 2>/dev/null || true
+  DATE=$(date +%F)
+  APPV=$(sed -n "s/.*APP_VERSION = '\([^']*\)'.*/\1/p" arkmap_studio.html | head -1)
+  if command -v node >/dev/null && [ -f "$OUT/base.arkmap" ] && [ ! -f "$OUT/META.json" ]; then
+    node - "$OUT" "$APPV" "${BG:-Maszyna bez innego obciążenia w trakcie pomiaru.}" <<'NODEEOF'
+const fs = require('fs');
+const [out, appv, bg] = process.argv.slice(2);
+let alg = 'unknown';
+for (const f of ['base.arkmap', 'stress_2k.arkmap', 'stress_4k.arkmap', 'stress_8k.arkmap', 'stress_16k.arkmap', 'stress_32k.arkmap']) {
+  try { const d = JSON.parse(fs.readFileSync(out + '/' + f, 'utf8')); alg = (d.meta && d.meta.checksums || d.checksums).alg; break; } catch {}
+}
+const meta = { app_version: appv, checksum_alg: alg, background: bg };
+for (const k of [32, 16, 8, 4, 2]) {   // gen_oom: najwieksze K z .arkmap bez .dat
+  if (fs.existsSync(`${out}/stress_${k}k.arkmap`) && !fs.existsSync(`${out}/stress_${k}k.dat`)) {
+    meta.gen_oom = `K=${k}: przerwanie generatora po zapisaniu .arkmap, przed eksportem .dat.`;
+    break;
+  }
+}
+fs.writeFileSync(out + '/META.json', JSON.stringify(meta, null, 1) + '\n');
+NODEEOF
+    echo "auto: $OUT/META.json"
+  fi
+  if [ ! -f "$OUT/MASZYNA.md" ]; then
+    CPU=$(LC_ALL=C lscpu 2>/dev/null | sed -n 's/^Model name:[[:space:]]*//p' | head -1)
+    [ -z "$CPU" ] && CPU=$(sed -n 's/^model name[[:space:]]*:[[:space:]]*//p' /proc/cpuinfo | head -1)
+    THR=$(LC_ALL=C lscpu 2>/dev/null | sed -n 's/^CPU(s):[[:space:]]*//p' | head -1)
+    CPS=$(LC_ALL=C lscpu 2>/dev/null | sed -n 's/^Core(s) per socket:[[:space:]]*//p' | head -1)
+    SCK=$(LC_ALL=C lscpu 2>/dev/null | sed -n 's/^Socket(s):[[:space:]]*//p' | head -1)
+    CORES=$(( ${CPS:-1} * ${SCK:-1} ))
+    RAM=$(awk '/MemTotal/{printf "%d", $2/1024}' /proc/meminfo)
+    OSN=$(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || uname -s)
+    NODEV=$(command -v node >/dev/null && node --version || echo 'brak')
+    BRW='brak (faza 3 pominieta)'
+    [ -n "${CHROME:-}" ] && BRW=$("$CHROME" --version 2>/dev/null | head -1)
+    REV=$(git rev-parse --short HEAD 2>/dev/null || echo 'kopia bez .git')
+    {
+      echo "# Maszyna pomiarowa (przebieg $DATE)"
+      echo
+      echo "- CPU: ${CPU:-nieznane} (${CORES}C/${THR:-?}T)"
+      echo "- RAM: ${RAM} MB (heap Node w teście: ${HEAP} MB)"
+      echo "- OS: ${OSN} (jądro $(uname -r))"
+      echo "- Node: ${NODEV}"
+      echo "- Aplikacja: ${APPV:-?} (silnik sum wg META.json)"
+      echo "- Przeglądarka: ${BRW}"
+      echo "- Repo: ${REV}"
+      echo "- Uwaga: ${BG:-Maszyna bez innego obciążenia w trakcie pomiaru.}"
+    } > "$OUT/MASZYNA.md"
+    echo "auto: $OUT/MASZYNA.md"
+  fi
+  if [ "${SKIP_REPORT:-0}" != 1 ] && command -v node >/dev/null && [ -f "$OUT/results_node.json" ] && [ -f "$OUT/results_browser.json" ]; then
+    node tests/perf/report_build.mjs "$OUT" "docs/raport_wydajnosci_${DATE}.html"       && echo "auto: docs/raport_wydajnosci_${DATE}.html" || true
+    LATEST=$(ls -d tests/perf/results/*/ 2>/dev/null | sort | tail -1)
+    if [ -n "$LATEST" ]; then
+      node tests/perf/report_build.mjs "$OUT" "docs/porownanie_wydajnosci_${DATE}.html" --compare "${LATEST%/}"         && echo "auto: docs/porownanie_wydajnosci_${DATE}.html (vs ${LATEST%/})" || true
+    fi
+  elif [ "${SKIP_REPORT:-0}" != 1 ] && [ -f "$OUT/results_node.json" ]; then
+    echo "raporty: SKIP (brak results_browser.json — faza 3 pominieta; report_build wymaga obu plikow)"
+  fi
+  exit "$rc"
+}
+trap finalize EXIT
+
+if [ "${SKIP_GEN:-0}" != 1 ]; then
 echo "=== faza 0: baza .arkmap z produkcyjnego fixture ==="
 node tools/dat2arkmap.mjs map_master3.dat "$OUT/base.arkmap" || exit 1
 
@@ -32,10 +101,18 @@ for K in 2 4 8 16 32; do
   node --max-old-space-size="$HEAP" tests/perf/gen_stress.mjs "$OUT/base.arkmap" "$OUT" "$K" || { echo "K=$K przerwane — stop drabinki"; break; }
 done
 ls -la "$OUT"
+else
+  echo "=== fazy 0-1: SKIP (SKIP_GEN=1) ==="
+fi
 
+if [ "${SKIP_NODE:-0}" != 1 ]; then
 echo "=== faza 2: czysty parse Node (dat vs arkmap) ==="
 node --expose-gc --max-old-space-size="$HEAP" tests/perf/bench_parse.js "$OUT" 20 || exit 1
+else
+  echo "=== faza 2: SKIP (SKIP_NODE=1) ==="
+fi
 
+if [ "${SKIP_BROWSER:-0}" != 1 ]; then
 echo "=== faza 3: przegladarka (load + render + kamera + eksport .dat) ==="
 python3 -c 'import websockets' 2>/dev/null || { echo "BRAK python3-websockets — sudo apt install python3-websockets — pomijam faze 3"; echo "Wyniki czesciowe: $OUT/results_node.json"; exit 0; }
 CHROME="${CHROMIUM_BIN:-}"
@@ -50,7 +127,6 @@ export CHROMIUM_BIN="$CHROME"
 
 python3 -m http.server "$PORT" --bind 127.0.0.1 >/dev/null 2>&1 &
 SRV=$!
-trap 'kill $SRV 2>/dev/null || true' EXIT
 sleep 1
 
 python3 - "$RUNS" "$PORT" << 'PYEOF'
@@ -123,7 +199,10 @@ for name, datp, arkp, rooms in ladder:
             print(f'  ^ {fmt}: STOP drabinki tego formatu (ostatni zielony = poprzedni rozmiar)')
 print('wyniki: ' + RES)
 PYEOF
+else
+  echo "=== faza 3: SKIP (SKIP_BROWSER=1) ==="
+fi
 
 echo "=== KONIEC ==="
 echo "Wyniki: $OUT/results_node.json + $OUT/results_browser.json"
-echo "Wklej oba pliki do czatu — dostaniesz ladny raport HTML."
+echo "META.json, MASZYNA.md i raporty HTML w docs/ wygenerowane automatycznie (SKIP_REPORT=1 wylacza raporty)."
