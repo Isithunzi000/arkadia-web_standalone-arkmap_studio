@@ -17,6 +17,13 @@ Node v20.20.1, chrome-headless-shell 152):
   (niezależny) oraz
   [`docs/porownanie_wydajnosci_2026-08-21_vs_2026-08-22.html`](../../docs/porownanie_wydajnosci_2026-08-21_vs_2026-08-22.html)
   (porównawczy).
+- **2026-08-23** (aplikacja v1.45.2, silnik sum v4):
+  [`results/2026-08-23/`](results/2026-08-23/) — raporty:
+  [`docs/raport_wydajnosci_2026-08-23.html`](../../docs/raport_wydajnosci_2026-08-23.html)
+  (niezależny) oraz
+  [`docs/porownanie_wydajnosci_2026-08-23.html`](../../docs/porownanie_wydajnosci_2026-08-23.html)
+  (porównawczy z 2026-08-22). Pierwszy przebieg w pełni zautomatyzowany
+  (Arc 30b: META.json, MASZYNA.md i raporty wygenerował sam `run.sh`).
 
 Każdy katalog przebiegu zawiera `results_node.json`, `results_browser.json`
 (starsze: `.jsonl`), `MASZYNA.md` (opis maszyny) i `META.json` (wersja aplikacji,
