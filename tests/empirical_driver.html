@@ -2070,6 +2070,37 @@ scenario('E9.crc-v4-export', async () => {
   A('E9.crc-v4-export.missing', r2.ok === false && r2.miss >= 1, 'pokoj bez sumy → missingRooms + ok:false');
 });
 
+scenario('E9.valmodal-geom', async () => {
+  // v1.45.1: stopka val-modal ma 4 przyciski (Kopiuj raport / Zapisz raport .md /
+  // Zaladuj mimo to / Anuluj) — wszystkie musza miescic sie w content box stopki.
+  // Repro (v1.45.0): width 520px + footer bez flex-wrap + justify-content:flex-end
+  // = przelew w lewo, „Kopiuj raport" obciety na krawedzi okna (zgloszenie usera).
+  const r = ev('(function(){'
+    + ' const p = showValDialog('
+    + '   { ok: false, errors: [{ path: "rooms[7].name", msg: "test geometryczny" }], warnings: [] },'
+    + '   { present: true, ok: false, fileOk: false, algMismatch: "v3",'
+    + '     badAreas: [], badRooms: [], missingRooms: [], missingAreas: [], extraRooms: [], extraAreas: [] },'
+    + '   "map_master3.arkmap", false);'
+    + ' p.then(function(){}, function(){});'
+    + ' const footer = document.getElementById("val-modal-footer");'
+    + ' const fr = footer.getBoundingClientRect();'
+    + ' const pad = parseFloat(getComputedStyle(footer).paddingLeft);'
+    + ' const vis = Array.prototype.slice.call(footer.querySelectorAll("button"))'
+    + '   .filter(function(b){ return b.getBoundingClientRect().width > 0; });'
+    + ' const out = vis.filter(function(b){ const r = b.getBoundingClientRect();'
+    + '   return r.left < fr.left + pad - 1 || r.right > fr.right - pad + 1; });'
+    + ' const res = { n: vis.length, out: out.length,'
+    + '   modalW: Math.round(document.getElementById("val-modal").getBoundingClientRect().width) };'
+    + ' document.getElementById("val-btn-cancel").click();'
+    + ' return res;'
+    + ' })()');
+  const g = AEV('E9.valmodal-geom.run', r, 'pomiar geometrii stopki val-modal');
+  if (g) {
+    EQ('E9.valmodal-geom.n', g.n, 4, 'stopka: 4 widoczne przyciski (copy/md/load/cancel)');
+    EQ('E9.valmodal-geom.fit', g.out, 0, 'wszystkie przyciski w content box stopki — brak przelewu w lewo');
+  }
+});
+
 scenario('E9.hidden-roundtrip', async () => {
   await loadBase('dat');
   const mk = '(function(id, extra){ const raw = Object.assign({ _roomId: id, x: 0, y: 0, z: 0, environment: 258,'

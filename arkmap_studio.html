@@ -199,7 +199,7 @@
   #ol-confirm-progress { font-size: 11px; color:var(--dim); text-align:center; min-height:16px; margin-top:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #ol-confirm-bar { height: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 2px; margin-top: 6px; overflow: hidden; }
   #ol-confirm-bar-fill { height: 100%; width: 0%; background: var(--accent); transition: width .15s; }
-  #ol-confirm-footer { padding:10px 16px 12px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end; align-items:center; }
+  #ol-confirm-footer { padding:10px 16px 12px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end; align-items:center; flex-wrap:wrap; }
   #btn-load-online { width:100%; text-align:left; margin-top:8px; border-color:var(--accent); color:var(--accent); font-size: 12px; padding:6px 8px; }
   /* F1: dialog tworzenia kalki z diffu map */
   #dk-cards { display:flex; gap:10px; }
@@ -831,7 +831,7 @@
   }
   #wp-import-footer {
     padding: 10px 16px 12px; border-top: 1px solid var(--border);
-    display: flex; gap: 8px; justify-content: flex-end; align-items: center;
+    display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap;
   }
   /* Przyciski dialogowe — ujednolicony system */
   .dialog-btn {
@@ -1020,7 +1020,9 @@
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
-    width: 520px; max-width: 94vw; max-height: 80vh;
+    /* 600px: stopka 4 przyciski (raport ×2 + Załaduj + Anuluj) ≈ 536px + padding 36px;
+       przy 520px przelew w lewo obcinał pierwszy przycisk (flex-end bez wrap). */
+    width: 600px; max-width: 94vw; max-height: 80vh;
     box-shadow: 0 16px 64px rgba(0,0,0,.85);
     overflow: hidden; display: flex; flex-direction: column;
   }
@@ -1065,7 +1067,9 @@
   }
   #val-modal-footer {
     padding: 12px 18px; border-top: 1px solid var(--border);
+    /* flex-wrap: przelew łamie się do nowego wiersza zamiast obcinać przycisk przy krawędzi */
     display: flex; gap: 8px; justify-content: flex-end; flex-shrink: 0; align-items: center;
+    flex-wrap: wrap;
   }
   /* val-btn używa .dialog-btn */
 
@@ -1378,7 +1382,7 @@
   .edlg-opt.local:hover  { border-color: var(--ok);     background: #0d2010; }
   .edlg-opt.github:hover { border-color: var(--accent); background: #0d1a2a; }
   .edlg-opt[disabled]    { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
-  .edlg-ftr  { padding: 10px 16px 12px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
+  .edlg-ftr  { padding: 10px 16px 12px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
 
 
   /* ✎ MOCKUP v2 — PANEL OBSZARU */
@@ -13665,7 +13669,7 @@ function _valReportSections(valRes, chkRes) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.45.0';
+const APP_VERSION = 'v1.45.1';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)

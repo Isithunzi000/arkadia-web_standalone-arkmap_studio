@@ -104,6 +104,20 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
     ok(!box.includes('max-width'), did + ': brak max-width na boksie (chroni klasowe 90vw)');
   }
 
+  // v1.45.1: geometria val-modal + siatka wrap na stopkach flex-end.
+  // Klasa buga: stopka nowrap + justify-content:flex-end = przy przelewie przyciski
+  // wypychane sa w LEWO i obcinane na krawedzi okna (overflow:hidden na #val-modal).
+  // Zgloszenie usera: „Kopiuj raport" na krawedzi po dodaniu 2 przyciskow raportu.
+  // Repro empiryczne: E9.valmodal-geom (FAIL na 520px, PASS po fixie).
+  ok(/#val-modal\s*\{[^}]*?width:\s*600px/.test(HTML),
+    'B15: #val-modal width:600px (stopka 4 przyciski ~536px + padding 36px; 520px = przelew)');
+  for (const sel of ['#val-modal-footer', '#ol-confirm-footer', '#wp-import-footer', '.edlg-ftr']) {
+    const esc = sel.replace(/[.#-]/g, '\\$&');
+    const m = HTML.match(new RegExp(esc + '\\s*\\{[^}]*\\}'));
+    ok(!!m && /flex-wrap\s*:\s*wrap/.test(m[0]),
+      sel + ': flex-wrap:wrap (siatka — przelew lamie sie do wiersza zamiast obcinac)');
+  }
+
 }
 
 // ═══ Sekcja C: #18 — bramka potwierdzenia importu trasy ═══
@@ -200,7 +214,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.45.0';"), 'V1: pin APP_VERSION v1.45.0');
+ok(HTML.includes("const APP_VERSION = 'v1.45.1';"), 'V1: pin APP_VERSION v1.45.1');
 
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);

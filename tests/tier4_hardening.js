@@ -30,7 +30,7 @@ function blockSlice(a, b) {
   return NEW.slice(i, j);
 }
 
-// ── wspolny blok stalych (jak tier3; CRC32 usuniete w v1.45.0) ──
+// ── wspolny blok stalych (jak tier3; CRC32 usuniete w v1.45.1) ──
 const constsStart = NEW.indexOf('const DIRS = [');
 const constsBlock = NEW.slice(constsStart, NEW.indexOf('// ── arkadia-env.js ──'));
 
@@ -219,7 +219,7 @@ console.log('── T2b: golden writera .dat (fixpoint + crc) ──');
     const b2 = o2 instanceof Uint8Array ? o2 : new Uint8Array(o2);
     ok(b1.length === b2.length && Buffer.from(b1).equals(Buffer.from(b2)),
       'W1/W2: writer stabilny — fixpoint bajtowy write(read(write(read(fix)))) == write(read(fix))');
-    // CRC-32 liczone po stronie testu (zlib) — aplikacja nie nosi juz CRC-32 (v1.45.0)
+    // CRC-32 liczone po stronie testu (zlib) — aplikacja nie nosi juz CRC-32 (v1.45.1)
     const hex = ('00000000' + require('zlib').crc32(b1).toString(16)).slice(-8);
     ok(b1.length === 7845726 && hex === '65da3512',
       'W1/W2: golden — wyjscie writera bajtowo jak v1.38.0 [len=' + b1.length + ' crc=' + hex + ']');
@@ -444,13 +444,13 @@ console.log('── T9: piny ──');
   ok(dij.indexOf('if (cur === toId) break;') < dij.indexOf('if (room.locked) continue;'),
     'pin P1: locked pokoj dopuszczalny jako CEL trasy (decyzja wlasciciela — nie zmieniac na Mudlet-parity)');
   // piny wersji
-  ok(NEW.includes("const APP_VERSION = 'v1.45.0';"), 'pin: APP_VERSION v1.45.0');
+  ok(NEW.includes("const APP_VERSION = 'v1.45.1';"), 'pin: APP_VERSION v1.45.1');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok(deltaSrc.split('v1.45.0').length - 1 === 10, 'pin: delta.js 10x v1.45.0');
+  ok(deltaSrc.split('v1.45.1').length - 1 === 10, 'pin: delta.js 10x v1.45.1');
   const t2 = fs.readFileSync(path.join(ROOT, 'tests', 'tier2_state.js'), 'utf8');
-  ok(t2.includes("wersja: v1.45.0"), 'pin: tier2_state.js v1.45.0');
+  ok(t2.includes("wersja: v1.45.1"), 'pin: tier2_state.js v1.45.1');
   const t3 = fs.readFileSync(path.join(ROOT, 'tests', 'tier3_format.js'), 'utf8');
-  ok(t3.includes("pin: APP_VERSION v1.45.0"), 'pin: tier3_format.js v1.45.0');
+  ok(t3.includes("pin: APP_VERSION v1.45.1"), 'pin: tier3_format.js v1.45.1');
 }
 
 // ═══ T10: bramka — wlasne kalki zawsze z sid (K7 nie zabija wlasnych eksportow) ═══

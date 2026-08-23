@@ -2,6 +2,27 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.45.1 — szerokosc dialogu walidacji pod przyciski raportu (Arc 21)
+
+Zgloszenie uzytkownika: po dodaniu przyciskow raportu (v1.45.0) stopka
+dialogu walidacji przeliwala sie w lewo — „Kopiuj raport" siedzial na
+krawedzi okna (stopka bez flex-wrap + justify-content:flex-end + width
+520px: 4 przyciski ~536px przy 484px dostepnych).
+
+- Pelny audyt szerokosci wszystkich 45 okien/paneli (przeliczenie etykiet
+  monospace vs szerokosc content box): jedyny osiagalny przelew to
+  #val-modal; pozostale przelewy to martwe okna uspionej integracji
+  GitHub (nieosiagalne z UI) albo stopki z wrap (panel kalki).
+- #val-modal: width 520px -> 600px (536px przyciski + 36px padding +
+  zapas na roznice renderu emoji); komentarz z rachunkiem w CSS.
+- flex-wrap:wrap na wszystkich 4 stopkach flex-end, ktore go nie mialy
+  (#val-modal-footer, #ol-confirm-footer, #wp-import-footer, .edlg-ftr) —
+  siatka klasowa: przelew lamie sie do nowego wiersza zamiast obcinac
+  przycisk na krawedzi.
+- Repro-first: E9.valmodal-geom (pomiar getBoundingClientRect przyciskow
+  vs content box stopki) — FAIL przed fixem, PASS po; piny B15/wrap
+  w tier6_ux.js.
+
 ## v1.45.0 — silnik sum v4, kalka na XXH3-64, raporty diagnostyczne (Arc 20)
 
 Trzy powiazane watki z polishment-audytu silnika: szczelniejszy zakres sum
