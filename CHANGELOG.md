@@ -2,6 +2,71 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.45.0 — silnik sum v4, kalka na XXH3-64, raporty diagnostyczne (Arc 20)
+
+Trzy powiazane watki z polishment-audytu silnika: szczelniejszy zakres sum
+kontrolnych .arkmap, unifikacja hashy kalki z silnikiem .arkmap i jednolity
+eksport raportow diagnostycznych. Bez migracji wstecznej (brak uzytkownikow
+formatow posrednich): stare algorytmy i stare wersje kalki sa glosno
+odrzucane, zapis przelicza wszystko do nowych formatow.
+
+**Silnik sum .arkmap v4** (zastepuje v3 z v1.44.x):
+
+- Zakres rozszerzony o luki v3: kanal alfa kolorow etykiet (licznik +
+  wszystkie kanaly), pola obszaru grid_mode/is_zone/zone_area_ref/pos,
+  pole room.hash (identyfikator upstream).
+- Prefixy domenowe r4/a4/f4; suma pliku bez globalnego rollupu pokoi
+  (redundantny wzgledem rollupow obszarowych).
+- verifyChecksums NIGDY nie rzuca: uszkodzone dane -> verifyError, a glos
+  ma walidacja strukturalna (sciezka zapisu celowo zostaje fail-loud).
+- alg inny niz v4 -> glosny algMismatch (ok:false). Cichy skip bylby
+  dziura downgrade'owa: plik ze starymi sumami wygladalby na plik bez sum.
+- Nowe listy diagnostyczne: missingAreas, extraRooms, extraAreas
+  (sieroty wpisow sum bez obiektow) — kazda niezgodnosc slownikow to
+  ok:false.
+- Jedno liczenie na wczytanie: verify zwraca computed, ktore reuzywa
+  _computeBaseInfo (bez klonu i sortowan — enkoder jest read-only).
+- Straznik _CanonBuf: zagniezdzony reset rzuca zamiast cicho psuc bufor.
+- Walidator: area.pos musi byc tablica 3 liczb calkowitych (luka).
+- Spec normatywny: tests/checksums/CANONICAL_V4.md (zastepuje V3);
+  oracle tests/checksums/oracle_v4.py + vectors_v4.json.
+
+**Kalka .arkdelta format_version 2:**
+
+- Sumy kalki zmigrowane z CRC-32 (8 hex) na XXH3-64 (16 hex) nad ta sama
+  kanonizacja stableStringify — wspolny helper _deltaChecksums dla
+  buildera i walidatora; CRC32_TABLE/crc32str usuniete z aplikacji.
+- Pliki kalki v1 glosno odrzucane (bez migracji — kalke tworzy sie
+  ponownie); komunikat podaje obslugiwana wersje.
+- tests/fixture_demo.arkdelta przeliczone do formatu v2.
+
+**Raporty diagnostyczne (jednolita regula):**
+
+- Kazda lista diagnostyczna ma eksport „Kopiuj do schowka" + „Zapisz
+  jako .md" wspolnym builderem buildDiagnosticsReport (Markdown;
+  deterministyczny poza data ISO w naglowku; pelne listy bez obciec
+  widoku; puste sekcje jako „(brak)").
+- Dialog walidacji pliku: „📋 Kopiuj raport" + „⬇ Zapisz raport .md"
+  (raport-diagnostyki-<mapa>-<ts>.md) — bledy, ostrzezenia, pelne
+  szczegoly sum kontrolnych (badAreas/badRooms/missing/extra/algMismatch).
+- Panel recenzji kalki: „📋 Kopiuj podsumowanie" + „⬇ Zapisz raport .md"
+  (raport-recenzji-<mapa>-<ts>.md) — liczniki klas + wszystkie operacje
+  z klasyfikacja, notatkami i diffami.
+- Walidacja kierunkow miala eksport wczesniej (bez zmian; PNG zostaje
+  tylko tam). Regula udokumentowana w tests/README.md.
+
+**Testy i CI:**
+
+- Nowe harnessy: tests/checksums_v4.js (oracle, korupcje, zakres v4,
+  algMismatch, macierz no-throw, straznik bufora) i tests/report_export.js
+  (struktura md, pelne listy, regula kompletnosci powierzchni).
+- Zmigrowane: tier3_format, tier4_hardening, delta, sync_map,
+  empirical_driver (E9.crc-v4-export), xxh3_golden, save_dialogs i inne
+  piny wersji; run-all.sh.
+- sync-map.yml: self-check lustra ekstrahuje blok CANONICAL-V4.
+- docs: arkmap_spec §15 (alg v4), arkdelta_spec (format 2, XXH3-64,
+  glosny odrzut v1), arkmap_manual (raporty, algMismatch).
+
 ## Korekta dokumentacji (2026-08-23, bez zmian w kodzie)
 
 Audyt aktualnosci calej dokumentacji wzgledem kodu v1.44.5 wykryl 11 rozjazdow;

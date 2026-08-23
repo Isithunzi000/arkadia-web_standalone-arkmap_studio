@@ -1,5 +1,6 @@
-// Harness Tier 3 (v1.44.1) — sumy v3 XXH3-64 (W3, nowa implementacja Arc 19), hidden/symbolColor
-// (W4/Q2), klucz cache piksmap (W9), cap w pushUndo (W17), granica sesji exitEditMode (W18 v2).
+// Harness Tier 3 (v1.45.0) — sumy v4 XXH3-64 (W3, implementacja Arc 19, migracja Arc 20),
+// hidden/symbolColor (W4/Q2), klucz cache piksmap (W9), cap w pushUndo (W17),
+// granica sesji exitEditMode (W18 v2).
 // Wzorzec extract/makeCtx jak tier2_state.js. Uruchamianie z katalogu glownego repo.
 const fs = require('fs');
 const path = require('path');
@@ -18,12 +19,12 @@ function extract(src, anchor) {
   throw new Error('niezbalansowane klamry: ' + anchor);
 }
 
-// Blok stalych DIRS..CRC32_TABLE + crc32str (jeden ciegly zakres zrodla)
+// Blok stalych DIRS..VERSION (jeden ciegly zakres zrodla; CRC32_TABLE/crc32str
+// usuniete w v1.45.0 — kalka na XXH3-64)
 const constsStart = NEW.indexOf('const DIRS = [');
-const crcAnchor = 'function crc32str(str) {';
-const constsBlock = NEW.slice(constsStart, NEW.indexOf(crcAnchor)) + extract(NEW, crcAnchor);
+const constsBlock = NEW.slice(constsStart, NEW.indexOf('// ── arkadia-env.js ──'));
 
-// Bloki markerowe sum v3 (XXH3-64 + kodowanie kanoniczne + addChecksums/verifyChecksums)
+// Bloki markerowe sum v4 (XXH3-64 + kodowanie kanoniczne + addChecksums/verifyChecksums)
 function markerBlock(tag) {
   const re = new RegExp('// ====' + tag + '-BEGIN====([\\s\\S]*?)// ====' + tag + '-END====');
   const m = NEW.match(re);
@@ -37,7 +38,7 @@ const code = [
   extract(NEW, 'function toQColor(arr, defaultAlpha = 255) {'),
   extract(NEW, 'function _stripRoomDefaults(room) {'),
   markerBlock('XXH3-64'),
-  markerBlock('CANONICAL-V3'),
+  markerBlock('CANONICAL-V4'),
   extract(NEW, 'function _hash8(s) {'),
   extract(NEW, 'function _datConvertRoom(raw, hashLookup) {'),
   extract(NEW, 'function buildRoom(room, areaId) {'),
@@ -55,7 +56,7 @@ function makeCtx() {
     'cv', 'document', '_paintStrokeRevert', '_paintDisarm',
     'let _paintStroke = null, _lockInterval = null;\n' +
     code + '\n;return { _stripRoomDefaults, addChecksums, verifyChecksums, _encodeRoomCanonical, xxh3_64hex,' +
-    ' _hash8, _datConvertRoom, buildRoom, pushUndo, exitEditMode, crc32str, stableStringify };'
+    ' _hash8, _datConvertRoom, buildRoom, pushUndo, exitEditMode, stableStringify };'
   );
   const api = fn(
     state,
@@ -74,8 +75,8 @@ function ok(cond, name) { if (cond) { pass++; console.log('  OK   ' + name); } e
 function mkRoom(id, extra) { return Object.assign({ id, x: 1, y: 2, z: 0, env: 258 }, extra || {}); }
 function mkMap(areas, colors) { return { areas: areas, colors: colors || { env_colors: { 258: [255, 0, 0] }, custom_env_colors: {} }, meta: {} }; }
 
-// ═══ T1 (W3): sumy v3 — widocznosc pol, rozroznialnosc pustych obszarow, determinizm ═══
-console.log('── T1 (W3): v3 — etykiety/nazwy/kolory wchodza do sumy, puste obszary rozroznialne ──');
+// ═══ T1 (W3): sumy v4 — widocznosc pol, rozroznialnosc pustych obszarow, determinizm ═══
+console.log('── T1 (W3): v4 — etykiety/nazwy/kolory wchodza do sumy, puste obszary rozroznialne ──');
 {
   const { api } = makeCtx();
   const hRoom = (r) => api.xxh3_64hex(api._encodeRoomCanonical(r));
@@ -111,8 +112,8 @@ console.log('── T1 (W3): v3 — etykiety/nazwy/kolory wchodza do sumy, puste
   ok(/^[0-9a-f]{16}$/.test(f3.file), 'suma pliku odporna na brak colors');
 }
 
-// ═══ T2 (W3): addChecksums/verifyChecksums — alg v3, mutacje, missingRooms, stare alg ═══
-console.log('── T2 (W3): addChecksums/verifyChecksums — v3, badAreas, missingRooms, skip nie-v3 ──');
+// ═══ T2 (W3): addChecksums/verifyChecksums — alg v4, mutacje, missingRooms, stare alg ═══
+console.log('── T2 (W3): addChecksums/verifyChecksums — v4, badAreas, missingRooms, algMismatch ──');
 {
   const { api } = makeCtx();
   const area = { id: 5, name: 'A5', rooms: [mkRoom(1), mkRoom(2)],
@@ -120,9 +121,9 @@ console.log('── T2 (W3): addChecksums/verifyChecksums — v3, badAreas, miss
                             fg_color: [1, 2, 3], bg_color: [4, 5, 6] }] };
   const map = mkMap([area]);
   api.addChecksums(map);
-  ok(map.meta.checksums.alg === 'v3', 'addChecksums zapisuje alg: v3');
+  ok(map.meta.checksums.alg === 'v4', 'addChecksums zapisuje alg: v4');
   const res = api.verifyChecksums(map);
-  ok(res.ok === true && res.missingRooms.length === 0, 'swieze checksums v3 → verify ok');
+  ok(res.ok === true && res.missingRooms.length === 0, 'swieze checksums v4 → verify ok');
 
   const map2 = mkMap([{ id: 5, name: 'A5', rooms: [mkRoom(1), mkRoom(2)],
                         labels: [{ id: 1, x: 0, y: 0, z: 0, width: 10, height: 5, text: 'L',
@@ -140,16 +141,21 @@ console.log('── T2 (W3): addChecksums/verifyChecksums — v3, badAreas, miss
   ok(res3.ok === false && res3.missingRooms.length === 1 && res3.missingRooms[0] === 2,
      'brak wpisu w stored.rooms → missingRooms + ok:false (Claude#5)');
 
-  // Arc 19: formuly v1/v2 wycofane — kazdy alg != v3 to ciche pominiecie (present:false).
+  // Arc 20 (v1.45.0): kazdy alg != v4 to GLOSNY algMismatch (present:true, ok:false) —
+  // cichy skip bylby dziura downgrade'owa (plik ze starymi sumami wygladalby na „bez sum").
   const map4 = mkMap([{ id: 5, name: 'A5', rooms: [mkRoom(1)] }]);
   map4.meta.checksums = { file: 'deadbeef', areas: { '5': 'cafe' }, rooms: { '1': 'cafe' } };
   const res4 = api.verifyChecksums(map4);
-  ok(res4.present === false && res4.ok === true,
-     'plik z sumami v1 (bez alg) → ciche pominiecie (Arc 19)');
+  ok(res4.present === true && res4.ok === false && res4.algMismatch === 'undefined',
+     'plik z sumami v1 (bez alg) → glosny algMismatch (Arc 20)');
   map4.meta.checksums.alg = 'v2';
   const res4b = api.verifyChecksums(map4);
-  ok(res4b.present === false && res4b.unknownAlg === 'v2',
-     'plik z sumami v2 → ciche pominiecie + unknownAlg (Arc 19)');
+  ok(res4b.present === true && res4b.ok === false && res4b.algMismatch === 'v2',
+     'plik z sumami v2 → glosny algMismatch="v2" (Arc 20)');
+  map4.meta.checksums.alg = 'v3';
+  const res4c = api.verifyChecksums(map4);
+  ok(res4c.present === true && res4c.ok === false && res4c.algMismatch === 'v3',
+     'plik z sumami v3 (poprzedni alg) → glosny algMismatch="v3" (Arc 20)');
 }
 
 // ═══ T3 (W4/Q2): konwerter i buildRoom — hidden + symbolColor fallback ═══
@@ -235,13 +241,13 @@ console.log('── T6 (W18 v2): exitEditMode — undo/redo czyszczone, deltaLog
 // ═══ T7: strazniki strukturalne + piny wersji ═══
 console.log('── T7: strazniki strukturalne Tier 3 + piny wersji ──');
 {
-  ok(NEW.includes("const APP_VERSION = 'v1.44.5';"), 'pin: APP_VERSION v1.44.5');
+  ok(NEW.includes("const APP_VERSION = 'v1.45.0';"), 'pin: APP_VERSION v1.45.0');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok((deltaSrc.match(/v1\.44\.5/g) || []).length === 8, 'pin: delta.js 8x v1.44.5 (4 linie x includes+label)');
-  ok(NEW.includes("alg: 'v3',"), 'straznik: addChecksums alg v3');
-  ok(NEW.includes('// ====XXH3-64-BEGIN====') && NEW.includes('// ====CANONICAL-V3-BEGIN====') &&
-     !NEW.includes('function _crcArea(area, roomCrcs)'),
-     'straznik: bloki markerowe v3, formuly v2 usuniete');
+  ok((deltaSrc.match(/v1\.45\.0/g) || []).length === 10, 'pin: delta.js 10x v1.45.0 (4 linie x includes+label + 2 komentarze Arc 20)');
+  ok(NEW.includes("alg: 'v4',"), 'straznik: addChecksums alg v4');
+  ok(NEW.includes('// ====XXH3-64-BEGIN====') && NEW.includes('// ====CANONICAL-V4-BEGIN====') &&
+     !NEW.includes('// ====CANONICAL-V3-BEGIN====') && !NEW.includes('function _crcArea(area, roomCrcs)'),
+     'straznik: bloki markerowe v4 (v3 usuniete), formuly v2 usuniete');
   ok(NEW.includes("if (room.hidden !== undefined && typeof room.hidden !== 'boolean')"),
      'straznik: validateRoom typ hidden');
   ok(NEW.includes("if (room.hidden && !ud['system.hidden']) ud['system.hidden'] = '1';"),

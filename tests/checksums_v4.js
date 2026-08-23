@@ -1,16 +1,17 @@
-// Harness — checksums_v3: sumy kontrolne XXH3-64 / kanoniczne kodowanie binarne v3.
-// Zastępuje legacy_crc.js (alg v1/v2 wycofane w v1.44.0 — Arc 19).
-// Metoda: ekstrakcja bloków ====XXH3-64==== / ====CANONICAL-V3==== z arkmap_studio.html
-// i weryfikacja przeciw zewnętrznemu oracle: tests/checksums/vectors_v3.json
-// (referencyjny enkoder Python + moduł xxhash — tests/checksums/oracle_v3.py).
+// Harness — checksums_v4: sumy kontrolne XXH3-64 / kanoniczne kodowanie binarne v4.
+// Zastępuje checksums_v3.js (alg v3 wycofany w v1.45.0 — Arc 20).
+// Metoda: ekstrakcja bloków ====XXH3-64==== / ====CANONICAL-V4==== z arkmap_studio.html
+// i weryfikacja przeciw zewnętrznemu oracle: tests/checksums/vectors_v4.json
+// (referencyjny enkoder Python + moduł xxhash — tests/checksums/oracle_v4.py).
 // Golden fixture: tests/checksums/golden_fixture.arkmap (2 obszary, 12 pokoi, wszystkie
-// pola + edge cases). Spec normatywny: tests/checksums/CANONICAL_V3.md.
-// Uruchamianie z katalogu głównego repo: node tests/checksums_v3.js
+// pola + edge cases v4: room.hash, alfa w labelach, grid_mode/is_zone/zone_area_ref/pos).
+// Spec normatywny: tests/checksums/CANONICAL_V4.md.
+// Uruchamianie z katalogu głównego repo: node tests/checksums_v4.js
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const HTML = fs.readFileSync(path.join(ROOT, 'arkmap_studio.html'), 'utf8');
-const VECTORS = JSON.parse(fs.readFileSync(path.join(__dirname, 'checksums', 'vectors_v3.json'), 'utf8'));
+const VECTORS = JSON.parse(fs.readFileSync(path.join(__dirname, 'checksums', 'vectors_v4.json'), 'utf8'));
 const FIXTURE = JSON.parse(fs.readFileSync(path.join(__dirname, 'checksums', 'golden_fixture.arkmap'), 'utf8'));
 
 let pass = 0, fail = 0;
@@ -24,9 +25,9 @@ function markerBlock(tag) {
   return m[1];
 }
 const api = new Function(
-  markerBlock('XXH3-64') + '\n' + markerBlock('CANONICAL-V3') +
-  '\n;return { addChecksums, verifyChecksums, _encodeRoomCanonical, _encodeColorsCanonical,' +
-  ' _canonBuf, _V3_DIR_ORDER, xxh3_64, xxh3_64hex };'
+  markerBlock('XXH3-64') + '\n' + markerBlock('CANONICAL-V4') +
+  '\n;return { addChecksums, verifyChecksums, _computeV4Checksums, _encodeRoomCanonical, _encodeColorsCanonical,' +
+  ' _canonBuf, _V4_DIR_ORDER, xxh3_64, xxh3_64hex };'
 )();
 
 function freshMap() { return JSON.parse(JSON.stringify(FIXTURE)); }
@@ -37,7 +38,7 @@ console.log('── T1: golden fixture — sumy zgodne z oracle (Python/xxhash) 
   const map = freshMap();
   api.addChecksums(map);
   const cs = map.meta.checksums;
-  ok(cs.alg === 'v3', "alg === 'v3'");
+  ok(cs.alg === 'v4', "alg === 'v4'");
   ok(cs.file === VECTORS.golden.file.hash, 'suma pliku zgodna z oracle');
   for (const [id, v] of Object.entries(VECTORS.golden.areas)) {
     ok(cs.areas[id] === v.hash, 'suma obszaru ' + id + ' zgodna z oracle');
@@ -57,9 +58,11 @@ console.log('── T2: kotwice bajtowe (minimalny pokoj, sekcja colors) ──'
   const enc = api._encodeRoomCanonical(room1);
   const hex = Array.from(enc, b => b.toString(16).padStart(2, '0')).join('');
   ok(hex === VECTORS.golden.minimal_room_enc_hex, 'kodowanie minimalnego pokoju == oracle (bajtowo)');
+  ok(hex.startsWith('7234'), "prefix pokoju 'r4' (0x72 0x34)");
   const B = api._canonBuf; B.reset();
   api._encodeColorsCanonical(B, FIXTURE.colors);
   const chex = Array.from(B.bytes(), b => b.toString(16).padStart(2, '0')).join('');
+  B.release();
   ok(chex === VECTORS.golden.colors_enc_hex, 'kodowanie colors == oracle (bajtowo)');
 }
 
@@ -99,13 +102,15 @@ console.log('── T4: verifyChecksums — OK / korupcja pokoju / obszaru / col
   const r0 = api.verifyChecksums(map);
   ok(r0.present === true && r0.ok === true && r0.fileOk === true,
      'świeży plik: present && ok && fileOk');
+  ok(r0.computed && r0.computed.alg === 'v4' && r0.computed.file === map.meta.checksums.file,
+     'verify zwraca computed (reużycie przez baseInfo — jedno liczenie na load)');
 
   const mRoom = freshMap(); api.addChecksums(mRoom);
   mRoom.areas[0].rooms.find(r => r.id === 2).name = 'Zmieniona nazwa';
   const r1 = api.verifyChecksums(mRoom);
   ok(r1.ok === false && r1.badRooms.length === 1 && r1.badRooms[0].roomId === 2,
      'zmiana nazwy pokoju → badRooms=[2], ok=false');
-  ok(r1.fileOk === false, 'zmiana pokoju → suma pliku też niezgodna (rollup)');
+  ok(r1.fileOk === false, 'zmiana pokoju → suma pliku też niezgodna (rollup obszaru)');
 
   const mArea = freshMap(); api.addChecksums(mArea);
   mArea.areas[0].name = 'Zmieniony obszar';
@@ -117,7 +122,7 @@ console.log('── T4: verifyChecksums — OK / korupcja pokoju / obszaru / col
   mAud.areas[0].user_data['area-key'] = 'zmieniona wartosc';
   const r2b = api.verifyChecksums(mAud);
   ok(r2b.ok === false && r2b.badAreas.length === 1 && r2b.badAreas[0].id === 1 && r2b.badRooms.length === 0,
-     'zmiana user_data obszaru → badAreas=[1] (zakres a3 obejmuje user_data, v1.44.1)');
+     'zmiana user_data obszaru → badAreas=[1] (zakres a4 obejmuje user_data)');
   const mAud2 = freshMap(); api.addChecksums(mAud2);
   delete mAud2.areas[0].user_data;
   const r2c = api.verifyChecksums(mAud2);
@@ -137,31 +142,118 @@ console.log('── T4: verifyChecksums — OK / korupcja pokoju / obszaru / col
      'brak wpisu pokoju w stored.rooms → missingRooms=[3]');
 }
 
-// ═══ T5: ciche pominięcie dla alg != v3 ═══
-console.log('── T5: skip — brak sum / alg v1 (brak pola) / v2 / v9 ──');
+// ═══ T4b: zakres v4 — pola nowo objęte sumą (luki v3 zamknięte) ═══
+console.log('── T4b: zakres v4 — room.hash / alfa labela / grid_mode / is_zone / zone_area_ref / pos ──');
+{
+  const mHash = freshMap(); api.addChecksums(mHash);
+  mHash.areas[0].rooms.find(r => r.id === 2).hash = '99:99:9:Podmieniony';
+  const rh = api.verifyChecksums(mHash);
+  ok(rh.ok === false && rh.badRooms.length === 1 && rh.badRooms[0].roomId === 2,
+     'zmiana room.hash → badRooms=[2] (v3 tego nie widział)');
+
+  const mAlfa = freshMap(); api.addChecksums(mAlfa);
+  mAlfa.areas[0].labels.find(l => l.id === 3).fg_color[3] = 255;
+  const ra = api.verifyChecksums(mAlfa);
+  ok(ra.ok === false && ra.badAreas.length === 1 && ra.badAreas[0].id === 1,
+     'zmiana kanału alfa labela → badAreas=[1] (v3 widział tylko RGB)');
+
+  for (const [fld, val] of [['grid_mode', false], ['pos', [0, 0, 0]]]) {
+    const m = freshMap(); api.addChecksums(m);
+    m.areas[0][fld] = val;
+    const r = api.verifyChecksums(m);
+    ok(r.ok === false && r.badAreas.length === 1 && r.badAreas[0].id === 1,
+       'zmiana area.' + fld + ' → badAreas=[1]');
+  }
+  for (const [fld, val] of [['is_zone', false], ['zone_area_ref', 999]]) {
+    const m = freshMap(); api.addChecksums(m);
+    m.areas[1][fld] = val;
+    const r = api.verifyChecksums(m);
+    ok(r.ok === false && r.badAreas.length === 1 && r.badAreas[0].id === -5,
+       'zmiana area.' + fld + ' → badAreas=[-5]');
+  }
+}
+
+// ═══ T4c: spójność słowników — missingAreas / extraRooms / extraAreas (głośno) ═══
+console.log('── T4c: missingAreas / extraRooms / extraAreas → ok:false ──');
+{
+  const mMissA = freshMap(); api.addChecksums(mMissA);
+  delete mMissA.meta.checksums.areas['-5'];
+  const r1 = api.verifyChecksums(mMissA);
+  ok(r1.ok === false && r1.missingAreas.length === 1 && r1.missingAreas[0].id === -5
+     && r1.missingAreas[0].name === 'Ujemny obszar',
+     'brak wpisu obszaru → missingAreas=[{id:-5,name}]');
+
+  const mXtraR = freshMap(); api.addChecksums(mXtraR);
+  mXtraR.meta.checksums.rooms['777'] = 'deadbeefdeadbeef';
+  const r2 = api.verifyChecksums(mXtraR);
+  ok(r2.ok === false && r2.extraRooms.length === 1 && r2.extraRooms[0] === '777',
+     'sierota w stored.rooms → extraRooms=[777]');
+
+  const mXtraA = freshMap(); api.addChecksums(mXtraA);
+  mXtraA.meta.checksums.areas['888'] = 'deadbeefdeadbeef';
+  const r3 = api.verifyChecksums(mXtraA);
+  ok(r3.ok === false && r3.extraAreas.length === 1 && r3.extraAreas[0] === '888',
+     'sierota w stored.areas → extraAreas=[888]');
+
+  // deterministyczny porządek sierot (bajtowy po kluczu-stringu)
+  const mSort = freshMap(); api.addChecksums(mSort);
+  mSort.meta.checksums.rooms['10'] = 'a'.repeat(16);
+  mSort.meta.checksums.rooms['9'] = 'b'.repeat(16);
+  const r4 = api.verifyChecksums(mSort);
+  ok(JSON.stringify(r4.extraRooms) === JSON.stringify(['10', '9']),
+     "extraRooms w porządku bajtowym kluczy ('10' < '9')");
+}
+
+// ═══ T5: alg != v4 → GŁOŚNO (algMismatch); brak sum → cicho ═══
+console.log('── T5: algMismatch głośny (v1/v2/v3/v9), brak sum cichy ──');
 {
   const mNone = freshMap();
   const r0 = api.verifyChecksums(mNone);
-  ok(r0.present === false && r0.ok === true && r0.unknownAlg === undefined,
-     'brak checksums → present:false, bez unknownAlg');
+  ok(r0.present === false && r0.ok === true && r0.algMismatch === undefined,
+     'brak checksums → present:false, ok:true, bez algMismatch');
 
   const mV1 = freshMap();
   mV1.meta.checksums = { file: 'deadbeef', areas: {}, rooms: {} };   // v1: bez pola alg
   const r1 = api.verifyChecksums(mV1);
-  ok(r1.present === false && r1.ok === true,
-     'alg v1 (brak pola alg) → ciche pominięcie');
+  ok(r1.present === true && r1.ok === false && r1.algMismatch === 'undefined',
+     'alg v1 (brak pola alg) → głośny algMismatch="undefined"');
 
-  const mV2 = freshMap();
-  mV2.meta.checksums = { alg: 'v2', file: 'deadbeef', areas: {}, rooms: {} };
-  const r2 = api.verifyChecksums(mV2);
-  ok(r2.present === false && r2.ok === true && r2.unknownAlg === 'v2',
-     'alg v2 → ciche pominięcie + unknownAlg=v2');
+  const mV3 = freshMap();
+  mV3.meta.checksums = { alg: 'v3', file: 'deadbeefdeadbeef', areas: {}, rooms: {} };
+  const r2 = api.verifyChecksums(mV3);
+  ok(r2.present === true && r2.ok === false && r2.fileOk === false && r2.algMismatch === 'v3',
+     'alg v3 (poprzedni) → głośny algMismatch="v3", ok:false (brak cichego skipu)');
 
   const mV9 = freshMap();
-  mV9.meta.checksums = { alg: 'v9', file: 'deadbeef', areas: {}, rooms: {} };
+  mV9.meta.checksums = { alg: 'v9', file: 'deadbeefdeadbeef', areas: {}, rooms: {} };
   const r3 = api.verifyChecksums(mV9);
-  ok(r3.present === false && r3.unknownAlg === 'v9',
-     'alg v9 (przyszły) → ciche pominięcie + unknownAlg=v9');
+  ok(r3.present === true && r3.ok === false && r3.algMismatch === 'v9',
+     'alg v9 (przyszły) → głośny algMismatch="v9" (odporność na downgrade/upgrade)');
+}
+
+// ═══ T5b: verifyChecksums NIGDY nie rzuca (biegnie przed dialogiem walidacji) ═══
+console.log('── T5b: no-throw matrix — uszkodzone dane → verifyError, nie wyjątek ──');
+{
+  const cases = [
+    ['labels jako obiekt (nie array)', m => { m.areas[0].labels = { 0: { id: 1 } }; }],
+    ['rooms jako obiekt', m => { m.areas[0].rooms = { 0: { id: 1 } }; }],
+    ['exits jako array', m => { m.areas[0].rooms[1].exits = [1, 2]; }],
+    ['custom_lines punkt jako skalar', m => { m.areas[0].rooms[1].custom_lines.n.points = [5]; }],
+    ['user_data wartosc nie-string', m => { m.areas[0].rooms[1].user_data = { k: 42 }; }],
+    ['room.id jako string', m => { m.areas[0].rooms[1].id = 'abc'; }],
+    ['area.pos niekompletne', m => { m.areas[0].pos = [1]; }],
+    ['labels fg_color jako skalar', m => { m.areas[0].labels[0].fg_color = 7; }],
+  ];
+  for (const [name, mutate] of cases) {
+    const m = freshMap();
+    api.addChecksums(m);
+    mutate(m);
+    let threw = false, res = null;
+    try { res = api.verifyChecksums(m); }
+    catch (e) { threw = true; }
+    ok(!threw && res && res.present === true && typeof res.ok === 'boolean',
+       'bez rzutu: ' + name + (res && res.verifyError ? ' (verifyError)' : ''));
+  }
 }
 
 // ═══ T6: piny strukturalne ═══
@@ -170,19 +262,22 @@ console.log('── T6: piny strukturalne ──');
   const chkBlock = HTML.slice(HTML.indexOf('// ── checksum.js ──'), HTML.indexOf('// ── mudlet_dat.js ──'));
   ok(!/_crcRoom|_crcArea|_crcFile|_stripAreaForCrc/.test(chkBlock),
      'sekcja checksum bez formuł v1/v2 (_crcRoom/_crcArea/_crcFile)');
-  ok(!/a2:|f2:/.test(chkBlock), 'sekcja checksum bez prefiksów a2:/f2:');
-  ok(chkBlock.includes("alg: 'v3'"), "sekcja checksum zawiera alg: 'v3'");
-  ok(/function crc32str\(str\)/.test(HTML), 'crc32str nadal obecny (.arkdelta pozostaje na CRC-32)');
-  ok(/file: crc32str\(stableStringify\(\{ meta, ops \}\)\)/.test(HTML),
-     'pin: .arkdelta liczy checksums przez crc32str (bez zmian)');
+  ok(!/a2:|f2:|a3:|f3:/.test(chkBlock), 'sekcja checksum bez prefiksów a2/f2/a3/f3');
+  ok(chkBlock.includes("alg: 'v4'"), "sekcja checksum zawiera alg: 'v4'");
+  ok(!/crc32str|CRC32_TABLE/.test(HTML),
+     'crc32str/CRC32_TABLE usunięte z calego HTML (.arkdelta na XXH3-64 od v1.45.0)');
+  ok(/function _deltaChecksums\(meta, ops\)/.test(HTML),
+     '.arkdelta liczy checksums przez _deltaChecksums (XXH3-64 + stableStringify)');
+  ok(/const ARKDELTA_FORMAT_VERSION = 2;/.test(HTML),
+     'ARKDELTA_FORMAT_VERSION = 2 (stare wersje kalki glosno odrzucane)');
   const dd = HTML.match(/const _DIFF_DIR_ORDER = \[([^\]]*)\];/);
   ok(!!dd, 'znaleziono _DIFF_DIR_ORDER');
   if (dd) {
     const diffOrder = eval('[' + dd[1] + ']');
-    ok(JSON.stringify(diffOrder) === JSON.stringify(api._V3_DIR_ORDER),
-       '_V3_DIR_ORDER === _DIFF_DIR_ORDER (strażnik rozjazdu)');
+    ok(JSON.stringify(diffOrder) === JSON.stringify(api._V4_DIR_ORDER),
+       '_V4_DIR_ORDER === _DIFF_DIR_ORDER (strażnik rozjazdu)');
   }
-  ok(HTML.includes("const APP_VERSION = 'v1.44.5';"), 'pin: APP_VERSION v1.44.5');
+  ok(HTML.includes("const APP_VERSION = 'v1.45.0';"), 'pin: APP_VERSION v1.45.0');
 }
 
 // ═══ T7: pin NaN-kanoniczny — klasa błędu z Arc 19 (NaN-payload provenance) ═══
@@ -207,5 +302,20 @@ console.log('── T7: pin NaN-kanoniczny (NaN/undefined w CL → identyczne ba
      'suma pokoju odporna na provenance NaN (DAT vs JSON.parse)');
 }
 
-console.log('checksums_v3: ' + pass + ' OK, ' + fail + ' FAIL');
+// ═══ T8: strażnik bufora — zagnieżdżony reset rzuca (bug-class _canonBuf) ═══
+console.log('── T8: _CanonBuf — strażnik zagnieżdżenia reset/release ──');
+{
+  const B = api._canonBuf;
+  B.reset();
+  let threw = false;
+  try { B.reset(); } catch (e) { threw = /zagniedzone/.test(e.message); }
+  B.release();
+  ok(threw, 'reset w trakcie kodowania → wyjątek (zamiast cichej korupcji bufora)');
+  B.reset(); B.release();
+  let ok2 = true;
+  try { B.reset(); B.u8(1); } finally { B.release(); }
+  ok(ok2, 'po release bufor znowu używalny');
+}
+
+console.log('checksums_v4: ' + pass + ' OK, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

@@ -223,7 +223,8 @@ function buildSingle({ nodeRes, browser, meta }) {
     return s;
   }).filter(Boolean).join('; ');
 
-  const algTxt = meta.checksum_alg === 'v3' ? 'sumy <b>v3</b> (XXH3-64) liczone funkcjami aplikacji'
+  const algTxt = meta.checksum_alg === 'v4' ? 'sumy <b>v4</b> (XXH3-64) liczone funkcjami aplikacji'
+    : meta.checksum_alg === 'v3' ? 'sumy <b>v3</b> (XXH3-64) liczone funkcjami aplikacji'
     : meta.checksum_alg === 'v2' ? 'sumy v2 liczone funkcjami aplikacji'
     : 'sumy liczone funkcjami aplikacji';
   const appTxt = meta.app_version ? ` · aplikacja <code>${esc(meta.app_version)}</code>` : '';

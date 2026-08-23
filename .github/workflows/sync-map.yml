@@ -113,7 +113,7 @@ jobs:
 
       # Arc 16/19: opublikowany plik MUSI przechodzic wlasny verifyChecksums z main —
       # lustro z sumami v1 (sprzed v1.38.0) straszylo userow falszywym „plik uszkodzony".
-      # v1.44.0: alg v3 (XXH3-64 + kodowanie kanoniczne) — ekstrakcja blokow markerowych.
+      # v1.45.0: alg v4 (XXH3-64 + kodowanie kanoniczne v4) — ekstrakcja blokow markerowych.
       - name: Self-check .arkmap wlasnym verifierem (fail-closed)
         if: steps.gate.outputs.changed == 'true'
         run: |
@@ -122,7 +122,7 @@ jobs:
             const fs = require("fs");
             const html = fs.readFileSync("arkmap_studio.html", "utf8");
             const blk = t => { const m = html.match(new RegExp("// ====" + t + "-BEGIN====([\\s\\S]*?)// ====" + t + "-END====")); if (!m) throw new Error("brak markera: " + t); return m[1]; };
-            const api = new Function(blk("XXH3-64") + "\n" + blk("CANONICAL-V3") + "\nreturn { verifyChecksums };")();
+            const api = new Function(blk("XXH3-64") + "\n" + blk("CANONICAL-V4") + "\nreturn { verifyChecksums };")();
             const m = JSON.parse(fs.readFileSync("map_master3.arkmap", "utf8"));
             const r = api.verifyChecksums(m);
             if (!r.ok) { console.error("SELF-CHECK FAIL:", JSON.stringify({ fileOk: r.fileOk, badAreas: r.badAreas.length, badRooms: r.badRooms.length })); process.exit(1); }

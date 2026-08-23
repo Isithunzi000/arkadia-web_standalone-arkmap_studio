@@ -3,73 +3,73 @@
   "golden": {
     "areas": {
       "-5": {
-        "enc_len": 75,
-        "hash": "b527081229157adb"
+        "enc_len": 80,
+        "hash": "5b5fbcd73b1bc7d8"
       },
       "1": {
-        "enc_len": 451,
-        "hash": "a5fd5bd46ac0a1f3"
+        "enc_len": 579,
+        "hash": "5805e20b5b2c5701"
       }
     },
     "colors_enc_hex": "02000000020000000f0000000a00000007000000020000000200000003ff00000080000000000000000a0000000401000000020000000300000004000000",
     "file": {
-      "enc_len": 184,
-      "hash": "a4666c5d72d0b7e2"
+      "enc_len": 84,
+      "hash": "faf954f9e5e078d3"
     },
-    "minimal_room_enc_hex": "72330100000000000000000000000000000001000000",
+    "minimal_room_enc_hex": "72340100000000000000000000000000000001000000",
     "rooms": {
       "1": {
         "enc_len": 22,
-        "hash": "2deb65cd6d61a8db"
+        "hash": "2326dc1f94f010f6"
       },
       "101": {
         "enc_len": 45,
-        "hash": "e8977cb687e5366d"
+        "hash": "fe243cee4835d59b"
       },
       "102": {
         "enc_len": 82,
-        "hash": "bba4791b3d5a7776"
+        "hash": "c63c13afa6940794"
       },
       "103": {
         "enc_len": 70,
-        "hash": "fd6f2ba36fbb8e10"
+        "hash": "edff64326b6f5898"
       },
       "104": {
         "enc_len": 60,
-        "hash": "eb7d0888a749919b"
+        "hash": "0a5ae0dff1de927a"
       },
       "105": {
         "enc_len": 56,
-        "hash": "ee5f38480f0f67e4"
+        "hash": "742b20a4f544c732"
       },
       "106": {
         "enc_len": 22,
-        "hash": "11180866d619b563"
+        "hash": "d9e73b63d1358df8"
       },
       "2": {
-        "enc_len": 497,
-        "hash": "36d12babd5fcd7f1"
+        "enc_len": 536,
+        "hash": "53c1bf5885665793"
       },
       "3": {
         "enc_len": 50,
-        "hash": "37ea461661234e86"
+        "hash": "b36af6e4ec554a6e"
       },
       "4": {
         "enc_len": 80,
-        "hash": "82abb85c0cabeb05"
+        "hash": "f82abf9105fcf1d2"
       },
       "5": {
         "enc_len": 26,
-        "hash": "eb789dedf88e7579"
+        "hash": "db076be4db9a6346"
       },
       "6": {
         "enc_len": 22,
-        "hash": "af71df1939abe4a2"
+        "hash": "df3f3363aa5d3eda"
       }
     },
     "strip_equivalence": {
       "explicit_defaults_equal": true,
-      "hash": "eb789dedf88e7579",
+      "hash": "db076be4db9a6346",
       "room_id": 5,
       "shuffled_keys_equal": true
     }

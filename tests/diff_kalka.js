@@ -48,7 +48,7 @@ const deltaCode =
   'function _deltaCardHide() {}\n' +
   extract(HTML, 'function _arkdeltaBaseNote(base) {') + '\n' +
   extract(HTML, 'function _deltaBaseCheck(base) {') + '\n' +
-  '\n;return { pushUndo, _computeBaseInfo, _deltaStripRoom, buildDelta, validateDeltaText, applyDelta, classifyDelta, _arkdeltaBaseNote, _deltaBaseCheck, crc32str, stableStringify, addChecksums, diffMaps, _diffCanonRoom, _diffEq, _deltaIsSuppressor,'
+  '\n;return { pushUndo, _computeBaseInfo, _deltaStripRoom, buildDelta, validateDeltaText, applyDelta, classifyDelta, _arkdeltaBaseNote, _deltaBaseCheck, _deltaChecksums, stableStringify, addChecksums, diffMaps, _diffCanonRoom, _diffEq, _deltaIsSuppressor,'
   + '\n  _deltaBuildOcc, _deltaTakenCells, _deltaFindFreeCell, _deltaPlaceCtx, _deltaCellFree, _deltaApplyOverridesToOps, _deltaGhostGeoms, _deltaGhostReset,'
   + '\n  get ghosts() { return _deltaGhosts; }, set ghosts(v) { _deltaGhosts = v; },'
   + '\n  get overrides() { return _deltaOverrides; }, set overrides(v) { _deltaOverrides = v; },'
@@ -323,7 +323,7 @@ console.log('— D5: piny UI (standalone, D7) —');
   ok(HTML.indexOf('const _bar = prog ? (prog.bar || null) : olConfirmBar;') !== -1,
     'olFetchFile: domyslny cel = ol-confirm (stare zachowanie)');
   ok(HTML.indexOf('function buildDelta(log, base) {') !== -1, 'buildDelta(log, base)');
-  ok(HTML.indexOf('function _computeBaseInfo(map) {') !== -1, '_computeBaseInfo(map)');
+  ok(HTML.indexOf('function _computeBaseInfo(map, precomputed) {') !== -1, '_computeBaseInfo(map, precomputed)');
   ok(HTML.indexOf('buildDelta(r.entries, _computeBaseInfo(_kalka.src))') !== -1, 'generator: baza z mapy zrodlowej');
   ok(HTML.indexOf('if (r.entries.length > 5000 || bytes > 8 * 1024 * 1024)') !== -1, 'pre-flight limitow walidatora');
   ok(HTML.indexOf('if (r.overlap < 0.5 && r.srcRooms > 0 && r.dstRooms > 0)') !== -1, 'straznik pokrewienstwa');

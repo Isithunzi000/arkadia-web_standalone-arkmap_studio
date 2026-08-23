@@ -30,10 +30,9 @@ function blockSlice(a, b) {
   return NEW.slice(i, j);
 }
 
-// ── wspolny blok stalych (jak tier3) ──
+// ── wspolny blok stalych (jak tier3; CRC32 usuniete w v1.45.0) ──
 const constsStart = NEW.indexOf('const DIRS = [');
-const crcAnchor = 'function crc32str(str) {';
-const constsBlock = NEW.slice(constsStart, NEW.indexOf(crcAnchor)) + extract(NEW, crcAnchor);
+const constsBlock = NEW.slice(constsStart, NEW.indexOf('// ── arkadia-env.js ──'));
 
 // ═══ ctx kalki (jak delta.js): blok ARKDELTA + walidator + remainder ═══
 const deltaCode =
@@ -50,7 +49,7 @@ const deltaCode =
   'function _deltaCardHide() {}\n' +
   extract(NEW, 'function _arkdeltaBaseNote(base) {') + '\n' +
   extract(NEW, 'function _deltaBaseCheck(base) {') + '\n' +
-  '\n;return { pushUndo, buildDelta, validateDeltaText, classifyDelta, crc32str, stableStringify,' +
+  '\n;return { pushUndo, buildDelta, validateDeltaText, classifyDelta, _deltaChecksums, stableStringify,' +
   ' _deltaRemainderOps, _deltaValidateOpTypes, _deltaScanDeep, _deltaApplyOverridesToOps,' +
   '\n  get overrides() { return _deltaOverrides; }, set overrides(v) { _deltaOverrides = v; },' +
   '\n  get appliedSeqs() { return _deltaAppliedSeqs; }, set appliedSeqs(v) { _deltaAppliedSeqs = v; },' +
@@ -90,10 +89,9 @@ function makeDeltaCtx() {
 // pomocnicza kalka z poprawnymi sumami (jak _deltaSerializeOps)
 function mkDelta(ctx, ops) {
   ops = ops.map((o, i) => Object.assign({}, o, { seq: i + 1 }));
-  const meta = { format: 'arkdelta', format_version: 1, ops_count: ops.length, base: {}, app_version: 'test' };
+  const meta = { format: 'arkdelta', format_version: 2, ops_count: ops.length, base: {}, app_version: 'test' };
   const checksums = {
-    file: ctx.api.crc32str(ctx.api.stableStringify({ meta, ops })),
-    ops: ops.map(op => ctx.api.crc32str(ctx.api.stableStringify(op))),
+    ...ctx.api._deltaChecksums(meta, ops),
   };
   return JSON.stringify({ meta, ops, checksums });
 }
@@ -213,7 +211,7 @@ console.log('── T2b: golden writera .dat (fixpoint + crc) ──');
       const d = html.indexOf('function buildColorCache');
       return html.slice(a, b) + '\n' + html.slice(c, d);
     }
-    const api2 = new Function(formatLayer2(NEW) + '\n;return { datToArkmap, arkmapToDat, CRC32_TABLE };')();
+    const api2 = new Function(formatLayer2(NEW) + '\n;return { datToArkmap, arkmapToDat };')();
     const ab = DAT.buffer.slice(DAT.byteOffset, DAT.byteOffset + DAT.byteLength);
     const o1 = api2.arkmapToDat(api2.datToArkmap(ab.slice(0)));
     const b1 = o1 instanceof Uint8Array ? o1 : new Uint8Array(o1);
@@ -221,10 +219,8 @@ console.log('── T2b: golden writera .dat (fixpoint + crc) ──');
     const b2 = o2 instanceof Uint8Array ? o2 : new Uint8Array(o2);
     ok(b1.length === b2.length && Buffer.from(b1).equals(Buffer.from(b2)),
       'W1/W2: writer stabilny — fixpoint bajtowy write(read(write(read(fix)))) == write(read(fix))');
-    let crc = 0xFFFFFFFF;
-    for (let i = 0; i < b1.length; i++) crc = api2.CRC32_TABLE[(crc ^ b1[i]) & 0xFF] ^ (crc >>> 8);
-    crc = (crc ^ 0xFFFFFFFF) >>> 0;
-    const hex = ('00000000' + crc.toString(16)).slice(-8);
+    // CRC-32 liczone po stronie testu (zlib) — aplikacja nie nosi juz CRC-32 (v1.45.0)
+    const hex = ('00000000' + require('zlib').crc32(b1).toString(16)).slice(-8);
     ok(b1.length === 7845726 && hex === '65da3512',
       'W1/W2: golden — wyjscie writera bajtowo jak v1.38.0 [len=' + b1.length + ' crc=' + hex + ']');
   }
@@ -448,13 +444,13 @@ console.log('── T9: piny ──');
   ok(dij.indexOf('if (cur === toId) break;') < dij.indexOf('if (room.locked) continue;'),
     'pin P1: locked pokoj dopuszczalny jako CEL trasy (decyzja wlasciciela — nie zmieniac na Mudlet-parity)');
   // piny wersji
-  ok(NEW.includes("const APP_VERSION = 'v1.44.5';"), 'pin: APP_VERSION v1.44.5');
+  ok(NEW.includes("const APP_VERSION = 'v1.45.0';"), 'pin: APP_VERSION v1.45.0');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok(deltaSrc.split('v1.44.5').length - 1 === 8, 'pin: delta.js 8x v1.44.5');
+  ok(deltaSrc.split('v1.45.0').length - 1 === 10, 'pin: delta.js 10x v1.45.0');
   const t2 = fs.readFileSync(path.join(ROOT, 'tests', 'tier2_state.js'), 'utf8');
-  ok(t2.includes("wersja: v1.44.5"), 'pin: tier2_state.js v1.44.5');
+  ok(t2.includes("wersja: v1.45.0"), 'pin: tier2_state.js v1.45.0');
   const t3 = fs.readFileSync(path.join(ROOT, 'tests', 'tier3_format.js'), 'utf8');
-  ok(t3.includes("pin: APP_VERSION v1.44.5"), 'pin: tier3_format.js v1.44.5');
+  ok(t3.includes("pin: APP_VERSION v1.45.0"), 'pin: tier3_format.js v1.45.0');
 }
 
 // ═══ T10: bramka — wlasne kalki zawsze z sid (K7 nie zabija wlasnych eksportow) ═══

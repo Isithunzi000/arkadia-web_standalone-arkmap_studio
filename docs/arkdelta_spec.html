@@ -108,14 +108,14 @@
 
 <p>Key design goals:</p>
 <ul>
-  <li><strong>Deterministic</strong> — the same edit log always produces a byte-identical file (canonical serialization, sorted keys, CRC-32 checksums)</li>
+  <li><strong>Deterministic</strong> — the same edit log always produces a byte-identical file (canonical serialization, sorted keys, XXH3-64 checksums)</li>
   <li><strong>Anonymous additions</strong> — rooms, areas and labels created by the delta carry no numeric IDs in the file; they use symbolic IDs (<code>d:N</code>) and receive fresh numbers on apply, like an overlay</li>
   <li><strong>Fail-closed</strong> — a corrupted or tampered file is refused outright, with precise diagnostics; nothing is loaded</li>
   <li><strong>Non-destructive</strong> — applying a delta goes through the normal undo machinery: every applied operation enters the undo history as a regular edit, and undo/redo behavior is unchanged</li>
   <li><strong>Self-describing base</strong> — the file records the identity (file checksum) of the map variant it was created from, plus optional version/revision metadata</li>
 </ul>
 
-<div class="note"><strong>Relationship to .arkmap:</strong> A delta never stores a full map — only operations. The base identity is the hierarchical file checksum of the <code>.arkmap</code> canonical form of the map that was loaded when the edits were made (including the reduced-information variant derived from a Mudlet <code>.dat</code> file, where base identity is the file checksum of that derived .arkmap form). The checksum algorithm is the one defined by the .arkmap spec (currently v3 — XXH3-64, 16-hex); deltas written against older map checksum generations (CRC-32, 8-hex) never match re-saved maps, so the base gate always reports a mismatch for them (informational dialog — the user may continue; see §4 and §9).</div>
+<div class="note"><strong>Relationship to .arkmap:</strong> A delta never stores a full map — only operations. The base identity is the hierarchical file checksum of the <code>.arkmap</code> canonical form of the map that was loaded when the edits were made (including the reduced-information variant derived from a Mudlet <code>.dat</code> file, where base identity is the file checksum of that derived .arkmap form). The checksum algorithm is the one defined by the .arkmap spec (currently v4 — XXH3-64, 16-hex); deltas written against older map checksum generations (CRC-32 8-hex, or v3 16-hex from ArkMap Studio v1.44.x) never match re-saved maps, so the base gate always reports a mismatch for them (informational dialog — the user may continue; see §4 and §9).</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="top-level">2. Top-Level Structure</h2>
@@ -123,7 +123,7 @@
 <pre>{
   <span class="k">"meta"</span>:      { ... },   <span class="c">// REQUIRED — format marker, base identity, bookkeeping (see §3)</span>
   <span class="k">"ops"</span>:       [ ... ],   <span class="c">// REQUIRED — ordered array of operation objects (see §7)</span>
-  <span class="k">"checksums"</span>: { ... }    <span class="c">// REQUIRED — CRC-32 checksums (see §5)</span>
+  <span class="k">"checksums"</span>: { ... }    <span class="c">// REQUIRED — XXH3-64 checksums (see §5)</span>
 }</pre>
 
 <p>Keys at every level are serialized in sorted order (see <a href="#serialization">§5</a>). The file is produced by <code>buildDelta()</code> from the editor's full edit log and consumed by <code>validateDeltaText()</code> + <code>applyDelta()</code>.</p>
@@ -134,7 +134,7 @@
 <table>
   <tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr>
   <tr><td><code>format</code></td><td>string</td><td class="req">REQ</td><td>Magic string, must be exactly <code>"arkdelta"</code></td></tr>
-  <tr><td><code>format_version</code></td><td>integer</td><td class="req">REQ</td><td>Format version, currently <code>1</code></td></tr>
+  <tr><td><code>format_version</code></td><td>integer</td><td class="req">REQ</td><td>Format version, currently <code>2</code></td></tr>
   <tr><td><code>ops_count</code></td><td>integer</td><td class="req">REQ</td><td>Number of operations; must equal <code>ops.length</code></td></tr>
   <tr><td><code>base</code></td><td>object</td><td class="req">REQ</td><td>Base identity (see <a href="#base">§4</a>); may be empty if the base could not be identified</td></tr>
   <tr><td><code>app_version</code></td><td>string</td><td class="req">REQ</td><td>ArkMap Studio version that produced the file (informational)</td></tr>
@@ -147,12 +147,12 @@
 
 <table>
   <tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr>
-  <tr><td><code>crc</code></td><td>string</td><td class="req">REQ</td><td>File checksum (hex) of the canonical .arkmap form of the base map — the hierarchical file checksum as defined by the .arkmap spec §15 (algorithm v3: XXH3-64, 16 lowercase hex characters)</td></tr>
+  <tr><td><code>crc</code></td><td>string</td><td class="req">REQ</td><td>File checksum (hex) of the canonical .arkmap form of the base map — the hierarchical file checksum as defined by the .arkmap spec §15 (algorithm v4: XXH3-64, 16 lowercase hex characters)</td></tr>
   <tr><td><code>version</code></td><td>string</td><td class="opt">OPT</td><td>Map version, copied from <code>meta.user_data.version</code> when present</td></tr>
   <tr><td><code>revision</code></td><td>string</td><td class="opt">OPT</td><td>Source revision (commit SHA), copied from <code>meta.user_data.revision</code> when present</td></tr>
 </table>
 
-<p>The base checksum is computed <strong>once, at map load time</strong> — not at export time. The computation clones the loaded map, sorts areas/rooms/labels by id, sorts per-room array fields (<code>stubs</code>, <code>exit_locks</code>, <code>special_exit_locks</code>), drops the internal <code>room.area</code> field, and takes the hierarchical <code>meta.checksums.file</code> of the clone. This makes the identity independent of in-memory ordering and of transient editing state.</p>
+<p>The base checksum is computed <strong>once, at map load time</strong> — not at export time. The v4 engine computes it read-only (no cloning: the canonical encoding is independent of key order and in-memory ordering, and excludes the internal <code>room.area</code> field), reusing the checksums already computed during load verification — one computation per load.</p>
 
 <div class="note"><strong>Why at load:</strong> the base identity must describe the map the user <em>started from</em>, not the map after edits. Computing it at load keeps it stable no matter what the session does afterwards.</div>
 
@@ -163,12 +163,12 @@
 
 <p>The file is serialized with the same canonical JSON writer as <code>.arkmap</code> (<code>stableStringify</code>): object keys sorted lexicographically at every level, no insignificant whitespace beyond the fixed pretty-print layout, UTF-8 encoding. The full canonical rules are those of the .arkmap specification (§16) — in particular, arrays of primitives with at most 8 elements are written inline on a single line (e.g. <code>[255, 0, 0]</code>), arrays of objects use the standard multi-line layout, and <code>undefined</code> values are omitted.</p>
 
-<p>Checksums use CRC-32 (hex string, lowercase) over the canonical serialization:</p>
+<p>Checksums use XXH3-64 (seed 0; 16 lowercase hex characters) over the UTF-8 bytes of the canonical serialization — the same hash family as the .arkmap checksum engine (format_version 2; format_version 1 used CRC-32, 8 hex):</p>
 
 <table>
   <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-  <tr><td><code>checksums.file</code></td><td>string</td><td>CRC-32 of the canonical form of <code>{ meta, ops }</code> (the whole file minus the checksums object itself)</td></tr>
-  <tr><td><code>checksums.ops</code></td><td>array&lt;string&gt;</td><td>Per-operation CRC-32 of the canonical form of each op, in order; used to localize corruption</td></tr>
+  <tr><td><code>checksums.file</code></td><td>string</td><td>XXH3-64 of the canonical form of <code>{ meta, ops }</code> (the whole file minus the checksums object itself)</td></tr>
+  <tr><td><code>checksums.ops</code></td><td>array&lt;string&gt;</td><td>Per-operation XXH3-64 of the canonical form of each op, in order; used to localize corruption</td></tr>
 </table>
 
 <div class="critical"><strong>Tamper handling:</strong> if <code>checksums.file</code> does not match, the file is refused. The per-op checksums are then used to name the offending operations precisely (e.g. <em>„op #17, #23 nie zgadza się z sumą kontrolną"</em>). The per-op array is diagnostic only — it is not itself an integrity gate.</div>
@@ -272,7 +272,7 @@
   <li><strong>Size limit</strong> — file larger than 8&nbsp;MiB is refused.</li>
   <li><strong>JSON</strong> — the file must parse as a single JSON object.</li>
   <li><strong>Magic</strong> — <code>meta.format</code> must be <code>"arkdelta"</code>.</li>
-  <li><strong>Version</strong> — <code>meta.format_version</code> must equal <code>1</code> (an unknown version advises updating ArkMap Studio).</li>
+  <li><strong>Version</strong> — <code>meta.format_version</code> must equal <code>2</code> (an unknown or older version — including 1 — is refused loudly and advises updating ArkMap Studio).</li>
   <li><strong>File checksum</strong> — <code>checksums.file</code> must match the canonical form of <code>{ meta, ops }</code>; on mismatch, per-op checksums localize the corrupted operations by <code>seq</code>.</li>
   <li><strong>Operation count</strong> — at most 5000 operations; <code>meta.ops_count</code> must equal <code>ops.length</code>.</li>
   <li><strong>Sequence</strong> — <code>seq</code> values must be 1-based and contiguous.</li>
@@ -316,10 +316,10 @@
 <pre>{
   <span class="k">"meta"</span>: {
     <span class="k">"format"</span>: <span class="s">"arkdelta"</span>,
-    <span class="k">"format_version"</span>: <span class="n">1</span>,
+    <span class="k">"format_version"</span>: <span class="n">2</span>,
     <span class="k">"ops_count"</span>: <span class="n">3</span>,
-    <span class="k">"base"</span>: { <span class="k">"crc"</span>: <span class="s">"3f8a21c0"</span>, <span class="k">"version"</span>: <span class="s">"0.205.0"</span>, <span class="k">"revision"</span>: <span class="s">"0123456789abcdef…"</span> },
-    <span class="k">"app_version"</span>: <span class="s">"v1.6.0"</span>
+    <span class="k">"base"</span>: { <span class="k">"crc"</span>: <span class="s">"3f8a21c0b7d4e5f6"</span>, <span class="k">"version"</span>: <span class="s">"0.205.0"</span>, <span class="k">"revision"</span>: <span class="s">"0123456789abcdef…"</span> },
+    <span class="k">"app_version"</span>: <span class="s">"v1.45.0"</span>
   },
   <span class="k">"ops"</span>: [
     { <span class="k">"seq"</span>: <span class="n">1</span>, <span class="k">"type"</span>: <span class="s">"ADD_AREA"</span>,
@@ -336,8 +336,8 @@
       <span class="k">"label"</span>: <span class="s">"Dodanie wyjścia #100 n"</span> }
   ],
   <span class="k">"checksums"</span>: {
-    <span class="k">"file"</span>: <span class="s">"91c04d2e"</span>,
-    <span class="k">"ops"</span>: [ <span class="s">"0a1b2c3d"</span>, <span class="s">"4e5f6071"</span>, <span class="s">"8293a4b5"</span> ]
+    <span class="k">"file"</span>: <span class="s">"91c04d2e7a8b9c0d"</span>,
+    <span class="k">"ops"</span>: [ <span class="s">"0a1b2c3d4e5f6071"</span>, <span class="s">"4e5f60718293a4b5"</span>, <span class="s">"8293a4b5c6d7e8f9"</span> ]
   }
 }</pre>
 
@@ -349,6 +349,7 @@
 <table>
   <tr><th>Version</th><th>Date</th><th>Changes</th></tr>
   <tr><td>1</td><td>2026-08</td><td>Initial format — ArkMap Studio v1.6.0</td></tr>
+  <tr><td>2</td><td>2026-08</td><td>Checksums migrated from CRC-32 (8 hex) to XXH3-64 (16 hex) over the same canonical serialization — unified with the .arkmap checksum engine; base identity follows .arkmap alg v4 (ArkMap Studio v1.45.0). Version 1 files are refused loudly (no migration path — re-create the delta).</td></tr>
 </table>
 
 </body>

@@ -2,7 +2,7 @@
  "format": "arkmap",
  "format_version": 1,
  "meta": {
-  "name": "golden-fixture-v3",
+  "name": "golden-fixture-v4",
   "source_file": "golden_fixture.dat"
  },
  "colors": {
@@ -114,7 +114,8 @@
      "user_data": {
       "klucz z ogonkami ąę": "wartość 🧭",
       "zz": "1"
-     }
+     },
+     "hash": "45:28:0:Karczma Pod Złotym Smokiem"
     },
     {
      "id": 3,
@@ -226,7 +227,34 @@
      "show_on_top": true,
      "no_scaling": true,
      "pixmap": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGM8IafBwMDAxMDAwMDAAAANcgESOXKF8gAAAABJRU5ErkJggg=="
+    },
+    {
+     "id": 3,
+     "x": 3.0,
+     "y": 4.0,
+     "z": 0,
+     "width": 20.0,
+     "height": 10.0,
+     "text": "Label z alfa",
+     "fg_color": [
+      255,
+      255,
+      255,
+      128
+     ],
+     "bg_color": [
+      0,
+      0,
+      0,
+      64
+     ]
     }
+   ],
+   "grid_mode": true,
+   "pos": [
+    12,
+    -34,
+    5
    ],
    "user_data": {
     "zz": "1",
@@ -319,7 +347,9 @@
      "env": 9
     }
    ],
-   "labels": []
+   "labels": [],
+   "is_zone": true,
+   "zone_area_ref": 1
   }
  ]
 }

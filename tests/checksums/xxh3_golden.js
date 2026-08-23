@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // xxh3_golden.js — weryfikacja implementacji XXH3-64 przeciw wektorom
-// z tests/checksums/vectors_v3.json (oracle Python/xxhash, oracle_v3.py).
+// z tests/checksums/vectors_v4.json (oracle Python/xxhash, oracle_v4.py).
 // Testuje OBIE kopie, jesli istnieja: dev (tests/checksums/xxh3.js) oraz blok
 // markerowy ====XXH3-64==== wpisany w arkmap_studio.html (kod produkcyjny).
 // Uruchamianie z katalogu glownego repo: node tests/checksums/xxh3_golden.js
@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 
 const HERE = __dirname;
-const vectors = JSON.parse(fs.readFileSync(path.join(HERE, 'vectors_v3.json'), 'utf8'));
+const vectors = JSON.parse(fs.readFileSync(path.join(HERE, 'vectors_v4.json'), 'utf8'));
 
 let pass = 0, fail = 0;
 function runSet(label, impl) {

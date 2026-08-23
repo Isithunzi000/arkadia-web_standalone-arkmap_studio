@@ -129,7 +129,7 @@ console.log('— timeouty (struktura) —');
   ok(WF.indexOf('Self-check .arkmap wlasnym verifierem') > WF.indexOf('Konwersja do .arkmap')
      && WF.indexOf('Self-check .arkmap wlasnym verifierem') < WF.indexOf('- name: index.json'),
      'workflow: self-check PO konwersji, PRZED index.json');
-  ok(WF.includes('CANONICAL-V3') && WF.includes('verifyChecksums'), 'workflow: self-check ekstrahuje verifier v3 (bloki markerowe)');
+  ok(WF.includes('CANONICAL-V4') && WF.includes('verifyChecksums'), 'workflow: self-check ekstrahuje verifier v4 (bloki markerowe)');
   const a = HTML.indexOf('// ─── ONLINE LOAD'), b = HTML.indexOf('// ─── WAYPOINT PLANNER');
   const OL = HTML.slice(a, b);
   ok((OL.match(/new AbortController\(\)/g) || []).length === 2, 'UI: AbortController ×2 (index.json + pliki)');

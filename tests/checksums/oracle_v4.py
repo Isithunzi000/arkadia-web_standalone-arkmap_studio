@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-# oracle_v3.py — referencyjny enkoder kanoniczny v3 + generator wektorow.
-# Zrodlo prawdy dla implementacji JS (ArkMap Studio v1.44.0).
+# oracle_v4.py — referencyjny enkoder kanoniczny v4 + generator wektorow.
+# Zrodlo prawdy dla implementacji JS (ArkMap Studio v1.45.0).
+# Zmiany v3 -> v4: prefixy r4/a4/f4; label fg/bg z licznikiem i wszystkimi kanalami
+# (alfa objeta); pola obszaru grid_mode/is_zone/zone_area_ref/pos objete suma;
+# room.hash objety suma; suma pliku bez globalnego rollupu pokoi (redundantny
+# wzgledem rollupow obszarow). Spec normatywny: CANONICAL_V4.md.
 # Wymaga: pip install xxhash
-# Uzycie: python3 tests/checksums/oracle_v3.py
-# Wynik: tests/checksums/vectors_v3.json + tests/checksums/golden_fixture.arkmap
+# Uzycie: python3 tests/checksums/oracle_v4.py
+# Wynik: tests/checksums/vectors_v4.json + tests/checksums/golden_fixture.arkmap
 
 import json
 import math
@@ -78,7 +82,7 @@ def xxh3_hex(data):
 # ---------- enkodery kanoniczne ----------
 
 def enc_room(r):
-    out = bytearray(b'r3')
+    out = bytearray(b'r4')
     out += i32(r['id']) + i32(r['x']) + i32(r['y']) + i32(r['z']) + i32(r['env'])
     if r.get('weight', 1) != 1:
         out += i32(r['weight'])
@@ -168,6 +172,11 @@ def enc_room(r):
         for k in utf8_keysort(ud.keys()):
             out += s_enc(k) + s_enc(ud[k])
 
+    # v4: hash pokoju z upstream (np. "45:28:0:Wyzima") objety suma
+    rh = r.get('hash')
+    if isinstance(rh, str) and rh != '':
+        out += s_enc(rh)
+
     return bytes(out)
 
 
@@ -176,9 +185,14 @@ def enc_label(lb):
     out += i32(lb['id']) + f64(lb['x']) + f64(lb['y']) + i32(lb['z'])
     out += f64(lb['width']) + f64(lb['height'])
     out += s_enc(lb['text'])
-    for c in lb['fg_color']:
+    # v4: liczba skladowych + wszystkie kanaly (alfa objeta)
+    fg = lb['fg_color'] if isinstance(lb.get('fg_color'), list) else [0, 0, 0]
+    bg = lb['bg_color'] if isinstance(lb.get('bg_color'), list) else [0, 0, 0]
+    out += u32(len(fg))
+    for c in fg:
         out += i32(c)
-    for c in lb['bg_color']:
+    out += u32(len(bg))
+    for c in bg:
         out += i32(c)
     out += b_enc(lb.get('show_on_top', False))
     out += b_enc(lb.get('no_scaling', False))
@@ -191,8 +205,17 @@ def enc_label(lb):
 
 
 def enc_area(area, room_hash_by_id):
-    out = bytearray(b'a3')
+    out = bytearray(b'a4')
     out += i32(area['id']) + s_enc(area['name'])
+    # v4: pola obszaru wczesniej poza suma (presence-guard jak w konwencji pliku)
+    if 'grid_mode' in area:
+        out += b_enc(area['grid_mode'])
+    if 'is_zone' in area:
+        out += b_enc(area['is_zone'])
+    if 'zone_area_ref' in area:
+        out += i32(area['zone_area_ref'])
+    if isinstance(area.get('pos'), list):
+        out += i32(area['pos'][0]) + i32(area['pos'][1]) + i32(area['pos'][2])
     labels = sorted(area.get('labels') or [], key=lambda l: l['id'])
     if labels:
         out += u32(len(labels))
@@ -229,22 +252,16 @@ def enc_colors(colors):
 
 
 def enc_file(colors, areas):
-    out = bytearray(b'f3')
+    out = bytearray(b'f4')
     out += enc_colors(colors)
-    room_hashes = []
     area_entries = []
     for a in areas:
         ah = xxh3_raw(enc_area(a, None))
         area_entries.append((a['id'], ah))
-        for r in a.get('rooms') or []:
-            room_hashes.append((r['id'], xxh3_raw(enc_room(r))))
     area_entries.sort(key=lambda t: t[0])
-    room_hashes.sort(key=lambda t: t[0])
+    # v4: bez globalnego rollupu pokoi — redundantny wzgledem rollupow obszarow
     out += u32(len(area_entries))
     for _, h in area_entries:
-        out += h
-    out += u32(len(room_hashes))
-    for _, h in room_hashes:
         out += h
     return bytes(out)
 
@@ -287,6 +304,8 @@ def build_fixture():
             },
             'tags': ['quest', 'sklep', '⚓'],
             'user_data': {'klucz z ogonkami ąę': 'wartość 🧭', 'zz': '1'},
+            # v4: hash pokoju z upstream objety suma
+            'hash': '45:28:0:Karczma Pod Złotym Smokiem',
         },
         # 3: wagi i pojedyncze wyjscie
         {'id': 3, 'x': 5, 'y': 5, 'z': 0, 'env': 4,
@@ -336,12 +355,16 @@ def build_fixture():
          'height': 12.25, 'text': 'Label z -0.0 i pixmap',
          'fg_color': [255, 0, 0], 'bg_color': [0, 0, 255],
          'show_on_top': True, 'no_scaling': True, 'pixmap': pm},
+        # v4: 4 kanaly (alfa) — w v3 kanal alfa uciekal poza sume
+        {'id': 3, 'x': 3.0, 'y': 4.0, 'z': 0, 'width': 20.0,
+         'height': 10.0, 'text': 'Label z alfa',
+         'fg_color': [255, 255, 255, 128], 'bg_color': [0, 0, 0, 64]},
     ]
     fixture = {
         'format': 'arkmap',
         'format_version': 1,
         'meta': {
-            'name': 'golden-fixture-v3',
+            'name': 'golden-fixture-v4',
             'source_file': 'golden_fixture.dat',
         },
         'colors': {
@@ -353,10 +376,14 @@ def build_fixture():
             # user_data: klucze wymuszajace porzadek bajtowy UTF-8 (a < zz < ą)
             {'id': 1, 'name': 'Obszar Testowy ąę', 'rooms': rooms_a,
              'labels': labels_a,
+             # v4: grid_mode i pos objete suma obszaru
+             'grid_mode': True, 'pos': [12, -34, 5],
              'user_data': {'zz': '1', 'ą-key': 'wartość 🧭',
                            'area-key': 'area-val'}},
             {'id': -5, 'name': 'Ujemny obszar', 'rooms': rooms_b,
-             'labels': []},
+             'labels': [],
+             # v4: is_zone i zone_area_ref objete suma obszaru
+             'is_zone': True, 'zone_area_ref': 1},
         ],
     }
     return fixture
@@ -437,7 +464,7 @@ def main():
             'strip_equivalence': strip_equiv,
         },
     }
-    out_v = os.path.join(HERE, 'vectors_v3.json')
+    out_v = os.path.join(HERE, 'vectors_v4.json')
     with open(out_v, 'w', encoding='utf-8') as f:
         json.dump(vectors, f, ensure_ascii=False, indent=2, sort_keys=True)
 

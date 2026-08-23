@@ -2601,6 +2601,8 @@
         <button class="vd-btn" id="dp-apply">✓ Zastosuj zaznaczone</button>
         <button class="vd-btn" id="dp-rebase" style="display:none" title="Zapisuje do pliku zmiany, które już naniesiono na mapę w tej sesji">💾 Zapisz naniesione zmiany&hellip;</button>
         <button class="vd-btn" id="dp-remainder" style="display:none" title="Zapisuje do pliku operacje z kalki, których nie naniesiono (konflikty, niewykonalne, odznaczone) — w pierwotnej postaci">📤 Zapisz resztę kalki&hellip;</button>
+        <button class="vd-btn" id="dp-copy-report" title="Kopiuje podsumowanie recenzji kalki (Markdown) do schowka">📋 Kopiuj podsumowanie</button>
+        <button class="vd-btn" id="dp-save-md" title="Zapisuje podsumowanie recenzji kalki do pliku .md">⬇ Zapisz raport .md</button>
         <button class="vd-btn close" id="dp-close2">Zamknij</button>
       </div>
       <div id="dp-resize" title="Przeciągnij, aby zmienić rozmiar panelu"></div>
@@ -2923,6 +2925,8 @@
     </div>
     <div id="val-modal-body"></div>
     <div id="val-modal-footer">
+      <button id="val-btn-copy" class="dialog-btn" title="Kopiuje pelny raport diagnostyczny (Markdown) do schowka">📋 Kopiuj raport</button>
+      <button id="val-btn-md" class="dialog-btn" title="Zapisuje pelny raport diagnostyczny do pliku .md">⬇ Zapisz raport .md</button>
       <button id="val-btn-load" class="dialog-btn ok-btn">Załaduj mimo to</button>
       <button id="val-btn-cancel" class="dialog-btn">Anuluj</button>
     </div>
@@ -4165,25 +4169,8 @@ const LINE_STR = Object.fromEntries(Object.entries(LINE_INT).map(([k, v]) => [v,
 const FORMAT  = 'arkmap';
 const VERSION = 1;
 
-// ── crc32 ────────────────────────────────────────────────────────────────────
-// CRC-32 (IEEE 802.3) — detekcja korupcji pliku .arkmap
-const CRC32_TABLE = (() => {
-  const t = new Uint32Array(256);
-  for (let i = 0; i < 256; i++) {
-    let c = i;
-    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    t[i] = c;
-  }
-  return t;
-})();
-function crc32str(str) {
-  const bytes = new TextEncoder().encode(str);
-  let crc = 0xFFFFFFFF;
-  for (let i = 0; i < bytes.length; i++) {
-    crc = CRC32_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
-  }
-  return ((crc ^ 0xFFFFFFFF) >>> 0).toString(16).padStart(8, '0');
-}
+// (CRC-32 usunięte w v1.45.0 — jedyny konsument (sumy .arkdelta) zmigrowany na XXH3-64,
+//  zunifikowany z silnikiem sum .arkmap; stableStringify pozostaje kanonizacją treści kalki)
 
 
 // ── arkadia-env.js ──
@@ -4580,6 +4567,8 @@ function validateArea(area, path, errors, warnings = []) {
     errors.push(err(`${path}.is_zone`,      'must be boolean'));
   if (area.zone_area_ref !== undefined && !Number.isInteger(area.zone_area_ref))
     errors.push(err(`${path}.zone_area_ref`, 'must be integer'));
+  if (area.pos !== undefined && (!Array.isArray(area.pos) || area.pos.length !== 3 || !area.pos.every(Number.isInteger)))
+    errors.push(err(`${path}.pos`, 'must be an array of 3 integers'));
   if (area.user_data    !== undefined) validateUserData(area.user_data, `${path}.user_data`, errors);
 
   // audyt T4/S2: obiekt zamiast tablicy przechodzil cicho (petla po undefined.length)
@@ -4703,11 +4692,11 @@ function validate(map) {
 
 
 // ── checksum.js ──────────────────────────────────────────────────────────────
-// Hierarchiczne sumy kontrolne XXH3-64 (alg v3) dla integralności pliku .arkmap
+// Hierarchiczne sumy kontrolne XXH3-64 (alg v4) dla integralności pliku .arkmap
 // Struktura: plik → obszary → pokoje
-// Zapis: meta.checksums = { alg:'v3', file, areas:{id→hex16}, rooms:{id→hex16} }
-// Kodowanie kanoniczne wg spec: tests/checksums/CANONICAL_V3.md
-// Weryfikacja wyłącznie alg 'v3'; każdy inny (brak/v1/v2/nieznany) → pominięcie.
+// Zapis: meta.checksums = { alg:'v4', file, areas:{id→hex16}, rooms:{id→hex16} }
+// Kodowanie kanoniczne wg spec: tests/checksums/CANONICAL_V4.md
+// Weryfikacja wyłącznie alg 'v4'; brak sum → cicho; inny alg → GŁOŚNE ostrzeżenie (algMismatch).
 // ─────────────────────────────────────────────────────────────────────────────
 
 // _stripRoomDefaults(room) — usuwa puste kontenery i wartości domyślne z obiektu pokoju.
@@ -4929,10 +4918,10 @@ function xxh3_64hex(bytes) {
 }
 // ====XXH3-64-END====
 
-// ====CANONICAL-V3-BEGIN====
-// Kanoniczne kodowanie binarne v3 — spec normatywny: tests/checksums/CANONICAL_V3.md
-const _V3_DIR_ORDER = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw', 'up', 'down', 'in', 'out'];
-const _V3_DIR_SET = new Set(_V3_DIR_ORDER);
+// ====CANONICAL-V4-BEGIN====
+// Kanoniczne kodowanie binarne v4 — spec normatywny: tests/checksums/CANONICAL_V4.md
+const _V4_DIR_ORDER = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw', 'up', 'down', 'in', 'out'];
+const _V4_DIR_SET = new Set(_V4_DIR_ORDER);
 const _CANON_NAN_BYTES = Uint8Array.from([0, 0, 0, 0, 0, 0, 0xF8, 0x7F]); // quiet-NaN 7ff8000000000000
 const _canonAB = new ArrayBuffer(8);
 const _canonF8 = new Uint8Array(_canonAB);
@@ -4940,8 +4929,14 @@ const _canonDv = new DataView(_canonAB);
 const _canonTe = new TextEncoder();
 
 class _CanonBuf {
-  constructor() { this.b = new Uint8Array(4096); this.n = 0; }
-  reset() { this.n = 0; }
+  constructor() { this.b = new Uint8Array(4096); this.n = 0; this._busy = false; }
+  // Straznik zagniezdzenia: reset w trakcie trwania innego kodowania nadpisalby bufor.
+  // Wejsciowe enkodery (pokoj/obszar/plik) robia reset() + release() w finally.
+  reset() {
+    if (this._busy) throw new Error('_CanonBuf: zagniedzone uzycie (reset w trakcie kodowania)');
+    this._busy = true; this.n = 0;
+  }
+  release() { this._busy = false; }
   _cap(k) {
     if (this.n + k > this.b.length) {
       let c = this.b.length * 2;
@@ -4989,16 +4984,16 @@ function _utf8cmp(a, b) {                                          // a, b: Uint
 function _utf8SortArr(arr) {
   return arr.map(k => [k, _canonTe.encode(k)]).sort((p, q) => _utf8cmp(p[1], q[1])).map(p => p[0]);
 }
-// Klucze mapy kierunkowej: znane wg _V3_DIR_ORDER, potem nieznane UTF-8 bajtowo
-function _v3DirKeys(m) {
-  const out = _V3_DIR_ORDER.filter(d => m[d] !== undefined);
-  const unk = Object.keys(m).filter(k => !_V3_DIR_SET.has(k));
+// Klucze mapy kierunkowej: znane wg _V4_DIR_ORDER, potem nieznane UTF-8 bajtowo
+function _canonDirKeys(m) {
+  const out = _V4_DIR_ORDER.filter(d => m[d] !== undefined);
+  const unk = Object.keys(m).filter(k => !_V4_DIR_SET.has(k));
   return unk.length ? out.concat(_utf8SortArr(unk)) : out;
 }
 // Lista kierunków (array): jak wyżej
-function _v3DirList(arr) {
-  const out = _V3_DIR_ORDER.filter(d => arr.includes(d));
-  const unk = arr.filter(k => !_V3_DIR_SET.has(k));
+function _canonDirList(arr) {
+  const out = _V4_DIR_ORDER.filter(d => arr.includes(d));
+  const unk = arr.filter(k => !_V4_DIR_SET.has(k));
   return unk.length ? out.concat(_utf8SortArr(unk)) : out;
 }
 
@@ -5010,8 +5005,9 @@ function _encodeLabelCanonical(B, lb) {
   // brakujace fg/bg kodowane jako [0,0,0] — deterministycznie, walidator i tak je odrzuci
   const fg = Array.isArray(lb.fg_color) ? lb.fg_color : [0, 0, 0];
   const bg = Array.isArray(lb.bg_color) ? lb.bg_color : [0, 0, 0];
-  B.i32(fg[0] | 0); B.i32(fg[1] | 0); B.i32(fg[2] | 0);
-  B.i32(bg[0] | 0); B.i32(bg[1] | 0); B.i32(bg[2] | 0);
+  // v4: liczba skladowych + wszystkie kanaly (alfa objeta) — konwencja jak w _encodeColorsCanonical
+  B.u32(fg.length); for (const c of fg) B.i32(c | 0);
+  B.u32(bg.length); for (const c of bg) B.i32(c | 0);
   B.u8(lb.show_on_top ? 1 : 0);
   B.u8(lb.no_scaling ? 1 : 0);
   const pm = lb.pixmap;
@@ -5019,10 +5015,13 @@ function _encodeLabelCanonical(B, lb) {
   else { B.u8(1); B.str(pm); }
 }
 
-// _encodeRoomCanonical(room) — kanoniczne bajty pokoju (prefix 'r3'). Bez klonowania.
+// _encodeRoomCanonical(room) — kanoniczne bajty pokoju (prefix 'r4'). Bez klonowania.
 function _encodeRoomCanonical(room) {
   const B = _canonBuf; B.reset();
-  B.u8(0x72); B.u8(0x33);                                          // 'r3'
+  try { return _encodeRoomBody(B, room); } finally { B.release(); }
+}
+function _encodeRoomBody(B, room) {
+  B.u8(0x72); B.u8(0x34);                                          // 'r4'
   B.i32(room.id); B.i32(room.x); B.i32(room.y); B.i32(room.z); B.i32(room.env);
   if (room.weight !== undefined && room.weight !== 1) B.i32(room.weight);
   if (room.locked) B.u8(1);
@@ -5033,25 +5032,25 @@ function _encodeRoomCanonical(room) {
 
   const exits = room.exits;
   if (exits && Object.keys(exits).length) {
-    const ks = _v3DirKeys(exits);
+    const ks = _canonDirKeys(exits);
     B.u32(ks.length);
     for (const k of ks) { B.str(k); B.i32(exits[k]); }
   }
   const locks = room.exit_locks;
   if (locks && locks.length) {
-    const ks = _v3DirList(locks);
+    const ks = _canonDirList(locks);
     B.u32(ks.length);
     for (const k of ks) B.str(k);
   }
   const doors = room.doors;
   if (doors && Object.keys(doors).length) {
-    const ks = _v3DirKeys(doors);
+    const ks = _canonDirKeys(doors);
     B.u32(ks.length);
     for (const k of ks) { B.str(k); B.str(doors[k]); }
   }
   const stubs = room.stubs;
   if (stubs && stubs.length) {
-    const ks = _v3DirList(stubs);
+    const ks = _canonDirList(stubs);
     B.u32(ks.length);
     for (const k of ks) B.str(k);
   }
@@ -5069,7 +5068,7 @@ function _encodeRoomCanonical(room) {
   }
   const ew = room.exit_weights;
   if (ew && Object.keys(ew).length) {
-    const ks = _v3DirKeys(ew);
+    const ks = _canonDirKeys(ew);
     B.u32(ks.length);
     for (const k of ks) { B.str(k); B.i32(ew[k]); }
   }
@@ -5104,14 +5103,24 @@ function _encodeRoomCanonical(room) {
     B.u32(ks.length);
     for (const k of ks) { B.str(k); B.str(ud[k]); }
   }
+  const rh = room.hash;                                            // v4: hash pokoju z upstream (np. "45:28:0:Wyzima")
+  if (typeof rh === 'string' && rh) B.str(rh);
   return B.bytes();
 }
 
-// _encodeAreaCanonical(area, roomRawList) — 'a3'; roomRawList: BigInt[] w kolejności id pokoju rosnąco
+// _encodeAreaCanonical(area, roomRawList) — 'a4'; roomRawList: BigInt[] w kolejności id pokoju rosnąco
 function _encodeAreaCanonical(area, roomRawList) {
   const B = _canonBuf; B.reset();
-  B.u8(0x61); B.u8(0x33);                                          // 'a3'
+  try { return _encodeAreaBody(B, area, roomRawList); } finally { B.release(); }
+}
+function _encodeAreaBody(B, area, roomRawList) {
+  B.u8(0x61); B.u8(0x34);                                          // 'a4'
   B.i32(area.id); B.str(area.name ?? '');
+  // v4: pola obszaru wczesniej poza suma (presence-guard zgodny z konwencja pomijania w pliku)
+  if (area.grid_mode !== undefined) B.u8(area.grid_mode ? 1 : 0);
+  if (area.is_zone !== undefined) B.u8(area.is_zone ? 1 : 0);
+  if (area.zone_area_ref !== undefined) B.i32(area.zone_area_ref);
+  if (Array.isArray(area.pos)) { B.i32(area.pos[0]); B.i32(area.pos[1]); B.i32(area.pos[2]); }
   const labels = area.labels;
   if (labels && labels.length) {
     const sorted = [...labels].sort((a, b) => a.id - b.id);
@@ -5144,26 +5153,29 @@ function _encodeColorsCanonical(B, colors) {
   }
 }
 
-// _encodeFileCanonical(colors, areaRaw, roomRawGlobal) — 'f3';
-// areaRaw/roomRawGlobal: pary [id, BigInt] posortowane po id rosnąco
-function _encodeFileCanonical(colors, areaRaw, roomRawGlobal) {
+// _encodeFileCanonical(colors, areaRaw) — 'f4'; areaRaw: pary [id, BigInt] posortowane po id rosnąco.
+// v4: bez globalnego rollupu pokoi — byl redundantny wzgledem rollupow obszarow (pokoj -> obszar -> plik).
+function _encodeFileCanonical(colors, areaRaw) {
   const B = _canonBuf; B.reset();
-  B.u8(0x66); B.u8(0x33);                                          // 'f3'
-  _encodeColorsCanonical(B, colors);
-  B.u32(areaRaw.length);
-  for (const [, h] of areaRaw) B.u64raw(h);
-  B.u32(roomRawGlobal.length);
-  for (const [, h] of roomRawGlobal) B.u64raw(h);
-  return B.bytes();
+  try {
+    B.u8(0x66); B.u8(0x34);                                        // 'f4'
+    _encodeColorsCanonical(B, colors);
+    B.u32(areaRaw.length);
+    for (const [, h] of areaRaw) B.u64raw(h);
+    return B.bytes();
+  } finally { B.release(); }
 }
 
 function _hex64(h) { return h.toString(16).padStart(16, '0'); }
 
-// addChecksums(arkmap) — oblicza i wstawia sumy v3 do meta. In-place, zwraca arkmap.
-function addChecksums(arkmap) {
+// _computeV4Checksums(arkmap) — jeden wspólny przebieg liczenia sum alg v4.
+// Read-only (bez klonowania, bez mutacji mapy). Zwraca dokładnie kształt meta.checksums.
+// Może rzucić na uszkodzonych danych — wyjątek łapie WYŁĄCZNIE verifyChecksums (ścieżka wczytania);
+// ścieżki zapisu (addChecksums, baseInfo, delta) celowo fail-loud: wyjątek tam = bug aplikacji.
+function _computeV4Checksums(arkmap) {
   const rooms = {}, areas = {};
   const sortedAreas = [...(arkmap.areas || [])].sort((a, b) => a.id - b.id);
-  const areaRaw = [], allRoomRaw = [];
+  const areaRaw = [];
 
   for (const area of sortedAreas) {
     const sortedRooms = [...(area.rooms || [])].sort((a, b) => a.id - b.id);
@@ -5172,61 +5184,72 @@ function addChecksums(arkmap) {
       const raw = xxh3_64(_encodeRoomCanonical(room));
       rooms[String(room.id)] = _hex64(raw);
       roomRawList.push(raw);
-      allRoomRaw.push([room.id, raw]);
     }
     const aRaw = xxh3_64(_encodeAreaCanonical(area, roomRawList));
     areas[String(area.id)] = _hex64(aRaw);
     areaRaw.push([area.id, aRaw]);
   }
-  allRoomRaw.sort((p, q) => p[0] - q[0]);
 
-  if (!arkmap.meta) arkmap.meta = {};
-  arkmap.meta.checksums = {
-    alg: 'v3',
-    file: _hex64(xxh3_64(_encodeFileCanonical(arkmap.colors, areaRaw, allRoomRaw))),
+  return {
+    alg: 'v4',
+    file: _hex64(xxh3_64(_encodeFileCanonical(arkmap.colors, areaRaw))),
     areas, rooms,
   };
+}
+
+// addChecksums(arkmap) — oblicza i wstawia sumy v4 do meta. In-place, zwraca arkmap.
+function addChecksums(arkmap) {
+  if (!arkmap.meta) arkmap.meta = {};
+  arkmap.meta.checksums = _computeV4Checksums(arkmap);
   return arkmap;
 }
 
-// verifyChecksums(arkmap) — weryfikacja hierarchiczna alg v3.
-// Zwraca: { present, ok, fileOk, badAreas:[{id,name}], badRooms:[{roomId,areaId,areaName}], missingRooms }
-// Alg inny niż v3 (brak/v1/v2/nieznany) → present:false (ciche pominięcie, bez ostrzeżeń).
+// verifyChecksums(arkmap) — weryfikacja hierarchiczna alg v4. NIGDY nie rzuca (biegnie przed
+// dialogiem walidacji): uszkodzone dane → verifyError, a głos ma walidacja.
+// Zwraca: { present, ok, fileOk, badAreas:[{id,name}], badRooms:[{roomId,areaId,areaName}],
+//           missingRooms:[id], missingAreas:[{id,name}], extraRooms:[klucz], extraAreas:[klucz],
+//           computed? (pełny zestaw do reużycia), algMismatch?, verifyError? }
+// Brak sekcji sum → present:false (cicho; świeże/zaimportowane pliki).
+// Alg inny niż v4 → present:true, ok:false, algMismatch — GŁOŚNO: cichy skip byłby dziurą downgrade'ową.
 function verifyChecksums(arkmap) {
+  const empty = { badAreas: [], badRooms: [], missingRooms: [], missingAreas: [], extraRooms: [], extraAreas: [] };
   const stored = arkmap.meta?.checksums;
-  if (!stored?.file || stored.alg !== 'v3') {
-    const skip = { present: false, ok: true, fileOk: true, badAreas: [], badRooms: [], missingRooms: [] };
-    if (stored?.file && stored.alg !== undefined && stored.alg !== 'v3') skip.unknownAlg = String(stored.alg);
-    return skip;
+  if (!stored || !stored.file) return { present: false, ok: true, fileOk: true, ...empty };
+  if (stored.alg !== 'v4') {
+    return { present: true, ok: false, fileOk: false, algMismatch: String(stored.alg), ...empty };
   }
 
-  const badAreas = [], badRooms = [], missingRooms = [];
+  let computed;
+  try { computed = _computeV4Checksums(arkmap); }
+  catch (e) { return { present: true, ok: false, fileOk: false, verifyError: true, ...empty }; }
+
+  const badAreas = [], badRooms = [], missingRooms = [], missingAreas = [];
+  const storedRooms = stored.rooms || {}, storedAreas = stored.areas || {};
   const sortedAreas = [...(arkmap.areas || [])].sort((a, b) => a.id - b.id);
-  const areaRaw = [], allRoomRaw = [];
-
   for (const area of sortedAreas) {
+    const sidA = String(area.id);
+    const storedA = storedAreas[sidA];
+    if (!storedA) missingAreas.push({ id: area.id, name: area.name });
+    else if (storedA !== computed.areas[sidA]) badAreas.push({ id: area.id, name: area.name });
     const sortedRooms = [...(area.rooms || [])].sort((a, b) => a.id - b.id);
-    const roomRawList = [];
     for (const room of sortedRooms) {
-      const raw = xxh3_64(_encodeRoomCanonical(room));
-      roomRawList.push(raw);
-      allRoomRaw.push([room.id, raw]);
-      const storedR = stored.rooms?.[String(room.id)];
+      const sid = String(room.id);
+      const storedR = storedRooms[sid];
       if (!storedR) missingRooms.push(room.id);
-      else if (_hex64(raw) !== storedR) badRooms.push({ roomId: room.id, areaId: area.id, areaName: area.name });
+      else if (storedR !== computed.rooms[sid]) badRooms.push({ roomId: room.id, areaId: area.id, areaName: area.name });
     }
-    const aRaw = xxh3_64(_encodeAreaCanonical(area, roomRawList));
-    areaRaw.push([area.id, aRaw]);
-    const storedA = stored.areas?.[String(area.id)];
-    if (storedA && _hex64(aRaw) !== storedA) badAreas.push({ id: area.id, name: area.name });
   }
-  allRoomRaw.sort((p, q) => p[0] - q[0]);
+  // sieroty: wpisy w zapisanych słownikach bez obiektu w pliku (deterministyczny porządek bajtowy kluczy)
+  const _keyOrder = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  const extraRooms = Object.keys(storedRooms).filter(id => !(id in computed.rooms)).sort(_keyOrder);
+  const extraAreas = Object.keys(storedAreas).filter(id => !(id in computed.areas)).sort(_keyOrder);
 
-  const fileOk = _hex64(xxh3_64(_encodeFileCanonical(arkmap.colors, areaRaw, allRoomRaw))) === stored.file;
-  const ok = fileOk && badAreas.length === 0 && badRooms.length === 0 && missingRooms.length === 0;
-  return { present: true, ok, fileOk, badAreas, badRooms, missingRooms };
+  const fileOk = stored.file === computed.file;
+  const ok = fileOk && !badAreas.length && !badRooms.length && !missingRooms.length
+             && !missingAreas.length && !extraRooms.length && !extraAreas.length;
+  return { present: true, ok, fileOk, badAreas, badRooms, missingRooms, missingAreas, extraRooms, extraAreas, computed };
 }
-// ====CANONICAL-V3-END====
+// ====CANONICAL-V4-END====
 
 
 // ── mudlet_dat.js ──
@@ -6692,6 +6715,7 @@ async function loadArkmap(text, filename) {
   }
 
   state.filename = filename || null;
+  state._pendingComputed = chkRes.computed || null;  // v4: sumy już policzone przez verify — baseInfo je reużyje
   applyMap(map);
   const label = chkRes.present ? (chkRes.ok ? ' [✓ suma kontrolna]' : ' [⚠ suma kontrolna]') : '';
   const allOk = valRes.ok && !hasWarnings && (!chkRes.present || chkRes.ok);
@@ -12664,6 +12688,67 @@ resize();
   });
 })();
 
+// ─── JEDNOLITY RAPORT DIAGNOSTYCZNY (Markdown) ──────────────────────────────
+// Zasada projektowa: kazda lista diagnostyczna w aplikacji ma eksport —
+// „Kopiuj do schowka" + „Zapisz jako .md" (walidacja pliku, sumy kontrolne,
+// walidacja kierunkow, recenzja kalki). Jeden builder dla wszystkich powierzchni.
+// Funkcja czysta: to samo wejscie → ten sam tekst; jedyna niedeterministyczna
+// linia to data ISO w naglowku. Kolejnosc sekcji ustala wywolujacy.
+function _reportMapName() {
+  const raw = (state.map && state.map.meta && typeof state.map.meta.map_name === 'string' && state.map.meta.map_name) || 'mapa';
+  return raw.replace(/\.(dat|arkmap|json|arkdelta)$/i, '').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'mapa';
+}
+function _reportTs() { return new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-'); }
+function buildDiagnosticsReport(opts) {
+  const L = [];
+  L.push('# ' + (opts.title || 'Raport diagnostyczny') + ' — ArkMap Studio');
+  L.push('');
+  L.push('- Plik: ' + (opts.filename || '—'));
+  L.push('- Wersja aplikacji: ' + APP_VERSION);
+  L.push('- Data: ' + new Date().toISOString());
+  L.push('');
+  for (const s of (opts.sections || [])) {
+    L.push('## ' + s.title);
+    L.push('');
+    if (s.lines && s.lines.length) { for (const ln of s.lines) L.push(ln); }
+    else L.push('(brak)');
+    L.push('');
+  }
+  return L.join('\n');
+}
+function _copyReportToClipboard(text) {
+  navigator.clipboard.writeText(text)
+    .then(() => toast('✓ Skopiowano raport do schowka'))
+    .catch(() => toast('⚠ Nie udało się skopiować do schowka', true));
+}
+// Pelne listy (bez obciec widoku dialogu), deterministyczna kolejnosc.
+function _valReportSections(valRes, chkRes) {
+  const errs  = (valRes.errors   || []).map(e => e.path + ': ' + e.msg).sort();
+  const warns = (valRes.warnings || []).map(e => e.path + ': ' + e.msg).sort();
+  const cl = [];
+  if (!chkRes.present) {
+    cl.push('Brak sekcji sum kontrolnych w pliku (plik bez weryfikacji spójności).');
+  } else if (chkRes.algMismatch) {
+    cl.push('⚠ Nieznany lub stary algorytm sum kontrolnych (alg "' + chkRes.algMismatch + '") — nie zweryfikowano.');
+    cl.push('Plik mógł zostać zmodyfikowany albo pochodzi ze starej wersji (zapis mapy przeliczy sumy do alg v4).');
+  } else if (chkRes.verifyError) {
+    cl.push('⚠ Nie można zweryfikować sum kontrolnych — dane pliku są uszkodzone (szczegóły w sekcjach walidacji).');
+  } else {
+    cl.push(chkRes.fileOk ? 'Suma kontrolna pliku: zgodna' : '⚠ Suma kontrolna pliku: NIEZGODNA');
+    for (const a of chkRes.badAreas)  cl.push('Obszar zmieniony: ' + a.name + ' (id=' + a.id + ')');
+    for (const r of chkRes.badRooms)  cl.push('Pokój zmieniony: ' + r.roomId + ' (obszar: ' + r.areaName + ', id=' + r.areaId + ')');
+    if ((chkRes.missingRooms || []).length) cl.push('Pokoje bez sumy kontrolnej (' + chkRes.missingRooms.length + '): ' + [...chkRes.missingRooms].sort((a, b) => a - b).join(', '));
+    for (const a of (chkRes.missingAreas || [])) cl.push('Obszar bez sumy kontrolnej: ' + a.name + ' (id=' + a.id + ')');
+    if ((chkRes.extraRooms || []).length) cl.push('Sieroty w sumach pokoi (' + chkRes.extraRooms.length + '): ' + chkRes.extraRooms.join(', '));
+    if ((chkRes.extraAreas || []).length) cl.push('Sieroty w sumach obszarów (' + chkRes.extraAreas.length + '): ' + chkRes.extraAreas.join(', '));
+  }
+  return [
+    { title: 'Błędy walidacji (' + errs.length + ')',   lines: errs },
+    { title: 'Ostrzeżenia walidacji (' + warns.length + ')', lines: warns },
+    { title: 'Sumy kontrolne', lines: cl },
+  ];
+}
+
 // ─── VALIDATION DIALOG ───────────────────────────────────────────────────────
 // showValDialog(valRes, chkRes, filename, isFatal) → Promise<bool>
 // isFatal=true → tylko przycisk Zamknij (nie można załadować)
@@ -12674,9 +12759,27 @@ resize();
   const btnLoad  = document.getElementById('val-btn-load');
   const btnCancel= document.getElementById('val-btn-cancel');
   const btnClose = document.getElementById('val-modal-close');
+  const btnCopy  = document.getElementById('val-btn-copy');
+  const btnMd    = document.getElementById('val-btn-md');
   if (!overlay || !body || !btnLoad || !btnCancel) { console.warn('val-modal elements missing'); return; }
 
   let _resolve = null;
+  // Argumenty biezacego dialogu — raport budowany leniwie na klik (swieza data).
+  let _curValArgs = null;
+  function _currentValReport() {
+    if (!_curValArgs) return '';
+    return buildDiagnosticsReport({
+      title: 'Raport diagnostyczny pliku',
+      filename: _curValArgs.filename,
+      sections: _valReportSections(_curValArgs.valRes, _curValArgs.chkRes),
+    });
+  }
+  if (btnCopy) btnCopy.addEventListener('click', (e) => { e.stopPropagation(); _copyReportToClipboard(_currentValReport()); });
+  if (btnMd) btnMd.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const text = _currentValReport();
+    saveWithDialog('raport-diagnostyki-' + _reportMapName() + '-' + _reportTs() + '.md', 'text/markdown', () => text);
+  });
 
   function closeModal(result) {
     overlay.classList.remove('open');
@@ -12692,6 +12795,7 @@ resize();
   window.showValDialog = function(valRes, chkRes, filename, isFatal) {
     return new Promise(resolve => {
       _resolve = resolve;
+      _curValArgs = { valRes, chkRes, filename: filename || '' };
       body.innerHTML = '';
 
       // Nagłówek
@@ -12745,23 +12849,31 @@ resize();
           sec.appendChild(t);
           const list = document.createElement('div'); list.className = 'val-warn-list';
           const lines = [];
-          if (!chkRes.fileOk) lines.push('⚠ Suma kontrolna pliku: niezgodna');
-          for (const a of chkRes.badAreas.slice(0, 5)) lines.push('  Obszar: ' + a.name + ' (id=' + a.id + ')');
-          for (const r of chkRes.badRooms.slice(0, 10)) lines.push('  Pokój: ' + r.roomId + ' (' + r.areaName + ')');
-          const extra = chkRes.badRooms.length - 10;
-          if (extra > 0) lines.push('  … i ' + extra + ' więcej pokoi');
-          if ((chkRes.missingRooms || []).length) lines.push('⚠ Pokoje bez sumy kontrolnej: ' + chkRes.missingRooms.length + ' (plik zmieniony bez przeliczenia sum)');  // audyt T3/W3
+          if (chkRes.algMismatch) {
+            lines.push('⚠ Nieznany lub stary algorytm sum kontrolnych (alg "' + chkRes.algMismatch + '") — nie zweryfikowano.');
+            lines.push('  Plik mógł zostać zmodyfikowany albo pochodzi ze starej wersji (zapis mapy przeliczy sumy do alg v4).');
+          } else if (chkRes.verifyError) {
+            lines.push('⚠ Nie można zweryfikować sum kontrolnych — dane pliku są uszkodzone (szczegóły w sekcjach walidacji).');
+          } else {
+            if (!chkRes.fileOk) lines.push('⚠ Suma kontrolna pliku: niezgodna');
+            for (const a of chkRes.badAreas.slice(0, 5)) lines.push('  Obszar: ' + a.name + ' (id=' + a.id + ')');
+            for (const r of chkRes.badRooms.slice(0, 10)) lines.push('  Pokój: ' + r.roomId + ' (' + r.areaName + ')');
+            const extra = chkRes.badRooms.length - 10;
+            if (extra > 0) lines.push('  … i ' + extra + ' więcej pokoi');
+            if ((chkRes.missingRooms || []).length) lines.push('⚠ Pokoje bez sumy kontrolnej: ' + chkRes.missingRooms.length + ' (plik zmieniony bez przeliczenia sum)');  // audyt T3/W3
+            if ((chkRes.missingAreas || []).length) lines.push('⚠ Obszary bez sumy kontrolnej: ' + chkRes.missingAreas.length);
+            if ((chkRes.extraRooms || []).length) lines.push('⚠ Sieroty w sumach: ' + chkRes.extraRooms.length + ' wpis(ów) pokoi bez pokoi w pliku');
+            if ((chkRes.extraAreas || []).length) lines.push('⚠ Sieroty w sumach: ' + chkRes.extraAreas.length + ' wpis(ów) obszarów bez obszarów w pliku');
+          }
           list.textContent = lines.join('\n') || '⚠ Niezgodne sumy kontrolne';
           sec.appendChild(list);
           body.appendChild(sec);
         }
       } else if (!chkRes.present) {
-        // Brak checksumów w pliku — stary format lub ręcznie edytowany
+        // Brak checksumów w pliku — świeży lub zaimportowany
         const note = document.createElement('div');
         note.style.cssText = 'font-size: 11px;color:var(--dim)';
-        note.textContent = chkRes.unknownAlg
-          ? '(format sum kontrolnych alg "' + chkRes.unknownAlg + '" nie jest weryfikowany — pominięto weryfikację)'
-          : '(brak sum kontrolnych — plik bez weryfikacji spójności)';
+        note.textContent = '(brak sum kontrolnych — plik bez weryfikacji spójności)';
         body.appendChild(note);
       }
 
@@ -13553,7 +13665,7 @@ resize();
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.44.5';
+const APP_VERSION = 'v1.45.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -13578,6 +13690,7 @@ Object.assign(state, {
   redoStack:          [],
   deltaLog:           [],   // audyt T3/W17: pełny log sesji dla eksportu kalki — NIE lustro capa; symetria LIFO ogona z undoStack; zeruje tylko applyMap
   baseInfo:           null, // ARKDELTA: tożsamość bazy (crc wariantu bazowego) — liczona raz przy wczytaniu mapy (_computeBaseInfo)
+  _pendingComputed:   null, // v4: computed z verifyChecksums przekazywane do baseInfo przy applyMap (jedno liczenie na load)
   // dirty = "pamięć może się różnić od ostatniego potwierdzonego zapisu" (audyt A11').
   // Ustawiana przy KAŻDEJ zmianie stosu undo (pushUndo + undo/redo), kasowana
   // WYŁĄCZNIE po potwierdzonym zapisie. Konserwatywna: undo do stanu zapisanego
@@ -14524,7 +14637,8 @@ applyMap = function(map) {
   state.undoStack = [];
   state.redoStack = [];
   state.deltaLog = [];  // ARKDELTA: nowa mapa = pusty log
-  state.baseInfo = _computeBaseInfo();  // ARKDELTA: tożsamość bazy nowej mapy
+  state.baseInfo = _computeBaseInfo(null, state._pendingComputed);  // ARKDELTA: tożsamość bazy nowej mapy (reużycie computed z verify przy load)
+  state._pendingComputed = null;
   _deltaGhostReset();  // ARKDELTA M3: nowa mapa = bez duchów / override'ów / trybu stawiania
   // ARKDELTA M4: panel recenzji otwarty → re-klasyfikacja względem nowej mapy
   if (typeof _deltaReview !== 'undefined' && _deltaReview) {
@@ -18446,38 +18560,33 @@ function submitPullRequest() {
 // Format .arkdelta — delta edycyjna mapy: eksport logu operacji (state.deltaLog),
 // walidacja fail-closed, czyste apply. Spec: docs/arkdelta_spec.html.
 // Zasady: undo/redo nietkniete (ops wchodza przez pushUndo jak normalne edycje),
-// determinizm przez stableStringify + CRC-32, anonimowe adds przez sid "d:N".
+// determinizm przez stableStringify + XXH3-64, anonimowe adds przez sid "d:N".
 
 const ARKDELTA_FORMAT = 'arkdelta';
-const ARKDELTA_FORMAT_VERSION = 1;
+const ARKDELTA_FORMAT_VERSION = 2;
 const ARKDELTA_MAX_OPS = 5000;
 const ARKDELTA_MAX_BYTES = 8 * 1024 * 1024;
 const _DELTA_SID_RE = /^d:[1-9][0-9]*$/;
 
+// _deltaChecksums(meta, ops) — sumy integralności kalki: XXH3-64 po kanonizacji stableStringify (UTF-8).
+// format_version 2: algorytm zunifikowany z .arkmap (jeden silnik sum w projekcie).
+// Jeden wspólny punkt dla obu builderów (buildDelta, _deltaSerializeOps) i weryfikacji importu.
+function _deltaChecksums(meta, ops) {
+  const h = o => xxh3_64hex(_canonTe.encode(stableStringify(o)));
+  return { file: h({ meta, ops }), ops: ops.map(h) };
+}
+
 // ── baseInfo: tożsamość bazy (crc liczone RAZ, przy wczytaniu mapy) ─────────
-function _computeBaseInfo(map) {
+function _computeBaseInfo(map, precomputed) {
   // F1: parametr opcjonalny — domyslnie state.map; generator kalki liczy baze z mapy zrodlowej
+  // v4: bez klonu i bez sortowan — _computeV4Checksums jest read-only, sortuje wewnetrznie,
+  // a enkoder kanoniczny jest niezalezny od kolejnosci pol (room.area w ogole nie jest kodowane).
+  // precomputed: opcjonalny wynik _computeV4Checksums (np. z verifyChecksums przy load) — jedno liczenie.
   if (!map) map = state.map;
   if (!map) return null;
-  const clone = JSON.parse(JSON.stringify(map));
-  if (clone.areas) {
-    clone.areas.sort((a, b) => a.id - b.id);
-    for (const area of clone.areas) {
-      if (area.rooms) {
-        area.rooms.sort((a, b) => a.id - b.id);
-        for (const room of area.rooms) {
-          if (room.stubs)              room.stubs.sort();
-          if (room.exit_locks)         room.exit_locks.sort();
-          if (room.special_exit_locks) room.special_exit_locks.sort();
-          delete room.area;
-        }
-      }
-      if (area.labels) area.labels.sort((a, b) => a.id - b.id);
-    }
-  }
-  addChecksums(clone);
+  const cs = precomputed || _computeV4Checksums(map);
   const ud = (map.meta && map.meta.user_data) || {};
-  const info = { crc: clone.meta.checksums.file };
+  const info = { crc: cs.file };
   if (ud.version)  info.version  = ud.version;
   if (ud.revision) info.revision = ud.revision;
   return info;
@@ -19234,10 +19343,7 @@ function buildDelta(log, base) {
     base: base,
     app_version: APP_VERSION,
   };
-  const checksums = {
-    file: crc32str(stableStringify({ meta, ops })),
-    ops: ops.map(op => crc32str(stableStringify(op))),
-  };
+  const checksums = _deltaChecksums(meta, ops);
   return stableStringify({ meta, ops, checksums });
 }
 
@@ -19263,10 +19369,7 @@ function _deltaSerializeOps(ops, base) {
     base: base || {},
     app_version: APP_VERSION,
   };
-  const checksums = {
-    file: crc32str(stableStringify({ meta, ops })),
-    ops: ops.map(op => crc32str(stableStringify(op))),
-  };
+  const checksums = _deltaChecksums(meta, ops);
   return stableStringify({ meta, ops, checksums });
 }
 
@@ -19402,16 +19505,16 @@ function validateDeltaText(text) {
   const meta = delta.meta || {};
   if (meta.format !== ARKDELTA_FORMAT) return { ok: false, errors: ['To nie jest plik .arkdelta.'] };
   if (meta.format_version !== ARKDELTA_FORMAT_VERSION)
-    return { ok: false, errors: ['Nieznana wersja formatu: ' + (meta.format_version ?? 'brak') + '. Zaktualizuj ArkMap Studio.'] };
+    return { ok: false, errors: ['Nieobsługiwana wersja formatu kalki: ' + (meta.format_version ?? 'brak') + ' (ta wersja ArkMap Studio obsługuje: ' + ARKDELTA_FORMAT_VERSION + '). Plik nie został wczytany.'] };
 
   // Checksumy: najpierw zbiorcze, przy niezgodności lokalizacja per op.
   const cs = delta.checksums || {};
-  const fileCrc = crc32str(stableStringify({ meta, ops: delta.ops }));
-  if (cs.file !== fileCrc) {
+  const computed = _deltaChecksums(meta, Array.isArray(delta.ops) ? delta.ops : []);
+  if (cs.file !== computed.file) {
     const bad = [];
     if (Array.isArray(delta.ops) && Array.isArray(cs.ops)) {
       for (let i = 0; i < delta.ops.length; i++) {
-        if (cs.ops[i] !== undefined && cs.ops[i] !== crc32str(stableStringify(delta.ops[i])))
+        if (cs.ops[i] !== undefined && cs.ops[i] !== computed.ops[i])
           bad.push(delta.ops[i] && delta.ops[i].seq !== undefined ? delta.ops[i].seq : i + 1);
       }
     }
@@ -21136,6 +21239,36 @@ function openDeltaReview(delta) {
   document.getElementById('delta-panel').classList.add('visible');
 }
 
+// Raport recenzji kalki (.md / schowek) — jednolity builder z script 1.
+// Pelna lista opow z klasyfikacja i powodami (note/diff), deterministyczna
+// kolejnosc = kolejnosc kalki (seq rosnaco, items juz tak ulozone).
+function _deltaReviewReportText() {
+  const R = _deltaReview;
+  if (!R) return '';
+  const counts = { ok: 0, hard: 0, done: 0, impossible: 0 };
+  for (const it of R.items) counts[it.cls]++;
+  const sum = [
+    'Operacji w kalce: ' + R.items.length,
+    'Do naniesienia: ' + counts.ok + ' · Konflikty: ' + counts.hard + ' · Zrobione: ' + counts.done + ' · Niewykonalne: ' + counts.impossible,
+    'Baza kalki: ' + _arkdeltaBaseNote(R.delta.meta.base),
+  ];
+  const lines = R.items.map(it => {
+    let s = '- [#' + it.seq + '] ' + it.label + ' — ' + _DELTA_CLS_BADGE[it.cls][0];
+    if (it.cls === 'done' && it.session) s += ' (naniesione z kalki)';
+    if (it.note) s += ' — ' + it.note;
+    if (it.diff && it.diff.length) s += ' — ' + it.diff.join(' · ');
+    return s;
+  });
+  return buildDiagnosticsReport({
+    title: 'Raport recenzji kalki .arkdelta',
+    filename: state.filename || '—',
+    sections: [
+      { title: 'Podsumowanie', lines: sum },
+      { title: 'Operacje (' + R.items.length + ')', lines },
+    ],
+  });
+}
+
 function _renderDeltaPanel() {
   const R = _deltaReview;
   if (!R) return;
@@ -21396,6 +21529,11 @@ btnSaveArkdelta.addEventListener('click', saveDelta);
   });
   document.getElementById('dp-rebase').addEventListener('click', saveDelta);
   document.getElementById('dp-remainder').addEventListener('click', saveDeltaRemainder);
+  document.getElementById('dp-copy-report').addEventListener('click', () => _copyReportToClipboard(_deltaReviewReportText()));
+  document.getElementById('dp-save-md').addEventListener('click', () => {
+    const text = _deltaReviewReportText();
+    saveWithDialog('raport-recenzji-' + _reportMapName() + '-' + _reportTs() + '.md', 'text/markdown', () => text);
+  });
   const closePanel = () => { panel.classList.remove('visible'); _deltaReview = null; _deltaGhostReset(); _deltaAppliedSeqs = new Set(); _deltaSkippedSeqs = new Set(); draw(); };
   document.getElementById('dp-close').addEventListener('click', closePanel);
   document.getElementById('dp-close2').addEventListener('click', closePanel);

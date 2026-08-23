@@ -183,10 +183,7 @@ function classifyText(text) {
 function repackDeltaWithBase(deltaObj, newBase) {
   const d = JSON.parse(JSON.stringify(deltaObj));
   d.meta.base = newBase;
-  d.checksums = {
-    file: W().crc32str(W().stableStringify({ meta: d.meta, ops: d.ops })),
-    ops: d.ops.map(op => W().crc32str(W().stableStringify(op))),
-  };
+  d.checksums = W()._deltaChecksums(d.meta, d.ops);
   return W().stableStringify(d);
 }
 
@@ -703,8 +700,7 @@ function _e2Craft(opsArr) {
   const meta = { format: fmt.f, format_version: fmt.v, ops_count: opsArr.length,
                  base: ev('state.baseInfo').val, app_version: 'e2-craft' };
   const ops = opsArr.map((o, i) => ({ seq: i + 1, type: o.type, target: o.target, payload: o.payload, label: o.label || o.type }));
-  const checksums = { file: W().crc32str(W().stableStringify({ meta, ops })),
-                      ops: ops.map(op => W().crc32str(W().stableStringify(op))) };
+  const checksums = W()._deltaChecksums(meta, ops);
   return W().stableStringify({ meta, ops, checksums });
 }
 // Malowanie dwoch pokoi (PAINT_BATCH przez realny commit pociagniecia).
@@ -1373,9 +1369,8 @@ function _e4Craft(opsArr, opts){
   const meta = Object.assign({ format: ev('ARKDELTA_FORMAT').val, format_version: ev('ARKDELTA_FORMAT_VERSION').val,
     ops_count: opsArr.length, base: ev('state.baseInfo').val, app_version: 'e4-craft' }, opts.meta || {});
   const ops = opsArr.map((o, i) => Object.assign({ seq: i + 1 }, o));
-  const checksums = { file: W().crc32str(W().stableStringify({ meta, ops })),
-                      ops: ops.map(op => W().crc32str(W().stableStringify(op))) };
-  if (opts.fileCrcStale) checksums.file = '00000000';
+  const checksums = W()._deltaChecksums(meta, ops);
+  if (opts.fileCrcStale) checksums.file = '0000000000000000';
   return W().stableStringify({ meta, ops, checksums });
 }
 // Wczytanie przez prawdziwy handler change (DataTransfer + File), czekanie na async handler.
@@ -1436,7 +1431,7 @@ scenario('E4.format', async () => {
     ['garbage', 'to nie jest json {{{', 'Nie można odczytać pliku'],
     ['notdelta', '{"hello": 1}', 'nie jest plik .arkdelta'],
     ['truncated', valid.slice(0, Math.floor(valid.length / 2)), 'Nie można odczytać pliku'],
-    ['badversion', _e4Craft([{ type: 'PAINT_BATCH', target: {}, payload: { changes: [] } }], { meta: { format_version: 999 } }), 'Nieznana wersja formatu'],
+    ['badversion', _e4Craft([{ type: 'PAINT_BATCH', target: {}, payload: { changes: [] } }], { meta: { format_version: 999 } }), 'Nieobsługiwana wersja formatu'],
   ];
   for (const [name, text, frag] of cases){
     await _e4Load(text);
@@ -1459,7 +1454,7 @@ scenario('E4.integrity', async () => {
   // podmiana tresci + przeliczenie checksumy opu, zbiorcza stala
   const tampered2 = JSON.parse(valid);
   tampered2.ops[0].label = 'TAMPERED-2';
-  tampered2.checksums.ops[0] = W().crc32str(W().stableStringify(tampered2.ops[0]));
+  tampered2.checksums.ops[0] = W()._deltaChecksums(tampered2.meta, tampered2.ops).ops[0];
   const tampered2Text = JSON.stringify(tampered2);
   const protoOp = JSON.parse('{"type":"PAINT_BATCH","target":{},"payload":{"__proto__":{"polluted":true},"changes":[]}}');
   const cases = [
@@ -2058,21 +2053,21 @@ scenario('E9.exitreset', async () => {
   EQ('E9.exitreset.ops2', n.n, 2, 'kalka po re-wejsciu kompletna: sesja1+sesja2 (W18 v2)');
 });
 
-scenario('E9.crc-v3-export', async () => {
+scenario('E9.crc-v4-export', async () => {
   await loadBase('dat');
   ex('_prepareArkmapForSave()');
-  EQ('E9.crc-v3-export.alg', ev('state.map.meta.checksums.alg').val, 'v3', 'eksport .arkmap zapisuje alg v3');
-  A('E9.crc-v3-export.ok', ev('verifyChecksums(state.map).ok').val === true, 'verify swiezego eksportu: ok');
+  EQ('E9.crc-v4-export.alg', ev('state.map.meta.checksums.alg').val, 'v4', 'eksport .arkmap zapisuje alg v4');
+  A('E9.crc-v4-export.ok', ev('verifyChecksums(state.map).ok').val === true, 'verify swiezego eksportu: ok');
   const r = JSON.parse(ev('(function(){ const a = state.map.areas.find(a => (a.labels || []).length);'
     + ' if (!a) return JSON.stringify({ skip: true });'
     + ' a.labels[0].text = a.labels[0].text + " X";'
     + ' const v = verifyChecksums(state.map); return JSON.stringify({ ok: v.ok, bad: v.badAreas.length }); })()').val);
-  A('E9.crc-v3-export.label', r.skip || (r.ok === false && r.bad >= 1),
+  A('E9.crc-v4-export.label', r.skip || (r.ok === false && r.bad >= 1),
     'mutacja etykiety po zapisie sum → badAreas (W3 widzi etykiety)');
   const r2 = JSON.parse(ev('(function(){ const ks = Object.keys(state.map.meta.checksums.rooms);'
     + ' delete state.map.meta.checksums.rooms[ks[0]];'
     + ' const v = verifyChecksums(state.map); return JSON.stringify({ ok: v.ok, miss: v.missingRooms.length }); })()').val);
-  A('E9.crc-v3-export.missing', r2.ok === false && r2.miss >= 1, 'pokoj bez sumy → missingRooms + ok:false');
+  A('E9.crc-v4-export.missing', r2.ok === false && r2.miss >= 1, 'pokoj bez sumy → missingRooms + ok:false');
 });
 
 scenario('E9.hidden-roundtrip', async () => {
@@ -2732,16 +2727,15 @@ scenario('E7.resize', async () => {
 scenario('E10.delta-validate', async () => {
   await loadBase('dat');
   const txt = await (await fetch('./fixture_demo.arkdelta')).text();
-  A('E10.delta-validate.helpers', ev('typeof crc32str === "function" && typeof stableStringify === "function"').val === true,
-    'crc32str/stableStringify dostepne w iframe');
+  A('E10.delta-validate.helpers', ev('typeof _deltaChecksums === "function" && typeof stableStringify === "function"').val === true,
+    '_deltaChecksums/stableStringify dostepne w iframe');
   // 1. wlasna kalka przechodzi zaostrzony walidator (typy K6 + sid K7 + glebokosc S8)
   const ok0 = ev('(function(){ const r = validateDeltaText(' + JSON.stringify(txt) + '); return { ok: r.ok, errs: r.errors }; })()').val;
   A('E10.delta-validate.fixture', ok0 && ok0.ok === true, 'fixture_demo przechodzi zaostrzony walidator');
   // helper: mutacja fixture z przeliczeniem checksumow (inaczej odrzut na CRC, nie na typach)
   const mutate = (fn) => ev('(function(){ const d = JSON.parse(' + JSON.stringify(txt) + ');'
     + ' (' + fn + ')(d);'
-    + ' d.checksums = { file: crc32str(stableStringify({ meta: d.meta, ops: d.ops })),'
-    + '   ops: d.ops.map(function(op){ return crc32str(stableStringify(op)); }) };'
+    + ' d.checksums = _deltaChecksums(d.meta, d.ops);'
     + ' const r = validateDeltaText(JSON.stringify(d));'
     + ' return { ok: r.ok, errs: r.errors }; })()').val;
   // 2. zly typ wspolrzednej (op#29 = MOVE_ROOM, index 28) — K6
@@ -2859,8 +2853,9 @@ scenario('E10.dat-roundtrip', async () => {
     + ' const b2 = o2 instanceof Uint8Array ? o2 : new Uint8Array(o2);'
     + ' if (b1.length !== b2.length) return { eq: false, why: "fixpoint len " + b1.length + " vs " + b2.length };'
     + ' for (let i = 0; i < b1.length; i++) if (b1[i] !== b2[i]) return { eq: false, why: "fixpoint byte@" + i };'
+    + ' let t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (3988292384 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; }'
     + ' let crc = 4294967295;'
-    + ' for (let j = 0; j < b1.length; j++) crc = CRC32_TABLE[(crc ^ b1[j]) & 255] ^ (crc >>> 8);'
+    + ' for (let j = 0; j < b1.length; j++) crc = t[(crc ^ b1[j]) & 255] ^ (crc >>> 8);'
     + ' crc = (crc ^ 4294967295) >>> 0;'
     + ' return { eq: true, len: b1.length, crc: ("00000000" + crc.toString(16)).slice(-8) }; })()');
   const r = AEV('E10.dat-roundtrip.fixpoint', rr, 'roundtrip .dat');
