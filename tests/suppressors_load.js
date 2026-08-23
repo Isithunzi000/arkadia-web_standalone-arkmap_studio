@@ -143,14 +143,14 @@ console.log('— Sekcja C: raport i eksport —');
     extract(HTML, 'function buildDiagnosticsReport(opts) {') + '\n' +
     extract(HTML, 'function _suppReportText(missing) {') + '\n' +
     'return { _suppReportText };';
-  const apiC = new Function('APP_VERSION', 'state', codeC)('v1.46.0', { filename: 'map_master3.arkmap' });
+  const apiC = new Function('APP_VERSION', 'state', codeC)('v1.46.1', { filename: 'map_master3.arkmap' });
 
   const many = [];
   for (let i = 30; i >= 1; i--) many.push({ roomA: i, dir: 'e', roomB: i + 1000, oppDir: 'w' });
   const r1 = apiC._suppReportText(many);
   ok(r1.split('\n')[0] === '# Raport podwójnych linii wyjść — ArkMap Studio', 'C1 naglowek H1 raportu podwojnych');
   ok(r1.includes('- Plik: map_master3.arkmap'), 'C2 plik biezacej mapy w naglowku');
-  ok(r1.includes('- Wersja aplikacji: v1.46.0'), 'C3 wersja aplikacji (pin)');
+  ok(r1.includes('- Wersja aplikacji: v1.46.1'), 'C3 wersja aplikacji (pin)');
   ok((r1.match(/^Pokój #\d+ \(dir=e → #\d+\): podwójna linia, domknięcie w #\d+ dir=w$/gm) || []).length === 30,
     'C4 PELNA lista 30 pozycji (bez obcinania jak w UI)');
   ok(r1.indexOf('Pokój #1 ') < r1.indexOf('Pokój #30'), 'C5 sortowanie numeryczne po roomA');

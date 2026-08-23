@@ -2,6 +2,32 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.46.1 — LOD roomsOnly przy dużych oddaleniach (Arc 31)
+
+Drugi etap optymalizacji renderera (plan Arc 31 F2):
+
+- `computeLodMode(planeCount, cellPx, W, H)`: predykat trybu renderu.
+  Pan-inwariantny — zalezy wylacznie od zoomu i rozmiaru plaszczyzny,
+  NIE od pozycji viewportu (przesuwanie mapy nigdy nie przelacza trybu).
+  Dwa warunki wejscia w roomsOnly: cellPx < 9 (strzalka wyjscia < 4 px =
+  subpikselowy szum; kaskada z istniejacymi progami: suppressors <0.35,
+  etykiety <0.3) ORAZ szacunek widocznych pokoi > 200 (budzet ~600
+  prymitywow wyjsc ~ 1.5-2 ms; male plaszczyzny zostaja w pelnym renderze).
+- W trybie roomsOnly `draw()` pomija warstwy exits/stubs/custom_lines
+  (liczniki F0: 30-40% kosztu klatki przy pelnoplaszczyznowym oddaleniu);
+  pokoje/etykiety/duchy/trasa/pending bez zmian. Struktura 13 tickow
+  licznikow F0 zachowana (pominieta warstwa = tick ~0).
+- Wskaznik „LOD" w pasku statusu (#msb-info, tooltip z wyjasnieniem).
+  Forma krotka — decyzja na liczbach z bramki geometrii (luz przy
+  najdluzszym zestawie pol = 94 px; „LOD: tylko pokoje" ~104 px = ciasno).
+- Efekt zmierzony (sandbox, trasa kamery 40 krokow, real_27k .arkmap,
+  realny zegar): camP95 44.9 ms -> 12.7-16.7 ms, med 4.4 -> 1.3 ms;
+  roomsOnly dokladnie na krokach p95 (zf <= 1.5, cellPx <= 8.81).
+- Piny: tier6 B17/B18/B19 (progi + budzet + wskaznik); scenariusze
+  empiryczne E23.lod (predykat + zliczanie prymitywow ctx per tryb —
+  odporne na virtual-time budget) i E23.lod-geom (bramka geometrii
+  paska statusu).
+
 ## v1.46.0 — RAF-batching renderu + shim render-to-offscreen (Arc 31)
 
 Pierwszy etap optymalizacji renderera (plan Arc 31 F1):

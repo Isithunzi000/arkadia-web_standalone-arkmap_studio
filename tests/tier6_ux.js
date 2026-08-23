@@ -127,6 +127,19 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
       'B16: dlg-suppressors width:660px (5 przyciskow stopki; 500px = przelew)');
   }
 
+  // Arc 31 F2: LOD roomsOnly — progi z pomiaru probe_lod (2026-08-23, trasa
+  // kamery, plaszczyzna 518 pokoi): kroki p95 maja cellPx <= 8.81. Kaskada
+  // czytelnosci przy oddalaniu: exits <0.5, suppressors <0.35, etykiety <0.3.
+  // Wskaznik: forma krotka „LOD" — decyzja na liczbach z probe_geom (luz
+  // w #msb-info przy najdluzszym zestawie pol = 94 px; „LOD: tylko pokoje"
+  // ~104 px = ciasno). Repro empiryczne: E23.lod / E23.lod-geom.
+  ok(HTML.includes('const LOD_MIN_CELL_PX = 9;'),
+    'B17: prog czytelnosci strzalki cellPx 9 (przy 8.81 strzalka ~4 px = szum subpikselowy)');
+  ok(HTML.includes('const LOD_ROOMS_BUDGET = 200;'),
+    'B18: budzet 200 pokoi ~600 prymitywow wyjsc ~1.5-2 ms (F0: exits+stubs+cl = 30-40% klatki przy 518)');
+  ok(HTML.includes('id="msb-lod"'),
+    'B19: wskaznik LOD w pasku statusu (#msb-info, forma krotka + tooltip)');
+
 }
 
 // ═══ Sekcja C: #18 — bramka potwierdzenia importu trasy ═══
@@ -223,7 +236,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.46.0';"), 'V1: pin APP_VERSION v1.46.0');
+ok(HTML.includes("const APP_VERSION = 'v1.46.1';"), 'V1: pin APP_VERSION v1.46.1');
 
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);

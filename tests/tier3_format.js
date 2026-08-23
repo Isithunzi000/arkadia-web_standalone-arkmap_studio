@@ -1,4 +1,4 @@
-// Harness Tier 3 (v1.46.0) — sumy v4 XXH3-64 (W3, implementacja Arc 19, migracja Arc 20),
+// Harness Tier 3 (v1.46.1) — sumy v4 XXH3-64 (W3, implementacja Arc 19, migracja Arc 20),
 // hidden/symbolColor (W4/Q2), klucz cache piksmap (W9), cap w pushUndo (W17),
 // granica sesji exitEditMode (W18 v2).
 // Wzorzec extract/makeCtx jak tier2_state.js. Uruchamianie z katalogu glownego repo.
@@ -20,7 +20,7 @@ function extract(src, anchor) {
 }
 
 // Blok stalych DIRS..VERSION (jeden ciegly zakres zrodla; CRC32_TABLE/crc32str
-// usuniete w v1.46.0 — kalka na XXH3-64)
+// usuniete w v1.46.1 — kalka na XXH3-64)
 const constsStart = NEW.indexOf('const DIRS = [');
 const constsBlock = NEW.slice(constsStart, NEW.indexOf('// ── arkadia-env.js ──'));
 
@@ -141,7 +141,7 @@ console.log('── T2 (W3): addChecksums/verifyChecksums — v4, badAreas, miss
   ok(res3.ok === false && res3.missingRooms.length === 1 && res3.missingRooms[0] === 2,
      'brak wpisu w stored.rooms → missingRooms + ok:false (Claude#5)');
 
-  // Arc 20 (v1.46.0): kazdy alg != v4 to GLOSNY algMismatch (present:true, ok:false) —
+  // Arc 20 (v1.46.1): kazdy alg != v4 to GLOSNY algMismatch (present:true, ok:false) —
   // cichy skip bylby dziura downgrade'owa (plik ze starymi sumami wygladalby na „bez sum").
   const map4 = mkMap([{ id: 5, name: 'A5', rooms: [mkRoom(1)] }]);
   map4.meta.checksums = { file: 'deadbeef', areas: { '5': 'cafe' }, rooms: { '1': 'cafe' } };
@@ -241,9 +241,9 @@ console.log('── T6 (W18 v2): exitEditMode — undo/redo czyszczone, deltaLog
 // ═══ T7: strazniki strukturalne + piny wersji ═══
 console.log('── T7: strazniki strukturalne Tier 3 + piny wersji ──');
 {
-  ok(NEW.includes("const APP_VERSION = 'v1.46.0';"), 'pin: APP_VERSION v1.46.0');
+  ok(NEW.includes("const APP_VERSION = 'v1.46.1';"), 'pin: APP_VERSION v1.46.1');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok((deltaSrc.match(/v1\.46\.0/g) || []).length === 10, 'pin: delta.js 10x v1.46.0 (4 linie x includes+label + 2 komentarze Arc 20)');
+  ok((deltaSrc.match(/v1\.46\.1/g) || []).length === 10, 'pin: delta.js 10x v1.46.1 (4 linie x includes+label + 2 komentarze Arc 20)');
   ok(NEW.includes("alg: 'v4',"), 'straznik: addChecksums alg v4');
   ok(NEW.includes('// ====XXH3-64-BEGIN====') && NEW.includes('// ====CANONICAL-V4-BEGIN====') &&
      !NEW.includes('// ====CANONICAL-V3-BEGIN====') && !NEW.includes('function _crcArea(area, roomCrcs)'),

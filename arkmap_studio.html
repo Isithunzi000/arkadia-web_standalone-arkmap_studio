@@ -418,6 +418,7 @@
     display: flex; align-items: center; padding: 0 10px; gap: 10px; font-size: 11px; color: var(--dim); flex-shrink: 0; }
   #map-status-bar span { color: var(--text); }
   #msb-info { display: flex; gap: 10px; flex: 1; min-width: 0; overflow: hidden; }
+  #msb-lod { color: var(--accent); font-weight: 600; letter-spacing: .4px; cursor: help; }
   #zoom-controls { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
   #zoom-slider { -webkit-appearance: none; appearance: none; width: 100px; height: 3px;
     background: var(--border); border-radius: 2px; outline: none; cursor: pointer; }
@@ -2063,6 +2064,7 @@
         <span id="msb-area">—</span>
         <span style="flex-shrink:0">Z=<span id="msb-z">0</span></span>
         <span style="flex-shrink:0"><span id="msb-rooms">0</span> pokoi</span>
+        <span id="msb-lod" style="display:none;flex-shrink:0" title="Duże oddalenie — rysowane są tylko pokoje (LOD roomsOnly). Wyjścia/stuby/custom lines są przy tym zoomie subpikselowym szumem; przybliż, aby je zobaczyć.">LOD</span>
       </div>
       <!-- ✎ EDIT MODE TOGGLE (mockup) -->
       <div id="msb-undoredo"><button class="ur-btn" id="ur-undo-all" title="Cofnij wszystko">↩↩</button><button class="ur-btn" id="ur-undo" title="Cofnij (Ctrl+Z)">↩</button><button class="ur-btn" id="ur-redo" disabled title="Ponów (Ctrl+Y)">↪</button><button class="ur-btn" id="ur-redo-all" disabled title="Ponów wszystko">↪↪</button></div>      <div id="msb-lock-timer" title="Masz aktywnego locka na mapę">🔒 lock aktywny</div>      <div id="msb-change-count" onclick="toggleChangelog(event)" title="Kliknij aby zobaczyć historię zmian"><div class="cc-dot"></div><span id="cc-num">12 zmian</span></div>
@@ -7042,6 +7044,7 @@ const zPanelEl   = document.getElementById('z-panel');
 const msbArea    = document.getElementById('msb-area');
 const msbZ       = document.getElementById('msb-z');
 const msbRooms   = document.getElementById('msb-rooms');
+const msbLod     = document.getElementById('msb-lod');   // F2 (Arc 31): wskaznik LOD roomsOnly
 
 function buildAreaList() {
   areaListEl.innerHTML = '';
@@ -7158,10 +7161,11 @@ function wpUpdateOverviewThrottled() {
 
 function updateStatus() {
   const area = state.areas.get(state.areaId);
-  if (!area) { msbArea.textContent = '—'; return; }
+  if (!area) { msbArea.textContent = '—'; msbLod.style.display = 'none'; return; }
   msbArea.textContent = area.name || String(area.id);
   msbZ.textContent    = state.z;
   msbRooms.textContent = state.roomsZ.length;
+  msbLod.style.display = _lodMode === 'roomsOnly' ? '' : 'none';  // F2: wskaznik LOD roomsOnly
 }
 
 // ─── FIT ──────────────────────────────────────────────────────────────────────
@@ -7285,8 +7289,31 @@ function _withRenderTarget(canvas2, viewState, dataOverride, fn) {
   }
 }
 
+// ─── LOD „roomsOnly" (Arc 31 F2, v1.46.1) ─────────────────────────────────────
+// Liczniki F0: exits+stubs+custom_lines = ~30-40% kosztu klatki przy
+// pelnoplaszczyznowym oddaleniu (518 pokoi ≈ 4-6 ms). Dwa warunki wejscia:
+//  1. czytelnosc: strzalka wyjscia ma ~0.45 komorki — przy cellPx < 9 px to
+//     < 4 px subpikselowej kreski (szum); kaskada przy oddalaniu: exits <0.5,
+//     suppressors <0.35, etykiety <0.3 (istniejace progi zoomu).
+//  2. budzet: pokoj ≈ 3 prymitywy wyjsc; 200 pokoi ≈ 600 prymitywow ≈ 1.5-2 ms
+//     — zapas na pokoje/duchy w klatce 16 ms na slabszej maszynie; male
+//     plaszczyzny zostaja w pelnym renderze nawet przy subpikselach.
+// Predykat PAN-INWARIANTNY: tryb zalezy wylacznie od zoomu + rozmiaru
+// plaszczyzny, NIE od ox/oy — przesuwanie mapy nigdy nie przelacza trybu.
+// Progi z pomiaru probe_lod (2026-08-23): kroki p95 trasy kamery maja
+// cellPx <= 8.81. Piny: tier6 B17/B18/B19; scenariusze E23.lod / E23.lod-geom.
+const LOD_MIN_CELL_PX = 9;
+const LOD_ROOMS_BUDGET = 200;
+function computeLodMode(planeCount, cellPx, W, H) {
+  if (cellPx >= LOD_MIN_CELL_PX) return 'full';
+  const visCells = Math.ceil(W / cellPx) * Math.ceil(H / cellPx);
+  return Math.min(planeCount, visCells) > LOD_ROOMS_BUDGET ? 'roomsOnly' : 'full';
+}
+let _lodMode = 'full';
+
 function draw() {
   const _pc = _perfOn() ? { t: performance.now() } : null;  // F0: null gdy flaga off — dalej same no-op ticki
+  _lodMode = 'full';  // F2: reset przy wczesnych returnach — wskaznik nie zostaje na pustej mapie
   const W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
   if (!_shimActive) { updateMinimap_call(); wpUpdateOverviewThrottled(); } // D2 (F1): minimapki tłumione podczas shima; planer: „jesteś tu" śledzi viewport (v1.5.40)
@@ -7312,10 +7339,15 @@ function draw() {
   if (_pc) { _PERF.draws++; _PERF.plane = rooms.length; _PERF.vis = vis.length; }
   _perfTick(_pc, 'cull');                                     // F0: filtr viewportu
 
-  drawExits(vis, rs); _perfTick(_pc, 'exits');                // warstwa 1-4
-  drawStubs(vis, rs); _perfTick(_pc, 'stubs');                // warstwa 1a (stub tick marks)
+  // F2 (Arc 31): LOD roomsOnly — skip warstw wyjsc przy duzym oddaleniu
+  // (subpikselowy szum, ~30-40% kosztu klatki). Ticki zostaja — struktura
+  // 13 warstw licznikow F0 niezmieniona (pominiete warstwa = tick ~0).
+  _lodMode = computeLodMode(rooms.length, cpx(), W, H);
+  const _lodFull = _lodMode === 'full';
+  if (_lodFull) drawExits(vis, rs); _perfTick(_pc, 'exits');  // warstwa 1-4
+  if (_lodFull) drawStubs(vis, rs); _perfTick(_pc, 'stubs');  // warstwa 1a (stub tick marks)
   drawPendingExitLines(rs); _perfTick(_pc, 'pending');        // warstwa 1b (preview pending exits)
-  drawCustomLines(vis); _perfTick(_pc, 'custom_lines');
+  if (_lodFull) drawCustomLines(vis); _perfTick(_pc, 'custom_lines');
   // drawCrossArrows(vis);  // ZAD 3: trójkąty up/down/in/out zastępują tekstowe ↑↓ (Delwing-style, bez podwójnego renderu)
   if (state.zoom > 0.3 && (state.view?.mudletLabels !== false || state.showPixmaps)) drawLabels();   // warstwa 4 — toggle „Etykiety Mudleta"
   _perfTick(_pc, 'labels');
@@ -13813,7 +13845,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.46.0';
+const APP_VERSION = 'v1.46.1';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)

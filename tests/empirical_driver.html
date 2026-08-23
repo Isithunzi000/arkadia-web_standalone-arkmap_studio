@@ -4297,6 +4297,114 @@ scenario('E23.shim', async () => {
      'try/finally: stan przywrocony mimo wyjatku, _shimActive wylaczone');
 });
 
+// ═══ E23.lod — Arc 31 F2 (v1.46.1): LOD roomsOnly ═══
+// Progi predykatu z pomiaru probe_lod (2026-08-23, trasa kamery, plaszczyzna
+// 518 pokoi): kroki p95 = cellPx <= 8.81 -> roomsOnly; cellPx >= 11.75 -> full.
+// Budzet 200 pokoi chroni male plaszczyzny. Warstwy rozstrzygane licznikami F0.
+scenario('E23.lod', async () => {
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  await loadBase('dat');
+  await eva('new Promise(function(res){ setTimeout(res, 60); })');
+  EQ('E23.lod.pred.p95fit', ev('computeLodMode(518, 5.87, 1260, 922)').val, 'roomsOnly',
+     'krok p95 trasy (fit 518 pokoi, cellPx 5.87) -> roomsOnly');
+  EQ('E23.lod.pred.p95edge', ev('computeLodMode(518, 8.81, 1260, 922)').val, 'roomsOnly',
+     'granica czytelnosci (cellPx 8.81 < 9, strzalka ~4 px) -> roomsOnly');
+  EQ('E23.lod.pred.zoom2', ev('computeLodMode(518, 11.75, 1260, 922)').val, 'full',
+     'cellPx 11.75 >= 9 -> full (strzalki czytelne)');
+  EQ('E23.lod.pred.small', ev('computeLodMode(100, 3, 1260, 922)').val, 'full',
+     'mala plaszczyzna (100 < budzet 200) -> full mimo subpikseli');
+  EQ('E23.lod.pred.big', ev('computeLodMode(5000, 3, 1260, 922)').val, 'roomsOnly',
+     'duza plaszczyzna + subpiksele -> roomsOnly');
+  EQ('E23.lod.pred.dense', ev('computeLodMode(5000, 20, 1260, 922)').val, 'full',
+     'cellPx 20 >= 9 -> full nawet przy 5000 pokoi (cull bierze viewport)');
+
+  // warstwy: zliczanie prymitywow ctx (fillRect/lineTo/strokeRect) zamiast
+  // czasow warstw — empirical.sh jedzie pod --virtual-time-budget, wiec
+  // performance.now() stoi w miejscu (lekcja: asercje behawioralne, nie progi
+  // ms; czasy mierzy tylko perf_driver na realnym zegarze). Siatka off —
+  // izoluje lineTo wyjsc. Pomiar referencyjny (probe_lod2, 2026-08-23):
+  // roomsOnly: lineTo 0, strokeRect 518; full (zoom 0.5, vis 350): lineTo 984.
+  ex('window.__PERF_COUNTERS__ = true; state.showGrid = false;'
+   + ' window.__wrapCtx = function(){ var c = { fr: 0, lt: 0, sre: 0 };'
+   + '   var ofr = ctx.fillRect, olt = ctx.lineTo, osre = ctx.strokeRect;'
+   + '   ctx.fillRect = function(){ c.fr++; return ofr.apply(this, arguments); };'
+   + '   ctx.lineTo = function(){ c.lt++; return olt.apply(this, arguments); };'
+   + '   ctx.strokeRect = function(){ c.sre++; return osre.apply(this, arguments); };'
+   + '   window.__unwrapCtx = function(){ ctx.fillRect = ofr; ctx.lineTo = olt; ctx.strokeRect = osre; };'
+   + '   return c; };');
+  const lodRaw = AEV('E23.lod.layers.out', ev('(function(){'
+   + ' var c = window.__wrapCtx(); state.zoom = 0.163; draw(); window.__unwrapCtx();'
+   + ' return JSON.stringify({ mode: _lodMode, vis: _PERF.vis, fr: c.fr, lt: c.lt, sre: c.sre });'
+   + '})()'), 'prymitywy ctx w roomsOnly (zoom 0.163 = cellPx 2.9)');
+  const lod = lodRaw ? JSON.parse(lodRaw) : null;
+  if (lod) {
+    EQ('E23.lod.mode.out', lod.mode, 'roomsOnly', 'tryb roomsOnly przy cellPx 2.9');
+    EQ('E23.lod.skip.lines', lod.lt, 0, 'zero linii wyjsc/stubow/custom lines w roomsOnly');
+    A('E23.lod.keep.rooms', lod.sre >= 400, 'pokoje NADAL rysowane (strokeRect=' + lod.sre + ' przy vis=' + lod.vis + ')');
+    EQ('E23.lod.ind.out', ev('getComputedStyle(document.getElementById("msb-lod")).display').val !== 'none', true,
+       'wskaznik LOD widoczny w roomsOnly');
+  }
+  // zoom 0.5 = cellPx 9 -> full; centrum fit trzyma ~350 pokoi w viewportcie
+  const fullRaw = AEV('E23.lod.layers.in', ev('(function(){'
+   + ' var c = window.__wrapCtx(); state.zoom = 0.5; draw(); window.__unwrapCtx();'
+   + ' return JSON.stringify({ mode: _lodMode, vis: _PERF.vis, lt: c.lt });'
+   + '})()'), 'prymitywy ctx w full (zoom 0.5 = cellPx 9)');
+  const full = fullRaw ? JSON.parse(fullRaw) : null;
+  if (full) {
+    EQ('E23.lod.mode.in', full.mode, 'full', 'tryb full przy cellPx 9 (vis=' + full.vis + ')');
+    A('E23.lod.full.lines', full.lt > 400, 'linie wyjsc rysuja w full (lineTo=' + full.lt + ')');
+    EQ('E23.lod.ind.in', ev('getComputedStyle(document.getElementById("msb-lod")).display').val, 'none',
+       'wskaznik LOD ukryty w full');
+  }
+});
+
+// E23.lod-geom — bramka geometrii F2: wskaznik LOD w #msb-info nie wypycha
+// elementow stalych paska statusu. Decyzja na liczbach (probe_geom 2026-08-23,
+// baseline): przy najdluzszym zestawie pol (nazwa 53 znaki, edit-mode) luz
+// w #msb-info = 94 px; „LOD: tylko pokoje" ~104 px = ciasno -> forma krotka
+// „LOD" (~30 px) + tooltip. Pasek 1260x28, elementy stale 602 px, zoom-controls
+// konczy sie na krawedzi content box (margines 0).
+scenario('E23.lod-geom', async () => {
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  await loadBase('dat');
+  await eva('new Promise(function(res){ setTimeout(res, 60); })');
+  const gRaw = AEV('E23.lod-geom.run', ev('JSON.stringify((function(){'
+    + ' state.areas.get(state.areaId).name = "Dluga Nazwa Obszaru Testowego Pd-Wsch Maximum Czytelnosci";'
+    + ' document.getElementById("app").classList.add("edit-mode");'
+    + ' state.zoom = 0.163; draw();'
+    + ' var bar = document.getElementById("map-status-bar");'
+    + ' var br = bar.getBoundingClientRect();'
+    + ' var padL = parseFloat(getComputedStyle(bar).paddingLeft);'
+    + ' var padR = parseFloat(getComputedStyle(bar).paddingRight);'
+    + ' var lod = document.getElementById("msb-lod");'
+    + ' if (!lod) return { missing: true };'
+    + ' var lr = lod.getBoundingClientRect();'
+    + ' var fixed = Array.prototype.slice.call(bar.children).filter(function(k){ return k.id !== "msb-info"; })'
+    + '   .filter(function(k){ var r = k.getBoundingClientRect(); return r.width > 0 || r.height > 0; });'
+    + ' var outV = fixed.filter(function(k){ var r = k.getBoundingClientRect();'
+    + '   return r.top < br.top - 1 || r.bottom > br.bottom + 1; }).length;'
+    + ' var outH = fixed.filter(function(k){ var r = k.getBoundingClientRect();'
+    + '   return r.left < br.left + padL - 1 || r.right > br.right - padR + 1; }).length;'
+    + ' var lastRight = Math.max.apply(null, fixed.map(function(k){ return k.getBoundingClientRect().right; }));'
+    + ' document.getElementById("app").classList.remove("edit-mode");'
+    + ' return { barH: Math.round(br.height), lodW: Math.round(lr.width),'
+    + '   lodVis: getComputedStyle(lod).display !== "none",'
+    + '   lodInBar: lr.right <= br.right - padR + 1 && lr.left >= br.left + padL - 1,'
+    + '   outV: outV, outH: outH, rightMargin: Math.round(br.right - padR - lastRight) };'
+    + '})())'), 'pomiar paska statusu ze wskaznikiem LOD');
+  const gm = gRaw ? JSON.parse(gRaw) : null;
+  if (gm && !gm.missing) {
+    EQ('E23.lod-geom.h', gm.barH, 28, 'pasek statusu nadal 28 px (brak wrap/wzrostu)');
+    A('E23.lod-geom.vis', gm.lodVis === true, 'wskaznik LOD widoczny w roomsOnly (najdluzszy zestaw pol)');
+    A('E23.lod-geom.inbar', gm.lodInBar === true, 'wskaznik w content box paska');
+    EQ('E23.lod-geom.outv', gm.outV, 0, 'zero przelewu pionowego elementow stalych');
+    EQ('E23.lod-geom.outh', gm.outH, 0, 'zero przelewu poziomego elementow stalych');
+    A('E23.lod-geom.margin', gm.rightMargin >= 0, 'elementy stale za prawa krawedzia? margines ' + gm.rightMargin);
+  } else {
+    A('E23.lod-geom.exists', false, 'brak #msb-lod w DOM');
+  }
+});
+
 runAll();
 </script>
 </body>
