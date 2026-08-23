@@ -24,7 +24,7 @@ for (const m of CHANGELOG.matchAll(HEAD_RE)) tagged.push({ ver: m[1], arc: +m[2]
 const PIN_MAP = {
   'v1.43.2': 12, 'v1.43.3': 13, 'v1.43.5': 14, 'v1.43.6': 15, 'v1.43.7': 16,
   'v1.44.0': 19, 'v1.44.1': 20,
-  'v1.45.0': 27, 'v1.45.1': 28, 'v1.45.2': 29,
+  'v1.45.0': 27, 'v1.45.1': 28, 'v1.45.2': 29, 'v1.45.3': 31,
 };
 
 ok(tagged.length >= Object.keys(PIN_MAP).length,

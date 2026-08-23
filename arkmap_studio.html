@@ -7215,7 +7215,21 @@ function drawGrid() {
   ctx.restore();
 }
 
+// ─── PERF COUNTERS (Arc 31 F0, v1.45.3) ─────────────────────────────────────
+// Diagnostyczne liczniki wydajności za flagą window.__PERF_COUNTERS__.
+// Flaga off = zero wpływu: _pc jest null, ticki to natychmiastowe zwroty,
+// żadnego performance.now() ani zapisów. Odczyt z zewnątrz: eval w realm (_PERF).
+const _PERF = { draws: 0, vis: 0, plane: 0, pixmapDecodes: 0, layers: {} };
+function _perfOn() { return typeof window !== 'undefined' && !!window.__PERF_COUNTERS__; }
+function _perfTick(pc, name) {
+  if (!pc) return;
+  const t = performance.now();
+  _PERF.layers[name] = (_PERF.layers[name] || 0) + (t - pc.t);
+  pc.t = t;
+}
+
 function draw() {
+  const _pc = _perfOn() ? { t: performance.now() } : null;  // F0: null gdy flaga off — dalej same no-op ticki
   const W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
   updateMinimap_call();
@@ -7223,6 +7237,7 @@ function draw() {
   ctx.fillStyle = '#0d0f12';
   ctx.fillRect(0, 0, W, H);
   if (state.showGrid) drawGrid();
+  _perfTick(_pc, 'prelude');                                  // F0: clear + minimapki + tło + siatka
   if (!state.map) return;
 
   const rooms = state.roomsZ;
@@ -7238,23 +7253,30 @@ function draw() {
   const vy1 = (state.oy + margin) / (CELL * state.zoom);       // Y flipped
 
   const vis = rooms.filter(r => r.x >= vx0 && r.x <= vx1 && r.y >= vy0 && r.y <= vy1);
+  if (_pc) { _PERF.draws++; _PERF.plane = rooms.length; _PERF.vis = vis.length; }
+  _perfTick(_pc, 'cull');                                     // F0: filtr viewportu
 
-  drawExits(vis, rs);                                             // warstwa 1-4
-  drawStubs(vis, rs);                                             // warstwa 1a (stub tick marks)
-  drawPendingExitLines(rs);                                       // warstwa 1b (preview pending exits)
-  drawCustomLines(vis);
+  drawExits(vis, rs); _perfTick(_pc, 'exits');                // warstwa 1-4
+  drawStubs(vis, rs); _perfTick(_pc, 'stubs');                // warstwa 1a (stub tick marks)
+  drawPendingExitLines(rs); _perfTick(_pc, 'pending');        // warstwa 1b (preview pending exits)
+  drawCustomLines(vis); _perfTick(_pc, 'custom_lines');
   // drawCrossArrows(vis);  // ZAD 3: trójkąty up/down/in/out zastępują tekstowe ↑↓ (Delwing-style, bez podwójnego renderu)
   if (state.zoom > 0.3 && (state.view?.mudletLabels !== false || state.showPixmaps)) drawLabels();   // warstwa 4 — toggle „Etykiety Mudleta"
-  drawRooms(vis, rs);                                            // warstwa 5
+  _perfTick(_pc, 'labels');
+  drawRooms(vis, rs); _perfTick(_pc, 'rooms');                // warstwa 5
   if (state.view?.areaExitLabels !== false) drawCrossAreaLabels(rs);  // warstwa 5b — toggle „Wyjścia z obszarów"
+  _perfTick(_pc, 'area_labels');
   if (state.zoom > 0.3 && (state.view?.mudletLabels !== false || state.showPixmaps)) drawLabelsOnTop();  // warstwa 6 — toggle „Etykiety Mudleta"
+  _perfTick(_pc, 'labels_top');
   if (state.showSuppressors && state.zoom > 0.35) drawSuppressors(vis); // warstwa 7
-  _drawDeltaGhosts(rs);                                          // warstwa 7b (ARKDELTA M3: duchy kalki + celownik)
+  _perfTick(_pc, 'suppressors');
+  _drawDeltaGhosts(rs); _perfTick(_pc, 'ghosts');             // warstwa 7b (ARKDELTA M3: duchy kalki + celownik)
   if (state.editDraggingRoom) drawDragGhost();                   // warstwa 8b drag
   if (state.canvasMode === 'cl-drawing') drawCLInProgress();    // warstwa 10
   if (state.canvasMode === 'paint' && state._paintHover != null && _paintStroke === null) drawPaintHover();  // warstwa 10b (ZAD 14)
   updateStatus();
   if (typeof syncZoomSlider === 'function') syncZoomSlider();
+  _perfTick(_pc, 'post');                                     // F0: duchy drag/cl/paint + status + slider
 }
 
 // ─── MINIMAP ──────────────────────────────────────────────────────────────────
@@ -8158,7 +8180,7 @@ function _getPixmapImage(lbl, areaId) {
   const img = new Image();
   const entry = { img, loaded: false };
   _pixmapCache.set(key, entry);
-  img.onload  = () => { entry.loaded = true; draw(); };
+  img.onload  = () => { entry.loaded = true; if (_perfOn()) _PERF.pixmapDecodes++; draw(); };  // F0: licznik dekodowań za flagą
   img.onerror = () => { /* silent — 🖼 placeholder stays */ };
   img.src = 'data:image/png;base64,' + lbl.pixmap;
   return null;
@@ -13735,7 +13757,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.45.2';
+const APP_VERSION = 'v1.45.3';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)

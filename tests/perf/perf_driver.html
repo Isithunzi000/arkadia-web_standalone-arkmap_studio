@@ -32,11 +32,18 @@ async function reloadIframe() {
   await loaded;
   const W = $f.contentWindow;
   for (let i = 0; i < 200; i++) {
-    if (W.applyMap && W.validate && W.datToArkmap && W.verifyChecksums && W.draw) return W;
+    if (W.applyMap && W.validate && W.datToArkmap && W.verifyChecksums && W.draw) {
+      W.__PERF_COUNTERS__ = true;   // F0 (Arc 31): liczniki warstw draw() — w apce zero kosztu gdy flaga off
+      return W;
+    }
     await new Promise(r => setTimeout(r, 25));
   }
   throw new Error('apka nie zbootowala w iframe');
 }
+
+// F0: reset/odczyt licznikow _PERF w realm iframe (top-level const — dostep przez eval)
+function perfReset(W) { W.eval('_PERF.draws = 0; _PERF.vis = 0; _PERF.plane = 0; _PERF.pixmapDecodes = 0; _PERF.layers = {}'); }
+function perfRead(W) { return JSON.parse(W.eval('JSON.stringify(_PERF)')); }
 
 async function oneRun(W, i) {
   const drawTimes = [];
@@ -127,7 +134,10 @@ async function cameraPath(W) {
     }
     // trasa kamery na mapie z ostatniego przebiegu (mapa nadal zaladowana)
     const W = $f.contentWindow;
+    const loadCounters = perfRead(W);   // F0: liczniki fazy loadu (realm swiezy per run = ostatni przebieg)
+    perfReset(W);                       // F0: czytamy kamere od zera
     const cam = await cameraPath(W);
+    const camCounters = perfRead(W);    // F0: rozbicie kosztu kamery per warstwa
     // bonus: eksport .dat w przegladarce („Eksportuj Mudlet .dat") — OSTATNI,
     // bo przy duzych mapach moze zabic karte (OOM = wynik stress testu)
     let exportDat = null;
@@ -145,7 +155,7 @@ async function cameraPath(W) {
     done({
       file: FILE, fmt: FMT, runs: RUNS,
       rooms: W.eval('state.map.areas.reduce((s, a) => s + a.rooms.length, 0)'),
-      phases, camera: cam, export_dat: exportDat,
+      phases, camera: cam, load_counters: loadCounters, camera_counters: camCounters, export_dat: exportDat,
       heap_mb_med: stats(runs.map(r => r.heap_mb).filter(v => v !== null)).med,
       userAgent: navigator.userAgent,
     });

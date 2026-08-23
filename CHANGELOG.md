@@ -2,6 +2,22 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.45.3 — liczniki wydajnosci F0 za flaga + driver (Arc 31)
+
+Diagnostyka wydajnosci (measurement-first, plan Arc 31 F0) — zero zmiany
+zachowania aplikacji:
+
+- `window.__PERF_COUNTERS__` (domyslnie off): licznik wywolan `draw()`,
+  timing per warstwa w `draw()` (prelude/cull/exits/stubs/pending/
+  custom_lines/labels/rooms/area_labels/labels_top/suppressors/ghosts/post),
+  licznik dekodowan pixmap. Flaga off = zero timingu i zapisow (guard
+  `_perfOn()`, ticki no-op przy null).
+- perf_driver: wlacza flage po boocie iframe, resetuje liczniki przed trasa
+  kamery i doklada `load_counters` + `camera_counters` do PERFJSON
+  (rozbicie kosztu kamery per warstwa — diagnoza anomalii .arkmap vs .dat).
+- Nowy harness `tests/perf_counters.js` (piny guardow, instrumentacji warstw,
+  zachowania off/on w Node, wiringu drivera).
+
 ## v1.45.2 — walidacja podwojnych linii przy loadzie + eksport raportow (Arc 29)
 
 Dwa watki ze zgloszenia uzytkownika:
