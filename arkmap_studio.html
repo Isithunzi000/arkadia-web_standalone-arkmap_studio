@@ -3690,7 +3690,11 @@
 
 <!-- ✎ DIALOG: WALIDATOR PODWÓJNYCH LINII — wywołany przy eksporcie -->
 <div id="dlg-suppressors" class="dlg-bg">
-  <div class="dlg-box wide">
+  <!-- width:660px — stopka 5 przyciskow (Anuluj/Kopiuj/MD/Kontynuuj/Napraw) ≈ 604px content
+       (pomiar empiryczny F0 Arc 29, najdluzsze etykiety sciezki .dat) + padding 2×16px + zapas;
+       max-width:90vw z .dlg-box chroni mobile. Przy 500px skrajne przyciski wyszlyby poza stope
+       (.dlg-ftr jest nowrap — decyzja Arc 15). -->
+  <div class="dlg-box wide" style="width:660px">
     <div class="dlg-hdr">
       <div class="dlg-icon">⚑</div>
       <div class="dlg-hdr-text">
@@ -3708,9 +3712,11 @@
       <div class="dlg-info">Auto-naprawa: redundantne proste custom lines zostaną usunięte, a przy realnych krzywych po stronie docelowej dodana zostanie pusta custom line, która ukrywa zdublowaną domyślną linię. Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
     </div>
     <div class="dlg-ftr">
-      <button class="dlg-cancel" onclick="closeDialog('dlg-suppressors')">Anuluj eksport</button>
-      <button style="border-color:#886020;color:#ffcc44" onclick="closeDialog('dlg-suppressors')">Eksportuj mimo to</button>
-      <button class="btn-primary" onclick="closeDialog('dlg-suppressors')">Napraw i eksportuj</button>
+      <button class="dlg-cancel" id="supp-cancel" onclick="closeDialog('dlg-suppressors')">Anuluj eksport</button>
+      <button id="supp-copy" title="Kopiuje raport podwójnych linii (Markdown) do schowka">📋 Kopiuj</button>
+      <button id="supp-md" title="Zapisuje raport podwójnych linii do pliku .md">⬇ MD</button>
+      <button id="supp-skip" style="border-color:#886020;color:#ffcc44" onclick="closeDialog('dlg-suppressors')">Eksportuj mimo to</button>
+      <button id="supp-fix" class="btn-primary" onclick="closeDialog('dlg-suppressors')">Napraw i eksportuj</button>
     </div>
   </div>
 </div>
@@ -3735,8 +3741,10 @@
       <div class="dlg-info">Auto-naprawa: redundantne proste custom lines zostaną usunięte, a przy realnych krzywych po stronie docelowej dodana zostanie pusta custom line, która ukrywa zdublowaną domyślną linię. Mapa działa poprawnie i bez naprawy — to zmiana czysto kosmetyczna.</div>
     </div>
     <div class="dlg-ftr">
-      <button class="dlg-cancel" onclick="closeDialog('dlg-suppressors-manual')">Zamknij</button>
-      <button class="btn-primary" onclick="closeDialog('dlg-suppressors-manual')">Napraw automatycznie</button>
+      <button class="dlg-cancel" id="suppm-cancel" onclick="closeDialog('dlg-suppressors-manual')">Zamknij</button>
+      <button id="suppm-copy" title="Kopiuje raport podwójnych linii (Markdown) do schowka">📋 Kopiuj</button>
+      <button id="suppm-md" title="Zapisuje raport podwójnych linii do pliku .md">⬇ MD</button>
+      <button class="btn-primary" id="suppm-fix" onclick="closeDialog('dlg-suppressors-manual')">Napraw automatycznie</button>
     </div>
   </div>
 </div>
@@ -6709,12 +6717,13 @@ async function loadArkmap(text, filename) {
 
   const valRes  = validate(map);
   const chkRes  = verifyChecksums(map);
+  const suppMissing = checkSuppressorsInMap(map);   // Arc 29: podwójne linie — ostrzeżenie przy loadzie (non-fatal)
   const isFatal = !valRes.ok && valRes.errors.some(e => e.path === 'format' || e.path === 'version');
   const hasWarnings = (valRes.warnings || []).length > 0;
-  const hasIssues = !valRes.ok || hasWarnings || (chkRes.present && !chkRes.ok);
+  const hasIssues = !valRes.ok || hasWarnings || (chkRes.present && !chkRes.ok) || suppMissing.length > 0;
 
   if (hasIssues) {
-    const confirmed = await showValDialog(valRes, chkRes, filename, isFatal);
+    const confirmed = await showValDialog(valRes, chkRes, filename, isFatal, suppMissing);
     if (!confirmed) return;
   }
 
@@ -6722,7 +6731,7 @@ async function loadArkmap(text, filename) {
   state._pendingComputed = chkRes.computed || null;  // v4: sumy już policzone przez verify — baseInfo je reużyje
   applyMap(map);
   const label = chkRes.present ? (chkRes.ok ? ' [✓ suma kontrolna]' : ' [⚠ suma kontrolna]') : '';
-  const allOk = valRes.ok && !hasWarnings && (!chkRes.present || chkRes.ok);
+  const allOk = valRes.ok && !hasWarnings && (!chkRes.present || chkRes.ok) && suppMissing.length === 0;
   toast((allOk ? '✓' : '⚠') + ' Wczytano: ' + (filename || 'plik') + fmtSz(text.length) + ' [.arkmap]' + label);
 }
 
@@ -9970,6 +9979,37 @@ function saveDat() {
   _performDatExport();
 }
 
+// ── Raport podwójnych linii (Arc 29 — reguła N3: każda lista diagnostyczna ma eksport) ─
+// _suppLine: jeden format linii dla val-modalu, raportu val-modalu i raportu dialogow.
+function _suppLine(m) {
+  return 'Pokój #' + m.roomA + ' (dir=' + m.dir + ' → #' + m.roomB + '): podwójna linia, domknięcie w #' + m.roomB + ' dir=' + m.oppDir;
+}
+// _suppSort: deterministyczny porządek raportu — numerycznie po roomA, potem dir.
+function _suppSort(missing) {
+  return (missing || []).slice().sort((a, b) =>
+    (a.roomA === b.roomA) ? String(a.dir).localeCompare(String(b.dir)) : (a.roomA < b.roomA ? -1 : 1));
+}
+// _suppReportText: PEŁNA lista (UI ucina do 20 — raport nigdy), wspolny builder.
+function _suppReportText(missing) {
+  const supp = _suppSort(missing);
+  return buildDiagnosticsReport({
+    title: 'Raport podwójnych linii wyjść',
+    filename: state.filename || undefined,
+    sections: [
+      { title: 'Informacja', lines: [
+        'Podwójne linie dotyczą tylko wyglądu — mapa działa poprawnie, brak wpływu na rozgrywkę.',
+        'Auto-naprawa (przycisk „Napraw"): redundantne proste custom lines zostaną usunięte,',
+        'przy realnych krzywych po stronie docelowej zostanie dodana pusta custom line.',
+      ] },
+      { title: 'Podwójne linie (' + supp.length + ')', lines: supp.map(_suppLine) },
+    ],
+  });
+}
+function _suppCopyReport(missing) { _copyReportToClipboard(_suppReportText(missing)); }
+function _suppDownloadMd(missing) {
+  saveWithDialog('raport-podwojne-linie-' + _reportMapName() + '-' + _reportTs() + '.md', 'text/markdown', () => _suppReportText(missing));
+}
+
 // Otwiera dlg-suppressors z dynamiczną treścią — reużywany przez .dat i .arkmap
 function _openSuppressorsDialog(missing, opts) {
   const dlg = document.getElementById('dlg-suppressors');
@@ -9988,15 +10028,22 @@ function _openSuppressorsDialog(missing, opts) {
       if (info) body.insertBefore(list, info); else body.appendChild(list);
     }
     list.innerHTML = missing.slice(0, 20).map(m =>
-      `<div class="supp-item">⚠ <span>Pokój #${m.roomA}</span> (dir=${m.dir} → #${m.roomB}): podwójna linia, domknięcie w #${m.roomB} dir=${m.oppDir}</div>`
+      `<div class="supp-item">⚠ <span>Pokój #${escHtml(String(m.roomA))}</span> (dir=${escHtml(m.dir)} → #${escHtml(String(m.roomB))}): podwójna linia, domknięcie w #${escHtml(String(m.roomB))} dir=${escHtml(m.oppDir)}</div>`
     ).join('') + (missing.length > 20 ? `<div class="supp-item">… i ${missing.length-20} więcej</div>` : '');
   }
 
-  // Wire przyciski z dynamicznymi etykietami i akcjami
-  const [cancelBtn, skipBtn, fixBtn] = dlg.querySelectorAll('.dlg-ftr button');
+  // Wire przyciski z dynamicznymi etykietami i akcjami — po id (lekcja Arc 9: btn-lde-*;
+  // wiring po pozycji w stopce lamie sie przy dodaniu przyciskow eksportu — Arc 29)
+  const cancelBtn = document.getElementById('supp-cancel');
+  const skipBtn   = document.getElementById('supp-skip');
+  const fixBtn    = document.getElementById('supp-fix');
+  const copyBtn   = document.getElementById('supp-copy');
+  const mdBtn     = document.getElementById('supp-md');
   if (cancelBtn) { cancelBtn.textContent = opts.cancelLabel || 'Anuluj';       cancelBtn.onclick = () => closeDialog('dlg-suppressors'); }
   if (skipBtn)   { skipBtn.textContent   = opts.skipLabel   || 'Kontynuuj';    skipBtn.onclick   = () => { closeDialog('dlg-suppressors'); if (opts.skipAction) opts.skipAction(); }; }
   if (fixBtn)    { fixBtn.textContent    = opts.fixLabel    || 'Napraw';       fixBtn.onclick    = () => { autoFixSuppressors(missing); closeDialog('dlg-suppressors'); if (opts.fixAction) opts.fixAction(); }; }
+  if (copyBtn)   { copyBtn.onclick = () => _suppCopyReport(missing); }
+  if (mdBtn)     { mdBtn.onclick   = () => _suppDownloadMd(missing); }
 
   openDialog('dlg-suppressors');
 }
@@ -10008,14 +10055,15 @@ async function loadDat(file) {
     const arkmap = datToArkmap(buf);
     const res    = validate(arkmap);
     const hasWarnings = (res.warnings || []).length > 0;
-    if (!res.ok || hasWarnings) {
+    const suppMissing = checkSuppressorsInMap(arkmap);   // Arc 29: podwójne linie przy loadzie
+    if (!res.ok || hasWarnings || suppMissing.length > 0) {
       // DAT→ARKMAP nie powinien dawać błędów — jeśli daje, pokaż dialog
-      const confirmed = await showValDialog(res, { present: false, ok: true }, file.name, false);
+      const confirmed = await showValDialog(res, { present: false, ok: true }, file.name, false, suppMissing);
       if (!confirmed) return;
     }
     state.filename = file.name;
     applyMap(arkmap);
-    const allClean = res.ok && !hasWarnings;
+    const allClean = res.ok && !hasWarnings && suppMissing.length === 0;
     toast((allClean ? '✓' : '⚠') + ' Wczytano: ' + file.name + fmtSz(file.size) + ' [Mudlet .dat]');
   } catch (e) {
     toast('✗ Import .dat — błąd: ' + e.message, true);
@@ -10219,9 +10267,10 @@ async function olLoadDat() {
     const arkmap = datToArkmap(buf.buffer);
     const r = validate(arkmap);
     const hasWarnings = (r.warnings || []).length > 0;
-    if (!r.ok || hasWarnings) {
+    const suppMissing = checkSuppressorsInMap(arkmap);   // Arc 29: podwójne linie przy loadzie
+    if (!r.ok || hasWarnings || suppMissing.length > 0) {
       closeOnlineConfirm();
-      const confirmed = await showValDialog(r, { present: false, ok: true }, 'map_master3.dat', !r.ok);
+      const confirmed = await showValDialog(r, { present: false, ok: true }, 'map_master3.dat', !r.ok, suppMissing);
       if (!confirmed) return;
     }
     if (!arkmap.meta) arkmap.meta = {};
@@ -10230,7 +10279,7 @@ async function olLoadDat() {
     if (olIndex && olIndex.revision) arkmap.meta.user_data.revision = olIndex.revision;
     state.filename = '🌐 online · map_master3.dat';
     applyMap(arkmap);
-    const allClean = r.ok && !hasWarnings;
+    const allClean = r.ok && !hasWarnings && suppMissing.length === 0;
     toast((allClean ? '✓' : '⚠') + ' Online: map_master3.dat' + fmtSz(buf.length) + ' [Mudlet .dat]');
     closeOnlineConfirm();
   } catch(e) {
@@ -12695,7 +12744,7 @@ resize();
 // ─── JEDNOLITY RAPORT DIAGNOSTYCZNY (Markdown) ──────────────────────────────
 // Zasada projektowa: kazda lista diagnostyczna w aplikacji ma eksport —
 // „Kopiuj do schowka" + „Zapisz jako .md" (walidacja pliku, sumy kontrolne,
-// walidacja kierunkow, recenzja kalki). Jeden builder dla wszystkich powierzchni.
+// walidacja kierunkow, recenzja kalki, podwojne linie). Jeden builder dla wszystkich powierzchni.
 // Funkcja czysta: to samo wejscie → ten sam tekst; jedyna niedeterministyczna
 // linia to data ISO w naglowku. Kolejnosc sekcji ustala wywolujacy.
 function _reportMapName() {
@@ -12726,7 +12775,7 @@ function _copyReportToClipboard(text) {
     .catch(() => toast('⚠ Nie udało się skopiować do schowka', true));
 }
 // Pelne listy (bez obciec widoku dialogu), deterministyczna kolejnosc.
-function _valReportSections(valRes, chkRes) {
+function _valReportSections(valRes, chkRes, suppMissing) {
   const errs  = (valRes.errors   || []).map(e => e.path + ': ' + e.msg).sort();
   const warns = (valRes.warnings || []).map(e => e.path + ': ' + e.msg).sort();
   const cl = [];
@@ -12746,10 +12795,12 @@ function _valReportSections(valRes, chkRes) {
     if ((chkRes.extraRooms || []).length) cl.push('Sieroty w sumach pokoi (' + chkRes.extraRooms.length + '): ' + chkRes.extraRooms.join(', '));
     if ((chkRes.extraAreas || []).length) cl.push('Sieroty w sumach obszarów (' + chkRes.extraAreas.length + '): ' + chkRes.extraAreas.join(', '));
   }
+  const supp = _suppSort(suppMissing);   // Arc 29: 4. sekcja raportu — zawsze obecna
   return [
     { title: 'Błędy walidacji (' + errs.length + ')',   lines: errs },
     { title: 'Ostrzeżenia walidacji (' + warns.length + ')', lines: warns },
     { title: 'Sumy kontrolne', lines: cl },
+    { title: 'Podwójne linie (' + supp.length + ')', lines: supp.map(_suppLine) },
   ];
 }
 
@@ -12775,7 +12826,7 @@ function _valReportSections(valRes, chkRes) {
     return buildDiagnosticsReport({
       title: 'Raport diagnostyczny pliku',
       filename: _curValArgs.filename,
-      sections: _valReportSections(_curValArgs.valRes, _curValArgs.chkRes),
+      sections: _valReportSections(_curValArgs.valRes, _curValArgs.chkRes, _curValArgs.suppMissing),
     });
   }
   if (btnCopy) btnCopy.addEventListener('click', (e) => { e.stopPropagation(); _copyReportToClipboard(_currentValReport()); });
@@ -12796,10 +12847,10 @@ function _valReportSections(valRes, chkRes) {
   overlay  .addEventListener('click', (e) => { if (e.target === overlay) closeModal(false); });
   document .addEventListener('keydown', (e) => { if (e.key === 'Escape' && overlay.classList.contains('open')) { closeModal(false); e.stopImmediatePropagation(); } });
 
-  window.showValDialog = function(valRes, chkRes, filename, isFatal) {
+  window.showValDialog = function(valRes, chkRes, filename, isFatal, suppMissing) {
     return new Promise(resolve => {
       _resolve = resolve;
-      _curValArgs = { valRes, chkRes, filename: filename || '' };
+      _curValArgs = { valRes, chkRes, filename: filename || '', suppMissing: suppMissing || null };
       body.innerHTML = '';
 
       // Nagłówek
@@ -12836,6 +12887,21 @@ function _valReportSections(valRes, chkRes) {
         const shown = valRes.warnings.slice(0, 20);
         list.textContent = shown.map(e => e.path + ': ' + e.msg).join('\n');
         if (valRes.warnings.length > 20) list.textContent += '\n… i ' + (valRes.warnings.length - 20) + ' więcej';
+        sec.appendChild(list);
+        body.appendChild(sec);
+      }
+
+      // Sekcja: podwójne linie (Arc 29) — INFORMACYJNA, nigdy nie blokuje loadu
+      if (suppMissing && suppMissing.length) {
+        const sec = document.createElement('div');
+        const t = document.createElement('div'); t.className = 'val-section-title';
+        t.style.color = '#e8a020';
+        t.textContent = 'PODWÓJNE LINIE — ' + suppMissing.length + ' — dotyczy tylko wyglądu, mapa działa poprawnie';
+        sec.appendChild(t);
+        const list = document.createElement('div'); list.className = 'val-warn-list';
+        const supp = _suppSort(suppMissing);
+        list.textContent = supp.slice(0, 20).map(_suppLine).join('\n');
+        if (supp.length > 20) list.textContent += '\n… i ' + (supp.length - 20) + ' więcej';
         sec.appendChild(list);
         body.appendChild(sec);
       }
@@ -13669,7 +13735,7 @@ function _valReportSections(valRes, chkRes) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.45.1';
+const APP_VERSION = 'v1.45.2';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -17951,10 +18017,12 @@ function commitSuppressor(dir) {
   toast(`✓ Pusta custom line dodana: ${dir}`);
 }
 
-// ── checkSuppressors() — pełny algorytm (Pass 68, S8, checkpoint linia 1213) ─
-function checkSuppressors() {
+// ── _findMissingSuppressors(roomById, roomArea) — pełny algorytm (Pass 68, S8, checkpoint linia 1213) ─
+// Wspolny rdzen detekcji (Arc 29): jeden algorytm dla stanu aplikacji (edycja/zapis —
+// wrapper checkSuppressors) i dla sparsowanej mapy przy loadzie (checkSuppressorsInMap).
+function _findMissingSuppressors(roomById, roomArea) {
   const missing = [];
-  for (const A of Object.values(state.roomById)) {
+  for (const A of Object.values(roomById)) {
     for (const [dir, cl] of Object.entries(A.custom_lines || {})) {
       if (!Array.isArray(cl.points)) continue;   // null-safety — pomiń zepsute wpisy (nie-tablica)
       if (cl.points.length === 0) continue;      // A jest suppresorem — skip
@@ -17962,9 +18030,9 @@ function checkSuppressors() {
       const targetId = A.exits?.[dir];            // tylko exits[], nie special_exits
       if (targetId === undefined) continue;        // orphan CL — skip
       // audyt T4/Q5: martwy guard `targetId === -1` usuniety — model nie trzyma -1 (stuby sa w room.stubs)
-      const B = state.roomById[targetId];
+      const B = roomById[targetId];
       if (!B) continue;                            // target nie istnieje — skip
-      if (state.roomArea[A.id] !== state.roomArea[B.id]) continue; // cross-area — skip
+      if (roomArea[A.id] !== roomArea[B.id]) continue; // cross-area — skip
       if (A.z !== B.z) continue;                   // cross-Z → drugi pokój nierenderowany na tym poziomie, brak podwójnej linii
       const opp = OPPOSITE[dir];
       if (!opp) continue;                          // nieznany kierunek — skip
@@ -17990,6 +18058,29 @@ function checkSuppressors() {
     }
   }
   return missing;
+}
+// checkSuppressors() — stan aplikacji (edycja / bramka zapisu / przycisk walidacji).
+function checkSuppressors() {
+  return _findMissingSuppressors(state.roomById, state.roomArea);
+}
+// checkSuppressorsInMap — wariant dla sparsowanej mapy PRZED applyMap (val-modal
+// przy loadzie, Arc 29). Read-only: buduje lekkie indeksy ad hoc i NIGDY nie mutuje
+// mapy (obiekt idzie potem do applyMap). NIGDY nie rzuca — malformed pokoje pomija,
+// load nie moze sie wywrocic przez ten check.
+function checkSuppressorsInMap(map) {
+  try {
+    const roomById = {}, roomArea = {};
+    const areas = (map && Array.isArray(map.areas)) ? map.areas : [];
+    for (const area of areas) {
+      if (!area || !Array.isArray(area.rooms)) continue;
+      for (const r of area.rooms) {
+        if (!r || r.id === undefined || r.id === null) continue;
+        roomById[r.id] = r;
+        roomArea[r.id] = area.id;
+      }
+    }
+    return _findMissingSuppressors(roomById, roomArea);
+  } catch (e) { return []; }
 }
 
 // ── autoFixSuppressors(missing) — auto-naprawa suppressorów z undo (Pass 68, S8) ─
@@ -18065,14 +18156,18 @@ function openCheckSuppressors() {
       let list = body.querySelector('.supp-list');
       if (!list) { list = document.createElement('div'); list.className = 'supp-list'; body.insertBefore(list, body.querySelector('.dlg-info')); }
       list.innerHTML = missing.slice(0, 20).map(m =>
-        `<div class="supp-item">⚠ <span>Pokój #${m.roomA}</span> (dir=${m.dir} → #${m.roomB}): podwójna linia, domknięcie w #${m.roomB} dir=${m.oppDir}</div>`
+        `<div class="supp-item">⚠ <span>Pokój #${escHtml(String(m.roomA))}</span> (dir=${escHtml(m.dir)} → #${escHtml(String(m.roomB))}): podwójna linia, domknięcie w #${escHtml(String(m.roomB))} dir=${escHtml(m.oppDir)}</div>`
       ).join('') + (missing.length > 20 ? `<div class="supp-item">… i ${missing.length-20} więcej</div>` : '');
     }
-    // Wire "Napraw automatycznie" button
-    const fixBtn = dlg.querySelector('.btn-primary');
+    // Wire przyciski — po id (jak w dlg-suppressors)
+    const fixBtn = document.getElementById('suppm-fix');
     if (fixBtn) {
       fixBtn.onclick = () => { autoFixSuppressors(missing); closeDialog('dlg-suppressors-manual'); };
     }
+    const copyBtn = document.getElementById('suppm-copy');
+    if (copyBtn) copyBtn.onclick = () => _suppCopyReport(missing);
+    const mdBtn = document.getElementById('suppm-md');
+    if (mdBtn) mdBtn.onclick = () => _suppDownloadMd(missing);
   }
   openDialog('dlg-suppressors-manual');
 }

@@ -3,7 +3,7 @@
 set -e
 cd "$(dirname "$0")/.."
 FAILED=0
-for t in tests/a12a14_undo_core.js tests/a13_delete_area.js tests/a7_readbuffer.js tests/a9_pixmap.js tests/dir_filter.js tests/transport.js tests/share_link.js tests/planner_ui.js tests/sync_map.js tests/dir_validation.js tests/transports_sync.js tests/converters_crc.js tests/delta.js tests/ui_strings.js tests/ci_workflow.js tests/tier2_state.js tests/tier3_format.js tests/tier4_hardening.js tests/tier5_audit.js tests/tier6_ux.js tests/diff_kalka.js tests/pwa.js tests/xss_sinks.js tests/malformed_dat.js tests/validate_full.js tests/universal_colors.js tests/checksums_v4.js tests/report_export.js tests/checksums/xxh3_golden.js tests/save_dialogs.js tests/fix_batch_v1445.js; do
+for t in tests/a12a14_undo_core.js tests/a13_delete_area.js tests/a7_readbuffer.js tests/a9_pixmap.js tests/dir_filter.js tests/transport.js tests/share_link.js tests/planner_ui.js tests/sync_map.js tests/dir_validation.js tests/transports_sync.js tests/converters_crc.js tests/delta.js tests/ui_strings.js tests/ci_workflow.js tests/tier2_state.js tests/tier3_format.js tests/tier4_hardening.js tests/tier5_audit.js tests/tier6_ux.js tests/diff_kalka.js tests/pwa.js tests/xss_sinks.js tests/malformed_dat.js tests/validate_full.js tests/universal_colors.js tests/checksums_v4.js tests/report_export.js tests/checksums/xxh3_golden.js tests/save_dialogs.js tests/fix_batch_v1445.js tests/suppressors_load.js; do
   echo "═══ $t ═══"
   node "$t" || FAILED=1
   echo
@@ -11,7 +11,7 @@ done
 # Testy empiryczne .arkdelta (prawdziwa przegladarka headless + pelna aplikacja) — wymagany Chromium.
 if [ -n "${CHROMIUM_BIN:-}" ] || command -v chromium >/dev/null 2>&1; then
   echo "═══ tests/empirical.sh ═══"
-  ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13 E14 E16 E17 E18 E19 E20 E21" ARKTEST_BUDGET=300000 ARKTEST_TIMEOUT=420 bash tests/empirical.sh || FAILED=1
+  ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13 E14 E16 E17 E18 E19 E20 E21 E22" ARKTEST_BUDGET=300000 ARKTEST_TIMEOUT=420 bash tests/empirical.sh || FAILED=1
   echo
   # E15 dedykowane (PWA/service worker): jedyna grupa czekajaca na REALNY cykl zycia SW,
   # ktory pod virtual-time-budget potrafi zaglodzic na obciazonym hoscie (lekcja Arc 12 +

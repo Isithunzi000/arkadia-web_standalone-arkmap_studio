@@ -118,6 +118,15 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
       sel + ': flex-wrap:wrap (siatka — przelew lamie sie do wiersza zamiast obcinac)');
   }
 
+  // Arc 29: dlg-suppressors poszerzony pod 5 przyciskow stopki (eksport raportu, regula N3).
+  // Pomiar F0: ~604px content przy najdluzszych etykietach sciezki .dat (500px = przelew
+  // stopki nowrap). Repro empiryczne: E22.supp-geom. max-width:90vw klasy chroni mobile.
+  {
+    const box = HTML.slice(HTML.indexOf('id="dlg-suppressors"'), HTML.indexOf('id="dlg-suppressors"') + 700);
+    ok(box.includes('class="dlg-box wide" style="width:660px"'),
+      'B16: dlg-suppressors width:660px (5 przyciskow stopki; 500px = przelew)');
+  }
+
 }
 
 // ═══ Sekcja C: #18 — bramka potwierdzenia importu trasy ═══
@@ -214,7 +223,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.45.1';"), 'V1: pin APP_VERSION v1.45.1');
+ok(HTML.includes("const APP_VERSION = 'v1.45.2';"), 'V1: pin APP_VERSION v1.45.2');
 
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);

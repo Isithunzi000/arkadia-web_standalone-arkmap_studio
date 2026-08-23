@@ -1,5 +1,6 @@
 // Harness — save_dialogs.js: dialogi zapisu (saveWithDialog) + smart-nazwy + checkSuppressors (v1.44.5).
-// Sekcja A: checkSuppressors — macierz 16 przypadkow (ekstrakcja verbatim, mock state).
+// Sekcja A: checkSuppressors — macierz 16 przypadkow (ekstrakcja verbatim rdzenia
+//           _findMissingSuppressors + cienkiego wrappera, mock state; refaktor Arc 29).
 // Sekcja B: piny strukturalne — 7 sciezek zapisu przez saveWithDialog, wpisy acceptMap,
 //           kotwice smart-nazw, zero golych download( poza helperem, brak triggerDownload.
 // Sekcja C: pin APP_VERSION.
@@ -22,7 +23,8 @@ function extract(src, anchor) {
   }
   throw new Error('niezbalansowane klamry: ' + anchor);
 }
-for (const a of ['const OPPOSITE = {', 'function checkSuppressors() {',
+for (const a of ['const OPPOSITE = {', 'function _findMissingSuppressors(roomById, roomArea) {',
+                 'function checkSuppressors() {',
                  'async function saveWithDialog(defaultName, mimeType, dataFn) {',
                  'function kalkaSave() {', 'function saveDelta() {', 'function saveDeltaRemainder() {',
                  'function finalize(canvas, fmt, basename) {', 'function vdDownloadMd(){',
@@ -35,6 +37,7 @@ for (const a of ['const OPPOSITE = {', 'function checkSuppressors() {',
 console.log('— Sekcja A: checkSuppressors —');
 const codeA =
   extract(HTML, 'const OPPOSITE = {') + '\n' +
+  extract(HTML, 'function _findMissingSuppressors(roomById, roomArea) {') + '\n' +
   extract(HTML, 'function checkSuppressors() {') + '\n' +
   'return { checkSuppressors };';
 
@@ -219,7 +222,7 @@ console.log('— Sekcja B: piny strukturalne —');
 
 // ═══ Sekcja C — pin wersji ═══
 console.log('— Sekcja C: pin wersji —');
-ok(HTML.includes("const APP_VERSION = 'v1.45.1';"), 'C1 APP_VERSION = v1.45.1');
+ok(HTML.includes("const APP_VERSION = 'v1.45.2';"), 'C1 APP_VERSION = v1.45.2');
 
 console.log(`\n═══ save_dialogs.js: PASS ${pass} / FAIL ${fail} ═══`);
 process.exit(fail ? 1 : 0);

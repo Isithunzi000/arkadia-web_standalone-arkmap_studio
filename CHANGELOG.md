@@ -2,6 +2,40 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.45.2 — walidacja podwojnych linii przy loadzie + eksport raportow (Arc 22)
+
+Dwa watki ze zgloszenia uzytkownika:
+
+- Load: checkSuppressors nie byl wolany przy wczytywaniu — val-modal nie
+  pokazywal podwojnych linii (byly widoczne dopiero z przycisku w edycji
+  albo przy zapisie). Teraz wszystkie 3 sciezki loadu (.arkmap i .dat,
+  z dysku i online) licza podwojne linie na sparsowanej mapie PRZED
+  applyMap (checkSuppressorsInMap: read-only, no-throw, guardy malformed)
+  i val-modal pokazuje je jako 4. sekcje „Podwojne linie" — ostrzezenie
+  informacyjne, NIGDY nie blokuje wczytania; sekcja wchodzi tez do
+  raportu diagnostycznego (Kopiuj / Zapisz .md). Toast sukcesu loadu
+  wymaga czystej listy (inaczej ⚠).
+- Eksport (regula N3 z v1.45.0 objela te powierzchnie): oba dialogi
+  „Podwojne linie wyjscia" (bramka zapisu i walidator z toolbaru) maja
+  przyciski 📋 Kopiuj i ⬇ MD — raport przez buildDiagnosticsReport
+  z PELNA lista (widok ucina do 20), plik raport-podwojne-linie-*.md.
+- Refaktor: wspolny rdzen _findMissingSuppressors(roomById, roomArea) —
+  jeden algorytm dla stanu (checkSuppressors) i sparsowanej mapy
+  (checkSuppressorsInMap); paritet pinowany testami.
+- Wiring stopki dlg-suppressors po id (supp-*) zamiast querySelectorAll
+  po pozycji (lekcja Arc 9: dodanie przyciskow eksportu przesuneloby
+  pozycje i rozbilo dynamiczne etykiety). Lista supp-item escapowana
+  (escHtml) w obu dialogach.
+- dlg-suppressors: 500px -> 660px inline (pomiar empiryczny F0: 5
+  przyciskow ~604px content przy najdluzszych etykietach sciezki .dat;
+  stopka .dlg-ftr jest nowrap — decyzja Arc 15; max-width:90vw klasy
+  chroni mobile). dlg-suppressors-manual zostaje 500px (4 przyciski
+  mieszcza sie z zapasem).
+- Testy: nowy harness suppressors_load.js (36 asercji), report_export.js
+  rozszerzony (4. sekcja raportu, 5 powierzchni), pin B16 w tier6_ux.js,
+  scenariusze E22 (load-section, load-clean, supp-export-btns, supp-geom)
+  — repro-first 9 FAIL -> 18 PASS.
+
 ## v1.45.1 — szerokosc dialogu walidacji pod przyciski raportu (Arc 21)
 
 Zgloszenie uzytkownika: po dodaniu przyciskow raportu (v1.45.0) stopka

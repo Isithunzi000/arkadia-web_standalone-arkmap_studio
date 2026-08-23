@@ -3954,6 +3954,148 @@ scenario('E18.universal', async () => {
     A('E18.restore.legend', leg2.indexOf('Las') !== -1, 'fixture: legenda znowu z „Las"');
 });
 
+// ═══ E22: podwójne linie — sekcja przy loadzie + eksport z dialogów (v1.45.2, Arc 29) ═══
+// Repro-first: (1) checkSuppressors nie byl wolany przy loadzie — val-modal nie pokazywal
+// podwojnych linii (zgloszenie usera: te same pokoje widoczne dopiero z przycisku w edycji);
+// (2) dialogi suppressorow bez eksportu raportu (regula N3 z Arc 27); (3) dlg-suppressors
+// po dodaniu 2 przyciskow przelewa stope 500px (pomiar F0: ~604px potrzebne).
+const _E22_META = {
+  map_name: 'Supp Test',
+  symbol_font: { family: 'Sans', point_size: 12, pixel_size: 12, style_hint: 0,
+                 weight: 50, style_setting: false, underline: false,
+                 strike_out: false, fixed_pitch: false },
+  symbol_font_fudge_factor: 1, use_only_map_font: false
+};
+const _E22_SUP = {
+  format: 'arkmap', version: 1, meta: _E22_META,
+  colors: { env_colors: {}, custom_env_colors: {} },
+  areas: [{ id: 1, name: 'Obszar A', rooms: [
+    { id: 1, x: 0, y: 0, z: 0, env: 1, weight: 1,
+      exits: { e: 2 }, special_exits: {},
+      custom_lines: { e: { points: [[1, 0], [2, 1]] } },
+      exit_locks: [], exit_weights: {}, doors: {}, user_data: {} },
+    { id: 2, x: 4, y: 0, z: 0, env: 1, weight: 1,
+      exits: { w: 1 }, special_exits: {}, custom_lines: {},
+      exit_locks: [], exit_weights: {}, doors: {}, user_data: {} }
+  ] }]
+};
+const _E22_CLEAN = {
+  format: 'arkmap', version: 1, meta: _E22_META,
+  colors: { env_colors: {}, custom_env_colors: {} },
+  areas: [{ id: 1, name: 'Obszar A', rooms: [
+    { id: 1, x: 0, y: 0, z: 0, env: 1, weight: 1,
+      exits: { e: 2 }, special_exits: {}, custom_lines: {},
+      exit_locks: [], exit_weights: {}, doors: {}, user_data: {} },
+    { id: 2, x: 4, y: 0, z: 0, env: 1, weight: 1,
+      exits: { w: 1 }, special_exits: {}, custom_lines: {},
+      exit_locks: [], exit_weights: {}, doors: {}, user_data: {} }
+  ] }]
+};
+function _e22MapText(m) { return JSON.stringify(JSON.stringify(m)); }
+// Laduje mape przez realny loadArkmap; jesli val-modal stanie otwarty — klika „Zaladuj mimo to".
+function _e22Load(mapObj, fname) {
+  ex('window.__e22text = ' + _e22MapText(mapObj) + ';');
+  ex('window.__e22p = loadArkmap(window.__e22text, ' + JSON.stringify(fname) + ');'
+     + ' window.__e22p.then(function(){}, function(){});');
+  const wasOpen = ev('document.getElementById("val-modal-overlay").classList.contains("open")').val;
+  ex('if (document.getElementById("val-modal-overlay").classList.contains("open"))'
+     + ' document.getElementById("val-btn-load").click();');
+  return { pending: eva('window.__e22p'), wasOpen: wasOpen };
+}
+function _e22Geom(dlgId) {
+  return '(function(){'
+    + ' const dlg = document.getElementById(' + JSON.stringify(dlgId) + ');'
+    + ' const box = dlg.querySelector(".dlg-box");'
+    + ' const ftr = dlg.querySelector(".dlg-ftr");'
+    + ' const fr = ftr.getBoundingClientRect();'
+    + ' const padL = parseFloat(getComputedStyle(ftr).paddingLeft);'
+    + ' const padR = parseFloat(getComputedStyle(ftr).paddingRight);'
+    + ' const vis = Array.prototype.slice.call(ftr.querySelectorAll("button"))'
+    + '   .filter(function(b){ return b.getBoundingClientRect().width > 0; });'
+    + ' const out = vis.filter(function(b){ const r = b.getBoundingClientRect();'
+    + '   return r.left < fr.left + padL - 1 || r.right > fr.right - padR + 1; });'
+    + ' return JSON.stringify({ n: vis.length, out: out.length,'
+    + '   boxW: Math.round(box.getBoundingClientRect().width) });'
+    + ' })()';
+}
+
+scenario('E22.load-section', async () => {
+  ex('window.__e22text = ' + _e22MapText(_E22_SUP) + ';');
+  ex('window.__e22p = loadArkmap(window.__e22text, "supp.arkmap");'
+     + ' window.__e22p.then(function(){}, function(){});');
+  const r = JSON.parse(ev('(function(){'
+    + ' const ov = document.getElementById("val-modal-overlay");'
+    + ' const body = document.getElementById("val-modal-body").textContent;'
+    + ' return JSON.stringify({ open: ov.classList.contains("open"),'
+    + '   sec: body.indexOf("PODWÓJNE LINIE — 1") !== -1,'
+    + '   fatal: document.getElementById("val-btn-load").style.display === "none" });'
+    + ' })()').val);
+  EQ('E22.load-section.open', r.open, true,
+    'val-modal otwarty przy loadzie mimo czystej struktury (jedyny problem: podwojna linia)');
+  EQ('E22.load-section.sec', r.sec, true, 'sekcja PODWÓJNE LINIE — 1 w val-modal');
+  EQ('E22.load-section.nonfatal', r.fatal, false, 'przycisk Zaladuj mimo to widoczny (non-fatal)');
+  ex('document.getElementById("val-btn-load").click();');
+  await eva('window.__e22p');
+  EQ('E22.load-section.loaded', ev('Object.keys(state.roomById).length').val, 2,
+    'mapa zaladowana mimo ostrzezenia (load nieblokowany)');
+  EQ('E22.load-section.parity', ev('checkSuppressors().length').val, 1,
+    'stan po loadzie: checkSuppressors widzi te sama 1 podwojna linie');
+});
+
+scenario('E22.load-clean', async () => {
+  const t = _e22Load(_E22_CLEAN, 'clean.arkmap');
+  await t.pending;
+  EQ('E22.load-clean.nodlg', t.wasOpen, false, 'czysta mapa: brak val-modalu przy loadzie');
+  EQ('E22.load-clean.loaded', ev('Object.keys(state.roomById).length').val, 2,
+    'czysta mapa zaladowana');
+});
+
+scenario('E22.supp-export-btns', async () => {
+  const t = _e22Load(_E22_SUP, 'supp.arkmap');
+  await t.pending;
+  ex('openCheckSuppressors();');
+  const r = JSON.parse(ev('(function(){'
+    + ' const dlg = document.getElementById("dlg-suppressors-manual");'
+    + ' const c = document.getElementById("suppm-copy"), m = document.getElementById("suppm-md");'
+    + ' return JSON.stringify({ open: dlg.classList.contains("open"),'
+    + '   copy: !!c, md: !!m, cw: !!(c && c.onclick), mw: !!(m && m.onclick) });'
+    + ' })()').val);
+  EQ('E22.supp-btns.open', r.open, true, 'dlg-suppressors-manual otwarty (1 podwojna linia)');
+  EQ('E22.supp-btns.copy', r.copy, true, 'dlg-suppressors-manual: przycisk suppm-copy w stopce');
+  EQ('E22.supp-btns.md', r.md, true, 'dlg-suppressors-manual: przycisk suppm-md w stopce');
+  EQ('E22.supp-btns.wired', r.cw && r.mw, true, 'dlg-suppressors-manual: oba przyciski podpiete');
+  ex('closeDialog("dlg-suppressors-manual");');
+  ex('_openSuppressorsDialog(checkSuppressors(),'
+     + ' { cancelLabel: "Anuluj zapis", skipLabel: "Zapisz mimo to", fixLabel: "Napraw i zapisz" });');
+  const r2 = JSON.parse(ev('(function(){'
+    + ' const c = document.getElementById("supp-copy"), m = document.getElementById("supp-md");'
+    + ' const cancel = document.querySelector("#dlg-suppressors .dlg-cancel");'
+    + ' return JSON.stringify({ copy: !!c, md: !!m, cw: !!(c && c.onclick), mw: !!(m && m.onclick),'
+    + '   cancel: cancel ? cancel.textContent : null });'
+    + ' })()').val);
+  EQ('E22.supp-btns.gate-copy', r2.copy && r2.md, true, 'dlg-suppressors: przyciski eksportu w stopce');
+  EQ('E22.supp-btns.gate-wired', r2.cw && r2.mw, true, 'dlg-suppressors: oba przyciski podpiete');
+  EQ('E22.supp-btns.gate-labels', r2.cancel, 'Anuluj zapis',
+    'dynamiczne etykiety nietkniete (wiring po id, nie po pozycji)');
+  ex('closeDialog("dlg-suppressors");');
+});
+
+scenario('E22.supp-geom', async () => {
+  const t = _e22Load(_E22_SUP, 'supp.arkmap');
+  await t.pending;
+  ex('openCheckSuppressors();');
+  const g1 = JSON.parse(ev(_e22Geom('dlg-suppressors-manual')).val);
+  EQ('E22.geom.manual-n', g1.n, 4, 'dlg-suppressors-manual: 4 widoczne przyciski');
+  EQ('E22.geom.manual-fit', g1.out, 0, 'dlg-suppressors-manual: wszystkie przyciski w content box stopki');
+  ex('closeDialog("dlg-suppressors-manual");');
+  ex('_openSuppressorsDialog(checkSuppressors(),'
+     + ' { cancelLabel: "Anuluj eksport", skipLabel: "Eksportuj mimo to", fixLabel: "Napraw i eksportuj" });');
+  const g2 = JSON.parse(ev(_e22Geom('dlg-suppressors')).val);
+  EQ('E22.geom.gate-n', g2.n, 5, 'dlg-suppressors: 5 widocznych przyciskow (najdluzsze etykiety .dat)');
+  EQ('E22.geom.gate-fit', g2.out, 0, 'dlg-suppressors: brak przelewu stopki (inline width po F0)');
+  ex('closeDialog("dlg-suppressors");');
+});
+
 // ═══ Runner ═══
 function appReady() {
   return new Promise(res => {
