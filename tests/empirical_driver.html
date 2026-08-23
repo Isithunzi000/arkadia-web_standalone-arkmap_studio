@@ -4206,6 +4206,97 @@ scenario('E21.fileReadReject', async () => {
   ex('File.prototype.text = window.__e21orig;');
 });
 
+// ═══ GRUPA E23 — Arc 31 F1 (v1.46.0): RAF-batching + shim render-to-offscreen ═══
+// E23.raf: scheduleDraw koalescuje do 1 renderu/klatke; draw() zostaje
+// synchroniczne (kontrakt dla drivera perf i eksportu). Kontrolowana kolejka
+// RAF = determinizm (zero zaleznosci od timingu headless).
+scenario('E23.raf', async () => {
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  await loadBase('dat');
+  await eva('new Promise(function(res){ setTimeout(res, 60); })');  // dopalienie ramek z boot/applyMap
+  ex('window.__rafQ = [];'
+   + ' window.requestAnimationFrame = function(cb){ window.__rafQ.push(cb); return window.__rafQ.length; };'
+   + ' window.__draws = 0; window.__od = window.draw;'
+   + ' window.draw = function(){ window.__draws++; return window.__od.apply(this, arguments); };'
+   + ' _drawScheduled = false;');
+  ex('scheduleDraw(); scheduleDraw();');
+  EQ('E23.raf.q1', ev('window.__rafQ.length').val, 1, 'dwa scheduleDraw w klatce = 1 wpis RAF (koalescencja)');
+  EQ('E23.raf.lazy', ev('window.__draws').val, 0, 'scheduleDraw nie renderuje synchronicznie');
+  ex('window.__rafQ.splice(0).forEach(function(cb){ cb(performance.now()); });');
+  EQ('E23.raf.one', ev('window.__draws').val, 1, 'po flush dokladnie 1 render');
+  ex('scheduleDraw(); window.__rafQ.splice(0).forEach(function(cb){ cb(performance.now()); });');
+  EQ('E23.raf.two', ev('window.__draws').val, 2, 'serie: kazda klatka to co najwyzej 1 render');
+  ex('draw();');
+  EQ('E23.raf.sync', ev('window.__draws').val, 3, 'draw() bezposrednio = render natychmiastowy (kontrakt zachowany)');
+  EQ('E23.raf.rearm', ev('(function(){ var n0 = window.__rafQ.length; scheduleDraw(); return window.__rafQ.length - n0; })()').val, 1,
+     'flaga koalescencji zwalnia sie po klatce — nowe scheduleDraw doklada dokladnie 1 wpis RAF');
+  ex('window.__rafQ.splice(0); window.draw = window.__od;');
+});
+
+// E23.shim: render na offscreen przez _withRenderTarget — izolacja (glowny
+// canvas i stan bajtowo/identycznosciowo nietkniete, takze przy wyjatku),
+// tlumienie minimapek podczas shima (decyzja D2), fn zwraca wartosc.
+scenario('E23.shim', async () => {
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  await loadBase('dat');
+  await eva('new Promise(function(res){ setTimeout(res, 60); })');
+  // determinizm: wylacz warstwe etykiet (pixmapy laduja sie asynchronicznie
+  // i ich onload schedulowalby render miedzy probkami zlotego hasha)
+  ex('state.showPixmaps = false; if (!state.view) state.view = {}; state.view.mudletLabels = false; draw();');
+  const before = AEV('E23.shim.pre', ev('(function(){'
+   + ' var c = document.getElementById("cv");'
+   + ' var d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;'
+   + ' var h = 0; for (var i = 0; i < d.length; i += 997) h = (h * 31 + d[i]) >>> 0;'
+   + ' window.__mm = 0; window.__mmO = window.updateMinimap_call;'
+   + ' window.updateMinimap_call = function(){ window.__mm++; };'
+   + ' window.__wp = 0; window.__wpO = window.wpUpdateOverviewThrottled;'
+   + ' window.wpUpdateOverviewThrottled = function(){ window.__wp++; };'
+   + ' return { px: h, zoom: state.zoom, ox: state.ox, oy: state.oy, z: state.z, areaId: state.areaId };'
+   + '})()'), 'zloty hash pikseli + snapshot stanu przed shimem');
+  const shim = AEV('E23.shim.run', ev('(function(){'
+   + ' var off = document.createElement("canvas"); off.width = 400; off.height = 300;'
+   + ' var keep = { roomsZ: state.roomsZ, roomById: state.roomById, areas: state.areas,'
+   + '   env: state.map.colors.env_colors, cust: state.map.colors.custom_env_colors };'
+   + ' var r = _withRenderTarget(off, { zoom: state.zoom * 2, ox: 11, oy: -7, z: state.z, areaId: state.areaId },'
+   + '   { roomsZ: keep.roomsZ, roomById: keep.roomById, areas: keep.areas,'
+   + '     envColors: keep.env, customEnvColors: keep.cust },'
+   + '   function(){ draw(); return 42; });'
+   + ' var d2 = off.getContext("2d").getImageData(0, 0, off.width, off.height).data;'
+   + ' var nz = 0; for (var i = 3; i < d2.length; i += 101) if (d2[i] > 0) nz++;'
+   + ' return { ret: r, offPx: nz,'
+   + '   cvBack: cv === document.getElementById("cv"),'
+   + '   ctxBack: ctx === document.getElementById("cv").getContext("2d"),'
+   + '   zoomBack: state.zoom, oxBack: state.ox, oyBack: state.oy,'
+   + '   roomsZBack: state.roomsZ === keep.roomsZ, areasBack: state.areas === keep.areas,'
+   + '   envBack: state.map.colors.env_colors === keep.env, custBack: state.map.colors.custom_env_colors === keep.cust };'
+   + '})()'), 'wykonanie shima na offscreen');
+  EQ('E23.shim.ret', shim && shim.ret, 42, 'shim zwraca wynik fn');
+  A('E23.shim.offrender', shim && shim.offPx > 0, 'offscreen zawiera render (niepuste piksele: ' + (shim && shim.offPx) + ')');
+  EQ('E23.shim.cvback', shim && [shim.cvBack, shim.ctxBack], [true, true], 'cv/ctx przywrocone po shimie');
+  EQ('E23.shim.viewback', shim && [shim.zoomBack, shim.oxBack, shim.oyBack], before && [before.zoom, before.ox, before.oy],
+     'zoom/ox/oy przywrocone po shimie');
+  EQ('E23.shim.databack', shim && [shim.roomsZBack, shim.areasBack, shim.envBack, shim.custBack], [true, true, true, true],
+     'roomsZ/areas/env_colors/custom_env_colors przywrocone (identycznosc referencji)');
+  EQ('E23.shim.mm', ev('window.__mm').val, 0, 'updateMinimap_call stlumione podczas shima (D2)');
+  EQ('E23.shim.wp', ev('window.__wp').val, 0, 'wpUpdateOverviewThrottled stlumione podczas shima (D2)');
+  ex('window.updateMinimap_call = window.__mmO; window.wpUpdateOverviewThrottled = window.__wpO;');
+  const after = AEV('E23.shim.post', ev('(function(){'
+   + ' var c = document.getElementById("cv");'
+   + ' var d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;'
+   + ' var h = 0; for (var i = 0; i < d.length; i += 997) h = (h * 31 + d[i]) >>> 0;'
+   + ' return h;'
+   + '})()'), 'hash pikseli glownego canvasu po shimie');
+  EQ('E23.shim.golden', after, before && before.px, 'glowny canvas BAJTOWO nietkniety przez shim');
+  const thr = AEV('E23.shim.throw.r', ev('(function(){'
+   + ' var off2 = document.createElement("canvas"); off2.width = 100; off2.height = 100;'
+   + ' try { _withRenderTarget(off2, { zoom: 9 }, {}, function(){ throw new Error("boom"); }); }'
+   + ' catch (e) {}'
+   + ' return { zoomBack: state.zoom, cvBack: cv === document.getElementById("cv"), shimOff: _shimActive };'
+   + '})()'), 'finally po wyjatku w fn');
+  EQ('E23.shim.throw', thr && [thr.zoomBack === (before && before.zoom), thr.cvBack, thr.shimOff], [true, true, false],
+     'try/finally: stan przywrocony mimo wyjatku, _shimActive wylaczone');
+});
+
 runAll();
 </script>
 </body>

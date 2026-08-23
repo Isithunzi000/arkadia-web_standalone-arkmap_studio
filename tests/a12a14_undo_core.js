@@ -44,14 +44,14 @@ function makeCtx(code) {
   const OPPOSITE = { n:'s', s:'n', e:'w', w:'e', ne:'sw', sw:'ne', nw:'se', se:'nw', up:'down', down:'up', in:'out', out:'in' };
   const stubDoc = { getElementById: () => null };
   const fn = new Function(
-    'state', 'OPPOSITE', 'toast', 'draw', 'pushUndo', 'updateUndoRedoUI', '_syncEditSnapshot',
+    'state', 'OPPOSITE', 'toast', 'draw', 'scheduleDraw', 'pushUndo', 'updateUndoRedoUI', '_syncEditSnapshot',
     'populateEditForm', 'buildRoomsZ', 'buildAreaList', 'buildColorCache', 'wpRecalcPaths', 'wpRebuildList', 'document',
     code + '\n;return { commitAddExit: (typeof commitAddExit!=="undefined")?commitAddExit:undefined, _dispatchUndo, _dispatchRedo: (typeof _dispatchRedo!=="undefined")?_dispatchRedo:undefined };'
   );
   const api = fn(
     state, OPPOSITE,
     (msg, isErr) => toasts.push({ msg, isErr }),
-    () => {},
+    () => {}, () => {},
     (entry) => { state.undoStack.push(entry); state.dirty = true; },
     () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {},
     stubDoc

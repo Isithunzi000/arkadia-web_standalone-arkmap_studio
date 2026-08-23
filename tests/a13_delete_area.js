@@ -61,7 +61,7 @@ function makeCtx(code) {
   const toasts = [];
   const stubDoc = { getElementById: () => null };
   const fn = new Function(
-    'state', 'toast', 'draw', 'pushUndo', 'updateUndoRedoUI',
+    'state', 'toast', 'draw', 'scheduleDraw', 'pushUndo', 'updateUndoRedoUI',
     'populateEditForm', 'buildRoomsZ', 'buildAreaList', 'buildColorCache', 'wpRecalcPaths', 'wpRebuildList',
     'selectArea', 'closeAreaPanel', 'document',
     code + '\n;return { commitDeleteArea, _dispatchUndo, _dispatchRedo };'
@@ -69,7 +69,7 @@ function makeCtx(code) {
   const api = fn(
     state,
     (msg, isErr) => toasts.push({ msg, isErr }),
-    () => {},
+    () => {}, () => {},
     (entry) => { state.undoStack.push(entry); state._entryCopy = entry; state.dirty = true; },
     () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {},
     () => {}, () => {},

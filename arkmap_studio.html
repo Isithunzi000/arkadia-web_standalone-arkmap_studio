@@ -2641,7 +2641,7 @@
           <div class="rp-erow"><span class="rp-elbl">Nazwa</span><input class="rp-einput" id="rp-name" value="" oninput="this.classList.remove('invalid');if(typeof setEditDirty==='function')setEditDirty()"></div>
           <div class="rp-field-err" id="rp-name-err">Nazwa nie może być pusta</div>
           <div class="rp-erow"><span class="rp-elbl">Środowisko</span>
-            <select class="rp-eselect" id="rp-env" onchange="if(typeof setEditDirty==='function')setEditDirty();state.pendingEnv=parseInt(this.value);draw()"><!-- audyt T5/F4 (#1): pendingEnv zamiast mutacji r.env — commit/undo/Porzuc widza zmiane --><option value="1">1 — (brak)</option></select></div>
+            <select class="rp-eselect" id="rp-env" onchange="if(typeof setEditDirty==='function')setEditDirty();state.pendingEnv=parseInt(this.value);scheduleDraw()"><!-- audyt T5/F4 (#1): pendingEnv zamiast mutacji r.env — commit/undo/Porzuc widza zmiane --><option value="1">1 — (brak)</option></select></div>
           <div class="rp-erow"><span class="rp-elbl">Symbol</span><input class="rp-einput-sm" id="rp-symbol" placeholder="(pusty)" title="Symbol pokoju (dowolna długość) — np. &quot;[]&quot; dla Tablicy; na mapie czcionka dopasuje się do kwadratu" oninput="if(typeof setEditDirty==='function')setEditDirty()"></div>
           <div class="rp-erow"><span class="rp-elbl">Waga</span><input class="rp-einput-sm" type="number" value="1" id="rp-weight" oninput="this.classList.remove('invalid');if(typeof setEditDirty==='function')setEditDirty()"></div>
           <div class="rp-erow"><span class="rp-elbl">Obrys</span>
@@ -6684,13 +6684,13 @@ const state = {
 };
 
 // ─── CANVAS ──────────────────────────────────────────────────────────────────
-const cv  = document.getElementById('cv');
-const ctx = cv.getContext('2d');
+let cv  = document.getElementById('cv');   // let (nie const) — shim F1 podmienia scoped na offscreen
+let ctx = cv.getContext('2d');             // let (nie const) — shim F1 podmienia scoped na offscreen
 
 function resize() {
   cv.width  = cv.offsetWidth;
   cv.height = cv.offsetHeight;
-  draw();
+  scheduleDraw();
 }
 window.addEventListener('resize', resize);
 
@@ -7122,7 +7122,7 @@ function _doSelectArea(id, fit) {
 
   buildRoomsZ();
   if (fit) fitToView();
-  draw();
+  scheduleDraw();
   if (typeof wpUpdateOverview === 'function' && typeof wpHasAnyFilled === 'function' && wpHasAnyFilled()) wpUpdateOverview();
 }
 
@@ -7136,7 +7136,7 @@ function selectZ(z) {
   });
   buildRoomsZ();
   if (!state.editMode) fitToView();  // Pass 42: no fitToView in edit mode
-  draw();
+  scheduleDraw();
   if (typeof wpUpdateOverview === 'function' && typeof wpHasAnyFilled === 'function' && wpHasAnyFilled()) wpUpdateOverview();
 }
 
@@ -7228,12 +7228,68 @@ function _perfTick(pc, name) {
   pc.t = t;
 }
 
+// ─── RAF-BATCHING + RENDER SHIM (Arc 31 F1, v1.46.0) ────────────────────────
+// scheduleDraw(): koalescencja renderów do 1/klatkę — serie zdarzeń (drag,
+// scroll, resize, onload pixmap) dają 1 draw() na klatkę zamiast N. draw()
+// ZOSTAJE synchroniczne dla: perf drivera (trasa kamery woła W.draw wprost),
+// eksportu (odczyty pikseli) i testów — dlatego shim woła draw(), nie scheduleDraw().
+let _drawScheduled = false;
+function scheduleDraw() {
+  if (_drawScheduled) return;
+  _drawScheduled = true;
+  requestAnimationFrame(() => { _drawScheduled = false; draw(); });
+}
+
+// _withRenderTarget(canvas2, viewState, dataOverride, fn) — scoped swap z
+// try/finally: podmienia globalne cv/ctx i wskazane pola stanu, wykonuje fn
+// (zwykle draw()), po czym PRZYWRACA wszystko — także przy wyjątku.
+// Świadoma decyzja: swap zamiast refaktora sygnatur ~15 funkcji warstw
+// (zero dryfu zachowania głównej ścieżki renderu).
+// Decyzja D1 (zatwierdzona 2026-08-23): flagi widoku NIE są swapowane —
+// showGrid, view.mudletLabels, view.areaExitLabels, showPixmaps,
+// showSuppressors, canvasMode, editDraggingRoom, _paintHover zostają live,
+// żeby render przez shim dziedziczył stylistykę widoku użytkownika.
+// Nie dopisywać ich do listy swapów.
+// Decyzja D2 (zatwierdzona 2026-08-23): draw() podczas shima TŁUMI
+// updateMinimap_call() i wpUpdateOverviewThrottled() (guard w draw()) —
+// minimapki nie mogą mignąć stanem miniatury.
+let _shimActive = false;
+function _withRenderTarget(canvas2, viewState, dataOverride, fn) {
+  const savedCv = cv, savedCtx = ctx;
+  const undo = [];
+  const swap = (obj, key, val) => { undo.push([obj, key, obj[key]]); obj[key] = val; };
+  const view = viewState || {};
+  const data = dataOverride || {};
+  try {
+    cv = canvas2;
+    ctx = canvas2.getContext('2d');
+    if ('zoom' in view)   swap(state, 'zoom', view.zoom);
+    if ('ox' in view)     swap(state, 'ox', view.ox);
+    if ('oy' in view)     swap(state, 'oy', view.oy);
+    if ('z' in view)      swap(state, 'z', view.z);
+    if ('areaId' in view) swap(state, 'areaId', view.areaId);
+    if ('roomsZ' in data)   swap(state, 'roomsZ', data.roomsZ);
+    if ('roomById' in data) swap(state, 'roomById', data.roomById);
+    if ('areas' in data)    swap(state, 'areas', data.areas);
+    if (state.map && state.map.colors) {
+      if ('envColors' in data)       swap(state.map.colors, 'env_colors', data.envColors);
+      if ('customEnvColors' in data) swap(state.map.colors, 'custom_env_colors', data.customEnvColors);
+    }
+    _shimActive = true;
+    return fn();
+  } finally {
+    _shimActive = false;
+    for (let i = undo.length - 1; i >= 0; i--) { const [o, k, v] = undo[i]; o[k] = v; }
+    cv = savedCv;
+    ctx = savedCtx;
+  }
+}
+
 function draw() {
   const _pc = _perfOn() ? { t: performance.now() } : null;  // F0: null gdy flaga off — dalej same no-op ticki
   const W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
-  updateMinimap_call();
-  wpUpdateOverviewThrottled(); // minimapka planera: „jesteś tu" śledzi viewport (v1.5.40)
+  if (!_shimActive) { updateMinimap_call(); wpUpdateOverviewThrottled(); } // D2 (F1): minimapki tłumione podczas shima; planer: „jesteś tu" śledzi viewport (v1.5.40)
   ctx.fillStyle = '#0d0f12';
   ctx.fillRect(0, 0, W, H);
   if (state.showGrid) drawGrid();
@@ -7434,7 +7490,7 @@ minimapEl.addEventListener('mousedown', e => {
   if (!c) return;
   state.ox = cv.width  / 2 - c.mapX * CELL * state.zoom;
   state.oy = cv.height / 2 + c.mapY * CELL * state.zoom;  // Y flipped
-  draw();
+  scheduleDraw();
 });
 
 document.addEventListener('mousemove', e => {
@@ -7449,7 +7505,7 @@ document.addEventListener('mousemove', e => {
   if (!c) return;
   state.ox = cv.width  / 2 - c.mapX * CELL * state.zoom;
   state.oy = cv.height / 2 + c.mapY * CELL * state.zoom;  // Y flipped
-  draw();
+  scheduleDraw();
 });
 
 document.addEventListener('mouseup', () => { _mmDragging = false; });
@@ -7502,7 +7558,7 @@ function rpApplyBorder() {
     delete r.user_data['room.ui_borderThickness'];
   }
   if (typeof setEditDirty === 'function') setEditDirty();
-  draw();
+  scheduleDraw();
 }
 // ZAD7 akcja: ustaw/wyczyść flagę ukrycia pokoju w user_data
 function rpApplyHidden() {
@@ -7513,7 +7569,7 @@ function rpApplyHidden() {
   if (cb && cb.checked) r.user_data['system.fallback_hidden'] = 'true';
   else delete r.user_data['system.fallback_hidden'];
   if (typeof setEditDirty === 'function') setEditDirty();
-  draw();
+  scheduleDraw();
 }
 
 function drawRooms(rooms, rs) {
@@ -8180,7 +8236,7 @@ function _getPixmapImage(lbl, areaId) {
   const img = new Image();
   const entry = { img, loaded: false };
   _pixmapCache.set(key, entry);
-  img.onload  = () => { entry.loaded = true; if (_perfOn()) _PERF.pixmapDecodes++; draw(); };  // F0: licznik dekodowań za flagą
+  img.onload  = () => { entry.loaded = true; if (_perfOn()) _PERF.pixmapDecodes++; scheduleDraw(); };  // F0: licznik dekodowań za flagą
   img.onerror = () => { /* silent — 🖼 placeholder stays */ };
   img.src = 'data:image/png;base64,' + lbl.pixmap;
   return null;
@@ -8391,7 +8447,7 @@ cv.addEventListener('mousedown', e => {
       state.labelDragStartMapX  = mx;
       state.labelDragStartMapY  = my;
       state.dragging = false;
-      draw();
+      scheduleDraw();
       return;
     }
   }
@@ -8440,7 +8496,7 @@ cv.addEventListener('mousemove', e => {
   _clPreviewX = evX(e);
   _clPreviewY = evY(e);
   if (state.canvasMode === 'cl-drawing' && state.clPoints.length > 0) {
-    draw(); // redraw dla preview linii do kursora
+    scheduleDraw(); // redraw dla preview linii do kursora
   }
 
   // ARKDELTA M3: celownik trybu stawiania pozycji zastępczej
@@ -8459,7 +8515,7 @@ cv.addEventListener('mousemove', e => {
     const rpy = document.getElementById('rp-y');
     if (rpx) rpx.value = state.editDragCurrentX;
     if (rpy) rpy.value = state.editDragCurrentY;
-    draw();
+    scheduleDraw();
     return;
   }
 
@@ -8545,7 +8601,7 @@ cv.addEventListener('mousemove', e => {
       lbl.width  = Math.max(0.5, nw);
       lbl.height = Math.max(0.2, nh);
       lbl.x = nx; lbl.y = ny;
-      draw();
+      scheduleDraw();
     }
     return;
   }
@@ -8568,7 +8624,7 @@ cv.addEventListener('mousemove', e => {
     if (lbl) {
       lbl.x = state.labelDragOrigX + (mx - state.labelDragStartMapX);
       lbl.y = state.labelDragOrigY + (my - state.labelDragStartMapY);
-      draw();
+      scheduleDraw();
     }
     return;
   }
@@ -8578,7 +8634,7 @@ cv.addEventListener('mousemove', e => {
   state.oy += e.clientY - state.dragY;
   state.dragX = e.clientX;
   state.dragY = e.clientY;
-  draw();
+  scheduleDraw();
 });
 
 cv.addEventListener('mouseup', e => {
@@ -8619,7 +8675,7 @@ cv.addEventListener('mouseup', e => {
     state.editDragCurrentX = 0;
     state.editDragCurrentY = 0;
     cv.style.cursor = '';
-    draw();
+    scheduleDraw();
     return;
   }
 
@@ -8641,7 +8697,7 @@ cv.addEventListener('mouseup', e => {
     }
     state.labelResizing = false;
     state.labelResizeCorner = null;
-    draw();
+    scheduleDraw();
     return;
   }
 
@@ -8707,7 +8763,7 @@ document.addEventListener('mouseup', () => {
       if (rpx) rpx.value = room.x;
       if (rpy) rpy.value = room.y;
     }
-    draw();
+    scheduleDraw();
   }
   // RESIZE_LABEL commit (mouseup outside canvas)
   if (state.labelResizing && state.selectedLabel) {
@@ -8727,7 +8783,7 @@ document.addEventListener('mouseup', () => {
     }
     state.labelResizing = false;
     state.labelResizeCorner = null;
-    draw();
+    scheduleDraw();
   }
   // MOVE_LABEL commit (mouseup outside canvas)
   if (state.labelDragging && state.selectedLabel) {
@@ -8803,7 +8859,7 @@ cv.addEventListener('touchmove', e => {
       const rpy = document.getElementById('rp-y');
       if (rpx) rpx.value = state.editDragCurrentX;
       if (rpy) rpy.value = state.editDragCurrentY;
-      draw();
+      scheduleDraw();
       return;
     }
   }
@@ -8813,7 +8869,7 @@ cv.addEventListener('touchmove', e => {
     state.oy += t.clientY - state.dragY;
     state.dragX = t.clientX;
     state.dragY = t.clientY;
-    draw();
+    scheduleDraw();
   } else if (e.touches.length === 2) {
     // pinch-to-zoom
     const t1 = e.touches[0], t2 = e.touches[1];
@@ -8857,7 +8913,7 @@ cv.addEventListener('touchend', e => {
     state.editDraggingRoom = false;
     state.editDragCurrentX = 0;
     state.editDragCurrentY = 0;
-    draw();
+    scheduleDraw();
     return;
   }
   if (e.changedTouches.length === 1 && e.touches.length === 0) {
@@ -8908,7 +8964,7 @@ cv.addEventListener('wheel', e => {
   state.ox = mx - (mx - state.ox) * (nz / state.zoom);
   state.oy = my - (my - state.oy) * (nz / state.zoom);
   state.zoom = nz;
-  draw();
+  scheduleDraw();
   if (typeof syncZoomSlider === 'function') syncZoomSlider();
 }, { passive: false });
 
@@ -8975,14 +9031,14 @@ function handleClick(sx, sy) {
       state.selected = newId;
       showRoomInfo(newRoom);
       setCanvasMode('normal');
-      draw();
+      scheduleDraw();
       return;
     }
 
     case 'cl-drawing': {
       // Lewy klik = dodaj punkt. Zakończenie: Enter / prawy klik / Esc (anuluj).
       state.clPoints.push([parseFloat(mx.toFixed(4)), parseFloat(my.toFixed(4))]);
-      draw();
+      scheduleDraw();
       return;
     }
 
@@ -9002,7 +9058,7 @@ function handleClick(sx, sy) {
             state.selected = null;
             showRoomInfo(null);
           }
-          draw();
+          scheduleDraw();
         });
         return;
       }
@@ -9020,7 +9076,7 @@ function handleClick(sx, sy) {
           if (window.updateExitGrid) window.updateExitGrid(best);
         }
       }
-      draw();
+      scheduleDraw();
       return;
     }
   }
@@ -9158,7 +9214,7 @@ function commitCLDrawing() {
   state.clOriginalPoints = null;
   setCanvasMode('normal');
   if (state.selected && state.roomById[state.selected]) updateCLTab(state.roomById[state.selected]);
-  draw();
+  scheduleDraw();
 }
 
 // Double-click on cross-area arrow → jump to that area
@@ -9481,13 +9537,13 @@ rpClose.addEventListener('click', () => {
     showDirtyConfirm(() => {
       roomPanel.classList.remove('visible');
       state.selected = null;
-      draw();
+      scheduleDraw();
     });
     return;
   }
   roomPanel.classList.remove('visible');
   state.selected = null;
-  draw();
+  scheduleDraw();
 });
 
 function showRoomInfo(r) {
@@ -9694,7 +9750,7 @@ function jumpToRoom(id) {
 
   state.selected = id;
   showRoomInfo(r);
-  draw();
+  scheduleDraw();
 }
 
 // ─── SAVE ────────────────────────────────────────────────────────────────────
@@ -10828,7 +10884,7 @@ function fitRouteToView() {
     state.ox = availW / 2 - cx * CELL * state.zoom;
     state.oy = TOOLBAR_H + availH / 2 + cy * CELL * state.zoom;
     if (typeof syncZoomSlider === 'function') syncZoomSlider();
-    draw();  };
+    scheduleDraw();  };
   // audyt T2/K2: kanoniczny dirty-guard zamiast cichego discardu (wzorce: selectArea, skok do pokoju)
   if (targetAreaId !== undefined && targetAreaId !== state.areaId) {
     if (state.editMode && state.editDirty && state.selected) {
@@ -10988,7 +11044,7 @@ function wpRebuildList() {
   wpUpdateBadge();
   wpUpdateOverview();
   wpUpdateRouteCode();
-  draw();
+  scheduleDraw();
   if (typeof wpUpdatePlanningMode === 'function') wpUpdatePlanningMode();
 }
 
@@ -11547,7 +11603,7 @@ document.getElementById('wp-panel-close').addEventListener('click', () => {
   document.getElementById('btn-planer').classList.remove('active');
   document.getElementById('wp-overview').classList.toggle('visible', wpHasAnyFilled());
   wpUpdateModeBtn();
-  draw();
+  scheduleDraw();
 });
 document.getElementById('wp-clear-btn').addEventListener('click', wpClear);
 document.getElementById('wp-add-btn').addEventListener('click', wpAdd);
@@ -11743,7 +11799,7 @@ function _wpImportApply(res) {
   wpRecalcPaths();
   wpRebuildList();
   wpUpdateSummary();
-  draw();
+  scheduleDraw();
 
   // Toast z wynikiem
   if (res.invalidCount > 0) {
@@ -11779,7 +11835,7 @@ document.querySelectorAll('.wp-algo-btn[data-algo]').forEach(btn => {
     wpRecalcPaths();
     wpRebuildList();
     wpUpdateSummary();
-    draw();
+    scheduleDraw();
   });
 });
 
@@ -11797,7 +11853,7 @@ document.querySelectorAll('.wp-dir-btn').forEach(btn => {
     wpRecalcPaths();
     wpRebuildList();
     wpUpdateSummary();
-    draw();
+    scheduleDraw();
   });
 });
 
@@ -11828,7 +11884,7 @@ document.querySelectorAll('.wp-trans-btn').forEach(btn => {
     wpRecalcPaths();
     wpRebuildList();
     wpUpdateSummary();
-    draw();
+    scheduleDraw();
   });
 });
 document.querySelectorAll('.wp-trans-aggro').forEach(btn => {
@@ -11840,7 +11896,7 @@ document.querySelectorAll('.wp-trans-aggro').forEach(btn => {
     wpRecalcPaths();
     wpRebuildList();
     wpUpdateSummary();
-    draw();
+    scheduleDraw();
   });
 });
 
@@ -12150,7 +12206,7 @@ document.addEventListener('keydown', e => {
       if (next) {
         state.selected = next.id;
         showRoomInfo(next);
-        draw();
+        scheduleDraw();
       }
       return;
     }
@@ -12168,7 +12224,7 @@ document.addEventListener('keydown', e => {
       // Guard zajętości pola: strzałki zawsze blokują (Shift = krok x5, nie wymuszenie;
       // wymuszenie tylko myszką). Blocked = zero mutacji.
       _tryMoveRoomWithPolicy(room, toX, toY, { shiftHint: false });
-      draw();
+      scheduleDraw();
       return;
     }
   }
@@ -12177,15 +12233,15 @@ document.addEventListener('keydown', e => {
   const inForm = e.target.closest && e.target.closest('#room-panel, #area-panel, .dlg-box, .dlg-bg, input, textarea');
   const hasSelected = state.editMode && state.selected && state.roomById[state.selected];
   if (!inForm && !hasSelected) {
-    if (e.key === 'ArrowLeft')  { state.ox += step; draw(); }
-    if (e.key === 'ArrowRight') { state.ox -= step; draw(); }
-    if (e.key === 'ArrowUp')    { state.oy += step; draw(); }
-    if (e.key === 'ArrowDown')  { state.oy -= step; draw(); }
+    if (e.key === 'ArrowLeft')  { state.ox += step; scheduleDraw(); }
+    if (e.key === 'ArrowRight') { state.ox -= step; scheduleDraw(); }
+    if (e.key === 'ArrowUp')    { state.oy += step; scheduleDraw(); }
+    if (e.key === 'ArrowDown')  { state.oy -= step; scheduleDraw(); }
   }
 
   if (e.key === '+' || e.key === '=') { zoomAround(cv.width/2, cv.height/2, 1.2); if (typeof syncZoomSlider === 'function') syncZoomSlider(); }
   if (e.key === '-')                  { zoomAround(cv.width/2, cv.height/2, 0.83); if (typeof syncZoomSlider === 'function') syncZoomSlider(); }
-  if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey) { fitToView(); draw(); }
+  if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey) { fitToView(); scheduleDraw(); }
   if (e.ctrlKey && e.key === 'f') { e.preventDefault(); searchIn.focus(); }
 });
 
@@ -12194,7 +12250,7 @@ function zoomAround(mx, my, f) {
   state.ox = mx - (mx - state.ox) * (nz / state.zoom);
   state.oy = my - (my - state.oy) * (nz / state.zoom);
   state.zoom = nz;
-  draw();
+  scheduleDraw();
 }
 
 // ─── FILE INPUT ──────────────────────────────────────────────────────────────
@@ -12325,7 +12381,7 @@ zoomSlider.addEventListener('input', () => {
   state.oy = cy - (cy - state.oy) * (z / state.zoom);
   state.zoom = z;
   syncZoomSlider();
-  draw();
+  scheduleDraw();
 });
 
 ['msb-zoomin','msb-zoomout','msb-fit'].forEach(id => {
@@ -12338,7 +12394,7 @@ document.getElementById('msb-zoomout').addEventListener('click', function() {
   zoomAround(cv.width/2, cv.height/2, 0.77); syncZoomSlider(); this.blur();
 });
 document.getElementById('msb-fit').addEventListener('click', function() {
-  fitToView(); syncZoomSlider(); draw(); this.blur();
+  fitToView(); syncZoomSlider(); scheduleDraw(); this.blur();
 });
 
 // ─── TOAST ────────────────────────────────────────────────────────────────────
@@ -12555,7 +12611,7 @@ function saveSettings() {
 toggleGrid.addEventListener('change', () => {
   state.showGrid = toggleGrid.checked;
   saveSettings();
-  draw();
+  scheduleDraw();
 });
 
 document.getElementById('toggle-minimap').addEventListener('change', function() {
@@ -12568,14 +12624,14 @@ document.getElementById('toggle-minimap').addEventListener('change', function() 
 document.getElementById('toggle-suppressors').addEventListener('change', function() {
   state.showSuppressors = this.checked;
   saveSettings();
-  draw();
+  scheduleDraw();
 });
 
 // ── Widok: przełączniki renderu (state.view) — wspólna infra ZAD 5/7/8 ──
 function setViewOption(key, val) {
   state.view[key] = val;
   try { localStorage.setItem('arkmap-view', JSON.stringify(state.view)); } catch (e) {}
-  draw();
+  scheduleDraw();
 }
 // Pixmapy = obrazki etykiet; mają sens tylko gdy tekstowe „Etykiety Mudleta" są wyłączone.
 // Gdy etykiety ON → toggle pixmap wyszarzony i zablokowany (tryby się wykluczają).
@@ -12620,7 +12676,7 @@ function _syncPixmapDisabled() {
 document.getElementById('toggle-pixmaps').addEventListener('change', function() {
   state.showPixmaps = this.checked;
   saveSettings();
-  draw();
+  scheduleDraw();
 });
 
 // ── UI Scale slider ──
@@ -12712,7 +12768,7 @@ function resetAllDefaults() {
     const colBtn = document.getElementById('rp-collapse-btn');
     if (colBtn) { colBtn.textContent = '▲'; colBtn.title = 'Zwiń'; }
   }
-  draw();
+  scheduleDraw();
   // v1.4.58: jeśli panel walidatora jest otwarty — odśwież, by źródło pokazało „przeglądarka" i lista się przebudowała
   const _vdPanelReset = document.getElementById('validate-panel');
   if (_vdPanelReset && _vdPanelReset.classList.contains('visible') && typeof _renderVdPanel === 'function') { try { _renderVdPanel(); } catch (_) {} }
@@ -13727,7 +13783,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
         wpState.visible = false;
         wpState.planning = false;
         if (typeof wpUpdateModeBtn === 'function') wpUpdateModeBtn();
-        if (typeof draw === 'function') draw();
+        if (typeof draw === 'function') scheduleDraw();
         mobUpdateClearBtn();
       }
     });
@@ -13757,7 +13813,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.45.3';
+const APP_VERSION = 'v1.46.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -13916,7 +13972,7 @@ function exitEditMode(force) {
   updateUndoRedoUI();
   hideBanners();
   closeCtxMenu();
-  draw();
+  scheduleDraw();
   toast('Wyjście z trybu edycji');
 }
 
@@ -14632,7 +14688,7 @@ function undoAction() {
   state.redoStack.push(entry);
   state.dirty = true; state.editRev = (state.editRev || 0) + 1;  // T6-F2: licznik edycji (wyscig z async save)  // A11': undo po zapisie odjeżdża od treści pliku
   updateUndoRedoUI();
-  draw();
+  scheduleDraw();
 }
 
 function redoAction() {
@@ -14643,7 +14699,7 @@ function redoAction() {
   state.deltaLog.push(entry);  // ARKDELTA mirror
   state.dirty = true; state.editRev = (state.editRev || 0) + 1;  // T6-F2: licznik edycji (wyscig z async save)  // A11'
   updateUndoRedoUI();
-  draw();
+  scheduleDraw();
 }
 
 function undoToIndex(targetIdx) {
@@ -14657,7 +14713,7 @@ function undoToIndex(targetIdx) {
   const undone = startLen - state.undoStack.length;
   if (undone > 0) state.dirty = true; state.editRev = (state.editRev || 0) + 1;  // T6-F2: licznik edycji (wyscig z async save)  // A11'
   updateUndoRedoUI();
-  draw();
+  scheduleDraw();
   const popup = document.getElementById('changelog-popup');
   if (popup) popup.classList.remove('open');
   toast(`✓ ${plPl(undone, 'cofnięta operacja', 'cofnięte operacje', 'cofniętych operacji')}`);
@@ -14679,7 +14735,7 @@ function redoAll() {
   }
   if (n > 0) state.dirty = true; state.editRev = (state.editRev || 0) + 1;  // T6-F2: licznik edycji (wyscig z async save)  // A11'
   updateUndoRedoUI();
-  draw();
+  scheduleDraw();
   toast(`✓ ${plPl(n, 'przywrócona operacja', 'przywrócone operacje', 'przywróconych operacji')}`);
 }
 
@@ -14955,7 +15011,7 @@ function editExitFromCtx() {
   // (już jest — brak zmiany editDirty zgodnie ze specem)
 
   if (rp) rp.classList.add('visible');
-  draw();
+  scheduleDraw();
 }
 
 // ── AREA PANEL ────────────────────────────────────────────────────────────
@@ -15288,7 +15344,7 @@ function _vdClearAccepts(){
   if (!confirm('Wyczyścić wszystkie akceptacje tej przeglądarki ('+bc+')?\n\nZatwierdzenia zapisane w pliku .arkmap NIE zostaną ruszone.')) return;
   try { localStorage.removeItem('arkmap_accepted_dir_issues'); } catch(e) {}  // audyt T4/S6
   _renderVdPanel();
-  draw();
+  scheduleDraw();
   toast('✓ Wyczyszczono akceptacje przeglądarki ('+bc+')');
 }
 function _vdSyncAccUI(view){
@@ -15569,7 +15625,7 @@ function hideExitDetail() {
   document.querySelectorAll('#exits-grid .ec, #exits-extra .ec').forEach(ec => ec.classList.remove('editing'));
   state._activeExitDir = null;
   state._activeSpecialExit = null;
-  draw();
+  scheduleDraw();
 }
 
 function onExitCellClick(ec, room) {
@@ -15669,7 +15725,7 @@ function openExitDetail(room, dir, isStub) {
         else if (room.stubs?.includes(dir)) cell.classList.add('stub');
         else cell.classList.add('no');
       }
-      draw(); // live preview linii na canvasie
+      scheduleDraw(); // live preview linii na canvasie
     };
   }
   // Helper: mark grid cell as pending (yellow border) when any field changes
@@ -15722,7 +15778,7 @@ function openExitDetail(room, dir, isStub) {
 
   // Pamiętaj aktywny kierunek + odśwież canvas (highlight na mapie)
   state._activeExitDir = dir;
-  draw();
+  scheduleDraw();
 
   // Przycisk usunięcia — widoczny tylko dla istniejących exitów
   const delBtn = document.getElementById('rp-exit-delete');
@@ -15797,7 +15853,7 @@ function posLivePreview() {
   state.ox = W / 2 - nx * CELL * state.zoom;
   state.oy = H / 2 + ny * CELL * state.zoom;
   setEditDirty();
-  draw();
+  scheduleDraw();
 }
 
 // ── _syncEditSnapshot() — sync snapshot after immediate commit (BUG2 fix) ─────
@@ -15903,13 +15959,13 @@ function updateSpecialeTab(room) {
         hintEl.textContent = t ? '← ' + (t.name || 'Pokój #' + id) : (id > 0 ? '← #' + id + ' (nieznany)' : '');
       }
       setEditDirty();
-      draw(); // live preview linii na canvasie
+      scheduleDraw(); // live preview linii na canvasie
     };
     if (cmdIn)   cmdIn.oninput   = update;
     if (idIn)    idIn.oninput    = update;
     if (lockChk) lockChk.onchange= update;
     // Highlight na mapie przy focusie
-    const _setActiveSpec = () => { state._activeSpecialExit = cmdIn?.value || origCmd; draw(); };
+    const _setActiveSpec = () => { state._activeSpecialExit = cmdIn?.value || origCmd; scheduleDraw(); };
     if (cmdIn) cmdIn.onfocus = _setActiveSpec;
     if (idIn)  idIn.onfocus  = _setActiveSpec;
     if (delBtn)  delBtn.onclick  = () => {
@@ -15997,7 +16053,7 @@ function updateCLTab(room) {
         state.redoStack = [];
         updateUndoRedoUI();
         _syncEditSnapshot();
-        draw();
+        scheduleDraw();
         updateCLTab(r);
       }
     };
@@ -16056,7 +16112,7 @@ function openCLEditor(room, dir) {
       state.redoStack = [];
       updateUndoRedoUI();
       _syncEditSnapshot();
-      draw();
+      scheduleDraw();
       openCLEditor(room, dir);
     };
   });
@@ -16072,7 +16128,7 @@ function openCLEditor(room, dir) {
     state.redoStack = [];
     updateUndoRedoUI();
     _syncEditSnapshot();
-    draw();
+    scheduleDraw();
     updateCLTab(room);
   };
 
@@ -16087,7 +16143,7 @@ function openCLEditor(room, dir) {
     state.redoStack = [];
     updateUndoRedoUI();
     _syncEditSnapshot();
-    draw();
+    scheduleDraw();
   };
 }
 
@@ -16285,7 +16341,7 @@ function cancelRoomEdit() {
       const rp = document.getElementById('room-panel');
       if (rp) rp.classList.remove('visible');
       updateUndoRedoUI();
-      draw();
+      scheduleDraw();
       toast('Dodawanie pokoju anulowane');
       return;
     }
@@ -16298,7 +16354,7 @@ function cancelRoomEdit() {
     state.editSnapshot = null;
     const rp = document.getElementById('room-panel');
     if (rp) rp.classList.remove('visible');
-    draw();
+    scheduleDraw();
     return;
   }
   // Są niezatwierdzone zmiany — przywróć editSnapshot
@@ -16312,7 +16368,7 @@ function cancelRoomEdit() {
   hideDirtyConfirmIfOpen();
   const badge = document.getElementById('rp-unsaved-badge');
   if (badge) badge.style.display = 'none';
-  draw();
+  scheduleDraw();
 }
 
 // ── commitRoomEdit() — zapis pokoju z undo (Pass 60) ─────────────────────────
@@ -16628,8 +16684,8 @@ function commitRoomEdit() {
     label = `Edycja pokoju "${roomName}" (#${roomId})`;
   }
 
-  const doFn   = () => { Object.assign(state.roomById[roomId], after); draw(); };
-  const undoFn = () => { Object.assign(state.roomById[roomId], before); draw(); };
+  const doFn   = () => { Object.assign(state.roomById[roomId], after); scheduleDraw(); };
+  const undoFn = () => { Object.assign(state.roomById[roomId], before); scheduleDraw(); };
 
   pushUndo({ type: labelType, roomId, before, after, label });
   state.redoStack = [];
@@ -16639,7 +16695,7 @@ function commitRoomEdit() {
 
   const badge = document.getElementById('rp-unsaved-badge');
   if (badge) badge.style.display = 'none';
-  draw();
+  scheduleDraw();
   // Refresh panel to show updated exits/fields
   if (typeof updateExitGrid === 'function') updateExitGrid(room);
   populateEditForm(room);
@@ -16832,7 +16888,7 @@ function deleteRoom(roomId, label) {
       if (wpDirty && typeof wpRecalcPaths === 'function') { wpRecalcPaths(); if (typeof wpRebuildList === 'function') wpRebuildList(); }
     }
     state._lastWpCleared = _wpCleared;
-    draw();
+    scheduleDraw();
   };
 
   const undoFn = () => {
@@ -16864,7 +16920,7 @@ function deleteRoom(roomId, label) {
     }
     if (typeof buildRoomsZ === 'function') buildRoomsZ();
     if (typeof buildAreaList === 'function') buildAreaList();
-    draw();
+    scheduleDraw();
   };
 
   doFn();
@@ -17046,7 +17102,7 @@ function commitDeleteArea(areaId, label) {
       if (wpDirty && typeof wpRecalcPaths === 'function') { wpRecalcPaths(); if (typeof wpRebuildList === 'function') wpRebuildList(); }
     }
     state._lastWpCleared2 = _wpCleared2;
-    draw();
+    scheduleDraw();
   };
   const undoFn = () => {
     state.map.areas = state.map.areas || [];
@@ -17058,7 +17114,7 @@ function commitDeleteArea(areaId, label) {
       state.roomArea[r.id] = areaId;
     }
     if (typeof buildAreaList === 'function') buildAreaList();
-    draw();
+    scheduleDraw();
   };
 
   doFn();
@@ -17130,8 +17186,8 @@ function commitEditArea(areaId) {
   const after = JSON.parse(JSON.stringify(area));
   if (JSON.stringify(before) === JSON.stringify(after)) { toast('Brak zmian'); return; }
 
-  const doFn   = () => { const a = state.areas.get(areaId); if (a) Object.assign(a, after); buildAreaList(); draw(); };
-  const undoFn = () => { const a = state.areas.get(areaId); if (a) Object.assign(a, before); buildAreaList(); draw(); };
+  const doFn   = () => { const a = state.areas.get(areaId); if (a) Object.assign(a, after); buildAreaList(); scheduleDraw(); };
+  const undoFn = () => { const a = state.areas.get(areaId); if (a) Object.assign(a, before); buildAreaList(); scheduleDraw(); };
 
   pushUndo({ type: 'EDIT_AREA', areaId, before, after,
     label: `Edycja obszaru "${after.name}" (#${areaId})` });
@@ -17296,7 +17352,7 @@ function commitAddExit(sourceId, dir, targetId, bidirectional, customLabel) {
   if (prevSupCL) { delete src.custom_lines[dir]; if (!Object.keys(src.custom_lines).length) delete src.custom_lines; }
   if (bidirectional && opp) { tgt.exits = tgt.exits || {}; tgt.exits[opp] = sourceId; }
   if (prevOppSupCL) { delete tgt.custom_lines[opp]; if (!Object.keys(tgt.custom_lines).length) delete tgt.custom_lines; }
-  draw();
+  scheduleDraw();
 
   const label = customLabel || (bidirectional
     ? `Dodanie wyjścia ${dir} ↔ ${opp||'?'} między #${sourceId} a #${targetId}`
@@ -17326,7 +17382,7 @@ function commitDeleteExit(room, dir, label) {
   if (room.custom_lines) delete room.custom_lines[dir];
   if (room.exit_locks)   room.exit_locks = (room.exit_locks || []).filter(d => d !== dir);
   if (!snap.hasStub && room.doors) delete room.doors[dir];
-  draw();
+  scheduleDraw();
   pushUndo({ type: 'DELETE_EXIT', roomId, dir, snap,
     label: label || `Usunięcie wyjścia ${dir} z #${roomId}` });
   state.redoStack = [];
@@ -17385,8 +17441,8 @@ function commitMoveRoom(room, fromX, fromY, fromZ, toX, toY, toZ, label) {
   const roomId = room.id;
   const roomName = room.name || '#' + roomId;
 
-  const doFn   = () => { room.x = toX;   room.y = toY;   room.z = toZ;   draw(); };
-  const undoFn = () => { room.x = fromX; room.y = fromY; room.z = fromZ; draw(); };
+  const doFn   = () => { room.x = toX;   room.y = toY;   room.z = toZ;   scheduleDraw(); };
+  const undoFn = () => { room.x = fromX; room.y = fromY; room.z = fromZ; scheduleDraw(); };
 
   pushUndo({ type: 'MOVE_ROOM', roomId, fromX, fromY, fromZ, toX, toY, toZ,
     label: label || `Przesunięcie pokoju "${roomName}" (#${roomId})` });
@@ -17470,7 +17526,7 @@ function dtpClearSymbol() {
   const symIn = document.getElementById('rp-symbol');
   if (symIn) symIn.value = '';
   setEditDirty();
-  draw();
+  scheduleDraw();
   toast('✓ Symbol wyczyszczony');
 }
 
@@ -17521,7 +17577,7 @@ function _paintApplyAtScreen(sx, sy) {
   if (sw.kind === 'env')         { room.env = sw.env; }
   else if (sw.kind === 'symbol') { room.symbol = sw.symbol; if (sw.env !== undefined) room.env = sw.env; }
   else if (sw.kind === 'erase')  { delete room.symbol; }
-  draw();
+  scheduleDraw();
 }
 // Cofnij bieżące (niezatwierdzone) pociągnięcie — np. Esc
 function _paintStrokeRevert() {
@@ -17531,7 +17587,7 @@ function _paintStrokeRevert() {
     r.env = before.env;
     if (before.symbol) r.symbol = before.symbol; else delete r.symbol;
   }
-  draw();
+  scheduleDraw();
 }
 // Zatwierdź pociągnięcie → jeden batch-undo, TYLKO realnie zmienione pokoje (idempotencja)
 function _paintStrokeCommit() {
@@ -17545,19 +17601,19 @@ function _paintStrokeCommit() {
     changes.push({ roomId: id, beforeEnv: before.env, beforeSymbol: before.symbol, afterEnv, afterSymbol });
   }
   _paintStroke = null;
-  if (changes.length === 0) { draw(); return; }
+  if (changes.length === 0) { scheduleDraw(); return; }
   const n = changes.length;
   pushUndo({ type:'PAINT_BATCH', changes, label:`Malowanie „${sw ? sw.label : ''}" — ${n} ${n===1?'pokój':'pokoi'}` });
   state.redoStack = [];
   updateUndoRedoUI();
-  draw();
+  scheduleDraw();
   toast(`✓ Pomalowano ${n} ${n===1?'pokój':'pokoi'}`);
 }
 // Hover w trybie paint (poza pociągnięciem): podświetl pokój pod kursorem
 function _paintUpdateHover(sx, sy) {
   const room = _paintRoomAt(sx, sy);
   const id = room ? room.id : null;
-  if (id !== state._paintHover) { state._paintHover = id; draw(); }
+  if (id !== state._paintHover) { state._paintHover = id; scheduleDraw(); }
 }
 // Warstwa draw: obrys pokoju pod kursorem (kolor swatcha / neutralny dla gumki)
 function drawPaintHover() {
@@ -17607,7 +17663,7 @@ function setCanvasMode(mode) {
     const b = document.getElementById('paint-mode');
     if (b) b.classList.add('show');
   }
-  draw();
+  scheduleDraw();
 }
 
 function hideBanners() {
@@ -17658,7 +17714,7 @@ function addRoomAtPosition(mx, my) {
   updateUndoRedoUI();
   state.selected = newId;
   showRoomInfo(newRoom);
-  draw();
+  scheduleDraw();
 }
 
 // ── selectAndEditRoom(roomId) — ctx menu "Edytuj pokój" ───────────────────────
@@ -17668,7 +17724,7 @@ function selectAndEditRoom(roomId) {
   if (!room) return;
   state.selected = roomId;
   showRoomInfo(room);
-  draw();
+  scheduleDraw();
 }
 
 // ── deleteExitFromCtx() — ctx menu "Usuń wyjście" ────────────────────────────
@@ -17691,7 +17747,7 @@ function deleteExitFromCtx() {
     if (room.exit_weights) { delete room.exit_weights[_ctxExitDir]; if (!Object.keys(room.exit_weights).length) delete room.exit_weights; }
     pushUndo({ type: 'DELETE_SPECIAL_EXIT', roomId: room.id, snap,
       label: `Usunięcie wyjścia specjalnego „${_ctxExitDir}" z #${room.id}` });
-    state.redoStack = []; updateUndoRedoUI(); _syncEditSnapshot(); draw();
+    state.redoStack = []; updateUndoRedoUI(); _syncEditSnapshot(); scheduleDraw();
   } else {
     commitDeleteExit(room, _ctxExitDir);
   }
@@ -17703,7 +17759,7 @@ function centerViewOnMap(mx, my) {
   const W = cv.width, H = cv.height;
   state.ox = W / 2 - mx * CELL * state.zoom;
   state.oy = H / 2 + my * CELL * state.zoom;
-  draw();
+  scheduleDraw();
 }
 
 // ── openSetPositionDialog(roomId) — populate + open dlg-set-position ──────────
@@ -17767,7 +17823,7 @@ function commitSetPosition() {
     state.editSnapshot.z = newZ;
   }
   closeDialog('dlg-set-position');
-  draw();
+  scheduleDraw();
   toast(`✓ Pozycja #${roomId} → (${newX}, ${newY}, ${newZ})`);
 }
 
@@ -18026,8 +18082,8 @@ function commitSuppressor(dir) {
   room.custom_lines = room.custom_lines || {};
   const prevCL = room.custom_lines[dir] ? JSON.parse(JSON.stringify(room.custom_lines[dir])) : null;
   const newCL  = { points: [], color: [255, 0, 0] };
-  const doFn   = () => { room.custom_lines[dir] = JSON.parse(JSON.stringify(newCL)); draw(); };
-  const undoFn = () => { if (prevCL) room.custom_lines[dir] = JSON.parse(JSON.stringify(prevCL)); else delete room.custom_lines[dir]; draw(); };
+  const doFn   = () => { room.custom_lines[dir] = JSON.parse(JSON.stringify(newCL)); scheduleDraw(); };
+  const undoFn = () => { if (prevCL) room.custom_lines[dir] = JSON.parse(JSON.stringify(prevCL)); else delete room.custom_lines[dir]; scheduleDraw(); };
   doFn();
   pushUndo({ type: 'ADD_SUPPRESSOR', roomId, dir, prevCL: prevCL || undefined, hadContainer, label: `Dodanie pustej custom line dir=${dir} w pokoju "${name}" (#${roomId})` });  // audyt T4/S7
   state.redoStack = [];
@@ -18151,7 +18207,7 @@ function autoFixSuppressors(missing) {
   pushUndo({ type: 'AUTO_FIX_SUPPRESSORS', added, removed, label: `Naprawa podwójnych linii (${nDel} usun., ${nAdd} dod.)` });
   state.redoStack = [];
   updateUndoRedoUI();
-  draw();
+  scheduleDraw();
   toast(`✓ Naprawiono ${n}: usunięto ${nDel} redundantnych, dodano ${nAdd} pust${nAdd===1?'ą custom line':'ych custom lines'}.`);
 }
 
@@ -18205,7 +18261,7 @@ function gotoSelected() {
   if (state.zoom < 2.0) state.zoom = 2.5;
   state.ox = cv.width  / 2 - r.x * CELL * state.zoom;
   state.oy = cv.height / 2 + r.y * CELL * state.zoom;
-  draw();
+  scheduleDraw();
   // Flash highlight
   const cx = wx(r.x), cy = wy(r.y);
   const rs = CELL * state.zoom * 0.5;
@@ -18218,7 +18274,7 @@ function gotoSelected() {
     ctx.restore();
     alpha -= 0.05;
     if (alpha > 0) requestAnimationFrame(flash);
-    else draw();
+    else scheduleDraw();
   };
   flash();
 }
@@ -18411,7 +18467,7 @@ function saveLabelEdit() {
 
   closeDialog('dlg-label-edit');
   refreshLabelList();
-  draw();
+  scheduleDraw();
 }
 
 // ── deleteLabelFromCtx() — DELETE_LABEL bez confirmacji (K3) ─────────────────
@@ -18430,7 +18486,7 @@ function deleteLabelFromCtx() {
   state.redoStack = [];
   updateUndoRedoUI();
   refreshLabelList();
-  draw();
+  scheduleDraw();
   toast(`✓ Etykieta usunięta`);
 }
 
@@ -18529,7 +18585,7 @@ function _decWirePickers() {
     if (!state.map.colors.custom_env_colors) state.map.colors.custom_env_colors = {};
     delete state.map.colors.custom_env_colors[_decEnvId];
     buildColorCache(state.map.colors);
-    draw();
+    scheduleDraw();
     pushUndo({
       type: 'EDIT_ENV_COLOR', envId: _decEnvId,
       oldColor: oldColor, newColor: null,
@@ -18554,7 +18610,7 @@ function commitEnvColor() {
   const newColor = [r, g, b];
   state.map.colors.custom_env_colors[_decEnvId] = [...newColor];
   buildColorCache(state.map.colors);
-  draw();
+  scheduleDraw();
   pushUndo({
     type: 'EDIT_ENV_COLOR', envId: _decEnvId,
     oldColor: oldColor ? [...oldColor] : null,
@@ -20674,7 +20730,7 @@ function applyDelta(delta, onlySeq, overrides, seedSids) {
       skip('błąd wykonania: ' + err.message);
     }
   }
-  draw();
+  scheduleDraw();
   return { applied, appliedSeqs, skipped };
 }
 
@@ -21070,7 +21126,7 @@ function _deltaShowGhost(it) {
     centerViewOnMap(cx, cy);
   } else _deltaJump(it);
   _deltaCardShow(it);
-  draw();
+  scheduleDraw();
 }
 
 // M6d: Pokaż przy opach zrobionych (done) — skok + stale podświetlenie REALNEGO
@@ -21091,7 +21147,7 @@ function _deltaShowReal(it) {
   if (hl.z !== undefined && hl.z !== state.z) selectZ(hl.z);
   centerViewOnMap(hl.x, hl.y);
   _deltaRealHl.set(it.seq, hl);
-  draw();
+  scheduleDraw();
 }
 
 // ── M6c: karta szczegółów konfliktu/edycji (tabela parametr | aktualnie | w kalce) ──
@@ -21150,7 +21206,7 @@ function _deltaAutoplace(it) {
   if (!cell) { toast('Brak wolnego miejsca w promieniu 25 — użyj „Ręcznie"', true); return; }
   _deltaOverrides.set(it.seq, { x: cell.x, y: cell.y, how: 'auto' });
   _renderDeltaPanel();
-  draw();
+  scheduleDraw();
 }
 
 // Ręczna pozycja: wejście w tryb stawiania (klik na mapie; Esc / prawy = anuluj).
@@ -21165,7 +21221,7 @@ function _deltaCancelPlacing() {
   _deltaPlacing = null;
   _deltaHover = null;
   cv.style.cursor = '';
-  draw();
+  scheduleDraw();
 }
 
 // Celownik: komórka pod kursorem + czy wolna (zielony/czerwony).
@@ -21178,7 +21234,7 @@ function _deltaUpdateHover(sx, sy) {
   const free = !!ctxInfo && _deltaCellFree(ctxInfo.areaId, x, y, ctxInfo.z, R.delta, R.items, _deltaPlacing.seq, ctxInfo.roomId);
   if (!_deltaHover || _deltaHover.x !== x || _deltaHover.y !== y || _deltaHover.free !== free) {
     _deltaHover = { x, y, free };
-    draw();
+    scheduleDraw();
   }
   cv.style.cursor = 'crosshair';
 }
@@ -21476,7 +21532,7 @@ function _renderDeltaPanel() {
       bHide.textContent = 'Ukryj';
       bHide.title = isDone ? 'Ukryj podświetlenie' : 'Ukryj ducha';
       bHide.disabled = !(isDone ? _deltaRealHl.has(it.seq) : _deltaGhosts.has(it.seq));
-      bHide.addEventListener('click', e => { e.stopPropagation(); _deltaGhosts.delete(it.seq); _deltaRealHl.delete(it.seq); _deltaCardHide(); draw(); _renderDeltaPanel(); });
+      bHide.addEventListener('click', e => { e.stopPropagation(); _deltaGhosts.delete(it.seq); _deltaRealHl.delete(it.seq); _deltaCardHide(); scheduleDraw(); _renderDeltaPanel(); });
       row.appendChild(bHide);
     }
     // M3: kolizja pozycji — autopozycja / ręczna / cofnięcie override'u
@@ -21491,7 +21547,7 @@ function _renderDeltaPanel() {
         bX.className = 'vd-btn dp-mini';
         bX.textContent = '✕';
         bX.title = 'Cofnij pozycję zastępczą';
-        bX.addEventListener('click', e => { e.stopPropagation(); _deltaOverrides.delete(it.seq); _renderDeltaPanel(); draw(); });
+        bX.addEventListener('click', e => { e.stopPropagation(); _deltaOverrides.delete(it.seq); _renderDeltaPanel(); scheduleDraw(); });
         row.appendChild(bX);
       } else {
         const bAuto = document.createElement('button');
@@ -21655,7 +21711,7 @@ btnSaveArkdelta.addEventListener('click', saveDelta);
     const text = _deltaReviewReportText();
     saveWithDialog('raport-recenzji-' + _reportMapName() + '-' + _reportTs() + '.md', 'text/markdown', () => text);
   });
-  const closePanel = () => { panel.classList.remove('visible'); _deltaReview = null; _deltaGhostReset(); _deltaAppliedSeqs = new Set(); _deltaSkippedSeqs = new Set(); draw(); };
+  const closePanel = () => { panel.classList.remove('visible'); _deltaReview = null; _deltaGhostReset(); _deltaAppliedSeqs = new Set(); _deltaSkippedSeqs = new Set(); scheduleDraw(); };
   document.getElementById('dp-close').addEventListener('click', closePanel);
   document.getElementById('dp-close2').addEventListener('click', closePanel);
   const hdr = document.getElementById('dp-hdr');
@@ -21775,7 +21831,7 @@ document.addEventListener('keydown', function(e) {
         // Po Porzuć/Zapisz — kontynuuj: deselect i zamknij panel
         state.selected = null;
         if (rp) rp.classList.remove('visible');
-        draw();
+        scheduleDraw();
       });
       return;
     }
@@ -21783,7 +21839,7 @@ document.addEventListener('keydown', function(e) {
     if (state.selected) {
       state.selected = null;
       if (rp) rp.classList.remove('visible');
-      draw();
+      scheduleDraw();
       return;
     }
     // (6) Label drag/resize in progress → cancel: restore position, reset flags. Stop.
@@ -21807,13 +21863,13 @@ document.addEventListener('keydown', function(e) {
       state._labelDragPendingPx = null; state._labelDragPendingPy = null;
       state.labelResizeOrigW = null; state.labelResizeOrigH = null;
       state.labelResizeOrigX = null; state.labelResizeOrigY = null;
-      draw();
+      scheduleDraw();
       return;
     }
     // (7) state.selectedLabel !== null → deselect label. Stop.
     if (state.selectedLabel !== null) {
       state.selectedLabel = null;
-      draw();
+      scheduleDraw();
       return;
     }
   }

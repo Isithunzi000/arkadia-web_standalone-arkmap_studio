@@ -109,9 +109,9 @@ console.log('── T2: podświetlenia przełączników (permutacje) ──');
   const wpState = { algorithm: 'dijkstra', dirMode: 'all', transportMode: 'off' };
   const calls = { recalc: 0, redraw: 0 };
   const code = togglesBlock() + '\n;return { wpRefreshDirUI, wpRefreshTransportUI };';
-  const api = new Function('document', 'wpState', 'wpRecalcPaths', 'wpRebuildList', 'wpUpdateSummary', 'draw', code)(
+  const api = new Function('document', 'wpState', 'wpRecalcPaths', 'wpRebuildList', 'wpUpdateSummary', 'draw', 'scheduleDraw', code)(
     documentStub, wpState,
-    () => calls.recalc++, () => {}, () => {}, () => calls.redraw++);
+    () => calls.recalc++, () => {}, () => {}, () => {}, () => calls.redraw++);
 
   // Stan początkowy HTML: dijkstra + all + pieszo + normal włączone
   algoBtns[0].classList.add('wp-algo-on');
@@ -350,7 +350,7 @@ console.log('── T6: v1.5.40 — lista przystanków / hop-markery / fit / jes
   ok(DR.includes('const hopMarkers = []'), 'drawRoute: hopMarkers zbierane');
   ok(DR.includes('hopMarkers.push({ room: aVis ? ra : rb, boarding: aVis, hop: legHops[i] })'), 'drawRoute: hop solo-visible → marker');
   ok(DR.includes('🚢 → ${m.hop.label || m.hop.name}'), 'drawRoute: etykieta wsiadania z celem hopu');
-  ok(NEW.includes('wpUpdateOverviewThrottled(); // minimapka planera'), 'draw(): hook odświeżania minimapki planera');
+  ok(NEW.includes('wpUpdateOverviewThrottled(); } // D2 (F1)'), 'draw(): hook odświeżania minimapki planera (w guardzie D2, F1)');
   const ovA = NEW.indexOf('function wpUpdateOverview() {');
   const ovB = NEW.indexOf('// ── Markery WP', ovA);
   const OV = NEW.slice(ovA, ovB);

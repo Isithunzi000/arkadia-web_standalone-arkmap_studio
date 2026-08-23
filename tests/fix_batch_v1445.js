@@ -149,7 +149,7 @@ function sectionC() {
 function sectionD() {
   console.log('— Sekcja D: K3 hideExitDetail —');
   const codeD = extract(HTML, 'function hideExitDetail() {') + '\nreturn { hideExitDetail };';
-  const mkD = new Function('document', 'state', 'draw', codeD);
+  const mkD = new Function('document', 'state', 'scheduleDraw', codeD);
   const state = { _activeExitDir: 'n', _activeSpecialExit: 'wypełć drzwiami' };
   let drawn = 0;
   const doc = { getElementById: () => null, querySelectorAll: () => [] };
@@ -160,7 +160,7 @@ function sectionD() {
 
   // ═══ Sekcja E — pin wersji ═══
   console.log('— Sekcja E: pin wersji —');
-  ok(HTML.includes("const APP_VERSION = 'v1.45.3';"), 'E1 APP_VERSION = v1.45.3');
+  ok(HTML.includes("const APP_VERSION = 'v1.46.0';"), 'E1 APP_VERSION = v1.46.0');
 
   console.log(`\n═══ fix_batch_v1445.js: PASS ${pass} / FAIL ${fail} ═══`);
   process.exit(fail ? 1 : 0);

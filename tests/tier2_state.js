@@ -44,7 +44,7 @@ function makeCtx() {
   const toasts = [];
   const stubDoc = { getElementById: () => null };
   const fn = new Function(
-    'state', 'toast', 'draw', 'pushUndo', 'updateUndoRedoUI',
+    'state', 'toast', 'draw', 'scheduleDraw', 'pushUndo', 'updateUndoRedoUI',
     'populateEditForm', 'buildRoomsZ', 'buildAreaList', 'buildColorCache', 'wpRecalcPaths', 'wpRebuildList',
     'selectArea', 'closeAreaPanel', 'document', 'jumpToRoom', 'showDirtyConfirm',
     code + '\n;return { commitDeleteArea, commitAddArea, commitMoveRoomToArea, _dispatchUndo, _dispatchRedo };'
@@ -52,7 +52,7 @@ function makeCtx() {
   const api = fn(
     state,
     (msg, isErr) => toasts.push({ msg, isErr }),
-    () => {},
+    () => {}, () => {},
     (entry) => { state.undoStack.push(entry); state.dirty = true; },
     () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {},
     (id, fit) => calls.push(['selectArea', id, fit]),
@@ -195,7 +195,7 @@ console.log('── T4: strażniki strukturalne (zrodlo) ──');
   ok(NEW.includes('const explicitTo = state.pendingSERenames'), 'Q4: jawny rename w commitRoomEdit przed heurystyka');
   ok(NEW.includes('if (room.doors[newCmd] === undefined)'), 'Q4: target wygrywa per-pole (doors)');
   ok((NEW.match(/state\.pendingSERenames\s+= null;/g) || []).length === 2, 'Q4: clear ×2 (zmiana pokoju + po commicie)');
-  ok(NEW.includes("const APP_VERSION = 'v1.45.3';"), 'wersja: v1.45.3');
+  ok(NEW.includes("const APP_VERSION = 'v1.46.0';"), 'wersja: v1.46.0');
 }
 
 console.log('');

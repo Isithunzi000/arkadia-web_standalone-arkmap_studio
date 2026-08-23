@@ -117,7 +117,7 @@ console.log('— C: F3 suppressor przy addExit —');
     state,
     OPPOSITE: { n: 's', s: 'n', e: 'w', w: 'e', ne: 'sw', sw: 'ne', nw: 'se', se: 'nw', up: 'down', down: 'up', in: 'out', out: 'in' },
     pushUndo: (e) => { state.undoStack.push(e); pushed.push(e); },
-    draw: () => {}, toast: () => {}, updateUndoRedoUI: () => {}, _syncEditSnapshot: () => {},
+    draw: () => {}, scheduleDraw: () => {}, toast: () => {}, updateUndoRedoUI: () => {}, _syncEditSnapshot: () => {},
   };
   const run = new Function(...Object.keys(ctx), commit + '; return commitAddExit;')(...Object.values(ctx));
   run(1, 'e', 2, false);
@@ -201,14 +201,14 @@ console.log('— E: F5 obszar-kalka sid —');
   };
   state.areas.set(1, a1);
   for (const r of a1.rooms) { state.roomById[r.id] = r; state.roomArea[r.id] = 1; }
-  const api = new Function('state', 'document', 'window', 'localStorage', 'toast', 'draw',
+  const api = new Function('state', 'document', 'window', 'localStorage', 'toast', 'draw', 'scheduleDraw',
     'buildRoomsZ', 'buildAreaList', 'deleteRoom', 'commitAddExit', 'commitDeleteExit',
     'commitMoveRoom', 'commitMoveRoomToArea', '_syncEditSnapshot', 'updateUndoRedoUI', 'renderDeltaList',
     deltaCode)(
     state,
     { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] },
     {}, { getItem: () => null, setItem: () => {}, removeItem: () => {} },
-    () => {}, () => {}, () => {}, () => {},
+    () => {}, () => {}, () => {}, () => {}, () => {},
     () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {});
 
   const room = (x, y, name) => ({ x, y, z: 0, name, env: 262 });

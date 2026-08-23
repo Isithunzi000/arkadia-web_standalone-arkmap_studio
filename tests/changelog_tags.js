@@ -24,7 +24,7 @@ for (const m of CHANGELOG.matchAll(HEAD_RE)) tagged.push({ ver: m[1], arc: +m[2]
 const PIN_MAP = {
   'v1.43.2': 12, 'v1.43.3': 13, 'v1.43.5': 14, 'v1.43.6': 15, 'v1.43.7': 16,
   'v1.44.0': 19, 'v1.44.1': 20,
-  'v1.45.0': 27, 'v1.45.1': 28, 'v1.45.2': 29, 'v1.45.3': 31,
+  'v1.45.0': 27, 'v1.45.1': 28, 'v1.45.2': 29, 'v1.45.3': 31, 'v1.46.0': 31,
 };
 
 ok(tagged.length >= Object.keys(PIN_MAP).length,
@@ -37,27 +37,33 @@ for (const [ver, arc] of Object.entries(PIN_MAP)) {
      'para ' + ver + ' → (Arc ' + arc + ')' + (hit ? (hit.arc === arc ? '' : ' — JEST (Arc ' + hit.arc + ')!') : ' — BRAK TAGU!'));
 }
 
-// A3: unikalnosc tagow wsrod naglowkow w formacie scislym (duplikat = blad F1)
+// A3: unikalnosc tagow wsrod naglowkow w formacie scislym (duplikat = blad F1).
+// WYJATEK (Arc 31, v1.46.0): arc wielowersyjny — kilka wersji MOZE dzielic tag,
+// ale tylko gdy WSZYSTKIE sa zadeklarowane w PIN_MAP z tym samym arcem
+// (niezadeklarowany duplikat = nadal blad; chroni przed historycznym F1).
 {
-  const seen = new Map();
+  const byArc = new Map();
+  for (const t of tagged) { if (!byArc.has(t.arc)) byArc.set(t.arc, []); byArc.get(t.arc).push(t.ver); }
   let dup = null;
-  for (const t of tagged) {
-    if (seen.has(t.arc)) { dup = '(Arc ' + t.arc + '): ' + seen.get(t.arc) + ' i ' + t.ver; break; }
-    seen.set(t.arc, t.ver);
+  for (const [arc, vers] of byArc) {
+    if (vers.length < 2) continue;
+    const undeclared = vers.filter(v => PIN_MAP[v] !== arc);
+    if (undeclared.length) { dup = '(Arc ' + arc + '): ' + vers.join(' i ') + ' — niezadeklarowane w PIN_MAP: ' + undeclared.join(', '); break; }
   }
-  ok(!dup, 'unikalnosc tagow arcow' + (dup ? ' — DUPLIKAT ' + dup : ''));
+  ok(!dup, 'unikalnosc tagow arcow (duplikat tylko z deklaracja w PIN_MAP)' + (dup ? ' — DUPLIKAT ' + dup : ''));
 }
 
-// A4: monotonicznosc — tagi rosna wraz z numerem wersji (cofniecie = blad F1)
+// A4: monotonicznosc — tagi NIE MALEJA wraz z numerem wersji (cofniecie = blad
+// F1); rowny tag dozwolony tylko przy arcu wielowersyjnym (pilnuje A3).
 {
   const semver = v => v.slice(1).split('.').map(Number);
   const cmp = (a, b) => { const x = semver(a), y = semver(b); for (let i = 0; i < 3; i++) { if (x[i] !== y[i]) return x[i] - y[i]; } return 0; };
   const sorted = tagged.slice().sort((a, b) => cmp(a.ver, b.ver));
   let inv = null;
   for (let i = 1; i < sorted.length; i++) {
-    if (sorted[i].arc <= sorted[i - 1].arc) { inv = sorted[i - 1].ver + ' (Arc ' + sorted[i - 1].arc + ') → ' + sorted[i].ver + ' (Arc ' + sorted[i].arc + ')'; break; }
+    if (sorted[i].arc < sorted[i - 1].arc) { inv = sorted[i - 1].ver + ' (Arc ' + sorted[i - 1].arc + ') → ' + sorted[i].ver + ' (Arc ' + sorted[i].arc + ')'; break; }
   }
-  ok(!inv, 'monotonicznosc: tagi rosna z numerem wersji' + (inv ? ' — COFNIECIE ' + inv : ''));
+  ok(!inv, 'monotonicznosc: tagi nie maleja z numerem wersji' + (inv ? ' — COFNIECIE ' + inv : ''));
 }
 
 // A5: najnowszy wpis (pierwszy naglowek ## v w pliku) ma tag scisly i jest w PIN_MAP

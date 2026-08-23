@@ -87,8 +87,8 @@ ok(/if \(_pc\) \{ _PERF\.draws\+\+; _PERF\.plane = rooms\.length; _PERF\.vis = v
    'B6: licznik draws/plane/vis za guardem if (_pc), po filtrze viewportu');
 
 // ── C: licznik dekodowan pixmap ─────────────────────────────────────────────
-ok(HTML.includes('img.onload  = () => { entry.loaded = true; if (_perfOn()) _PERF.pixmapDecodes++; draw(); };'),
-   'C1: onload pixmap: pixmapDecodes++ za guardem _perfOn(), przed draw()');
+ok(HTML.includes('img.onload  = () => { entry.loaded = true; if (_perfOn()) _PERF.pixmapDecodes++; scheduleDraw(); };'),
+   'C1: onload pixmap: pixmapDecodes++ za guardem _perfOn(), przed scheduleDraw() (RAF-batching F1)');
 
 // ── D: zachowanie bloku w Node (off => no-op, on => akumulacja) ─────────────
 const blockStart = HTML.indexOf('const _PERF =');

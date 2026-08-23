@@ -2,6 +2,34 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.46.0 — RAF-batching renderu + shim render-to-offscreen (Arc 31)
+
+Pierwszy etap optymalizacji renderera (plan Arc 31 F1):
+
+- `scheduleDraw()`: koalescencja renderow do 1/klatke — wszystkie 122
+  dotychczasowe synchroniczne wywolania `draw()` (121 call-site'ow
+  `draw();` + 1 inline onchange rp-env bez srednika; drag, scroll,
+  resize, onload pixmap, commity edycji, panele) przechodza przez
+  kolejke RAF; serie zdarzen daja 1 render zamiast N. `draw()` ZOSTAJE
+  synchroniczne dla kontraktow: perf driver (trasa kamery), eksport
+  (odczyty pikseli), testy.
+- `_withRenderTarget(canvas2, viewState, dataOverride, fn)`: render na
+  osobnym canvasie przez scoped swap z try/finally (cv/ctx + zoom/ox/oy/z/
+  areaId + roomsZ/roomById/areas + kolory env z state.map.colors.*).
+  Fundament pod miniatury „przed/po" raportu kalki (F5). Decyzje
+  zatwierdzone: D1 — flagi widoku (siatka, etykiety, suppressory, tryby)
+  NIE sa swapowane (render dziedziczy stylistyke widoku); D2 — minimapki
+  tlumione podczas shima (guard w draw()).
+- `cv`/`ctx` z const na let (scoped swap shima).
+- Nowe piny: harness tests/raf_shim.js (26 asercji statycznych; run-all
+  = 35 harnessow) + scenariusze empiryczne E23.raf (koalescencja,
+  synchronicznosc draw) i E23.shim (izolacja: zlote piksele glownego
+  canvasu, identycznosc referencji stanu, finally przy wyjatku, tlumienie
+  minimapek) — grupa E23 w run-all.sh.
+- changelog_tags: model arcu wielowersyjnego — kilka wersji moze dzielic
+  tag (Arc N), ale tylko z deklaracja wszystkich w PIN_MAP; monotonicznosc
+  = tagi nie maleja.
+
 ## v1.45.3 — liczniki wydajnosci F0 za flaga + driver (Arc 31)
 
 Diagnostyka wydajnosci (measurement-first, plan Arc 31 F0) — zero zmiany
