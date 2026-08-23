@@ -23,6 +23,7 @@ function colorLayer(html) {
   if (a < 0 || b < 0 || b <= a) throw new Error('kotwice warstwy formatu');
   if (c < 0 || d < 0 || d <= c) throw new Error('kotwice regionu kolorow');
   return 'let state={colorCache:{},pendingEnv:null,editMode:false,selected:null,isArkadia:false,map:null,filename:null};\n'
+    + 'let _rasterCache=null; function _rasterInvalidate(){ _rasterCache=null; }\n'  // F3 (Arc 31): stub — buildColorCache uniewaznia raster
     + html.slice(a, b) + '\n' + html.slice(c, d);
 }
 const api = new Function(colorLayer(HTML)
@@ -111,7 +112,7 @@ ok(count("rgba(100,140,180,0.55)") === 0, 'stary styl stubow (niebieski dash) us
   ok(!body.includes('setLineDash'), 'stuby: pelna linia (zero dash)');
   ok(body.includes('0.5 * cpx()'), 'stuby: dlugosc 0.5 jednostki mapy (Delwing 1:1)');
 }
-ok(count("const APP_VERSION = 'v1.46.1';") === 1, 'APP_VERSION v1.46.1');
+ok(count("const APP_VERSION = 'v1.47.0';") === 1, 'APP_VERSION v1.47.0');
 
 console.log('');
 console.log('universal_colors: ' + pass + ' OK, ' + fail + ' FAIL');

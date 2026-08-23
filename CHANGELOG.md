@@ -2,6 +2,32 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.47.0 — LOD raster przy ekstremalnych oddaleniach (Arc 31)
+
+Trzeci etap optymalizacji renderera (plan Arc 31 F3):
+
+- `computeLodMode` jest teraz tri-mode: full / roomsOnly / raster. Drugi
+  prog `LOD_RASTER_CELL_PX = 3` (ten sam wzor predykatu, pan-inwariantny):
+  przy cellPx < 3 pokoj (0.65 komorki) ma < 2 px — obrys, wypelnienie
+  i antyaliasing krawedzi kosztuja wiecej niz sam piksel.
+- W trybie raster pokoje plaszczyzny sa pakowane 32-bit (Uint32Array ABGR)
+  do ImageData w rozdzielczosci komorki (1 teksel = 1 komorka), z kolorem
+  env z `envColorRgb` (ta sama kaskada co `roomColor`: ANSI / ARKADIA_ENVS /
+  env_colors / custom_env_colors) i blitowane jednym `drawImage`
+  (imageSmoothingEnabled=false) — O(1) na klatke zamiast O(n) fillRect.
+  Ukryte pokoje: tryb `hide` pomija, `faded` pakuje alpha 0.35 (1:1).
+- Cache `_rasterCache` z kluczem `obszar:plaszczyzna:trybUkrytych
+  (+pendingEnv@zaznaczony)`. Uniewaznianie: `buildRoomsZ` (wszystkie
+  mutacje mapy) + `buildColorCache` (zmiana kolorow env).
+- Selekcja/duchy/trasa zostaja wektorowe; marker selekcji w trybie raster
+  jest statyczny (halo drawRooms pulsuje z Date.now() i lamaloby
+  determinizm bajtow podkladu).
+- Wskaznik w pasku statusu: „LOD" (roomsOnly) lub „LOD·R" (raster),
+  tooltip objasnia oba tryby.
+- Repro-first: scenariusz E23.raster (piny predykatu; pokoj →
+  nieprzezroczysty piksel w komorce; dwa painty = identyczne bajty;
+  mutacja env → rebuild z nowym kolorem). Piny tier6 B20/B21.
+
 ## v1.46.1 — LOD roomsOnly przy dużych oddaleniach (Arc 31)
 
 Drugi etap optymalizacji renderera (plan Arc 31 F2):

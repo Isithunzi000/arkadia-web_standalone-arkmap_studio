@@ -140,6 +140,18 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
   ok(HTML.includes('id="msb-lod"'),
     'B19: wskaznik LOD w pasku statusu (#msb-info, forma krotka + tooltip)');
 
+  // Arc 31 F3: LOD raster — drugi prog przy ekstremalnych oddaleniach.
+  // Przy cellPx < 3 pokoj (0.65 * cellPx) ma < 2 px: geometria wektorowa
+  // (obrys, wypelnienie, antyaliasing krawedzi) kosztuje wiecej niz sam
+  // piksel — ImageData w rozdzielczosci komorki + drawImage nearest-neighbor
+  // daje identyczny obraz przy O(1) blit zamiast O(n) fillRect. Repro: E23.raster.
+  ok(HTML.includes('const LOD_RASTER_CELL_PX = 3;'),
+    'B20: prog rastra cellPx 3 (pokoj < 2 px — wektor drozszy niz piksel)');
+  ok(HTML.includes('_rasterInvalidate();') &&
+     /function buildRoomsZ\([\s\S]*?_rasterInvalidate\(\);/.test(HTML) &&
+     /function buildColorCache\([\s\S]*?_rasterInvalidate\(\);/.test(HTML),
+    'B21: uniewaznienie rastra podpieciete w buildRoomsZ i buildColorCache');
+
 }
 
 // ═══ Sekcja C: #18 — bramka potwierdzenia importu trasy ═══
@@ -236,7 +248,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.46.1';"), 'V1: pin APP_VERSION v1.46.1');
+ok(HTML.includes("const APP_VERSION = 'v1.47.0';"), 'V1: pin APP_VERSION v1.47.0');
 
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);

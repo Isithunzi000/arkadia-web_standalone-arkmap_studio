@@ -70,7 +70,7 @@ console.log('── T2: buildDiagnosticsReport (funkcjonalnie) ──');
     extract(HTML, 'function _reportTs() {') + '\n' +
     extract(HTML, 'function buildDiagnosticsReport(opts) {') + '\n' +
     'return { buildDiagnosticsReport };';
-  const api = new Function('APP_VERSION', code)('v1.46.1');
+  const api = new Function('APP_VERSION', code)('v1.47.0');
 
   const opts = {
     title: 'Raport testowy', filename: 'm.arkmap',
@@ -85,7 +85,7 @@ console.log('── T2: buildDiagnosticsReport (funkcjonalnie) ──');
   ok(strip(r1) === strip(r2), 'deterministyczny poza linia daty ISO');
   ok(r1.split('\n')[0] === '# Raport testowy — ArkMap Studio', 'naglowek H1 z tytulem');
   ok(r1.includes('- Plik: m.arkmap'), 'naglowek: plik');
-  ok(r1.includes('- Wersja aplikacji: v1.46.1'), 'naglowek: wersja aplikacji');
+  ok(r1.includes('- Wersja aplikacji: v1.47.0'), 'naglowek: wersja aplikacji');
   ok(/- Data: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/.test(r1), 'naglowek: data ISO');
   ok(r1.includes('## Sekcja A') && r1.includes('linia 1\nlinia 2'), 'sekcja z liniami');
   ok(r1.includes('## Pusta\n\n(brak)'), 'pusta sekcja → (brak)');
@@ -167,7 +167,7 @@ console.log('── T4: _deltaReviewReportText (funkcjonalnie) ──');
     extract(HTML, 'function _deltaReviewReportText() {') + '\n' +
     'return { _deltaReviewReportText, set rv(v) { _deltaReview = v; } };';
   const state = { filename: 'mapa-testowa.arkmap', map: null };
-  const api = new Function('APP_VERSION', 'state', code)('v1.46.1', state);
+  const api = new Function('APP_VERSION', 'state', code)('v1.47.0', state);
 
   api.rv = null;
   ok(api._deltaReviewReportText() === '', 'brak otwartej recenzji → pusty tekst (guard)');

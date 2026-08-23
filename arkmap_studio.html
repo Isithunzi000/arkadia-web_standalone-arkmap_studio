@@ -2064,7 +2064,7 @@
         <span id="msb-area">—</span>
         <span style="flex-shrink:0">Z=<span id="msb-z">0</span></span>
         <span style="flex-shrink:0"><span id="msb-rooms">0</span> pokoi</span>
-        <span id="msb-lod" style="display:none;flex-shrink:0" title="Duże oddalenie — rysowane są tylko pokoje (LOD roomsOnly). Wyjścia/stuby/custom lines są przy tym zoomie subpikselowym szumem; przybliż, aby je zobaczyć.">LOD</span>
+        <span id="msb-lod" style="display:none;flex-shrink:0" title="Duże oddalenie — uproszczony render (LOD). „LOD" = tylko pokoje: wyjścia/stuby/custom lines są przy tym zoomie subpikselowym szumem. „LOD·R" = ekstremalne oddalenie: pokoje jako podkład rastrowy (piksel na komórkę). Przybliż, aby zobaczyć szczegóły.">LOD</span>
       </div>
       <!-- ✎ EDIT MODE TOGGLE (mockup) -->
       <div id="msb-undoredo"><button class="ur-btn" id="ur-undo-all" title="Cofnij wszystko">↩↩</button><button class="ur-btn" id="ur-undo" title="Cofnij (Ctrl+Z)">↩</button><button class="ur-btn" id="ur-redo" disabled title="Ponów (Ctrl+Y)">↪</button><button class="ur-btn" id="ur-redo-all" disabled title="Ponów wszystko">↪↪</button></div>      <div id="msb-lock-timer" title="Masz aktywnego locka na mapę">🔒 lock aktywny</div>      <div id="msb-change-count" onclick="toggleChangelog(event)" title="Kliknij aby zobaczyć historię zmian"><div class="cc-dot"></div><span id="cc-num">12 zmian</span></div>
@@ -6887,6 +6887,7 @@ function buildColorCache(colors) {
   }
   // Sync legend + palette swatches with updated colorCache
   if (typeof refreshEnvColors === 'function') refreshEnvColors();
+  _rasterInvalidate();  // F3 (Arc 31): kolory env zmienione — raster traci waznosc
 }
 
 // Mudlet default room color for unknown/unmapped envIds (matches Delwing fallback)
@@ -7146,6 +7147,7 @@ function selectZ(z) {
 function buildRoomsZ() {
   const area = state.areas.get(state.areaId);
   state.roomsZ = (area?.rooms || []).filter(r => r.z === state.z);
+  _rasterInvalidate();  // F3 (Arc 31): kazda mutacja przechodzi przez buildRoomsZ — raster odbuduje sie przy nastepnym paintcie
   updateStatus();
 }
 
@@ -7165,7 +7167,8 @@ function updateStatus() {
   msbArea.textContent = area.name || String(area.id);
   msbZ.textContent    = state.z;
   msbRooms.textContent = state.roomsZ.length;
-  msbLod.style.display = _lodMode === 'roomsOnly' ? '' : 'none';  // F2: wskaznik LOD roomsOnly
+  msbLod.style.display = _lodMode === 'full' ? 'none' : '';       // F2/F3: wskaznik LOD (roomsOnly / raster)
+  msbLod.textContent = _lodMode === 'raster' ? 'LOD·R' : 'LOD';   // F3: „R" = podklad rastrowy
 }
 
 // ─── FIT ──────────────────────────────────────────────────────────────────────
@@ -7304,12 +7307,85 @@ function _withRenderTarget(canvas2, viewState, dataOverride, fn) {
 // cellPx <= 8.81. Piny: tier6 B17/B18/B19; scenariusze E23.lod / E23.lod-geom.
 const LOD_MIN_CELL_PX = 9;
 const LOD_ROOMS_BUDGET = 200;
+// ─── LOD „raster" (Arc 31 F3, v1.47.0) ───────────────────────────────────────
+// Drugi prog, ten sam wzor predykatu (pan-inwariantny): przy cellPx < 3 pokoj
+// (0.65 komorki) ma < 2 px — obrys + wypelnienie + antyaliasing krawedzi
+// kosztuja wiecej niz sam piksel. Zamiast O(n) fillRect/strokeRect: pokoje
+// plaszczyzny pakowane 32-bit do ImageData w rozdzielczosci komorki
+// (1 teksel = 1 komorka), blit drawImage nearest-neighbor = O(1) na klatke.
+// Kolory z envColorRgb (state.colorCache: ANSI / ARKADIA_ENVS / env_colors /
+// custom_env_colors — ta sama kaskada co roomColor, korekta 2026-08-23).
+// Duchy/selekcja/trasa zostaja wektorowe (marker selekcji statyczny — halo
+// z Date.now() jest niedeterministyczne). Uniewaznianie: buildRoomsZ (wszystkie
+// mutacje) + buildColorCache. Piny: tier6 B20/B21; scenariusz E23.raster.
+const LOD_RASTER_CELL_PX = 3;
 function computeLodMode(planeCount, cellPx, W, H) {
   if (cellPx >= LOD_MIN_CELL_PX) return 'full';
   const visCells = Math.ceil(W / cellPx) * Math.ceil(H / cellPx);
-  return Math.min(planeCount, visCells) > LOD_ROOMS_BUDGET ? 'roomsOnly' : 'full';
+  if (Math.min(planeCount, visCells) <= LOD_ROOMS_BUDGET) return 'full';
+  return cellPx < LOD_RASTER_CELL_PX ? 'raster' : 'roomsOnly';
 }
 let _lodMode = 'full';
+
+// Cache rastra: klucz = obszar + plaszczyzna + tryb ukrytych (+ podglad env
+// z formularza — pendingEnv wplywa na kolor zaznaczonego pokoju, patrz _envOf).
+let _rasterCache = null;   // { key, canvas, minX, maxY, cols, rows }
+function _rasterKey() {
+  const hMode = state.view?.hiddenRooms || 'faded';
+  let k = state.areaId + ':' + state.z + ':' + hMode;
+  if (state.editMode && state.pendingEnv != null) k += ':' + state.pendingEnv + '@' + state.selected;
+  return k;
+}
+function _rasterInvalidate() { _rasterCache = null; }
+function _buildRoomsRaster() {
+  const rooms = state.roomsZ || [];
+  const hMode = state.view?.hiddenRooms || 'faded';
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const r of rooms) {
+    if (r.x < minX) minX = r.x; if (r.x > maxX) maxX = r.x;
+    if (r.y < minY) minY = r.y; if (r.y > maxY) maxY = r.y;
+  }
+  const cols = maxX - minX + 1, rows = maxY - minY + 1;
+  const img = new ImageData(cols, rows);
+  const buf = new Uint32Array(img.data.buffer);   // ABGR (little-endian)
+  const pack = new Map();   // envId -> uint32 (osobno wariant faded: bit znaku)
+  for (const r of rooms) {
+    const hidden = isRoomHidden(r);
+    if (hidden && hMode === 'hide') continue;
+    const env = _envOf(r);
+    const pkKey = (hidden && hMode === 'faded') ? -(env + 1) : env;
+    let pk = pack.get(pkKey);
+    if (pk === undefined) {
+      const [cr, cg, cb] = envColorRgb(env);
+      const a = (hidden && hMode === 'faded') ? 89 : 255;   // 0.35 = 1:1 HIDDEN_ROOM_FADE
+      pk = ((a << 24) | (cb << 16) | (cg << 8) | cr) >>> 0;
+      pack.set(pkKey, pk);
+    }
+    buf[(maxY - r.y) * cols + (r.x - minX)] = pk;   // wiersz 0 = gora ekranu = max Y (Y flip)
+  }
+  const off = document.createElement('canvas');
+  off.width = cols; off.height = rows;
+  off.getContext('2d').putImageData(img, 0, 0);
+  _rasterCache = { key: _rasterKey(), canvas: off, minX, maxY, cols, rows };
+}
+function drawRoomsRaster() {
+  if (!_rasterCache || _rasterCache.key !== _rasterKey()) _buildRoomsRaster();
+  const c = _rasterCache, cellPx = cpx();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(c.canvas,
+    wx(c.minX) - cellPx / 2, wy(c.maxY) - cellPx / 2,
+    c.cols * cellPx, c.rows * cellPx);
+  // Marker selekcji: statyczny (wektorowy) — halo drawRooms pulsuje z Date.now()
+  // i lamaloby determinizm bajtow rastra (E23.raster.bytes).
+  if (state.selected != null) {
+    const r = state.roomById[state.selected];
+    if (r && r.z === state.z) {
+      const cx = wx(r.x), cy = wy(r.y), h = Math.max(cellPx, 3);
+      ctx.strokeStyle = '#4a9eff'; ctx.lineWidth = 1.5;
+      ctx.strokeRect(cx - h, cy - h, h * 2, h * 2);
+    }
+  }
+}
 
 function draw() {
   const _pc = _perfOn() ? { t: performance.now() } : null;  // F0: null gdy flaga off — dalej same no-op ticki
@@ -7351,7 +7427,8 @@ function draw() {
   // drawCrossArrows(vis);  // ZAD 3: trójkąty up/down/in/out zastępują tekstowe ↑↓ (Delwing-style, bez podwójnego renderu)
   if (state.zoom > 0.3 && (state.view?.mudletLabels !== false || state.showPixmaps)) drawLabels();   // warstwa 4 — toggle „Etykiety Mudleta"
   _perfTick(_pc, 'labels');
-  drawRooms(vis, rs); _perfTick(_pc, 'rooms');                // warstwa 5
+  if (_lodMode === 'raster') drawRoomsRaster(); else drawRooms(vis, rs);  // F3: podklad rastrowy zamiast warstwy wektorowej pokoi
+  _perfTick(_pc, 'rooms');                                    // warstwa 5
   if (state.view?.areaExitLabels !== false) drawCrossAreaLabels(rs);  // warstwa 5b — toggle „Wyjścia z obszarów"
   _perfTick(_pc, 'area_labels');
   if (state.zoom > 0.3 && (state.view?.mudletLabels !== false || state.showPixmaps)) drawLabelsOnTop();  // warstwa 6 — toggle „Etykiety Mudleta"
@@ -13845,7 +13922,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.46.1';
+const APP_VERSION = 'v1.47.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)

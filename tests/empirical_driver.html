@@ -4333,12 +4333,12 @@ scenario('E23.lod', async () => {
    + '   window.__unwrapCtx = function(){ ctx.fillRect = ofr; ctx.lineTo = olt; ctx.strokeRect = osre; };'
    + '   return c; };');
   const lodRaw = AEV('E23.lod.layers.out', ev('(function(){'
-   + ' var c = window.__wrapCtx(); state.zoom = 0.163; draw(); window.__unwrapCtx();'
+   + ' var c = window.__wrapCtx(); state.zoom = 0.245; draw(); window.__unwrapCtx();'
    + ' return JSON.stringify({ mode: _lodMode, vis: _PERF.vis, fr: c.fr, lt: c.lt, sre: c.sre });'
-   + '})()'), 'prymitywy ctx w roomsOnly (zoom 0.163 = cellPx 2.9)');
+   + '})()'), 'prymitywy ctx w roomsOnly (zoom 0.245 = cellPx 4.4; F3: 0.163 to juz raster)');
   const lod = lodRaw ? JSON.parse(lodRaw) : null;
   if (lod) {
-    EQ('E23.lod.mode.out', lod.mode, 'roomsOnly', 'tryb roomsOnly przy cellPx 2.9');
+    EQ('E23.lod.mode.out', lod.mode, 'roomsOnly', 'tryb roomsOnly przy cellPx 4.4 (pasmo 3-9 px; F3: nizej raster)');
     EQ('E23.lod.skip.lines', lod.lt, 0, 'zero linii wyjsc/stubow/custom lines w roomsOnly');
     A('E23.lod.keep.rooms', lod.sre >= 400, 'pokoje NADAL rysowane (strokeRect=' + lod.sre + ' przy vis=' + lod.vis + ')');
     EQ('E23.lod.ind.out', ev('getComputedStyle(document.getElementById("msb-lod")).display').val !== 'none', true,
@@ -4402,6 +4402,83 @@ scenario('E23.lod-geom', async () => {
     A('E23.lod-geom.margin', gm.rightMargin >= 0, 'elementy stale za prawa krawedzia? margines ' + gm.rightMargin);
   } else {
     A('E23.lod-geom.exists', false, 'brak #msb-lod w DOM');
+  }
+});
+
+// ═══ E23.raster — Arc 31 F3 (v1.47.0): raster overview ═══
+// Drugi prog LOD: pokoje jako piksele pakowane 32-bit (ImageData) zamiast
+// warstw wektorowych przy ekstremalnych oddaleniach (cellPx < 3).
+// Asercje behawioralne (piksele/bajty), odporne na virtual-time budget.
+scenario('E23.raster', async () => {
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  await loadBase('dat');
+  await eva('new Promise(function(res){ setTimeout(res, 60); })');
+  EQ('E23.raster.pred.enter', ev('computeLodMode(518, 2.9, 1260, 922)').val, 'raster',
+     'cellPx 2.9 < 3 + 518 pokoi -> raster');
+  EQ('E23.raster.pred.edge', ev('computeLodMode(518, 3, 1260, 922)').val, 'roomsOnly',
+     'cellPx dokladnie 3 -> jeszcze roomsOnly (prog ostry)');
+  EQ('E23.raster.pred.small', ev('computeLodMode(100, 2, 1260, 922)').val, 'full',
+     'mala plaszczyzna pod budzetem 200 -> full nawet przy cellPx 2');
+  EQ('E23.raster.pred.extreme', ev('computeLodMode(20000, 0.9, 1260, 922)').val, 'raster',
+     'ekstremalne oddalenie (MIN_ZOOM 0.05 = cellPx 0.9) -> raster');
+
+  // paint 1: pokoj -> nieprzezroczysty piksel w jego komorce ekranowej
+  ex('state.showGrid = false; state.selected = null;');
+  const probe = '(function(){'
+    + ' var r = state.roomsZ[0];'
+    + ' var sx = Math.floor(wx(r.x)), sy = Math.floor(wy(r.y));'   // srodek komorki — wewnatrz teksela i slupka wektorowego
+    + ' var c = document.getElementById("cv");'
+    + ' var px = c.getContext("2d").getImageData(sx, sy, 1, 1).data;'
+    + ' var d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;'
+    + ' var h = 0; for (var i = 0; i < d.length; i += 997) h = (h * 31 + d[i]) >>> 0;'
+    + ' return JSON.stringify({ mode: _lodMode, alpha: px[3], rgb: [px[0], px[1], px[2]],'
+    + '   hash: h, key: _rasterCache && _rasterCache.key,'
+    + '   chip: document.getElementById("msb-lod").textContent,'
+    + '   chipVis: getComputedStyle(document.getElementById("msb-lod")).display !== "none" });'
+    + '})()';
+  const r1s = AEV('E23.raster.paint1', ev('(function(){ state.zoom = 0.163; draw(); return (' + probe + '); })()'),
+    'paint 1 w trybie raster (zoom 0.163 = cellPx 2.9)');
+  const p1 = r1s ? JSON.parse(r1s) : null;
+  if (p1) {
+    EQ('E23.raster.mode', p1.mode, 'raster', 'tryb raster przy cellPx 2.9');
+    EQ('E23.raster.alpha', p1.alpha, 255, 'pokoj -> nieprzezroczysty piksel w komorce');
+    A('E23.raster.cache', typeof p1.key === 'string' && p1.key.length > 0, 'cache rastra zbudowany (klucz ' + p1.key + ')');
+    EQ('E23.raster.chip', [p1.chip, p1.chipVis], ['LOD·R', true], 'wskaznik LOD·R widoczny w rasterze');
+  }
+  // paint 2: determinizm bajtow + TEN SAM cache (brak rebuildu bez mutacji)
+  const r2s = AEV('E23.raster.paint2', ev('(function(){ draw(); return (' + probe + '); })()'), 'paint 2 — determinizm');
+  const p2 = r2s ? JSON.parse(r2s) : null;
+  if (p1 && p2) {
+    EQ('E23.raster.bytes', p2.hash, p1.hash, 'dwa painty = identyczne bajty canvasu');
+    EQ('E23.raster.cachekeep', p2.key, p1.key, 'cache rastra utrzymany miedzy paintami (brak mutacji)');
+    EQ('E23.raster.color', p2.rgb, p1.rgb, 'kolor piksela stabilny');
+  }
+  // uniewaznianie: mutacja env przez sciezke commitu (buildRoomsZ) -> rebuild rastra
+  const r3s = AEV('E23.raster.mutate', ev('(function(){'
+    + ' var r = state.roomsZ[0]; var before = _rasterCache && _rasterCache.key;'
+    + ' var target = (r.env === 262) ? 258 : 262;'
+    + ' r.env = target; buildRoomsZ(); draw();'
+    + ' var sx = Math.floor(wx(r.x)), sy = Math.floor(wy(r.y));'
+    + ' var px = document.getElementById("cv").getContext("2d").getImageData(sx, sy, 1, 1).data;'
+    + ' return JSON.stringify({ keyAfter: _rasterCache && _rasterCache.key, rgb: [px[0], px[1], px[2]],'
+    + '   want: envColorRgb(target), stale: before });'
+    + '})()'), 'mutacja env + rebuild rastra');
+  const p3 = r3s ? JSON.parse(r3s) : null;
+  if (p3) {
+    EQ('E23.raster.rebuild', p3.rgb, p3.want, 'po mutacji piksel = nowy kolor env (cache uniewazniony, rebuild)');
+  }
+  // selekcja zostaje wektorowa: marker w rasterze
+  const r4s = AEV('E23.raster.selection', ev('(function(){'
+    + ' var r = state.roomsZ[1]; state.selected = r.id;'
+    + ' var c = window.__wrapCtx ? null : null;'
+    + ' var lt0 = 0;'
+    + ' draw();'
+    + ' var sr = state.roomById[r.id];'
+    + ' return JSON.stringify({ sel: state.selected, onPlane: sr && sr.z === state.z });'
+    + '})()'), 'selekcja w trybie raster');
+  const p4 = r4s ? JSON.parse(r4s) : null;
+  if (p4) {
+    A('E23.raster.selmarker', p4.sel != null && p4.onPlane === true, 'zaznaczony pokoj na plaszczyznie — marker wektorowy rysowany (smoke)');
   }
 });
 
