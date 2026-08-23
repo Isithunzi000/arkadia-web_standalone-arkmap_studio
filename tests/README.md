@@ -45,9 +45,11 @@ node tests/validate_full.js  # walidator .arkmap: validateFont/UserData/Label/Ar
 node tests/universal_colors.js # uniwersalne kolory (v1.43.3): detekcja Arkadii, golden 51 envId, mapa obca
 node tests/checksums_v4.js    # sumy v4 (v1.45.0): XXH3-64 + kodowanie kanoniczne przeciw oracle, korupcje, algMismatch, no-throw
 node tests/checksums/xxh3_golden.js  # XXH3-64 pure-JS przeciw wektorom oracle (dev + blok w HTML)
-node tests/report_export.js   # raporty diagnostyczne (v1.45.0): wspolny builder md, val-modal + panel kalki, regla kompletnosci eksportu
+node tests/report_export.js   # raporty diagnostyczne (v1.45.0/2): wspolny builder md, val-modal (4 sekcje) + panel kalki + podwojne linie, regla kompletnosci eksportu (5 powierzchni)
 node tests/save_dialogs.js   # dialogi zapisu (v1.44.4): 7 sciezek przez saveWithDialog, smart-nazwy, macierz 16 przypadkow checkSuppressors
 node tests/fix_batch_v1445.js # fixy v1.44.5: R1 clRoom w startClDrawingExisting, K1 guard toBlob-null w saveWithDialog, K2 rejection file.text(), K3 czyszczenie _activeSpecialExit
+node tests/suppressors_load.js # podwojne linie (v1.45.2): checkSuppressorsInMap przy loadzie, paritet z rdzeniem, raport, wiring po id
+node tests/changelog_tags.js  # straznik tagow arcow w CHANGELOGU: pary wersja->arc, unikalnosc, monotonicznosc, synchron z APP_VERSION
 ```
 
 ### tests/checksums/ — laboratorium sum kontrolnych v4
@@ -73,15 +75,15 @@ Kod wyjścia: 0 = wszystko OK, 1 = są FAIL-e, 2 = brak fixture.
 Oprócz harnessów Node.js regresja obejmuje testy empiryczne: `tests/empirical.sh` odpala
 pełną aplikację w headless Chromium (driver: `tests/empirical_driver.html` — iframe z
 `arkmap_studio.html`, scenariusze przez eval) i wykonuje scenariusze pogrupowane w
-`SMOKE` oraz `E0`–`E21` (m.in. kalka .arkdelta end-to-end, generator kalki z diffu map, roundtrip .dat, planer,
+`SMOKE` oraz `E0`–`E22` (m.in. kalka .arkdelta end-to-end, generator kalki z diffu map, roundtrip .dat, planer,
 walidacja kierunków, UI, syntetyczne zdarzenia dotyku, a także: PWA runtime (E15), eksport PNG/SVG przez
 prawdziwe UI (E16), serializacja pobrań online (E17), uniwersalne kolory dla map spoza Arkadii (E18),
 edycja punktów istniejącej custom line (E19), guard toBlob-null przy eksporcie widoku (E20),
-rejection file.text() przy wczytywaniu pliku (E21)).
+rejection file.text() przy wczytywaniu pliku (E21), walidacja podwojnych linii przy loadzie + eksport i geometria dialogow (E22)).
 `run-all.sh` odpala je automatycznie po harnessach Node.js.
 
 ```bash
-ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13 E14 E16 E17 E18 E19 E20 E21" \
+ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13 E14 E16 E17 E18 E19 E20 E21 E22" \
 ARKTEST_BUDGET=300000 ARKTEST_TIMEOUT=420 bash tests/empirical.sh
 ```
 

@@ -70,15 +70,15 @@ chyba że zaznaczono inaczej):
 7. `name` str — pomijany gdy `''`
 8. `notes` str — pomijany gdy `''`
 9. `exits`: mapa kierunków. Kolejność: najpierw znane kierunki wg
-   `_DIFF_DIR_ORDER` (`n,ne,e,se,s,sw,w,nw,up,down,in,out`), potem
+   `_V4_DIR_ORDER` (`n,ne,e,se,s,sw,w,nw,up,down,in,out`), potem
    nieznane klucze UTF-8 bajtowo rosnąco. Wpis: klucz str + cel i32.
    Pomijany gdy pusty.
 10. `exit_locks`: lista kierunkow (stringi), kolejnosc wg
-    `_DIFF_DIR_ORDER`, wpis: klucz str (bez wartosci). Pomijany gdy
+    `_V4_DIR_ORDER`, wpis: klucz str (bez wartosci). Pomijany gdy
     pusty.
 11. `doors`: jak (9), wpis: klucz str + wartość str
     (`open`/`closed`/`locked`). Pomijany gdy pusty.
-12. `stubs`: jak (10) — lista kierunkow wg `_DIFF_DIR_ORDER`, wpis:
+12. `stubs`: jak (10) — lista kierunkow wg `_V4_DIR_ORDER`, wpis:
     klucz str. Pomijany gdy pusty.
 13. `special_exits`: klucze UTF-8 bajtowo rosnąco, wpis: klucz str +
     cel i32. Pomijany gdy pusty.

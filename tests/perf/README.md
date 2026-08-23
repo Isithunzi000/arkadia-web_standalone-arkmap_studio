@@ -94,6 +94,43 @@ nadpisywana przyrostowo po każdym rekordzie); generator czyta też starsze plik
 `results/2026-08-22/META.json`) — generator wplecie wersję aplikacji, silnik sum
 i warunki tła w raport.
 
+## Przebieg v4 (silnik sum v4, aplikacja >= v1.45.0)
+
+Narzędzia ekstrahują funkcje sum verbatim z `arkmap_studio.html` — drabinka i
+benchmark automatycznie liczą **alg v4** (zweryfikowane smoke K=2: wygenerowana
+mapa ma `alg: v4`, `bench_parse` raportuje `crc_ok=true`). Kompletny przebieg
+na cichej maszynie (jak poprzednie):
+
+```bash
+bash tests/fetch-fixture.sh          # jesli brak map_master3.dat
+bash tests/perf/run.sh 5             # pelny re-benchmark v4 (fazy 0-3)
+# opcjonalnie domkniecie samych luk drabinki przegladarki (dawna „faza 3"):
+SKIP_GEN=1 SKIP_NODE=1 bash tests/perf/run.sh 5
+```
+
+Po przebiegu, PRZED generowaniem raportu, dopisz `tests/perf/out/META.json`:
+
+```json
+{
+  "app_version": "v1.45.2",
+  "checksum_alg": "v4",
+  "background": "Maszyna bez innego obciążenia w trakcie pomiaru."
+}
+```
+
+Raporty (niezależny + porównawczy z ostatnim zacommitowanym):
+
+```bash
+node tests/perf/report_build.mjs tests/perf/out docs/raport_wydajnosci_<data>.html
+node tests/perf/report_build.mjs tests/perf/out docs/porownanie_wydajnosci_<data>.html \
+  --compare tests/perf/results/2026-08-22
+```
+
+Do commita: `tests/perf/results/<data>/` (results_node.json, results_browser.json,
+MASZYNA.md, META.json), oba raporty w `docs/` oraz wpis przebiegu na liscie
+u gory tego README. Uwaga: `results/` NIE jest gitignored — wyniki commitujemy
+swiadomie; `out/` jest gitignored (artefakty robocze).
+
 ## Uwagi
 
 - Skrypty nie modyfikują repo poza `tests/perf/out/` i nie wysyłają nic nigdzie —

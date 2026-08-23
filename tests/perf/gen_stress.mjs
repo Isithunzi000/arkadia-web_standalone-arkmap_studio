@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // gen_stress.mjs — generator syntetycznych map stresowych (Arc 18).
 // Klony produkcyjnej bazy .arkmap z offsetami wspolrzednych, remap ID,
-// checksumy v2, serializacja bajtowo jak zapis edytora (funkcje ekstrahowane
+// checksumy silnikiem aplikacji (obecnie v4 — ekstrakcja podaza za kodem),
+// serializacja bajtowo jak zapis edytora (funkcje ekstrahowane
 // verbatim z arkmap_studio.html). Klony = rozlaczne wyspy (swiadome
 // uproszczenie — koszt renderu skaluje sie liniowo z pokojami).
 //
@@ -108,7 +109,7 @@ for (const K of KS) {
   const v = api.validate(map);
   if (!v.ok) fail(`K=${K}: walidacja: ${(v.errors[0] || {}).message}`);
 
-  // Zapis .arkmap — bajtowo jak „Zapisz .arkmap" w edytorze (checksumy v2 + sort + stable).
+  // Zapis .arkmap — bajtowo jak „Zapisz .arkmap" w edytorze (checksumy silnikiem aplikacji, obecnie v4 + sort + stable).
   let arkmapStr;
   try {
     state.map = map;

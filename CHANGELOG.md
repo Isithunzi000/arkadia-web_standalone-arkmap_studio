@@ -2,7 +2,7 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
-## v1.45.2 — walidacja podwojnych linii przy loadzie + eksport raportow (Arc 22)
+## v1.45.2 — walidacja podwojnych linii przy loadzie + eksport raportow (Arc 29)
 
 Dwa watki ze zgloszenia uzytkownika:
 
@@ -36,7 +36,7 @@ Dwa watki ze zgloszenia uzytkownika:
   scenariusze E22 (load-section, load-clean, supp-export-btns, supp-geom)
   — repro-first 9 FAIL -> 18 PASS.
 
-## v1.45.1 — szerokosc dialogu walidacji pod przyciski raportu (Arc 21)
+## v1.45.1 — szerokosc dialogu walidacji pod przyciski raportu (Arc 28)
 
 Zgloszenie uzytkownika: po dodaniu przyciskow raportu (v1.45.0) stopka
 dialogu walidacji przeliwala sie w lewo — „Kopiuj raport" siedzial na
@@ -57,7 +57,7 @@ krawedzi okna (stopka bez flex-wrap + justify-content:flex-end + width
   vs content box stopki) — FAIL przed fixem, PASS po; piny B15/wrap
   w tier6_ux.js.
 
-## v1.45.0 — silnik sum v4, kalka na XXH3-64, raporty diagnostyczne (Arc 20)
+## v1.45.0 — silnik sum v4, kalka na XXH3-64, raporty diagnostyczne (Arc 27)
 
 Trzy powiazane watki z polishment-audytu silnika: szczelniejszy zakres sum
 kontrolnych .arkmap, unifikacja hashy kalki z silnikiem .arkmap i jednolity
