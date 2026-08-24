@@ -3,7 +3,7 @@
 set -e
 cd "$(dirname "$0")/.."
 FAILED=0
-for t in tests/a12a14_undo_core.js tests/a13_delete_area.js tests/a7_readbuffer.js tests/a9_pixmap.js tests/dir_filter.js tests/transport.js tests/share_link.js tests/planner_ui.js tests/sync_map.js tests/dir_validation.js tests/transports_sync.js tests/converters_crc.js tests/delta.js tests/ui_strings.js tests/ci_workflow.js tests/tier2_state.js tests/tier3_format.js tests/tier4_hardening.js tests/tier5_audit.js tests/tier6_ux.js tests/diff_kalka.js tests/pwa.js tests/xss_sinks.js tests/malformed_dat.js tests/validate_full.js tests/universal_colors.js tests/checksums_v4.js tests/report_export.js tests/checksums/xxh3_golden.js tests/save_dialogs.js tests/fix_batch_v1445.js tests/suppressors_load.js tests/changelog_tags.js tests/perf_counters.js tests/raf_shim.js; do
+for t in tests/a12a14_undo_core.js tests/a13_delete_area.js tests/a7_readbuffer.js tests/a9_pixmap.js tests/dir_filter.js tests/transport.js tests/share_link.js tests/planner_ui.js tests/sync_map.js tests/dir_validation.js tests/transports_sync.js tests/converters_crc.js tests/delta.js tests/ui_strings.js tests/ci_workflow.js tests/tier2_state.js tests/tier3_format.js tests/tier4_hardening.js tests/tier5_audit.js tests/tier6_ux.js tests/diff_kalka.js tests/pwa.js tests/xss_sinks.js tests/malformed_dat.js tests/validate_full.js tests/universal_colors.js tests/checksums_v4.js tests/report_export.js tests/checksums/xxh3_golden.js tests/save_dialogs.js tests/fix_batch_v1445.js tests/suppressors_load.js tests/changelog_tags.js tests/perf_counters.js tests/raf_shim.js tests/empirical_runner.js; do
   echo "═══ $t ═══"
   node "$t" || FAILED=1
   echo
@@ -11,14 +11,30 @@ done
 # Testy empiryczne .arkdelta (prawdziwa przegladarka headless + pelna aplikacja) — wymagany Chromium.
 if [ -n "${CHROMIUM_BIN:-}" ] || command -v chromium >/dev/null 2>&1; then
   echo "═══ tests/empirical.sh ═══"
-  ARKTEST_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13 E14 E16 E17 E18 E19 E20 E21 E22 E23" ARKTEST_BUDGET=300000 ARKTEST_TIMEOUT=420 bash tests/empirical.sh || FAILED=1
+  # Hardening (2026-08-24, flake ea33f85): DOKLADNIE 1 retry kampanii glownej
+  # wylacznie na sygnature CZYSTEJ zawiechy srodowiska (rc!=0 LUB BRAK SUMMARY)
+  # **i zero linii R|FAIL w outpucie**. FAIL asercji nigdy nie jest retry'owany
+  # ani maskowany — run od razu czerwieni (doktryna jak w bloku E15).
+  CAMP_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13 E14 E16 E17 E18 E19 E20 E21 E22 E23"
+  CAMP_OUT="$(ARKTEST_GROUPS="$CAMP_GROUPS" ARKTEST_BUDGET=300000 ARKTEST_TIMEOUT=420 bash tests/empirical.sh 2>&1)" && CAMP_RC=0 || CAMP_RC=$?
+  echo "$CAMP_OUT"
+  if [ "$CAMP_RC" -ne 0 ] && ! printf '%s\n' "$CAMP_OUT" | grep -q 'R|FAIL'; then
+    echo "kampania: czysta zawiecha (rc=$CAMP_RC, zero FAIL-i asercji) — 1 retry" >&2
+    pkill -f '[c]hromium' 2>/dev/null || true; sleep 2
+    CAMP_OUT="$(ARKTEST_GROUPS="$CAMP_GROUPS" ARKTEST_BUDGET=300000 ARKTEST_TIMEOUT=420 bash tests/empirical.sh 2>&1)" && CAMP_RC=0 || CAMP_RC=$?
+    echo "$CAMP_OUT"
+  fi
+  [ "$CAMP_RC" -eq 0 ] || FAILED=1
   echo
-  # E15 dedykowane (PWA/service worker): jedyna grupa czekajaca na REALNY cykl zycia SW,
-  # ktory pod virtual-time-budget potrafi zaglodzic na obciazonym hoscie (lekcja Arc 12 +
-  # faile CI 34af1db/a543243 — BRAK SUMMARY przy zerze FAIL-i asercji). Dlatego: osobny run
-  # z budzetem x2 i do 3 prob. Retry WYLACZNIE na zawieche (BRAK SUMMARY bez R|FAIL) —
-  # realny FAIL asercji natychmiast czerwieni run, bez retry. Timeout 300 s/probe, zeby
-  # pesymistyczne 3x zawiechy (~15 min) z reszta regresji zmiescily sie w limicie CI 1380 s.
+  # E15 dedykowane (PWA/service worker): jedyna grupa czekajaca na REALNY cykl zycia SW.
+  # Hardening 2026-08-24 (flake ea33f85): E15 jedzie na REALNYM zegarze przez CDP
+  # (tests/empirical_run.py — routing w empirical.sh po ARKTEST_REALTIME), wiec
+  # zrodlowe glodzenie SW pod virtual-time-budget (lekcja Arc 12 + faile CI
+  # 34af1db/a543243/ea33f85) jest wyeliminowane; watchdog drivera (90 s) gwarantuje
+  # SUMMARY nawet przy zawiesze. Retry 3x zostaje jako siatka na awarie srodowiska:
+  # WYLACZNIE na zawieche (BRAK SUMMARY bez R|FAIL) — realny FAIL asercji
+  # natychmiast czerwieni run, bez retry. Timeout 300 s/probe > watchdog 90 s
+  # + boot runnera (zapas na obciazony host).
   echo "═══ tests/empirical.sh (E15 dedykowane, retry na zawieche) ═══"
   E15_OK=0
   for attempt in 1 2 3; do

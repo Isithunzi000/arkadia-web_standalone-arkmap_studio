@@ -52,5 +52,11 @@ jobs:
           [ -n "$BIN" ]
           echo "CHROMIUM_BIN=$BIN" >> "$GITHUB_ENV"
 
+      # Hardening E15 (2026-08-24): E15 jedzie na realnym zegarze przez CDP
+      # (tests/empirical_run.py) — wymaga python3-websockets. Wersja spinana
+      # jak playwright powyzej (deterministyczne srodowisko CI).
+      - name: Python websockets (dla tests/empirical_run.py — E15 real clock)
+        run: python3 -m pip install websockets==15.0.1
+
       - name: Regresja (wszystkie harnessy + kampania empiryczna)
         run: timeout 1380 bash tests/run-all.sh

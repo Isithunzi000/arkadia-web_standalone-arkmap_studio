@@ -56,6 +56,8 @@ console.log('— pinning / struktura —');
 console.log('— podpięcie —');
 {
   ok(RUNALL.includes('tests/ci_workflow.js'), 'run-all.sh uruchamia ci_workflow.js (watchdog nie może zostać osierocony)');
+  // Hardening E15 (2026-08-24): runner CDP wymaga python3-websockets w CI
+  ok(/pip install websockets==[0-9.]+/.test(YML), 'CI instaluje python3-websockets spinane wersja (E15 real clock przez CDP)');
 }
 
 console.log(`\nci_workflow: ${pass} OK, ${fail} FAIL`);

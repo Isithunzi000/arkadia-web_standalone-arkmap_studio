@@ -57,6 +57,25 @@ function AEV(id, r, msg) {
   return r.val;
 }
 
+// ── Hardening E15 (2026-08-24): tryb real-time (?rt=1) ──────────────────────
+// E15 czeka na REALNY cykl service workera (osobny proces, realny zegar);
+// pod --virtual-time-budget SW gloduje na obciazonym hoscie (zawiechy CI
+// 34af1db/a543243/ea33f85 — BRAK SUMMARY przy zerze FAIL-i asercji).
+// W trybie rt=1 driver jedzie na realnym zegarze (runner CDP
+// tests/empirical_run.py czeka na window.__EMPIRICAL_DONE__), a watchdog
+// GWARANTUJE domkniecie: zawiecha = FAIL z nazwa wiszacego scenariusza
+// i SUMMARY w ograniczonym czasie, nigdy ciche BRAK SUMMARY.
+const ARK_RT_WATCHDOG_MS = 90000;
+let _curScenario = null;   // diagnostyka watchdogu: nazwa biezacego scenariusza
+if (new URLSearchParams(location.search).get('rt') === '1') {
+  setTimeout(function () {
+    if (window.__EMPIRICAL_DONE__) return;
+    REC('FAIL', 'watchdog', 'scenariusz ' + (_curScenario || '(boot)') + ' nie domknal w '
+      + (ARK_RT_WATCHDOG_MS / 1000) + ' s (real clock) — zawiecha srodowiska, nie FAIL asercji');
+    finish();
+  }, ARK_RT_WATCHDOG_MS);
+}
+
 // ── Fixture + ładowanie bazy ─────────────────────────────────────────────────
 let fixBuf = null;  // ArrayBuffer map_master3.dat (pobierany raz)
 async function fetchFixture() {
@@ -4127,12 +4146,15 @@ async function runAll() {
   for (const s of SC) {
     if (GRP && !(s.id === GRP || s.id.startsWith(GRP + '.'))) continue;
     if (ONLY.length && !ONLY.includes(s.id)) continue;
+    _curScenario = s.id;   // hardening E15: watchdog wie, co wisi
     try { await s.fn(); }
     catch (e) { FAIL(s.id, 'wyjatek scenariusza: ' + String(e && e.message || e)); }
   }
   finish();
 }
 function finish() {
+  if (window.__EMPIRICAL_DONE__) return;   // hardening E15: watchdog mogl domknac run wczesniej — SUMMARY tylko raz
+  window.__EMPIRICAL_DONE__ = true;        // hardening E15: marker dla runnera CDP (real clock, ?rt=1)
   $out.textContent += 'SUMMARY|pass=' + _pass + '|fail=' + _fail + '\n';
   const d = document.getElementById('done');
   d.textContent = 'DONE';
