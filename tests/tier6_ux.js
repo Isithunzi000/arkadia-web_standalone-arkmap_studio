@@ -166,7 +166,7 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
      HTML.includes('const vis = _cullQuery(rooms, vx0, vx1, vy0, vy1);'),
     'B24: indeks budowany w buildRoomsZ (kazda mutacja) + draw() culluje przez _cullQuery');
 
-  // ── F5 (v1.48.1): raport HTML kalki z miniaturami przed/po ──
+  // ── F5 (v1.48.2): raport HTML kalki z miniaturami przed/po ──
   ok(HTML.includes('id="dp-save-html"') && HTML.includes('⬇ Zapisz raport .html'),
     'B25: 7. przycisk stopki panelu kalki — bramka F5-geom (sonda 2026-08-24): dluga etykieta nie zmienia liczby rzedow wrap (2 przy 560 px, 3 przy 448 px) — szerokosc panelu bez zmian');
   ok(HTML.includes('const DELTA_THUMB_CAP = 60;') && HTML.includes('.slice(0, DELTA_THUMB_CAP)'),
@@ -275,8 +275,17 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
     'LDE: oba call-site (online + lokalny) selektuja saveBtn po id');
 }
 
+// ── A31 (Arc 31, audyt zewnetrzny, fala 1): renderer/cache — invalidacja + higiena ctx ──
+{
+  ok((HTML.match(/_rasterInvalidate\(\);/g) || []).length >= 10,
+    'A31-F1.8: invalidacja rastra we wszystkich sciezkach mutacji env/symbol/hidden (6 nowych + istniejace)');
+  const m = HTML.match(/function drawRoomsRaster\(\) \{[\s\S]*?\n\}/);
+  ok(!!m && m[0].includes('ctx.save()') && m[0].includes('ctx.restore()'),
+    'A31-F1.10: drawRoomsRaster — ctx.save/restore wokol blitu (imageSmoothingEnabled nie wycieka)');
+}
+
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.48.1';"), 'V1: pin APP_VERSION v1.48.1');
+ok(HTML.includes("const APP_VERSION = 'v1.48.2';"), 'V1: pin APP_VERSION v1.48.2');
 
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);

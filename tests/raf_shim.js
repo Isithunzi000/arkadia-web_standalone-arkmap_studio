@@ -40,7 +40,7 @@ ok(sd.includes('_drawScheduled = true;') && sd.includes('requestAnimationFrame((
 
 // ── B: komplet podmiany call-site'ow ────────────────────────────────────────
 const nSched = (HTML.match(/\bscheduleDraw\(\);/g) || []).length;
-// F5 (Arc 31, v1.48.1): +1 call-site — scheduleDraw() w _deltaReviewReportHtml
+// F5 (Arc 31, v1.48.2): +1 call-site — scheduleDraw() w _deltaReviewReportHtml
 // (przywrocenie paska statusu/slidera po renderach shimowych miniaturek).
 ok(nSched === 122, 'B1: dokladnie 122 call-site\'ow scheduleDraw(); (jest ' + nSched + ')');
 const bareAll = (HTML.match(/\bdraw\(\);/g) || []).length;

@@ -2,6 +2,23 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.48.2 — Audyt zewnetrzny, fala 1: kalka + renderer/cache + XSS (Arc 31)
+
+Dwanascie poprawek z zewnetrznego audytu kodu (fala 1: silnik kalek, renderer i DOM). Wszystkie objete pinami regresyjnymi (tests/audit_ext.js, tier6_ux A31, xss_sinks A31).
+
+- F1.1: symulacja MOVE_ROOM sprawdza kolizje zajetego pokoju na pozycji docelowej — klasyfikacja hard zamiast ok przy kolizji dwoch operacji.
+- F1.2: applyDelta: straznik glebokosci zagniezdzenia przed stableStringify — gleboka delta zwraca ok:false zamiast rzucac RangeError.
+- F1.3: SET_COLOR akceptuje newColor null (reset do domyslnego) — walidator i symulacja zgodne z dokumentacja formatu.
+- F1.4: commitMoveRoomToArea zastapiony sciezka data-only wewnatrz applyDelta: aktualizacja pokojow, areaList, undo i cache bez commit/promptu/skoku widoku; jeden rebuild listy obszarow na koniec delty.
+- F1.5: mapa pozycji referencji sid d:N (_DELTA_REF_*) wspoldzielona miedzy walidatorem, translatorem i skanerem resztek — pojedyncze zrodlo prawdy; sid-y w payloadach wykrywane i tlumaczone.
+- F1.6: walidacja ksztaltu elementow PAINT_BATCH i AUTO_FIX (elements: [x,y]) + guardy null w classify i symulacji.
+- F1.7: commitMoveRoom i dispatcher undo/redo odbudowuja buildRoomsZ() bezwarunkowo — brak starych wspolrzednych z po przesunieciach i cofnieciach.
+- F1.8: inwalidacja _rasterInvalidate() po mutacjach danych pokojow w 6 sciezkach (undo/redo, zmiana trybu podswietlania, checkboxy terenu, silnik kolorow) — raster nie pokazuje starych kolorow.
+- F1.9: zamiana kolorow pokojow odbudowuje colorCache po przywroceniu danych — kolory wracaja bez reloadu; cache poprawny rowniez przy bledzie.
+- F1.10: drawRoomsRaster: save/restore stanu ctx — gladkie krawedzie (smoothing) nie wyciekaja do drawRoomsLod.
+- F1.11: twarde limity komorek cull-indexu i rastra (2^22); raster fallback do LOD zamiast RangeError przy gigantycznym bbox.
+- F1.12: edytor CL: przycisk punktow bez atrybutu onclick z interpolacja — podpiecie programistyczne, zamyka wektor XSS przez nazwe kierunku.
+
 ## v1.48.1 — Hartowanie try/finally po audycie zewnetrznym (Arc 31)
 
 Wynik pelnego audytu zewnetrznego (silniki v4 arkmap/arkdelta, renderer,

@@ -94,5 +94,13 @@ ok((srcInfo.match(/escHtml\(r\.env\)/g) || []).length >= 2, 'straznik: envLabel 
 ok(!srcRefs.includes('(${r.dir})'), 'straznik: dlg-refs-list — r.dir nie raw');
 ok((srcRefs.match(/escHtml\(r\.dir\)/g) || []).length >= 1, 'straznik: dlg-refs-list — escHtml(r.dir)');
 
+// ── A31-F1.12 (Arc 31, audyt zewnetrzny): openCLEditor — klucz custom_lines poza inline onclick ──
+{
+  const srcCL = extract('openCLEditor');
+  ok(!/onclick="[^"]*'\$\{/.test(srcCL), 'A31-F1.12: openCLEditor — zero interpolacji stringa w atrybucie onclick');
+  ok(!/onclick="[^"]*startClDrawingExisting/.test(srcCL), 'A31-F1.12: startClDrawingExisting nie jest inline handlerem');
+  ok(/startClDrawingExisting\(dir\)/.test(srcCL), 'A31-F1.12: wiring programowy startClDrawingExisting(dir)');
+}
+
 console.log('\nxss_sinks.js: ' + pass + ' PASS, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

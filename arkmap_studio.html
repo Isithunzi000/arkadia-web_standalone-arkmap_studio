@@ -7266,6 +7266,7 @@ let _shimActive = false;
 function _withRenderTarget(canvas2, viewState, dataOverride, fn) {
   const savedCv = cv, savedCtx = ctx;
   const undo = [];
+  let _colorsSwapped = false;  // audyt ext F1.9
   const swap = (obj, key, val) => { undo.push([obj, key, obj[key]]); obj[key] = val; };
   const view = viewState || {};
   const data = dataOverride || {};
@@ -7285,11 +7286,19 @@ function _withRenderTarget(canvas2, viewState, dataOverride, fn) {
       if ('envColors' in data)       swap(state.map.colors, 'env_colors', data.envColors);
       if ('customEnvColors' in data) swap(state.map.colors, 'custom_env_colors', data.customEnvColors);
     }
+    // audyt ext F1.9: roomColor/envColorRgb czytaja state.colorCache — po swapie kolorow
+    // cache musi odpowiadac podmienionym; poprzedni cache przywracany przez undo[] w finally.
+    if (('envColors' in data || 'customEnvColors' in data) && state.map && state.map.colors) {
+      swap(state, 'colorCache', state.colorCache);
+      buildColorCache(state.map.colors);
+      _colorsSwapped = true;
+    }
     _shimActive = true;
     return fn();
   } finally {
     _shimActive = false;
     for (let i = undo.length - 1; i >= 0; i--) { const [o, k, v] = undo[i]; o[k] = v; }
+    if (_colorsSwapped && typeof refreshEnvColors === 'function') refreshEnvColors();  // audyt ext F1.9: legenda po przywroconym cache
     cv = savedCv;
     ctx = savedCtx;
   }
@@ -7340,6 +7349,18 @@ function _rasterKey() {
   return k;
 }
 function _rasterInvalidate() { _rasterCache = null; }
+// audyt ext F1.11: true gdy bbox roomsZ miesci sie w capie rastra (ImageData <= 16 MB)
+function _rasterFitsCap() {
+  const rooms = state.roomsZ || [];
+  if (!rooms.length) return true;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const r of rooms) {
+    if (r.x < minX) minX = r.x; if (r.x > maxX) maxX = r.x;
+    if (r.y < minY) minY = r.y; if (r.y > maxY) maxY = r.y;
+  }
+  return (maxX - minX + 1) * (maxY - minY + 1) <= RASTER_MAX_CELLS;
+}
+
 function _buildRoomsRaster() {
   const rooms = state.roomsZ || [];
   const hMode = state.view?.hiddenRooms || 'faded';
@@ -7374,6 +7395,7 @@ function _buildRoomsRaster() {
 function drawRoomsRaster() {
   if (!_rasterCache || _rasterCache.key !== _rasterKey()) _buildRoomsRaster();
   const c = _rasterCache, cellPx = cpx();
+  ctx.save();                       // audyt ext F1.10: imageSmoothingEnabled nie wycieka poza raster
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(c.canvas,
     wx(c.minX) - cellPx / 2, wy(c.maxY) - cellPx / 2,
@@ -7388,6 +7410,7 @@ function drawRoomsRaster() {
       ctx.strokeRect(cx - h, cy - h, h * 2, h * 2);
     }
   }
+  ctx.restore();
 }
 
 // ─── CullIndex „uniform grid" (Arc 31 F4, v1.47.1) ─────────────────────────────
@@ -7408,6 +7431,11 @@ function drawRoomsRaster() {
 // Piny: tier6 B22/B23/B24; scenariusz E23.cull.
 const CULL_INDEX_MIN = 256;
 const CULL_GRID_CELLS = 16;
+// audyt ext F1.11: cap alokacji proporcjonalnych do bbox (2^22 komorki = ImageData 16 MB /
+// Array ~32 MB; ~100x headroom nad bbox realnej mapy; 3 rzedy wielkosci pod progiem
+// RangeError). Powyzej capa — fallback: liniowy _cullQuery / wektorowy drawRooms.
+const CULL_INDEX_MAX_CELLS = 4194304;
+const RASTER_MAX_CELLS     = 4194304;
 let _cullIndex = null;   // { plane, minX, minY, cols, rows, cells: tablica cel z indeksami roomsZ }
 function _buildCullIndex() {
   const rooms = state.roomsZ || [];
@@ -7419,6 +7447,7 @@ function _buildCullIndex() {
   }
   const cols = Math.max(1, Math.floor((maxX - minX) / CULL_GRID_CELLS) + 1);
   const rows = Math.max(1, Math.floor((maxY - minY) / CULL_GRID_CELLS) + 1);
+  if (cols * rows > CULL_INDEX_MAX_CELLS) { _cullIndex = null; return; }  // audyt ext F1.11: fallback liniowy
   const cells = new Array(cols * rows);
   for (let i = 0; i < rooms.length; i++) {
     const r = rooms[i];
@@ -7493,7 +7522,7 @@ function draw() {
   // drawCrossArrows(vis);  // ZAD 3: trójkąty up/down/in/out zastępują tekstowe ↑↓ (Delwing-style, bez podwójnego renderu)
   if (state.zoom > 0.3 && (state.view?.mudletLabels !== false || state.showPixmaps)) drawLabels();   // warstwa 4 — toggle „Etykiety Mudleta"
   _perfTick(_pc, 'labels');
-  if (_lodMode === 'raster') drawRoomsRaster(); else drawRooms(vis, rs);  // F3: podklad rastrowy zamiast warstwy wektorowej pokoi
+  if (_lodMode === 'raster' && _rasterFitsCap()) drawRoomsRaster(); else drawRooms(vis, rs);  // F3: podklad rastrowy zamiast warstwy wektorowej pokoi; audyt ext F1.11: bbox > cap -> wektor
   _perfTick(_pc, 'rooms');                                    // warstwa 5
   if (state.view?.areaExitLabels !== false) drawCrossAreaLabels(rs);  // warstwa 5b — toggle „Wyjścia z obszarów"
   _perfTick(_pc, 'area_labels');
@@ -7743,6 +7772,7 @@ function rpApplyHidden() {
   r.user_data = r.user_data || {};
   if (cb && cb.checked) r.user_data['system.fallback_hidden'] = 'true';
   else delete r.user_data['system.fallback_hidden'];
+  _rasterInvalidate();  // audyt ext F1.8: widocznosc pokoju wchodzi do rastra (faded/hide)
   if (typeof setEditDirty === 'function') setEditDirty();
   scheduleDraw();
 }
@@ -13992,7 +14022,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.48.1';
+const APP_VERSION = 'v1.48.2';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -14345,12 +14375,14 @@ function _dispatchUndo(entry) {
         if (ch.beforeSymbol) r.symbol = ch.beforeSymbol; else delete r.symbol;
       }
       if (state.selected && state.editMode) { const sr = rm(state.selected); if (sr) populateEditForm(sr); }
+      _rasterInvalidate();  // audyt ext F1.8: batch undo — raz, nie per pokoj
       break;
     }
     case 'MOVE_ROOM': {
       const r = rm(entry.roomId); if (!r) break;
       r.x = entry.fromX; r.y = entry.fromY; r.z = entry.fromZ;
-      if (r.z !== state.z) { state.z = r.z; buildRoomsZ(); }
+      if (r.z !== state.z) state.z = r.z;
+      buildRoomsZ();  // audyt ext F1.7: rebuild zawsze (ruch na tym samym Z uniewaznia indeks)
       break;
     }
     case 'MOVE_ROOM_TO_AREA': {
@@ -14642,12 +14674,14 @@ function _dispatchRedo(entry) {
         if (ch.afterSymbol) r.symbol = ch.afterSymbol; else delete r.symbol;
       }
       if (state.selected && state.editMode) { const sr = rm(state.selected); if (sr) populateEditForm(sr); }
+      _rasterInvalidate();  // audyt ext F1.8: batch redo — raz, nie per pokoj
       break;
     }
     case 'MOVE_ROOM': {
       const r = rm(entry.roomId); if (!r) break;
       r.x = entry.toX; r.y = entry.toY; r.z = entry.toZ;
-      if (r.z !== state.z) { state.z = r.z; buildRoomsZ(); }
+      if (r.z !== state.z) state.z = r.z;
+      buildRoomsZ();  // audyt ext F1.7: rebuild zawsze (ruch na tym samym Z uniewaznia indeks)
       break;
     }
     case 'MOVE_ROOM_TO_AREA': {
@@ -16276,7 +16310,11 @@ function openCLEditor(room, dir) {
       <input type="checkbox" id="cl-arrow-in" ${cl.arrow?'checked':''} style="accent-color:var(--edit)">
     </div>
     <div class="cl-pts">Punkty: ${cl.points?.length||0} — <span style="color:var(--edit)">kliknij na canvasie aby edytować</span></div>
-    <button style="font-size: 11px;padding:4px 8px;margin-top:2px;border-color:var(--edit);color:var(--edit)" onclick="startClDrawingExisting('${dir}')">✎ Edytuj punkty na canvasie</button>`;
+    <button class="cl-edit-pts" style="font-size: 11px;padding:4px 8px;margin-top:2px;border-color:var(--edit);color:var(--edit)">✎ Edytuj punkty na canvasie</button>`;
+
+  // audyt ext F1.12: dir jako wartosc JS (zero wstrzykniecia w atrybut) — wiring programowy
+  const editPtsBtn = editorEl.querySelector('.cl-edit-pts');
+  if (editPtsBtn) editPtsBtn.onclick = () => startClDrawingExisting(dir);
 
   // Wire style buttons
   editorEl.querySelectorAll('.cl-style-btn').forEach(btn => {
@@ -16584,6 +16622,7 @@ function commitRoomEdit() {
   if (nameIn)   room.name   = nameIn.value.trim();
   if (envIn)    room.env    = parseInt(envIn.value) || 1;
   if (symbolIn) room.symbol = symbolIn.value.trim() || undefined;
+  _rasterInvalidate();  // audyt ext F1.8: env/symbol zmienione w commicie — raster traci waznosc
   if (weightIn) {
     const wv = parseInt(weightIn.value);
     if (weightIn.value.trim() !== '' && (isNaN(wv) || wv < 1)) {
@@ -17627,6 +17666,7 @@ function commitMoveRoom(room, fromX, fromY, fromZ, toX, toY, toZ, label) {
     label: label || `Przesunięcie pokoju "${roomName}" (#${roomId})` });
   state.redoStack = [];
   updateUndoRedoUI();
+  buildRoomsZ();  // audyt ext F1.7: rebuild bezwarunkowo — ruch na tym samym Z tez uniewaznia CullIndex/raster
   _syncEditSnapshot();
 }
 
@@ -17766,6 +17806,7 @@ function _paintStrokeRevert() {
     r.env = before.env;
     if (before.symbol) r.symbol = before.symbol; else delete r.symbol;
   }
+  _rasterInvalidate();  // audyt ext F1.8
   scheduleDraw();
 }
 // Zatwierdź pociągnięcie → jeden batch-undo, TYLKO realnie zmienione pokoje (idempotencja)
@@ -17785,6 +17826,7 @@ function _paintStrokeCommit() {
   pushUndo({ type:'PAINT_BATCH', changes, label:`Malowanie „${sw ? sw.label : ''}" — ${n} ${n===1?'pokój':'pokoi'}` });
   state.redoStack = [];
   updateUndoRedoUI();
+  _rasterInvalidate();  // audyt ext F1.8: batch paint — raz, nie per pokoj
   scheduleDraw();
   toast(`✓ Pomalowano ${n} ${n===1?'pokój':'pokoi'}`);
 }
@@ -19782,6 +19824,59 @@ const _DELTA_SCHEMA = {
   EDIT_ENV_COLOR:       { target: ['envId'], payload: ['newColor'] },
 };
 
+// ── audyt ext F1.5: pozycje referencyjne sid d:N — JEDNO zrodlo prawdy ──────
+// sid-y walidujemy/tlumaczymy WYLACZNIE w pozycjach referencyjnych (klucze ref
+// target/payload per typ + wartosci id-owe w kontenerach: id, exits, special_exits,
+// targetId, roomId). Pola tekstowe (name/notes/text/user_data/label.text) NIGDY —
+// pokoj moze sie legalnie nazywac „d:1". Konsumenci: walidator (zbieranie uzyc),
+// _deltaTranslate (podmiana), skan leftoverow w applyDelta.
+const _DELTA_REF_TARGET = {
+  ADD_ROOM: ['roomId', 'areaId'], DELETE_ROOM: ['roomId', 'areaId'], EDIT_ROOM: ['roomId'],
+  EDIT_EXIT: ['roomId'], MOVE_ROOM: ['roomId'], MOVE_ROOM_TO_AREA: ['roomId'],
+  ADD_EXIT: ['sourceId'], DELETE_EXIT: ['roomId'], DELETE_SPECIAL_EXIT: ['roomId'],
+  ADD_CL: ['roomId'], EDIT_CL: ['roomId'], DELETE_CL: ['roomId'],
+  DELETE_SUPPRESSOR: ['roomId'], ADD_SUPPRESSOR: ['roomId'],
+  ADD_AREA: ['areaId'], DELETE_AREA: ['areaId'], EDIT_AREA: ['areaId'],
+  ADD_LABEL: ['areaId'], EDIT_LABEL: ['areaId', 'labelId'], DELETE_LABEL: ['areaId', 'labelId'],
+  MOVE_LABEL: ['areaId', 'labelId'], RESIZE_LABEL: ['areaId', 'labelId'],
+  PAINT_BATCH: [], AUTO_FIX_SUPPRESSORS: [], EDIT_ENV_COLOR: [],
+};
+const _DELTA_REF_PAYLOAD = {
+  MOVE_ROOM_TO_AREA: ['toAreaId'], ADD_EXIT: ['targetId'],
+};
+// Kontenery payload z polami id-owymi: klucz -> rodzaj kontenera.
+const _DELTA_REF_CONTAINERS = {
+  ADD_ROOM: { room: 'room' }, DELETE_ROOM: { room: 'room' },
+  EDIT_ROOM: { before: 'room', after: 'room' }, EDIT_EXIT: { before: 'room', after: 'room' },
+  ADD_LABEL: { label: 'label' }, EDIT_LABEL: { before: 'label', after: 'label' },
+  DELETE_LABEL: { label: 'label' }, ADD_AREA: { area: 'area' },
+  PAINT_BATCH: { changes: 'changes' },
+  AUTO_FIX_SUPPRESSORS: { added: 'changes', removed: 'changes' },
+};
+// Sloty [obj, klucz] pozycji referencyjnych opu (mutowalne — translate podmienia w miejscu).
+function _deltaSidRefSlots(op) {
+  const slots = [];
+  const T = op.target || {}, P = op.payload || {};
+  for (const k of (_DELTA_REF_TARGET[op.type] || [])) if (T[k] !== undefined) slots.push([T, k]);
+  for (const k of (_DELTA_REF_PAYLOAD[op.type] || [])) if (P[k] !== undefined) slots.push([P, k]);
+  const walkRoom = (room) => {
+    if (!room || typeof room !== 'object') return;
+    if (room.id !== undefined) slots.push([room, 'id']);
+    if (room.exits) for (const d of Object.keys(room.exits)) slots.push([room.exits, d]);
+    if (room.special_exits) for (const c of Object.keys(room.special_exits)) slots.push([room.special_exits, c]);
+  };
+  const cont = _DELTA_REF_CONTAINERS[op.type] || {};
+  for (const key of Object.keys(cont)) {
+    const c = P[key];
+    if (cont[key] === 'room') walkRoom(c);
+    else if (cont[key] === 'label' || cont[key] === 'area') { if (c && typeof c === 'object' && c.id !== undefined) slots.push([c, 'id']); }
+    else if (cont[key] === 'changes') {
+      if (Array.isArray(c)) for (const ch of c) if (ch && typeof ch === 'object' && ch.roomId !== undefined) slots.push([ch, 'roomId']);
+    }
+  }
+  return slots;
+}
+
 const _DELTA_MAX_DEPTH = 60;  // audyt T4/S8: limit rekursji skanera kalki — kontrolowany blad zamiast RangeError (kontrakt "Nigdy nie rzuca" validateDeltaText)
 function _deltaScanDeep(val, onKey, onStr, depth) {
   depth = depth || 0;
@@ -19835,8 +19930,15 @@ function _deltaValidateOpTypes(op) {
     case 'ADD_CL': refT('roomId'); objP('cl'); break;
     case 'EDIT_CL': refT('roomId'); objP('before'); objP('after'); break;
     case 'DELETE_CL': case 'DELETE_SUPPRESSOR': case 'ADD_SUPPRESSOR': refT('roomId'); break;
-    case 'PAINT_BATCH': arrP('changes'); break;
-    case 'AUTO_FIX_SUPPRESSORS': arrP('added'); arrP('removed'); break;
+    case 'PAINT_BATCH': arrP('changes');
+      // audyt ext F1.6: ksztalt elementow (obiekt; roomId ref: numer albo sid)
+      if (Array.isArray(P.changes) && P.changes.some(ch => !ch || typeof ch !== 'object' || Array.isArray(ch)
+          || (ch.roomId !== undefined && typeof ch.roomId !== 'number' && typeof ch.roomId !== 'string'))) bad.push(pl('changes'));
+      break;
+    case 'AUTO_FIX_SUPPRESSORS': arrP('added'); arrP('removed');
+      if (Array.isArray(P.added) && P.added.some(ch => !ch || typeof ch !== 'object' || Array.isArray(ch))) bad.push(pl('added'));
+      if (Array.isArray(P.removed) && P.removed.some(ch => !ch || typeof ch !== 'object' || Array.isArray(ch))) bad.push(pl('removed'));
+      break;
     case 'ADD_LABEL': refT('areaId'); objP('label'); break;
     case 'EDIT_LABEL': refT('areaId'); refT('labelId'); objP('before'); objP('after'); break;
     case 'DELETE_LABEL': refT('areaId'); refT('labelId'); objP('label'); break;
@@ -19844,7 +19946,8 @@ function _deltaValidateOpTypes(op) {
     case 'RESIZE_LABEL': refT('areaId'); refT('labelId'); coordP('toX'); coordP('toY'); coordP('toW'); coordP('toH'); break;
     case 'EDIT_ENV_COLOR':
       if (T.envId !== undefined && !(Number.isInteger(T.envId) && T.envId >= 0) && !(typeof T.envId === 'string' && T.envId.length)) bad.push(pl('envId'));
-      if (P.newColor !== undefined && !(Array.isArray(P.newColor) && P.newColor.length >= 3 && P.newColor.every(c => Number.isInteger(c) && c >= 0 && c <= 255))) bad.push(pl('newColor'));
+      // audyt ext F1.3: null = przywrocenie domyslnego koloru (generator diffu emituje null legalnie)
+      if (P.newColor !== undefined && P.newColor !== null && !(Array.isArray(P.newColor) && P.newColor.length >= 3 && P.newColor.every(c => Number.isInteger(c) && c >= 0 && c <= 255))) bad.push(pl('newColor'));
       break;
   }
   return bad;
@@ -19862,6 +19965,15 @@ function validateDeltaText(text) {
   if (meta.format !== ARKDELTA_FORMAT) return { ok: false, errors: ['To nie jest plik .arkdelta.'] };
   if (meta.format_version !== ARKDELTA_FORMAT_VERSION)
     return { ok: false, errors: ['Nieobsługiwana wersja formatu kalki: ' + (meta.format_version ?? 'brak') + ' (ta wersja ArkMap Studio obsługuje: ' + ARKDELTA_FORMAT_VERSION + '). Plik nie został wczytany.'] };
+
+  // audyt ext F1.2: straznik glebokosci PRZED checksumami — stableStringify jest
+  // rekurencyjne; bez guarda glebokie ops wywalaja RangeError poza walidator.
+  if (Array.isArray(delta.ops)) {
+    let tooDeep = false;
+    try { for (const op of delta.ops) _deltaScanDeep(op, () => {}, () => {}); }
+    catch (e) { tooDeep = true; }
+    if (tooDeep) return { ok: false, errors: ['zbyt głęboko zagnieżdżona struktura.'] };
+  }
 
   // Checksumy: najpierw zbiorcze, przy niezgodności lokalizacja per op.
   const cs = delta.checksums || {};
@@ -19914,9 +20026,13 @@ function validateDeltaText(text) {
     }
     else if (op.type === 'ADD_ROOM' || op.type === 'ADD_AREA' || op.type === 'ADD_LABEL')
       errors.push(tag + ': nowy obiekt musi mieć identyfikator kalki (np. d:1), nie zwykły numer.');  // audyt T4/K7
+    // audyt ext F1.5: uzycia sid zbierane WYLACZNIE z pozycji referencyjnych (mapa wyzej);
+    // glebokosc opu strzezona przez skan kluczy powyzej + globalny straznik F1.2.
     const used = [];
-    try { _deltaScanDeep(op, () => {}, v => { if (_DELTA_SID_RE.test(v)) used.push(v); }); }
-    catch (e) { errors.push(tag + ': zbyt głęboko zagnieżdżona struktura.'); continue; }  // audyt T4/S8
+    for (const [o, k] of _deltaSidRefSlots(op)) {
+      const v = o[k];
+      if (typeof v === 'string' && _DELTA_SID_RE.test(v)) used.push(v);
+    }
     for (const sid of used) if (!definedSid.has(sid)) errors.push(tag + ': odwołanie do nieistniejącego obiektu kalki (' + sid + ').');
   }
   if (errors.length) return { ok: false, errors };
@@ -20125,6 +20241,7 @@ function _deltaBuildShadow(sidDone) {
       }
       case 'PAINT_BATCH': {
         for (const ch of (P.changes || [])) {
+          if (!ch) continue;  // audyt ext F1.6
           const ridP = resR(ch.roomId);  // audyt T1/W14
           const r = ridP === undefined ? null : sh.roomById[ridP];
           if (!r) continue;
@@ -20136,6 +20253,9 @@ function _deltaBuildShadow(sidDone) {
       case 'MOVE_ROOM': {
         const r = sh.roomById[resR(T.roomId)];
         if (!r) break;                                           // apply: skip
+        // audyt ext F1.1: guard zajetosci (lustro applyDelta) — zajeta komorka = cien bez ruchu
+        const occM = shRoomAt(sh.roomArea[r.id], P.toX, P.toY, P.toZ);
+        if (occM && occM.id !== r.id) break;
         r.x = P.toX; r.y = P.toY; r.z = P.toZ ?? r.z;            // no-move = bez zmian
         break;
       }
@@ -20217,12 +20337,14 @@ function _deltaBuildShadow(sidDone) {
       }
       case 'AUTO_FIX_SUPPRESSORS': {
         for (const x of (P.added || [])) {
+          if (!x) continue;  // audyt ext F1.6
           const ridA = resR(x.roomId);  // audyt T1/W14
           const r = ridA === undefined ? null : sh.roomById[ridA]; if (!r) continue;
           r.custom_lines = r.custom_lines || {};
           r.custom_lines[x.dir] = JSON.parse(JSON.stringify(x.cl));
         }
         for (const x of (P.removed || [])) {
+          if (!x) continue;  // audyt ext F1.6
           const ridD = resR(x.roomId);  // audyt T1/W14
           const r = ridD === undefined ? null : sh.roomById[ridD]; if (!r || !r.custom_lines) continue;
           delete r.custom_lines[x.dir];
@@ -20400,7 +20522,7 @@ function classifyDelta(delta) {
       case 'PAINT_BATCH': {
         const changes = P.changes || [];
         // audyt T1/W14: identyfikatory kalki (d:N) przez resR — jak w pozostalych typach
-        const existing = changes.filter(ch => { const rid = resR(ch.roomId); return rid !== undefined && sh.roomById[rid]; });
+        const existing = changes.filter(ch => { if (!ch) return false; const rid = resR(ch.roomId); return rid !== undefined && sh.roomById[rid]; });  // audyt ext F1.6
         if (!existing.length) { items.push(_deltaClsItem(op, 'impossible', 'żaden pokój nie istnieje')); break; }
         const allMatch = existing.every(ch => {
           const r = sh.roomById[resR(ch.roomId)];
@@ -20533,8 +20655,8 @@ function classifyDelta(delta) {
       }
       case 'AUTO_FIX_SUPPRESSORS': {
         // audyt T1/W14: resR — jak w pozostalych typach
-        const added = (P.added || []).filter(x => { const rid = resR(x.roomId); return rid !== undefined && sh.roomById[rid]; });
-        const removed = (P.removed || []).filter(x => { const rid = resR(x.roomId); return rid !== undefined && sh.roomById[rid]; });
+        const added = (P.added || []).filter(x => { if (!x) return false; const rid = resR(x.roomId); return rid !== undefined && sh.roomById[rid]; });  // audyt ext F1.6
+        const removed = (P.removed || []).filter(x => { if (!x) return false; const rid = resR(x.roomId); return rid !== undefined && sh.roomById[rid]; });  // audyt ext F1.6
         const total = (P.added || []).length + (P.removed || []).length;
         if (!added.length && !removed.length) { items.push(_deltaClsItem(op, 'impossible', 'pokoje nie istnieją')); break; }
         const eff = added.filter(x => { const c = sh.roomById[resR(x.roomId)].custom_lines; return !c || !c[x.dir]; }).length
@@ -20633,16 +20755,16 @@ function _deltaPush(entry) {
   updateUndoRedoUI();
 }
 
-// Tłumaczy sid → świeże id w głębokim klonie opu.
+// Tłumaczy sid → świeże id w głębokim klonie opu — WYLACZNIE w pozycjach
+// referencyjnych (audyt ext F1.5: teksty uzytkownika nigdy nie sa podmieniane).
 function _deltaTranslate(obj, sidMap) {
   const c = JSON.parse(JSON.stringify(obj));
-  const walk = (v) => {
-    if (Array.isArray(v)) { for (let i = 0; i < v.length; i++) v[i] = walk(v[i]); return v; }
-    if (v !== null && typeof v === 'object') { for (const k of Object.keys(v)) v[k] = walk(v[k]); return v; }
-    if (typeof v === 'string' && sidMap.has(v)) return sidMap.get(v);
-    return v;
-  };
-  return walk(c);
+  if (!sidMap.size) return c;
+  for (const [o, k] of _deltaSidRefSlots(c)) {
+    const v = o[k];
+    if (typeof v === 'string' && sidMap.has(v)) o[k] = sidMap.get(v);
+  }
+  return c;
 }
 
 // Zwraca { applied, skipped: [{seq, reason}] }.
@@ -20661,6 +20783,7 @@ function applyDelta(delta, onlySeq, overrides, seedSids) {
   let applied = 0;
   const appliedSeqs = [];  // seq-e realnie naniesione (panel: warstwa "naniesione z tej kalki")
   const skipped = [];
+  let _deltaMovedArea = false;  // audyt ext F1.4: batch MOVE_ROOM_TO_AREA -> jeden buildAreaList po petli
 
   // audyt A22/D4 (decyzja): izolacja PER-OP zamiast rollbacku — blad w jednym opie
   // pomija ten op (skip z powodem -> panel raportuje applied/skipped), reszta delty
@@ -20678,9 +20801,11 @@ function applyDelta(delta, onlySeq, overrides, seedSids) {
                    : rawOp.type === 'ADD_AREA' ? String(rawOp.target.areaId)
                    : rawOp.type === 'ADD_LABEL' ? String(rawOp.payload.label && rawOp.payload.label.id) : null;
       let leftover = null;
-      _deltaScanDeep(op, () => {}, v => {
-        if (_DELTA_SID_RE.test(v) && v !== ownSid && !sidMap.has(v) && leftover === null) leftover = v;
-      });
+      // audyt ext F1.5: skan leftoverow tylko w pozycjach ref (teksty moga byc dowolne)
+      for (const [o, k] of _deltaSidRefSlots(op)) {
+        const v = o[k];
+        if (typeof v === 'string' && _DELTA_SID_RE.test(v) && v !== ownSid && !sidMap.has(v) && leftover === null) leftover = v;
+      }
       if (leftover !== null) { skip('odwołanie do obiektu kalki, który nie istnieje (' + leftover + ')'); continue; }
     }
     // M3: override pozycji (autopozycja / ręczna) — po tłumaczeniu sid, przed commit.
@@ -20757,15 +20882,29 @@ function applyDelta(delta, onlySeq, overrides, seedSids) {
           const occM = _deltaRoomAt(state.roomArea[room.id], tx, ty, tz);
           if (occM && occM.id !== room.id) { skip('komórka docelowa zajęta'); break; }
           room.x = tx; room.y = ty; room.z = tz;
-          commitMoveRoom(room, fx, fy, fz, tx, ty, tz, op.label);
-          buildRoomsZ();
+          commitMoveRoom(room, fx, fy, fz, tx, ty, tz, op.label);  // audyt ext F1.7: rebuild w commitMoveRoom (dubel usuniety)
           applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
         case 'MOVE_ROOM_TO_AREA': {
-          if (!state.roomById[op.target.roomId]) { skip('pokój nie istnieje'); break; }
-          if (!state.areas.get(op.payload.toAreaId)) { skip('obszar docelowy nie istnieje'); break; }
-          commitMoveRoomToArea(op.target.roomId, op.payload.toAreaId, op.label);
+          // audyt ext F1.4: sciezka data-only (jak dispatchery undo/redo) — bez UI-owego
+          // commitMoveRoomToArea (nawigacja/toast/buildAreaList per op przy batchu).
+          const room = state.roomById[op.target.roomId];
+          if (!room) { skip('pokój nie istnieje'); break; }
+          const toAreaId = op.payload.toAreaId;
+          if (toAreaId === undefined || toAreaId === null || !state.areas.get(toAreaId)) { skip('obszar docelowy nie istnieje'); break; }
+          if (state.roomArea[room.id] === toAreaId) { skip('pokój już jest w tym obszarze'); break; }
+          const fromAreaId = state.roomArea[room.id];
+          const fromArea = state.areas.get(fromAreaId);
+          const toArea = state.areas.get(toAreaId);
+          if (fromArea) fromArea.rooms = (fromArea.rooms || []).filter(r => r.id !== room.id);
+          toArea.rooms = toArea.rooms || []; toArea.rooms.push(room);
+          room.area = toAreaId;
+          state.roomArea[room.id] = toAreaId;
+          // effect-check po operacji (niespojnosci -> skip bez wpisu)
+          if (state.roomArea[room.id] !== toAreaId || !(toArea.rooms || []).includes(room)) { skip('efekt nieutrwalony'); break; }
+          _deltaPush({ type: 'MOVE_ROOM_TO_AREA', roomId: room.id, fromAreaId, toAreaId, label: op.label });
+          _deltaMovedArea = true;
           applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
@@ -20929,6 +21068,7 @@ function applyDelta(delta, onlySeq, overrides, seedSids) {
       skip('błąd wykonania: ' + err.message);
     }
   }
+  if (_deltaMovedArea) buildAreaList();  // audyt ext F1.4: jeden rebuild listy obszarow po batchu (nie per op)
   scheduleDraw();
   return { applied, appliedSeqs, skipped };
 }
