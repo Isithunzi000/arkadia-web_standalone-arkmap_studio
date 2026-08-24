@@ -4482,6 +4482,103 @@ scenario('E23.raster', async () => {
   }
 });
 
+// ═══ E23.cull — Arc 31 F4 (v1.47.1): CullIndex (uniform grid) ═══
+// Indeks siatkowy nad punktami pokoi per plaszczyzna; fallback liniowy <256.
+// Asercje behawioralne (paritet bitowy + bajty canvasu), odporne na
+// virtual-time budget. Losowosc: seedowany mulberry32 (determinizm runu).
+scenario('E23.cull', async () => {
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  await loadBase('dat');
+  await eva('new Promise(function(res){ setTimeout(res, 60); })');
+
+  EQ('E23.cull.min', ev('CULL_INDEX_MIN').val, 256, 'pin stalej progu fallbacku liniowego');
+  EQ('E23.cull.grid', ev('CULL_GRID_CELLS').val, 16, 'pin rozmiaru komorki siatki (rachunek: tier6 B23)');
+  A('E23.cull.active', ev('state.roomsZ.length >= 256 && _cullIndex !== null && _cullIndex.plane === state.roomsZ').val === true,
+    'indeks zbudowany na glownej plaszczyznie fixture (518 pokoi >= 256)');
+
+  // PIN PARITETU: 10k seedowanych losowych viewportow — zbior (i kolejnosc)
+  // z indeksu musi byc BITOWO rowny filtrowi liniowemu.
+  const parRaw = AEV('E23.cull.parity', ev('(function(){'
+    + ' function rng(seed){ return function(){ seed|=0; seed=(seed+0x6D2B79F5)|0; var t=Math.imul(seed^(seed>>>15),1|seed); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }'
+    + ' var rnd = rng(20260824), bad = 0, checked = 0;'
+    + ' for (var i = 0; i < 10000; i++) {'
+    + '   var cx = (rnd()*2.4-1.2)*154, cy = (rnd()*2.4-1.2)*101;'
+    + '   var w = rnd()*220, h = rnd()*220;'
+    + '   var vx0 = cx-w/2, vx1 = cx+w/2, vy0 = cy-h/2, vy1 = cy+h/2;'
+    + '   var a = _cullQuery(state.roomsZ, vx0, vx1, vy0, vy1);'
+    + '   var b = state.roomsZ.filter(function(r){ return r.x >= vx0 && r.x <= vx1 && r.y >= vy0 && r.y <= vy1; });'
+    + '   checked++;'
+    + '   if (a.length !== b.length) { bad++; continue; }'
+    + '   for (var j = 0; j < a.length; j++) if (a[j] !== b[j]) { bad++; break; }'
+    + ' }'
+    + ' return JSON.stringify({ bad: bad, checked: checked });'
+    + '})()'), '10k losowych viewportow: indeks == filtr (bitowo, z kolejnoscia)');
+  const pj = parRaw ? JSON.parse(parRaw) : null;
+  if (pj) {
+    EQ('E23.cull.parity.zero', pj.bad, 0, 'zero rozbieznosci indeks vs filtr');
+    EQ('E23.cull.parity.n', pj.checked, 10000, 'wszystkie viewporty policzone');
+  }
+
+  // Fallback: mala plaszczyzna -> brak indeksu, _cullQuery = filtr liniowy.
+  const fbRaw = AEV('E23.cull.fallback', ev('(function(){'
+    + ' var saved = state.roomsZ, out = {};'
+    + ' try {'
+    + '   state.roomsZ = saved.slice(0, 100);'
+    + '   _buildCullIndex();'
+    + '   out.idxNull = _cullIndex === null;'
+    + '   var a = _cullQuery(state.roomsZ, -100, 100, -100, 100);'
+    + '   var b = state.roomsZ.filter(function(r){ return r.x >= -100 && r.x <= 100 && r.y >= -100 && r.y <= 100; });'
+    + '   out.same = a.length === b.length && a.every(function(r, j){ return r === b[j]; });'
+    + ' } finally { state.roomsZ = saved; _buildCullIndex(); }'
+    + ' out.restored = _cullIndex !== null && _cullIndex.plane === saved;'
+    + ' return JSON.stringify(out);'
+    + '})()'), 'fallback liniowy dla malej plaszczyzny (<256)');
+  const fj = fbRaw ? JSON.parse(fbRaw) : null;
+  if (fj) {
+    EQ('E23.cull.fallback.noidx', fj.idxNull, true, 'indeks nie budowany <256');
+    EQ('E23.cull.fallback.same', fj.same, true, 'wynik fallbacku == filtr');
+    EQ('E23.cull.fallback.restore', fj.restored, true, 'indeks odbudowany po teście');
+  }
+
+  // Bajty canvasu: draw z indeksem == draw z wymuszonym fallbackiem liniowym.
+  ex('state.showGrid = false; state.selected = null;'
+    + ' state.view.mudletLabels = false; state.showPixmaps = false;'
+    + ' state.view.areaExitLabels = false; state.showSuppressors = false;');
+  const bpRaw = AEV('E23.cull.bytes', ev('(function(){'
+    + ' var c = document.getElementById("cv");'
+    + ' function h(){ var d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; var x = 0; for (var i = 0; i < d.length; i += 997) x = (x * 31 + d[i]) >>> 0; return x; }'
+    + ' draw(); var h1 = h();'
+    + ' _cullIndex = null; draw(); var h2 = h();'
+    + ' _buildCullIndex(); draw(); var h3 = h();'
+    + ' return JSON.stringify({ h1: h1, h2: h2, h3: h3, idx: _cullIndex !== null });'
+    + '})()'), 'bajty canvasu: indeks vs fallback liniowy');
+  const bj = bpRaw ? JSON.parse(bpRaw) : null;
+  if (bj) {
+    EQ('E23.cull.bytes.linear', bj.h2, bj.h1, 'fallback liniowy daje identyczne bajty');
+    EQ('E23.cull.bytes.rebuilt', bj.h3, bj.h1, 'po odbudowie indeksu bajty identyczne');
+    EQ('E23.cull.bytes.idxback', bj.idx, true, 'indeks odbudowany po teście');
+  }
+
+  // Mutacja pozycji pokoju -> buildRoomsZ przebudowuje indeks.
+  const muRaw = AEV('E23.cull.rebuild', ev('(function(){'
+    + ' var r = state.roomsZ[0], ox0 = r.x, oy0 = r.y, before = _cullIndex;'
+    + ' r.x = 100000; r.y = 100000; buildRoomsZ();'
+    + ' var out = { rebuilt: _cullIndex !== before };'
+    + ' out.goneFromOld = _cullQuery(state.roomsZ, ox0-2, ox0+2, oy0-2, oy0+2).indexOf(r) === -1;'
+    + ' out.atNew = _cullQuery(state.roomsZ, 99998, 100002, 99998, 100002).indexOf(r) !== -1;'
+    + ' r.x = ox0; r.y = oy0; buildRoomsZ(); draw();'
+    + ' out.restored = _cullQuery(state.roomsZ, ox0-2, ox0+2, oy0-2, oy0+2).indexOf(r) !== -1;'
+    + ' return JSON.stringify(out);'
+    + '})()'), 'mutacja pozycji -> rebuild indeksu');
+  const mj = muRaw ? JSON.parse(muRaw) : null;
+  if (mj) {
+    EQ('E23.cull.rebuild.idx', mj.rebuilt, true, 'buildRoomsZ przebudowal indeks');
+    EQ('E23.cull.rebuild.gone', mj.goneFromOld, true, 'pokoj zniknal ze starej pozycji w indeksie');
+    EQ('E23.cull.rebuild.atnew', mj.atNew, true, 'pokoj widoczny na nowej pozycji w indeksie');
+    EQ('E23.cull.rebuild.restore', mj.restored, true, 'po przywroceniu pozycji pokoj z powrotem w indeksie');
+  }
+});
+
 runAll();
 </script>
 </body>

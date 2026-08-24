@@ -222,7 +222,7 @@ console.log('— Sekcja B: piny strukturalne —');
 
 // ═══ Sekcja C — pin wersji ═══
 console.log('— Sekcja C: pin wersji —');
-ok(HTML.includes("const APP_VERSION = 'v1.47.0';"), 'C1 APP_VERSION = v1.47.0');
+ok(HTML.includes("const APP_VERSION = 'v1.47.1';"), 'C1 APP_VERSION = v1.47.1');
 
 console.log(`\n═══ save_dialogs.js: PASS ${pass} / FAIL ${fail} ═══`);
 process.exit(fail ? 1 : 0);

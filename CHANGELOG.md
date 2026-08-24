@@ -2,6 +2,29 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.47.1 — CullIndex: indeks siatkowy cullingu viewportu (Arc 31)
+
+Czwarty etap optymalizacji renderera (plan Arc 31 F4):
+
+- `_cullQuery` zamiast liniowego `rooms.filter(...)` w `draw()`: uniform grid
+  (16x16 komorek mapy na cele) nad PUNKTAMI pokoi — kazdy pokoj w dokladnie
+  jednej celi (prosciej niz u Delwinga: brak oversized-bucket i stamp-dedupu,
+  bo indeks trzyma punkty; custom lines rysowane per pokoj z `vis`, do
+  indeksu nie wchodza). Zapytanie = cele przecinajace rect viewportu + ten
+  sam predykat inkluzywny na kandydatach + sort po indeksie roomsZ.
+- **Paritet bitowy z filtrem liniowym** — pin E23.cull.parity: 10k
+  seedowanych losowych viewportow, zero rozbieznosci (zbior I kolejnosc);
+  E23.cull.bytes: bajty canvasu z indeksem i z wymuszonym fallbackiem
+  identyczne.
+- Fallback liniowy dla malych plaszczyzn (`CULL_INDEX_MIN = 256` — skan
+  255 pokoi to mikrosekundy, indeks sie nie oplaca).
+- Rebuild w `buildRoomsZ` (wszystkie mutacje mapy + zmiana plaszczyzny),
+  koszt O(n) — ten sam rzad co samo `buildRoomsZ`.
+- Rachunek celi 16: najwieksza plaszczyzna fixture (area 52 z 0, 1520
+  pokoi) to ~10x10 cel (~15 pokoi/cela); viewport full-zoom czyta ~4x3
+  cel ≈ 180 kandydatow zamiast pelnego skanu 1520.
+- Repro-first: scenariusz E23.cull (15 asercji). Piny tier6 B22/B23/B24.
+
 ## v1.47.0 — LOD raster przy ekstremalnych oddaleniach (Arc 31)
 
 Trzeci etap optymalizacji renderera (plan Arc 31 F3):

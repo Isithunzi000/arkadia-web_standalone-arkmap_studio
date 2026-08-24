@@ -152,6 +152,20 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
      /function buildColorCache\([\s\S]*?_rasterInvalidate\(\);/.test(HTML),
     'B21: uniewaznienie rastra podpieciete w buildRoomsZ i buildColorCache');
 
+  // Arc 31 F4: CullIndex — uniform grid nad PUNKTAMI pokoi (custom lines
+  // rysowane per pokoj z vis, nie wchodza do indeksu). Fallback liniowy <256:
+  // skan 255 pokoi to mikrosekundy — indeks sie nie oplaca. Komorka 16x16
+  // komorek mapy: plaszczyzna 1520 pokoi (najwieksza w fixture, area 52 z 0)
+  // to ~10x10 cel ~ 15 pokoi/cela; viewport full-zoom (~63x39 komorek) czyta
+  // ~4x3 cel ~ 180 kandydatow zamiast skanu 1520. Repro: E23.cull.
+  ok(HTML.includes('const CULL_INDEX_MIN = 256;'),
+    'B22: fallback liniowy dla malych plaszczyzn (<256 pokoi = skan trywialny)');
+  ok(HTML.includes('const CULL_GRID_CELLS = 16;'),
+    'B23: komorka siatki 16x16 komorek mapy (1520 pokoi -> ~180 kandydatow vs pelny skan)');
+  ok(/function buildRoomsZ\([\s\S]*?_buildCullIndex\(\);/.test(HTML) &&
+     HTML.includes('const vis = _cullQuery(rooms, vx0, vx1, vy0, vy1);'),
+    'B24: indeks budowany w buildRoomsZ (kazda mutacja) + draw() culluje przez _cullQuery');
+
 }
 
 // ═══ Sekcja C: #18 — bramka potwierdzenia importu trasy ═══
@@ -248,7 +262,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.47.0';"), 'V1: pin APP_VERSION v1.47.0');
+ok(HTML.includes("const APP_VERSION = 'v1.47.1';"), 'V1: pin APP_VERSION v1.47.1');
 
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);

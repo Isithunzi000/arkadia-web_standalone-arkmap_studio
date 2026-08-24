@@ -7147,6 +7147,7 @@ function selectZ(z) {
 function buildRoomsZ() {
   const area = state.areas.get(state.areaId);
   state.roomsZ = (area?.rooms || []).filter(r => r.z === state.z);
+  _buildCullIndex();    // F4 (Arc 31): rebuild indeksu cullingu przy kazdej mutacji/zmianie plaszczyzny
   _rasterInvalidate();  // F3 (Arc 31): kazda mutacja przechodzi przez buildRoomsZ — raster odbuduje sie przy nastepnym paintcie
   updateStatus();
 }
@@ -7387,6 +7388,67 @@ function drawRoomsRaster() {
   }
 }
 
+// ─── CullIndex „uniform grid" (Arc 31 F4, v1.47.1) ─────────────────────────────
+// Liniowy filtr viewportu kosztuje O(plaszczyzna) na klatke; najwieksza
+// plaszczyzna fixture (area 52 z 0) ma 1520 pokoi. Indeks: siatka 16x16
+// komorek mapy nad PUNKTAMI pokoi — kazdy pokoj w dokladnie jednej celi
+// (prosciej niz u Delwinga: brak oversized-bucket i stamp-dedupu, bo indeks
+// trzyma punkty, nie odcinki; custom lines rysowane per pokoj z vis, do
+// indeksu nie wchodza). Rachunek celi 16: plaszczyzna 1520 pokoi to ~10x10
+// cel (~15 pokoi/cela); viewport full-zoom (~63x39 komorek mapy) czyta ~4x3
+// cel ≈ 180 kandydatow zamiast pelnego skanu 1520. Zapytanie = cele
+// przecinajace rect + TEN SAM predykat inkluzywny na kandydatach + sort po
+// indeksie roomsZ — paritet bitowy z filtrem liniowym (pin E23.cull.parity
+// na 10k seedowanych viewportow + E23.cull.bytes na bajtach canvasu).
+// Fallback liniowy < CULL_INDEX_MIN: skan 255 pokoi to mikrosekundy — indeks
+// sie nie oplaca. Rebuild: buildRoomsZ (wszystkie mutacje + zmiana
+// plaszczyzny), koszt O(n) = ten sam rzad co samo buildRoomsZ (filter po z).
+// Piny: tier6 B22/B23/B24; scenariusz E23.cull.
+const CULL_INDEX_MIN = 256;
+const CULL_GRID_CELLS = 16;
+let _cullIndex = null;   // { plane, minX, minY, cols, rows, cells: tablica cel z indeksami roomsZ }
+function _buildCullIndex() {
+  const rooms = state.roomsZ || [];
+  if (rooms.length < CULL_INDEX_MIN) { _cullIndex = null; return; }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const r of rooms) {
+    if (r.x < minX) minX = r.x; if (r.x > maxX) maxX = r.x;
+    if (r.y < minY) minY = r.y; if (r.y > maxY) maxY = r.y;
+  }
+  const cols = Math.max(1, Math.floor((maxX - minX) / CULL_GRID_CELLS) + 1);
+  const rows = Math.max(1, Math.floor((maxY - minY) / CULL_GRID_CELLS) + 1);
+  const cells = new Array(cols * rows);
+  for (let i = 0; i < rooms.length; i++) {
+    const r = rooms[i];
+    const cx = Math.min(cols - 1, Math.max(0, Math.floor((r.x - minX) / CULL_GRID_CELLS)));
+    const cy = Math.min(rows - 1, Math.max(0, Math.floor((r.y - minY) / CULL_GRID_CELLS)));
+    const k = cy * cols + cx;
+    (cells[k] || (cells[k] = [])).push(i);
+  }
+  _cullIndex = { plane: rooms, minX, minY, cols, rows, cells };
+}
+function _cullQuery(rooms, vx0, vx1, vy0, vy1) {
+  const gi = _cullIndex;
+  if (!gi || gi.plane !== rooms)   // fallback: mala plaszczyzna albo nieaktualny indeks
+    return rooms.filter(r => r.x >= vx0 && r.x <= vx1 && r.y >= vy0 && r.y <= vy1);
+  const C = CULL_GRID_CELLS;
+  const cx0 = Math.max(0, Math.floor((vx0 - gi.minX) / C)), cx1 = Math.min(gi.cols - 1, Math.floor((vx1 - gi.minX) / C));
+  const cy0 = Math.max(0, Math.floor((vy0 - gi.minY) / C)), cy1 = Math.min(gi.rows - 1, Math.floor((vy1 - gi.minY) / C));
+  if (cx0 > cx1 || cy0 > cy1) return [];
+  const cand = [];
+  for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
+    const cell = gi.cells[cy * gi.cols + cx];
+    if (cell) for (let i = 0; i < cell.length; i++) cand.push(cell[i]);
+  }
+  cand.sort((a, b) => a - b);   // kolejnosc roomsZ = paritet bitowy z filtrem
+  const out = [];
+  for (const i of cand) {
+    const r = rooms[i];
+    if (r.x >= vx0 && r.x <= vx1 && r.y >= vy0 && r.y <= vy1) out.push(r);
+  }
+  return out;
+}
+
 function draw() {
   const _pc = _perfOn() ? { t: performance.now() } : null;  // F0: null gdy flaga off — dalej same no-op ticki
   _lodMode = 'full';  // F2: reset przy wczesnych returnach — wskaznik nie zostaje na pustej mapie
@@ -7411,7 +7473,9 @@ function draw() {
   const vy0 = (state.oy - H - margin) / (CELL * state.zoom);  // Y flipped
   const vy1 = (state.oy + margin) / (CELL * state.zoom);       // Y flipped
 
-  const vis = rooms.filter(r => r.x >= vx0 && r.x <= vx1 && r.y >= vy0 && r.y <= vy1);
+  // F4 (Arc 31): culling przez CullIndex (paritet bitowy z filtrem liniowym;
+  // fallback liniowy dla malych plaszczyzn < CULL_INDEX_MIN)
+  const vis = _cullQuery(rooms, vx0, vx1, vy0, vy1);
   if (_pc) { _PERF.draws++; _PERF.plane = rooms.length; _PERF.vis = vis.length; }
   _perfTick(_pc, 'cull');                                     // F0: filtr viewportu
 
@@ -13922,7 +13986,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.47.0';
+const APP_VERSION = 'v1.47.1';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
