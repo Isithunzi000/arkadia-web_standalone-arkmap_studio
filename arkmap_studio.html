@@ -764,6 +764,17 @@
   .wp-sp:hover    { border-color: var(--accent); color: var(--text); }
   .wp-sp.wp-sp-on { border-color: #e8a020; color: #e8a020; background: rgba(232,160,32,0.08); }
 
+  /* Omijanie zablokowanych pokoi (audyt ext F2.15) */
+  #wp-avoidlocked-row {
+    padding: 5px 10px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; flex-shrink: 0;
+  }
+  #wp-avoidlocked-row label {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--fg); cursor: pointer; user-select: none;
+  }
+  #wp-avoidlocked-row input { accent-color: var(--accent); cursor: pointer; }
+
   /* Kod trasy — pole read-only + przycisk kopiowania */
   #wp-route-code {
     padding: 4px 8px; border-top: 1px solid var(--border);
@@ -2995,6 +3006,9 @@
           <button class="wp-algo-btn wp-trans-aggro" data-aggro="aggressive" title="Kara za wejście na pokład: 10 · czas×0.1">Agresywny</button>
         </div>
       </div>
+      <div id="wp-avoidlocked-row">
+        <label title="Pokoje zablokowane (locked) wykluczone ze szukania trasy — paritet z Mudletem; wylaczenie = routowanie permissive"><input type="checkbox" id="wp-avoidlocked" checked> Omijaj zablokowane pokoje</label>
+      </div>
       <div id="wp-route-code">
         <label>Kod trasy</label>
         <input id="wp-route-code-input" type="text" readonly placeholder="(brak trasy)">
@@ -4375,11 +4389,12 @@ function validateLabel(label, path, errors) {
     return;
   }
   if (!Number.isInteger(label.id))        errors.push(err(`${path}.id`,     'must be integer'));
-  if (typeof label.x !== 'number')        errors.push(err(`${path}.x`,      'must be number'));
-  if (typeof label.y !== 'number')        errors.push(err(`${path}.y`,      'must be number'));
+  // audyt ext F2.11: isFinite zamiast typeof — NaN/Infinity nie przechodza (komunikat bez zmian)
+  if (!Number.isFinite(label.x))          errors.push(err(`${path}.x`,      'must be number'));
+  if (!Number.isFinite(label.y))          errors.push(err(`${path}.y`,      'must be number'));
   if (!Number.isInteger(label.z))         errors.push(err(`${path}.z`,      'must be integer'));
-  if (typeof label.width  !== 'number')   errors.push(err(`${path}.width`,  'must be number'));
-  if (typeof label.height !== 'number')   errors.push(err(`${path}.height`, 'must be number'));
+  if (!Number.isFinite(label.width))      errors.push(err(`${path}.width`,  'must be number'));
+  if (!Number.isFinite(label.height))     errors.push(err(`${path}.height`, 'must be number'));
   if (typeof label.text !== 'string')     errors.push(err(`${path}.text`,   'must be string'));
   if (!isRGB(label.fg_color))             errors.push(err(`${path}.fg_color`, 'must be [r,g,b] 0-255'));
   if (!isRGB(label.bg_color))             errors.push(err(`${path}.bg_color`, 'must be [r,g,b] 0-255'));
@@ -4531,7 +4546,8 @@ function validateRoom(room, path, errors, warnings = []) {
     else if (cl.points.length > 0) {
       for (let pi = 0; pi < cl.points.length; pi++) {
         const pt = cl.points[pi];
-        if (!Array.isArray(pt) || pt.length !== 2 || typeof pt[0] !== 'number' || typeof pt[1] !== 'number')
+        // audyt ext F2.11: isFinite — NaN/Infinity w punkcie CL odrzucone
+        if (!Array.isArray(pt) || pt.length !== 2 || !Number.isFinite(pt[0]) || !Number.isFinite(pt[1]))
           errors.push(err(`${path}.custom_lines.${d}.points[${pi}]`, 'must be [number, number]'));
       }
     }
@@ -5506,6 +5522,14 @@ function cmpIntMinusFirst(a, b) {
 // QMap / QMultiMap — różne warianty typów kluczy i wartości
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// audyt ext F2.8: liczniki sekcji czytane jako int32 (ze znakiem) — ujemny = uszkodzony
+// plik, NIE „pusta sekcja". Liczniki uint32 (QMap/QList) ujemne byc nie moga; skorumpowane
+// wielkie wartosci i tak koncza sie kontrolowanym bledem bounds-checku ReadBuffer (audyt A7).
+function _datCounter(n) {
+  if (n < 0) throw new Error('Uszkodzony plik .dat (ujemny licznik sekcji)');
+  return n;
+}
+
 // QMap<QInt, QInt> — np. envColors, xmaxForZ itd.
 function readQMapII(r) {
   const n = r.readUInt32(), o = {};
@@ -5767,7 +5791,7 @@ function readMudletArea(r, version) {
   // v21+: labele wbudowane w obszar (wcześniej były globalnie po areaCount)
   let areaLabels = null;
   if (version >= 21) {
-    const labelCount = r.readInt32();
+    const labelCount = _datCounter(r.readInt32());  // audyt ext F2.8
     areaLabels = [];
     for (let i = 0; i < labelCount; i++) {
       areaLabels.push(readMudletLabel(r, version));
@@ -6111,10 +6135,14 @@ function readMudletDat(arrayBuffer) {
   const useOnlyMapFont       = !!r.readInt8();
 
   // MudletAreas
+  const importWarnings = [];  // audyt ext F2.9/F2.10: warningi importu (duplikaty, zgubione rekordy)
   const areas = {};
-  const areaCount = r.readInt32();
+  const areaCount = _datCounter(r.readInt32());  // audyt ext F2.8
   for (let i = 0; i < areaCount; i++) {
     const areaId = r.readInt32();
+    // audyt ext F2.9: duplikat id obszaru → warning (last-wins bez zmian), NIE throw
+    if (Object.prototype.hasOwnProperty.call(areas, areaId))
+      importWarnings.push(`zduplikowany id obszaru #${areaId} — zachowano ostatni rekord`);
     areas[areaId] = readMudletArea(r, version);
   }
 
@@ -6126,9 +6154,9 @@ function readMudletDat(arrayBuffer) {
   // v21+:    wbudowane w każdy obszar (już odczytane w readMudletArea)
   const labels = {};
   if (version < 21) {
-    const lblAreaCount = r.readInt32();
+    const lblAreaCount = _datCounter(r.readInt32());  // audyt ext F2.8
     for (let i = 0; i < lblAreaCount; i++) {
-      const lblCount = r.readInt32();
+      const lblCount = _datCounter(r.readInt32());  // audyt ext F2.8
       const areaId   = r.readInt32();
       labels[areaId] = [];
       for (let j = 0; j < lblCount; j++) {
@@ -6148,13 +6176,16 @@ function readMudletDat(arrayBuffer) {
   const rooms = {};
   while (r.remaining() > 0) {
     const roomId = r.readInt32();
+    // audyt ext F2.9: duplikat id pokoju → warning (last-wins bez zmian), NIE throw
+    if (Object.prototype.hasOwnProperty.call(rooms, roomId))
+      importWarnings.push(`zduplikowany id pokoju #${roomId} — zachowano ostatni rekord`);
     rooms[roomId] = readMudletRoom(r, version);
   }
 
   return {
     version, envColors, areaNames, mCustomEnvColors, mpRoomDbHashToRoomId, mUserData,
     mapSymbolFont, mapFontFudgeFactor, useOnlyMapFont,
-    areas, mRoomIdHash, labels, rooms,
+    areas, mRoomIdHash, labels, rooms, importWarnings,
   };
 }
 
@@ -6399,6 +6430,11 @@ function datToArkmap(arrayBuffer) {
   const hashLookup = {};
   for (const [hash, id] of Object.entries(raw.mpRoomDbHashToRoomId || {})) hashLookup[id] = hash;
 
+  // audyt ext F2.10: ciche gubienie pokoi → warningi importu (wspolny kanal z F2.9)
+  const importWarnings = [...(raw.importWarnings || [])];
+  const referenced = new Set();
+  for (const rawArea of Object.values(raw.areas)) for (const rid of rawArea.rooms) referenced.add(rid);
+
   const areas = [];
   for (const [areaId, rawArea] of Object.entries(raw.areas)) {
     const id = parseInt(areaId);
@@ -6410,11 +6446,14 @@ function datToArkmap(arrayBuffer) {
     if (rawArea.pos && (rawArea.pos[0] || rawArea.pos[1] || rawArea.pos[2]))
       area.pos = [rawArea.pos[0], rawArea.pos[1], rawArea.pos[2]]; // pozycja obszaru na overview mapie
 
+    let _missing = 0;  // audyt ext F2.10
     area.rooms = rawArea.rooms.map(roomId => {
-      const r = raw.rooms[roomId]; if (!r) return null;
+      const r = raw.rooms[roomId]; if (!r) { _missing++; return null; }
       r._roomId = roomId;
       const room = _datConvertRoom(r, hashLookup); room.id = roomId; return room;
     }).filter(Boolean).sort((a, b) => a.id - b.id);
+    if (_missing)
+      importWarnings.push(`obszar #${id} (${area.name || 'bez nazwy'}): ${_missing} pokoi bez rekordu w strumieniu — pominięte`);
 
     const labels = (raw.labels[areaId] || []).map(_datConvertLabel);
     if (labels.length) area.labels = labels;
@@ -6422,12 +6461,16 @@ function datToArkmap(arrayBuffer) {
   }
   areas.sort((a, b) => a.id - b.id);
 
+  // audyt ext F2.10: rekordy pokoi niewymienione w zadnym obszarze (orphans)
+  const _orphans = Object.keys(raw.rooms).filter(rid => !referenced.has(+rid)).length;
+  if (_orphans) importWarnings.push(`${_orphans} rekordow pokoi spoza list obszarow — pominięte (orphan)`);
+
   const env_colors = {};
   for (const [k, v] of Object.entries(raw.envColors || {})) if (v !== undefined) env_colors[k] = v;
   const custom_env_colors = {};
   for (const [k, v] of Object.entries(raw.mCustomEnvColors || {})) custom_env_colors[k] = qcolor(v);
 
-  return {
+  const map = {
     format: FORMAT, version: VERSION,
     meta: {
       map_name:                 raw.mUserData?.map_name || (raw.areaNames?.[-1] !== 'Default Area' ? raw.areaNames?.[-1] : null) || _datFallbackMapName(raw),
@@ -6443,6 +6486,10 @@ function datToArkmap(arrayBuffer) {
     },
     areas,
   };
+  // audyt ext F2.9/F2.10: warningi importu POZA modelem — nieenumerowalne (zero smieci w zapisie)
+  if (importWarnings.length)
+    Object.defineProperty(map, '_importWarnings', { value: importWarnings, enumerable: false, configurable: true });
+  return map;
 }
 
 
@@ -8806,8 +8853,11 @@ cv.addEventListener('mousemove', e => {
       else if (c === 'bl') { nw -= dmx; nx += dmx; nh -= dmy; }
       else if (c === 'tr') { nw += dmx; ny += dmy; nh += dmy; }
       else if (c === 'tl') { nw -= dmx; nx += dmx; ny += dmy; nh += dmy; }
-      lbl.width  = Math.max(0.5, nw);
-      lbl.height = Math.max(0.2, nh);
+      // audyt ext F2.5: clamp z korekta kotwicy — przeciwlegla krawedz (orig+origSize) stoi
+      if (nw < 0.5) { nw = 0.5; if (c === 'bl' || c === 'tl') nx = state.labelResizeOrigX + (state.labelResizeOrigW - 0.5); }
+      if (nh < 0.2) { nh = 0.2; if (c === 'tr' || c === 'tl') ny = state.labelResizeOrigY + (state.labelResizeOrigH - 0.2); }
+      lbl.width  = nw;
+      lbl.height = nh;
       lbl.x = nx; lbl.y = ny;
       scheduleDraw();
     }
@@ -9021,12 +9071,38 @@ document.addEventListener('mouseup', () => {
 // ─── TOUCH (PAN + PINCH-TO-ZOOM) ─────────────────────────────────────────────
 let _touches = {};
 let _lastPinchDist = null;
+let _gestureMulti = false;        // audyt ext F2.17: gest mial >=2 palce → tap/dbltap zablokowane
+let _pinchToolCancelled = false;  // audyt ext F2.16: anulowanie narzedzia raz na gest
 
 cv.addEventListener('touchstart', e => {
   e.preventDefault();
-  _touches = {};
+  if (e.touches.length === 1) {
+    // audyt ext F2.17: gest startuje od zera dotkniec — swiezy rejestr + reset flag
+    _touches = {};
+    _gestureMulti = false;
+    _pinchToolCancelled = false;
+  } else if (e.touches.length >= 2) {
+    _gestureMulti = true;  // audyt ext F2.17: pinch w tym gescie → tap/dbltap zablokowane
+  }
   for (const t of e.touches) _touches[t.identifier] = { x: t.clientX, y: t.clientY };
   _lastPinchDist = null;
+  if (e.touches.length >= 2 && !_pinchToolCancelled) {
+    // audyt ext F2.16: pinch anuluje aktywne narzedzie — raz na gest (mirror touchcancel)
+    _pinchToolCancelled = true;
+    if (_paintStroke !== null) { _paintStrokeRevert(); _paintStroke = null; }
+    if (state.editDraggingRoom) {
+      state.editDraggingRoom = false;
+      state.editDragCurrentX = 0;
+      state.editDragCurrentY = 0;
+      const room = state.roomById[state.selected];
+      const rpx = document.getElementById('rp-x');
+      const rpy = document.getElementById('rp-y');
+      if (room && rpx) rpx.value = room.x;
+      if (room && rpy) rpy.value = room.y;
+    }
+    state.dragging = false;
+    scheduleDraw();
+  }
   if (e.touches.length === 1) {
     // T6/#8: delegacja 1-palcowego dragu do logiki narzedzia (jak mysz) zamiast zawsze pan
     const t0 = e.touches[0];
@@ -9084,8 +9160,10 @@ cv.addEventListener('touchmove', e => {
     const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
     if (_lastPinchDist !== null && _lastPinchDist > 0) {
       const f = dist / _lastPinchDist;
-      const mx = (t1.clientX + t2.clientX) / 2 - cv.getBoundingClientRect().left;
-      const my = (t1.clientY + t2.clientY) / 2 - cv.getBoundingClientRect().top;
+      // audyt ext F2.18: srodek pinch w pikselach canvasu (CSS-zoom → mnoznik), wzorzec evX/evY
+      const rect = cv.getBoundingClientRect();
+      const mx = ((t1.clientX + t2.clientX) / 2 - rect.left) * (cv.width / rect.width);
+      const my = ((t1.clientY + t2.clientY) / 2 - rect.top) * (cv.height / rect.height);
       zoomAround(mx, my, f);
     }
     _lastPinchDist = dist;
@@ -9124,7 +9202,8 @@ cv.addEventListener('touchend', e => {
     scheduleDraw();
     return;
   }
-  if (e.changedTouches.length === 1 && e.touches.length === 0) {
+  // audyt ext F2.17: tap/dbltap tylko po gescie jednopalcowym (bez pinch w historii)
+  if (e.changedTouches.length === 1 && e.touches.length === 0 && !_gestureMulti) {
     const t = e.changedTouches[0];
     const start = _touches[t.identifier];
     if (start && Math.abs(t.clientX - start.x) < 8 && Math.abs(t.clientY - start.y) < 8) {
@@ -9145,11 +9224,15 @@ cv.addEventListener('touchend', e => {
       }
     }
   }
+  if (e.touches.length === 0) _gestureMulti = false;  // audyt ext F2.17: reset _gestureMulti przy 0 dotkniec
 }, { passive: false });
 
 cv.addEventListener('touchcancel', () => {
   state.dragging = false;
   _lastPinchDist = null;
+  // audyt ext F2.16/F2.17: touchcancel czysci flagi gestu
+  _gestureMulti = false;
+  _pinchToolCancelled = false;
   // T6/#8: przerwanie dotyku sprzata narzedzia bez mutacji mapy
   if (_paintStroke !== null) { _paintStrokeRevert(); _paintStroke = null; }
   if (state.editDraggingRoom) {
@@ -9213,6 +9296,9 @@ function handleClick(sx, sy) {
       if (!area) { toast('✗ Brak aktywnego obszaru', true); setCanvasMode('normal'); return; }
       const newX = Math.round(mx);
       const newY = Math.round(my);
+      // audyt ext F2.4: guard zajetosci (jak addRoomAtPosition) — zero mutacji przy kolizji
+      const _occAdd = _roomCollisionAt(newX, newY, state.z, -1);
+      if (_occAdd) { toast(`⚠ Pole (${newX}, ${newY}, ${state.z}) jest zajęte przez pokój #${_occAdd.id}`, true); return; }
       const newRoom = {
         id: newId, area: areaId, x: newX, y: newY, z: state.z,
         name: '', env: state.isArkadia ? 258 : 1, weight: 1,  // §07d: domyslny biom (v1.43.3: 258=Las tylko dla Arkadii)
@@ -10080,8 +10166,7 @@ function saveArkmapAs() {
 function _performArkmapSaveAs() {
   // Zawsze pokaż dialog wyboru pliku (ignoruj istniejący handle)
   if (!state.map) return;
-  _prepareArkmapForSave();
-  const text = _serializeMap();  // T6/D2: serializuj raz — zapis + bufor
+  const text = _serializeMapForSave();  // T6/D2: serializuj raz — zapis + bufor (audyt ext F2.19: na klonie)
   // A11': dirty kasowane dopiero po POTWIERDZONYM zapisie (success-pointy niżej), nie przed dialogiem
   const saveRev = state.editRev || 0;  // T6-F2: edycja wspolbiezna z async save = dirty zostaje
   const suggestedName = _arkmapSuggestedName();
@@ -10095,10 +10180,12 @@ function _performArkmapSaveAs() {
   }
 }
 
-function _prepareArkmapForSave() {
-  if (state.map.areas) {
-    state.map.areas.sort((a, b) => a.id - b.id);
-    for (const area of state.map.areas) {
+// audyt ext F2.19: kanonizacja zapisu na KLONIE — live state.map bez mutacji przed
+// potwierdzeniem zapisu (anulowany picker nie zostawia sortowan / delete room.area / checksumow).
+function _canonicalizeMapForSave(map) {
+  if (map.areas) {
+    map.areas.sort((a, b) => a.id - b.id);
+    for (const area of map.areas) {
       if (area.rooms) {
         area.rooms.sort((a, b) => a.id - b.id);
         for (const room of area.rooms) {
@@ -10111,7 +10198,30 @@ function _prepareArkmapForSave() {
       if (area.labels) area.labels.sort((a, b) => a.id - b.id);
     }
   }
+}
+
+function _prepareArkmapForSave() {
+  _canonicalizeMapForSave(state.map);
   addChecksums(state.map);
+}
+
+// audyt ext F2.19: kanoniczny klon mapy do zapisu/eksportu (sortowania + delete room.area + checksumy)
+function _canonicalCloneForSave() {
+  const clone = JSON.parse(JSON.stringify(state.map));
+  _canonicalizeMapForSave(clone);
+  addChecksums(clone);
+  return clone;
+}
+
+// audyt ext F2.19: pelna sciezka serializacji na klonie (kanonizacja + checksumy + strip + stableStringify)
+function _serializeMapForSave() {
+  const clone = _canonicalCloneForSave();
+  for (const area of (clone.areas || [])) {
+    for (const room of (area.rooms || [])) {
+      _stripRoomDefaults(room);
+    }
+  }
+  return stableStringify(clone);
 }
 
 // Serialize map to JSON — deep copy with stripped empty containers (spec §6 omission convention)
@@ -10154,8 +10264,7 @@ function saveArkmap(onSaved) {
 
 function _performArkmapSave(onSaved) {
   if (!state.map) return;
-  _prepareArkmapForSave();
-  const text = _serializeMap();  // T6/D2: serializuj raz — zapis + bufor
+  const text = _serializeMapForSave();  // T6/D2: serializuj raz — zapis + bufor (audyt ext F2.19: na klonie)
   // A11': dirty kasowane dopiero po POTWIERDZONYM zapisie; clear PRZED onSaved (latentny TypeError z A16 nie pominie cleara)
   const saveRev = state.editRev || 0;  // T6-F2: edycja wspolbiezna z async save = dirty zostaje
   const suggestedName = _arkmapSuggestedName();
@@ -10227,10 +10336,9 @@ function _performDatExport() {
   // audyt A22/D6 (decyzja): eksport .dat NIE jest punktem kontrolnym — nie czysci
   // dirty ani nie odswieza pristineArkmap. dirty znaczy "rozni sie od ostatniego
   // zapisu .arkmap"; eksport do innego formatu tego nie zmienia.
-  _prepareArkmapForSave();
   toast('Konwertuję do .dat…', false);
   try {
-    const bytes = arkmapToDat(state.map);
+    const bytes = arkmapToDat(_canonicalCloneForSave());  // audyt ext F2.19: kanoniczny klon — live map bez mutacji
     const cleanFn = (state.filename || 'mapa').replace(/^.*·\s*/, '').trim();
     const suggestedName = cleanFn.replace(/\.dat$|\.json$|\.arkmap$/, '') + '.dat';
     // Eksport w trybie edycji: formularz z niezapisanymi zmianami NIE wchodzi do pliku
@@ -10341,6 +10449,10 @@ async function loadDat(file) {
     const buf    = await file.arrayBuffer();
     const arkmap = datToArkmap(buf);
     const res    = validate(arkmap);
+    // audyt ext F2.9/F2.10: warningi importu .dat (duplikaty id, zgubione rekordy)
+    // → wspolny dialog walidacyjny z mozliwoscia anulowania
+    const importWarnings = arkmap._importWarnings || [];
+    if (importWarnings.length) res.warnings = (res.warnings || []).concat(importWarnings);
     const hasWarnings = (res.warnings || []).length > 0;
     const suppMissing = checkSuppressorsInMap(arkmap);   // Arc 29: podwójne linie przy loadzie
     if (!res.ok || hasWarnings || suppMissing.length > 0) {
@@ -10399,6 +10511,23 @@ async function olResolveBaseUrl(signal) {
   }
 }
 
+// audyt ext F2.13: TOCTOU — fallback na ruchomą gałąź `mapa`: re-fetch index.json
+// tuż przed pobraniem pliku; rozjazd revision → świeże metadane + toast.
+// Ścieżka SHA-pinned (niezmienniczy URL /<sha>/) bez zmian — migawka spójna z definicji.
+async function olRefreshIndexOnFallback() {
+  if (olBaseUrl !== MAPA_RAW_URL) return;
+  try {
+    const resp = await fetch(olBaseUrl + 'index.json?_=' + Date.now(), { cache: 'no-cache' });
+    if (!resp.ok) return;              // błąd re-fetchu → stare metadane (rozmiar tylko do paska %)
+    const fresh = await resp.json();
+    if (!fresh || typeof fresh.revision !== 'string') return;
+    if (!olIndex || fresh.revision !== olIndex.revision) {
+      olIndex = fresh;
+      toast('ℹ Kopia zmieniła się w trakcie — pobieram najnowszą wersję');
+    }
+  } catch { /* sieć padła między dialogiem a pobraniem → olFetchFile zgłosi błąd */ }
+}
+
 const olConfirmBg  = document.getElementById('ol-confirm-bg');
 const olConfirmPrg = document.getElementById('ol-confirm-progress');
 const olConfirmBar = document.getElementById('ol-confirm-bar-fill');
@@ -10439,7 +10568,7 @@ async function openOnlineConfirm() {
       ? new Date(olIndex.synced_at).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' }) : '?';
     const sz   = Number.isFinite(olIndex.arkmap_size) && Number.isFinite(olIndex.dat_size)
       ? `<span>.arkmap ${(olIndex.arkmap_size/1024/1024).toFixed(1)} MB · .dat ${(olIndex.dat_size/1024/1024).toFixed(1)} MB</span>` : '';
-    olSyncInfo.innerHTML = `<span>mapa <strong>${ver}</strong> · <strong>@${rev}</strong></span><span>sync ${when}</span>${sz}`;
+    olSyncInfo.innerHTML = `<span>mapa <strong>${escHtml(ver)}</strong> · <strong>@${escHtml(rev)}</strong></span><span>sync ${when}</span>${sz}`;
   } catch(e) {
     olIndex = null;
     olSyncInfo.textContent = e.name === 'AbortError'
@@ -10485,6 +10614,11 @@ olConfirmBg.addEventListener('click', e => { if (e.target === olConfirmBg) close
 // Pobieranie z paskiem postępu — wspólne dla .arkmap i .dat.
 // v1.5.36: AbortController 180 s — zawieszony transfer (fetch nie ma domyślnego
 // timeoutu) kończy się błędem zamiast wisieć do reloadu strony.
+// audyt ext F2.14: twardy limit pobierania — expectedSize z index.json może kłamać
+// (albo index.json być podmieniony), a content-length bywa skompresowane. Limit:
+// floor 64 MB ORAZ 125% zadeklarowanego rozmiaru (zapas na błąd metadanych).
+const OL_MAX_BYTES = 64 * 1024 * 1024;
+
 async function olFetchFile(url, label, expectedSize, prog) {
   // F1: prog = { prg, bar } — opcjonalny cel postepu (dialog kalki); domyslnie ol-confirm
   const _prg = (prog && prog.prg) || olConfirmPrg;
@@ -10508,6 +10642,10 @@ async function olFetchFile(url, label, expectedSize, prog) {
     if (done) break;
     chunks.push(value);
     loaded += value.length;
+    // audyt ext F2.14: limit bajtów — ponad max(125% expectedSize, OL_MAX_BYTES) → stop
+    if (loaded > Math.max(Number.isFinite(expectedSize) ? expectedSize * 1.25 : 0, OL_MAX_BYTES)) {
+      throw new Error(`plik za duży (${(loaded/1024/1024).toFixed(1)} MB — ponad limit)`);
+    }
     if (total) {
       const pct = Math.min(100, Math.round(loaded / total * 100));
       _prg.textContent = `Pobieranie: ${label}… ${pct}% (${(loaded/1024/1024).toFixed(1)} / ${(total/1024/1024).toFixed(1)} MB)`;
@@ -10530,6 +10668,7 @@ async function olLoadArkmap() {
   _olActiveLabel = OL_F;
   olSetBusy(true);
   try {
+    await olRefreshIndexOnFallback();  // audyt ext F2.13: TOCTOU fallback (.arkmap)
     const buf = await olFetchFile(olBaseUrl + OL_F, OL_F, olIndex?.arkmap_size);
     closeOnlineConfirm();
     // Ta sama ścieżka co „Wczytaj .arkmap…" z dysku (validate + checksumy + applyMap)
@@ -10549,6 +10688,7 @@ async function olLoadDat() {
   _olActiveLabel = OL_F;
   olSetBusy(true);
   try {
+    await olRefreshIndexOnFallback();  // audyt ext F2.13: TOCTOU fallback (.dat)
     const buf = await olFetchFile(olBaseUrl + OL_F, OL_F, olIndex?.dat_size);
     olConfirmPrg.textContent = 'Konwertowanie .dat…';
     const arkmap = datToArkmap(buf.buffer);
@@ -10601,6 +10741,7 @@ const wpState = {
   algorithm:  'dijkstra', // 'dijkstra' | 'astar'
   dirMode:    'all',      // 'cardinal' | 'vertical' | 'all' — filtr kierunków w pathfindingu
   transportMode: 'off',   // 'off' | 'normal' | 'aggressive' — statki/dyliżanse jako wirtualne krawędzie
+  avoidLocked: true,      // audyt ext F2.15: locked wylaczone z pathfindingu (ON = paritet Mudlet)
   hops:       [],         // hops[i] = tablica hop|null wyrównana do kroków paths[i]
 };
 let _wpSearchTimer = 0;  // DS 2.13: debounce dla waypoint search
@@ -10843,11 +10984,13 @@ function dijkstraPath(fromId, toId) {
     const [cost, cur] = _heapPop(heap);
     if (visited.has(cur)) continue;
     visited.add(cur);
-    if (cur === toId) break;
 
     const room = state.roomById[cur];
     if (!room) continue;
-    if (room.locked) continue; // Mudlet: locked rooms skipped by pathfinder
+    // audyt ext F2.15: guard PRZED breakiem cur===toId — locked nieosiągalny też jako cel;
+    // ON = paritet z Mudletem, OFF = routowanie permissive (styl klienta Dargotha)
+    if (room.locked && wpState.avoidLocked) continue;
+    if (cur === toId) break;
 
     const exitLockSet = new Set(room.exit_locks || []);
     const specLockSet = new Set(room.special_exit_locks || []);
@@ -10860,6 +11003,7 @@ function dijkstraPath(fromId, toId) {
       if (!_dirAllowed(dir, room)) continue; // filtr kierunków planera (wpState.dirMode)
       const nbr = state.roomById[nid];
       if (!nbr) continue;
+      if (wpState.avoidLocked && nbr.locked) continue; // audyt ext F2.15: nie wchodzimy do locked (Dijkstra)
       const newCost = cost + _edgeWeight(room, dir, nbr);
       if (newCost < (dist.get(nid) ?? Infinity)) {
         dist.set(nid, newCost);
@@ -10946,11 +11090,13 @@ function astarPath(fromId, toId) {
     const [, cur] = _heapPop(heap);
     if (visited.has(cur)) continue;
     visited.add(cur);
-    if (cur === toId) break;
 
     const room = state.roomById[cur];
     if (!room) continue;
-    if (room.locked) continue; // Mudlet: locked rooms skipped by pathfinder
+    // audyt ext F2.15: guard PRZED breakiem cur===toId — locked nieosiągalny też jako cel;
+    // ON = paritet z Mudletem, OFF = routowanie permissive (styl klienta Dargotha)
+    if (room.locked && wpState.avoidLocked) continue;
+    if (cur === toId) break;
     const gCur = g.get(cur) ?? Infinity;
 
     const exitLockSet = new Set(room.exit_locks || []);
@@ -10964,6 +11110,7 @@ function astarPath(fromId, toId) {
       if (!_dirAllowed(dir, room)) continue; // filtr kierunków planera (wpState.dirMode)
       const nbr = state.roomById[nid];
       if (!nbr) continue;
+      if (wpState.avoidLocked && nbr.locked) continue; // audyt ext F2.15: nie wchodzimy do locked (A*)
       const newG = gCur + _edgeWeight(room, dir, nbr);
       if (newG < (g.get(nid) ?? Infinity)) {
         g.set(nid, newG);
@@ -12066,6 +12213,16 @@ document.querySelectorAll('.wp-dir-btn').forEach(btn => {
   });
 });
 
+// Omijanie zablokowanych pokoi (audyt ext F2.15): checkbox → re-plan tras
+const wpAvoidLockedCb = document.getElementById('wp-avoidlocked');
+if (wpAvoidLockedCb) wpAvoidLockedCb.addEventListener('change', () => {
+  wpState.avoidLocked = wpAvoidLockedCb.checked;
+  wpRecalcPaths();
+  wpRebuildList();
+  wpUpdateSummary();
+  scheduleDraw();
+});
+
 // Transport (statki/dyliżanse): pieszo / włączone + tryb normalny/agresywny
 function wpRefreshTransportUI() {
   const on = wpState.transportMode !== 'off';
@@ -12448,9 +12605,10 @@ document.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown')  { state.oy -= step; scheduleDraw(); }
   }
 
-  if (e.key === '+' || e.key === '=') { zoomAround(cv.width/2, cv.height/2, 1.2); if (typeof syncZoomSlider === 'function') syncZoomSlider(); }
-  if (e.key === '-')                  { zoomAround(cv.width/2, cv.height/2, 0.83); if (typeof syncZoomSlider === 'function') syncZoomSlider(); }
-  if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey) { fitToView(); scheduleDraw(); }
+  // audyt ext F2.20: skroty +/-/f nieaktywne, gdy focus w formularzu (inForm jak w galezi pan wyzej)
+  if (!inForm && (e.key === '+' || e.key === '=')) { zoomAround(cv.width/2, cv.height/2, 1.2); if (typeof syncZoomSlider === 'function') syncZoomSlider(); }
+  if (!inForm && e.key === '-')                  { zoomAround(cv.width/2, cv.height/2, 0.83); if (typeof syncZoomSlider === 'function') syncZoomSlider(); }
+  if (!inForm && (e.key === 'f' || e.key === 'F') && !e.ctrlKey) { fitToView(); scheduleDraw(); }
   if (e.ctrlKey && e.key === 'f') { e.preventDefault(); searchIn.focus(); }
 });
 
@@ -12546,7 +12704,7 @@ async function handleDropFiles(files) {
         let text;
         try { text = await file.text(); } catch { toast('✗ Nie można odczytać pliku: ' + (file?.name || 'plik'), true); return; }  // audyt K2
         let parsed; try { parsed = JSON.parse(text); } catch { toast('✗ Nie można odczytać pliku: ' + (file?.name || 'plik'), true); return; }
-        if (parsed?.format === 'arkmap') await loadArkmap(text);
+        if (parsed?.format === 'arkmap') await loadArkmap(text, file.name);  // audyt ext F2.21: nazwa pliku jak w galezi .arkmap
         else toast('✗ Nieznany format JSON (oczekiwano .arkmap)', true);
       }
     };
@@ -14022,7 +14180,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.48.2';
+const APP_VERSION = 'v1.48.3';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -16182,8 +16340,15 @@ function updateSpecialeTab(room) {
     if (cmdIn) cmdIn.onfocus = _setActiveSpec;
     if (idIn)  idIn.onfocus  = _setActiveSpec;
     if (delBtn)  delBtn.onclick  = () => {
-      delete state.pendingSpecialExits[origCmd || cmdIn?.value];
-      if (state.pendingSERenames) delete state.pendingSERenames[origCmd || cmdIn?.value];  // audyt T2/Q4
+      // audyt ext F2.2: delete po currentCmd (tracker rename), nie po origCmd — po rename
+      // foo→bar klucz 'bar' zostawal w pending i wskrzeszal spec-exit przy commicie.
+      delete state.pendingSpecialExits[currentCmd];
+      if (state.pendingSERenames) {
+        // rekord rename kasowany tylko gdy dotyczy kasowanego wiersza (lustro kolapsu lancucha)
+        const ren = state.pendingSERenames;
+        for (const k of Object.keys(ren)) if (ren[k] === currentCmd) delete ren[k];
+        if (currentCmd) delete ren[currentCmd];
+      }
       setEditDirty();
       updateSpecialeTab(room);
     };
@@ -16619,10 +16784,7 @@ function commitRoomEdit() {
     }
   }
 
-  if (nameIn)   room.name   = nameIn.value.trim();
-  if (envIn)    room.env    = parseInt(envIn.value) || 1;
-  if (symbolIn) room.symbol = symbolIn.value.trim() || undefined;
-  _rasterInvalidate();  // audyt ext F1.8: env/symbol zmienione w commicie — raster traci waznosc
+  // audyt ext F2.6: walidacja wagi PRZED zapisami name/env/symbol — blad wagi = zero mutacji
   if (weightIn) {
     const wv = parseInt(weightIn.value);
     if (weightIn.value.trim() !== '' && (isNaN(wv) || wv < 1)) {
@@ -16634,6 +16796,10 @@ function commitRoomEdit() {
     weightIn.classList.remove('invalid');
     room.weight = isNaN(wv) ? 1 : Math.max(1, wv);
   }
+  if (nameIn)   room.name   = nameIn.value.trim();
+  if (envIn)    room.env    = parseInt(envIn.value) || 1;
+  if (symbolIn) room.symbol = symbolIn.value.trim() || undefined;
+  _rasterInvalidate();  // audyt ext F1.8: env/symbol zmienione w commicie — raster traci waznosc
   if (notesIn)  room.notes  = notesIn.value.trim() || undefined;
 
   // Position from editable fields (v1.3.2)
@@ -16740,8 +16906,10 @@ function commitRoomEdit() {
 
   // K2: Aplikuj pending exit/special/CL pola (Pass 38/44/45/48/60) ──────────
   // pending exits
+  let _pendingSkipped = 0;  // audyt ext F2.3: cele spoza mapy pomijane — zbiorczy toast po petli
   for (const [dir, targetId] of Object.entries(state.pendingExitTarget || {})) {
     if (targetId !== undefined && targetId !== null) {
+      if (!state.roomById[targetId]) { _pendingSkipped++; continue; }  // audyt ext F2.3: bez wiszacego exit
       room.exits = room.exits || {};
       room.exits[dir] = targetId;
       // FIX: remove stub for this dir if it had one (stub+exit coexistence cleanup)
@@ -16754,6 +16922,7 @@ function commitRoomEdit() {
       }
     }
   }
+  if (_pendingSkipped) toast(`⚠ Pominięto ${_pendingSkipped} wyjście(-a) — pokój docelowy nie istnieje`, true);
   // Remove stubs that user unchecked
   if (state.pendingStubRemovals && state.pendingStubRemovals.size > 0) {
     if (room.stubs) {
@@ -17500,7 +17669,7 @@ function openMoveAreaDialog(roomId) {
 
 // ── commitMoveRoomToArea(roomId, targetAreaId) — przenieś pokój (Pass 57/66) ─
 function commitMoveRoomToArea(roomId, targetAreaId, label) {
-  if (!state.editMode || !roomId || !targetAreaId) return;
+  if (!state.editMode || roomId == null || targetAreaId == null) return;  // audyt ext F2.1: obszar id 0 legalny
   const room = state.roomById[roomId];
   if (!room) return;
   const fromAreaId = state.roomArea[roomId];
@@ -18417,7 +18586,7 @@ function autoFixSuppressors(missing) {
       // Realny reshape → SUPPRESSOR po stronie B (zachowaj krzywą A)
       if (B.custom_lines?.[oppDir]?.points?.length > 0) continue; // nie nadpisuj CL z punktami
       const newCL = { points: [], color: cl.color ?? [255, 0, 0] };
-      const hadC = !B.custom_lines;  // audyt T4/S7
+      const hadC = !!B.custom_lines;  // audyt T4/S7; audyt ext F2.7: flaga NIE odwrocona (konsument === false)
       B.custom_lines = B.custom_lines || {};
       B.custom_lines[oppDir] = JSON.parse(JSON.stringify(newCL));
       added.push({ roomId: roomB, dir: oppDir, snapshot: JSON.parse(JSON.stringify(newCL)), hadContainer: hadC });

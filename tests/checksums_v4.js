@@ -277,7 +277,7 @@ console.log('── T6: piny strukturalne ──');
     ok(JSON.stringify(diffOrder) === JSON.stringify(api._V4_DIR_ORDER),
        '_V4_DIR_ORDER === _DIFF_DIR_ORDER (strażnik rozjazdu)');
   }
-  ok(HTML.includes("const APP_VERSION = 'v1.48.2';"), 'pin: APP_VERSION v1.48.2');
+  ok(HTML.includes("const APP_VERSION = 'v1.48.3';"), 'pin: APP_VERSION v1.48.3');
 }
 
 // ═══ T7: pin NaN-kanoniczny — klasa błędu z Arc 19 (NaN-payload provenance) ═══

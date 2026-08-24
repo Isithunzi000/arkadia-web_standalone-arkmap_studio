@@ -30,7 +30,7 @@ function blockSlice(a, b) {
   return NEW.slice(i, j);
 }
 
-// ── wspolny blok stalych (jak tier3; CRC32 usuniete w v1.48.2) ──
+// ── wspolny blok stalych (jak tier3; CRC32 usuniete w v1.48.3) ──
 const constsStart = NEW.indexOf('const DIRS = [');
 const constsBlock = NEW.slice(constsStart, NEW.indexOf('// ── arkadia-env.js ──'));
 
@@ -219,7 +219,7 @@ console.log('── T2b: golden writera .dat (fixpoint + crc) ──');
     const b2 = o2 instanceof Uint8Array ? o2 : new Uint8Array(o2);
     ok(b1.length === b2.length && Buffer.from(b1).equals(Buffer.from(b2)),
       'W1/W2: writer stabilny — fixpoint bajtowy write(read(write(read(fix)))) == write(read(fix))');
-    // CRC-32 liczone po stronie testu (zlib) — aplikacja nie nosi juz CRC-32 (v1.48.2)
+    // CRC-32 liczone po stronie testu (zlib) — aplikacja nie nosi juz CRC-32 (v1.48.3)
     const hex = ('00000000' + require('zlib').crc32(b1).toString(16)).slice(-8);
     ok(b1.length === 7845726 && hex === '65da3512',
       'W1/W2: golden — wyjscie writera bajtowo jak v1.38.0 [len=' + b1.length + ' crc=' + hex + ']');
@@ -439,18 +439,22 @@ console.log('── T9: piny ──');
   ok(NEW.includes('const _DELTA_MAX_DEPTH = 60;'), 'pin S8: limit glebokosci skanera kalki');
   const s7 = (NEW.split('audyt T4/S7').length - 1);
   ok(s7 >= 8, 'pin S7: hadContainer we wszystkich sciezkach CL [actual=' + s7 + ']');
-  // pin P1 (S4): locked-cel dozwolony — break PRZED sprawdzeniem locked (swiadoma roznica z Mudletem, udokumentowana)
+  // pin P1 (S4): NADPISANY decyzja F2.15 (Arc 31, v1.48.3) — domyslnie paritet z Mudletem
+  // (locked nieosiagalny tez jako CEL), przelacznik „Omijaj zablokowane pokoje" → OFF = permissive.
+  // Dawniej: locked-cel dozwolony (break przed locked). Piny behawioralne: audit_ext A2.15.
   const dij = extract(NEW, 'function dijkstraPath(fromId, toId) {');
-  ok(dij.indexOf('if (cur === toId) break;') < dij.indexOf('if (room.locked) continue;'),
-    'pin P1: locked pokoj dopuszczalny jako CEL trasy (decyzja wlasciciela — nie zmieniac na Mudlet-parity)');
+  ok(dij.indexOf('if (room.locked && wpState.avoidLocked) continue;') >= 0
+    && dij.indexOf('if (room.locked && wpState.avoidLocked) continue;') < dij.indexOf('if (cur === toId) break;')
+    && dij.includes('if (wpState.avoidLocked && nbr.locked) continue;'),
+    'pin P1: F2.15 — guard locked (ON=paritet Mudlet) PRZED breakiem + przy relaksacji; OFF=permissive');
   // piny wersji
-  ok(NEW.includes("const APP_VERSION = 'v1.48.2';"), 'pin: APP_VERSION v1.48.2');
+  ok(NEW.includes("const APP_VERSION = 'v1.48.3';"), 'pin: APP_VERSION v1.48.3');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok(deltaSrc.split('v1.48.2').length - 1 === 10, 'pin: delta.js 10x v1.48.2');
+  ok(deltaSrc.split('v1.48.3').length - 1 === 10, 'pin: delta.js 10x v1.48.3');
   const t2 = fs.readFileSync(path.join(ROOT, 'tests', 'tier2_state.js'), 'utf8');
-  ok(t2.includes("wersja: v1.48.2"), 'pin: tier2_state.js v1.48.2');
+  ok(t2.includes("wersja: v1.48.3"), 'pin: tier2_state.js v1.48.3');
   const t3 = fs.readFileSync(path.join(ROOT, 'tests', 'tier3_format.js'), 'utf8');
-  ok(t3.includes("pin: APP_VERSION v1.48.2"), 'pin: tier3_format.js v1.48.2');
+  ok(t3.includes("pin: APP_VERSION v1.48.3"), 'pin: tier3_format.js v1.48.3');
 }
 
 // ═══ T10: bramka — wlasne kalki zawsze z sid (K7 nie zabija wlasnych eksportow) ═══

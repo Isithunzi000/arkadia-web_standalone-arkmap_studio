@@ -32,7 +32,7 @@ const code =
   // DEPS z warstwy main: buildAnsiPal + ANSI_PAL + ansiPaletteRgb (wola go arkmapToDat).
   block('const ANSI_PAL = buildAnsiPal();', 'function buildColorCache') + '\n' +
   block('function stableStringify(val, indent, _lvl) {', 'function saveArkmapAs()') + '\n' +
-  block('function _prepareArkmapForSave() {', 'function _arkmapSuggestedName() {') + '\n' +
+  block('function _canonicalizeMapForSave(map) {', 'function _arkmapSuggestedName() {') + '\n' +
   'return { validate, arkmapToDat, _prepareArkmapForSave, _serializeMap };';
 
 const state = { map: null };

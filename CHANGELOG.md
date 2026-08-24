@@ -2,6 +2,32 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.48.3 — Audyt zewnetrzny, fala 2: edytor + loader .dat + online + planer + touch + UI/zapis (Arc 31)
+
+Dwadziescia jeden poprawek z zewnetrznego audytu kodu (fala 2: edytor, parser .dat, warstwa online, planer, dotyk, zapis). Wszystkie objete pinami repro-first (tests/audit_ext.js A2.1-A2.21).
+
+- F2.1: commitMoveRoomToArea odrzuca roomId/targetAreaId null — brak cichej mutacji przy pustym zaznaczeniu.
+- F2.2: usuniecie spec-exit kasuje rekord rename powiazany z biezaca komenda — brak sierocych wpisow SERenames.
+- F2.3: wyjscia do nieistniejacych pokoi pomijane przy commicie formularza, z licznikiem i tostem — bez martwych powiazan.
+- F2.4: dodanie pokoju na zajete pole odrzucane (kolizja _roomCollisionAt) — brak stosu pokoi na jednej pozycji.
+- F2.5: resize etykiety clampowany do prawidlowej krawedzi kotwicy — brak ujemnych rozmiarow przy rogach bl/tl/tr.
+- F2.6: waga pokoju zapisywana przed nazwa/env/symbolem — spojna kolejnosc commitu formularza.
+- F2.7: undo AUTO_FIX respektuje hadContainer — snapshot custom_lines przywracany wiernie.
+- F2.8: ujemne liczniki sekcji .dat (areaCount, lblAreaCount, lblCount, v21 labelCount) → kontrolowany throw zamiast cichej pustej mapy.
+- F2.9: duplikaty id obszarow/pokoi w .dat → warningi importu w dialogu walidacyjnym (last-wins bez zmian), anulowanie przerywa import.
+- F2.10: wiszace id i rekordy-orphany w .dat → warningi importu poza modelem (_importWarnings nieenumerowalne — zero smieci w zapisie).
+- F2.11: walidacja geometrii odrzuca NaN/Infinity (etykiety, punkty custom_lines).
+- F2.12: ver/rev z index.json escHtml-owane przed innerHTML — XSS z danych sieciowych zamkniete.
+- F2.13: TOCTOU przy fallbacku na ruchoma galaz: re-fetch index.json przed pobraniem pliku, rozjazd revision → swieze metadane + toast; sciezka SHA-pinned bez zmian.
+- F2.14: olFetchFile z twardym limitem bajtow (max 125% expectedSize, floor 64 MB) — kontrolowany blad zamiast pozaru pamieci.
+- F2.15: planer — przelacznik „Omijaj zablokowane pokoje" (domyslnie ON, paritet z Mudletem); guard locked przed breakiem i przy relaksacji w Dijkstrze i A*; OFF = routowanie permissive.
+- F2.16: pinch anuluje aktywne narzedzie (drag pokoju / paint stroke) — revert raz na gest, bez commitu po pinch.
+- F2.17: tap/dbltap po pinch zablokowane flaga _gestureMulti; reset rejestru dotkniec tylko przy starcie gestu od zera.
+- F2.18: srodek pinch liczony w pikselach canvasu (mnoznik CSS→px) — poprawny zoom przy CSS-zoom strony.
+- F2.19: kanonizacja zapisu na klonie (_serializeMapForSave / _canonicalCloneForSave) — anulowany picker nie zostawia sortowan ani checksumow w live modelu; zloty test bajtowosci z dawna sciezka.
+- F2.20: skroty +/-/f z guardem !inForm — wpisywanie w formularzach nie odpala fitToView/zoom; ctrl+f bez zmian.
+- F2.21: drop pliku .json przekazuje nazwe pliku do loadArkmap — pasek statusu i smart-nazwy jak przy .arkmap.
+
 ## v1.48.2 — Audyt zewnetrzny, fala 1: kalka + renderer/cache + XSS (Arc 31)
 
 Dwanascie poprawek z zewnetrznego audytu kodu (fala 1: silnik kalek, renderer i DOM). Wszystkie objete pinami regresyjnymi (tests/audit_ext.js, tier6_ux A31, xss_sinks A31).

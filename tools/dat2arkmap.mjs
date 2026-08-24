@@ -53,7 +53,7 @@ const code =
   block('// ── mudlet_dat.js ──', '// ── dat-to-arkmap.js ──') + '\n' +    // prymitywy .dat
   block('// ── dat-to-arkmap.js ──', '// ── arkmap-to-dat.js ──') + '\n' + // datToArkmap()
   block('function stableStringify(val, indent, _lvl) {', 'function saveArkmapAs()') + '\n' +
-  block('function _prepareArkmapForSave() {', 'function _arkmapSuggestedName() {') + '\n' +
+  block('function _canonicalizeMapForSave(map) {', 'function _arkmapSuggestedName() {') + '\n' +
   'return { datToArkmap, validate, _prepareArkmapForSave, _serializeMap };';
 
 const state = { map: null };

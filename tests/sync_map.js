@@ -184,7 +184,8 @@ console.log('— v1.5.37: pinning / transports / TOCTOU (struktura) —');
     'UI: resolve tipa gałęzi mapa przez API (TOCTOU)');
   ok(OL.includes("if (e.name === 'AbortError') throw e;") && OL.includes('return MAPA_RAW_URL;'),
     'UI: fallback na URL-e gałęziowe, AbortError nie jest maskowany');
-  ok((OL.match(/olBaseUrl \+ /g) || []).length === 3, 'UI: index.json i oba pliki po URL-ach przypiętych do SHA');
+  // F2.13 (Arc 31, v1.48.3): +1 — re-fetch index.json na fallbacku (TOCTOU) tez przez olBaseUrl.
+  ok((OL.match(/olBaseUrl \+ /g) || []).length === 4, 'UI: index.json ×2 (dialog + F2.13 fallback) i oba pliki po URL-ach przypiętych do SHA');
 }
 
 // ── v1.5.39: okienko online (segmenty/nowrap/szerokość) + NOTICE.md ─────────

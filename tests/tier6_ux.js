@@ -53,17 +53,19 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
     'B2: wrapper applyMap ustawia bufor przy kazdym wczytaniu');
 
   const save = extract(HTML, 'function _performArkmapSave(onSaved) {');
-  ok((save.split('const text = _serializeMap()').length - 1) === 1
-    && !save.includes('() => _serializeMap()') && save.includes('writable.write(text)'),
-    'B3: _performArkmapSave serializuje raz (const text), zero leniwych lambd');
+  // F2.19 (Arc 31, v1.48.3): serializacja na klonie — _serializeMapForSave zamiast _serializeMap.
+  ok((save.split('const text = _serializeMapForSave()').length - 1) === 1
+    && !save.includes('() => _serializeMapForSave()') && save.includes('writable.write(text)'),
+    'B3: _performArkmapSave serializuje raz (const text, F2.19: na klonie), zero leniwych lambd');
   ok((save.split('state.pristineArkmap = text;').length - 1) === 4,
     'B4: bufor ustawiany przy 4/4 punktow sukcesu zapisu — jest '
     + (save.split('state.pristineArkmap = text;').length - 1));
 
   const saveAs = extract(HTML, 'function _performArkmapSaveAs() {');
-  ok((saveAs.split('const text = _serializeMap()').length - 1) === 1
-    && !saveAs.includes('() => _serializeMap()'),
-    'B5: _performArkmapSaveAs serializuje raz (luka z audytu planu zamknieta)');
+  // F2.19 (Arc 31, v1.48.3): serializacja na klonie — _serializeMapForSave zamiast _serializeMap.
+  ok((saveAs.split('const text = _serializeMapForSave()').length - 1) === 1
+    && !saveAs.includes('() => _serializeMapForSave()'),
+    'B5: _performArkmapSaveAs serializuje raz (luka z audytu planu zamknieta, F2.19: na klonie)');
   ok((saveAs.split('state.pristineArkmap = text;').length - 1) === 2,
     'B6: bufor przy 2/2 punktow sukcesu Zapisz-kopie — jest '
     + (saveAs.split('state.pristineArkmap = text;').length - 1));
@@ -166,7 +168,7 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
      HTML.includes('const vis = _cullQuery(rooms, vx0, vx1, vy0, vy1);'),
     'B24: indeks budowany w buildRoomsZ (kazda mutacja) + draw() culluje przez _cullQuery');
 
-  // ── F5 (v1.48.2): raport HTML kalki z miniaturami przed/po ──
+  // ── F5 (v1.48.3): raport HTML kalki z miniaturami przed/po ──
   ok(HTML.includes('id="dp-save-html"') && HTML.includes('⬇ Zapisz raport .html'),
     'B25: 7. przycisk stopki panelu kalki — bramka F5-geom (sonda 2026-08-24): dluga etykieta nie zmienia liczby rzedow wrap (2 przy 560 px, 3 przy 448 px) — szerokosc panelu bez zmian');
   ok(HTML.includes('const DELTA_THUMB_CAP = 60;') && HTML.includes('.slice(0, DELTA_THUMB_CAP)'),
@@ -285,7 +287,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.48.2';"), 'V1: pin APP_VERSION v1.48.2');
+ok(HTML.includes("const APP_VERSION = 'v1.48.3';"), 'V1: pin APP_VERSION v1.48.3');
 
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);

@@ -1,6 +1,8 @@
 // Harness — audit_ext.js: piny repro-first audytu zewnetrznego (Arc 31).
 // Fala 1 (v1.48.2): F1.1-F1.12 — kalka (.arkdelta) + renderer/cache + XSS.
+// Fala 2 (v1.48.3): F2.1-F2.21 — edytor + loader .dat + online + planer + touch + UI/zapis.
 // Kazdy pin behawioralny: FAIL na bazie e357c82 (v1.48.1) -> PASS po fixie.
+// Piny A2.x: FAIL na bazie abd75f0 (v1.48.2) -> PASS po fixie.
 // Ekstrakcja verbatim z arkmap_studio.html (wzorzec diff_kalka.js), stuby DOM.
 // Uruchamianie z katalogu glownego repo.
 const fs = require('fs');
@@ -73,7 +75,7 @@ const KALKA_CODE =
   extract(HTML, 'function _arkdeltaBaseNote(base) {') + '\n' +
   extract(HTML, 'function _deltaBaseCheck(base) {') + '\n' +
   '\n;return { pushUndo, _computeBaseInfo, _deltaStripRoom, buildDelta, validateDeltaText, applyDelta, classifyDelta,'
-  + ' _deltaChecksums, stableStringify, addChecksums, diffMaps, _diffEq,'
+  + ' _deltaChecksums, stableStringify, addChecksums, diffMaps, _diffEq, commitMoveRoomToArea,'
   + ' get cmrtaCalls() { return _cmrtaCalls; } };';
 
 function makeKalkaCtx(map) {
@@ -174,12 +176,12 @@ function makeRenderCtx(rooms) {
   }
   const fn = new Function(
     'state', 'buildRoomsZ', 'scheduleDraw', 'updateUndoRedoUI', '_syncEditSnapshot', 'populateEditForm',
-    'document', 'toast', 'ImageData', '_envOf', 'envColorRgb', 'CULL_CAP', 'RASTER_CAP',
+    'document', 'toast', 'ImageData', '_envOf', 'envColorRgb', 'CULL_CAP', 'RASTER_CAP', 'buildAreaList',
     RENDER_CODE
   );
   const api = fn(state, () => { counters.roomsZ++; }, () => {}, () => {}, () => {}, () => {},
     documentStub, () => {}, ImageDataStub, (r) => (r.env ?? 1), (e) => [e & 255, e & 255, e & 255],
-    CULL_CAP, RASTER_CAP);
+    CULL_CAP, RASTER_CAP, () => {});
   return { state, api, counters };
 }
 
@@ -452,6 +454,660 @@ console.log('— A1.12 (F1.12): openCLEditor — klucz custom_lines poza inline 
   ok(bad.length === 0, 'A1.12: grep-audit — zero atrybutow onclick z interpolacja stringa w calym pliku');
 }
 
-console.log('');
-console.log(`═══ audit_ext: ${pass} OK, ${fail} FAIL ═══`);
-process.exit(fail ? 1 : 0);
+// ═══════════════════════════════════════════════════════════════════════════
+// FALA 2 (v1.48.3) — EDYTOR (F2.1-F2.7)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const PUSH_UNDO_SRC = extract(HTML, 'function pushUndo(entry) {');
+function mkPushUndo(state) { return new Function('state', PUSH_UNDO_SRC + '\nreturn pushUndo;')(state); }
+
+console.log('— A2.1 (F2.1): commitMoveRoomToArea do obszaru id 0 + undo —');
+{
+  const map = { meta: {}, areas: [
+    { id: 0, name: 'Default', rooms: [] },
+    { id: 1, name: 'A', rooms: [{ id: 5, x: 0, y: 0, z: 0, name: 'R5', env: 1 }] },
+  ], colors: { custom_env_colors: {} } };
+  const c = makeKalkaCtx(map);
+  c.api.commitMoveRoomToArea(5, 0);
+  ok(c.state.roomArea[5] === 0 && (c.state.areas.get(0).rooms || []).some(r => r.id === 5),
+    'A2.1 (F2.1): przeniesienie do obszaru id 0 dziala (pre-fix: falsy guard blokuje)');
+  const entry = c.state.undoStack[c.state.undoStack.length - 1];
+  ok(entry && entry.type === 'MOVE_ROOM_TO_AREA' && entry.toAreaId === 0 && entry.fromAreaId === 1,
+    'A2.1 (F2.1): wpis undo z toAreaId 0 na stosie');
+  // undo przez prawdziwy dispatcher (render ctx)
+  const rc = makeRenderCtx([]);
+  const r5 = { id: 5, x: 0, y: 0, z: 0, name: 'R5', env: 1, area: 0 };
+  rc.state.areas.set(0, { id: 0, name: 'Default', rooms: [r5] });
+  rc.state.areas.set(1, { id: 1, name: 'A', rooms: [] });
+  rc.state.roomById[5] = r5; rc.state.roomArea[5] = 0;
+  if (entry) rc.api._dispatchUndo(entry);
+  ok(!!entry && rc.state.roomArea[5] === 1 && rc.state.areas.get(1).rooms.some(r => r.id === 5)
+    && !rc.state.areas.get(0).rooms.some(r => r.id === 5),
+    'A2.1: undo MOVE_ROOM_TO_AREA z obszaru 0 dziala');
+}
+
+console.log('— A2.2 (F2.2): rename spec-exit foo→bar + delete wiersza —');
+{
+  const WIRE = 'function wireSpecRows(container, room) {\n'
+    + blockSlice(HTML, "  container.querySelectorAll('.spec-row').forEach(row => {",
+      "  const addBtn = document.getElementById('spec-add-btn');") + '\n}';
+  const cmdIn  = { dataset: { orig: 'foo' }, value: 'foo', oninput: null, onfocus: null };
+  const idIn   = { value: '7', oninput: null, onfocus: null };
+  const lockChk = { checked: false, onchange: null };
+  const delBtn = { onclick: null };
+  const confirmBtn = { onclick: null };
+  const row = { querySelector: (s) => ({ '.spec-cmd': cmdIn, '.spec-id': idIn,
+    'input[type=checkbox]': lockChk, '.spec-del': delBtn, '.spec-confirm': confirmBtn })[s] || null,
+    nextElementSibling: null };
+  const container = { querySelectorAll: (s) => (s === '.spec-row' ? [row] : []) };
+  const state = {
+    roomById: { 7: { id: 7, name: 'Cel' } },
+    pendingSpecialExits: { foo: 7 }, pendingSpecialExitLocks: {}, pendingSERenames: {},
+    _activeSpecialExit: null,
+  };
+  const room = { id: 1, special_exits: { foo: 7 } };
+  const wire = new Function('state', '_setMapKey', 'setEditDirty', 'scheduleDraw', 'updateSpecialeTab',
+    'commitRoomEdit', WIRE + '\nreturn wireSpecRows;')
+    (state, (o, k, v) => { o[k] = v; }, () => {}, () => {}, () => {}, () => {});
+  wire(container, room);
+  cmdIn.value = 'bar'; cmdIn.oninput();  // rename foo → bar
+  ok(state.pendingSpecialExits.bar === 7 && state.pendingSERenames.foo === 'bar'
+    && !('foo' in state.pendingSpecialExits), 'A2.2: rename foo→bar przeniosl pending (setup)');
+  delBtn.onclick();  // ✕ na wierszu po rename
+  ok(!('bar' in state.pendingSpecialExits) && !('foo' in state.pendingSpecialExits),
+    'A2.2 (F2.2): po ✕ pending bez foo i bez bar (pre-fix: bar zostaje → wskrzeszony przy commicie)');
+  const ren = state.pendingSERenames || {};
+  ok(!Object.values(ren).includes('bar') && !('bar' in ren),
+    'A2.2 (F2.2): rekord rename dotyczacy wiersza skasowany (lustro kolapsu lancucha)');
+}
+
+console.log('— A2.3 (F2.3): pendingExitTarget na nieistniejacy pokoj —');
+{
+  const COMMIT_SRC = extract(HTML, 'function commitRoomEdit() {');
+  const room = { id: 1, x: 0, y: 0, z: 0, name: 'R1', env: 1, exits: {} };
+  const state = {
+    selected: 1, editMode: true, editSnapshot: null, editDirty: true, dirty: false,
+    roomById: { 1: room }, roomArea: { 1: 1 },
+    areas: new Map([[1, { id: 1, name: 'A', rooms: [room] }]]),
+    undoStack: [], redoStack: [], deltaLog: [],
+    pendingExitTarget: { n: 999 }, pendingEnv: null, pendingDoors: {}, pendingExitWeight: {},
+    pendingExitLock: {}, pendingStubs: new Set(), pendingStubRemovals: new Set(),
+    pendingSpecialExits: null, pendingSpecialExitLocks: null, pendingSpecialDoors: null, pendingSERenames: null,
+  };
+  const toasts = [];
+  const commit = new Function('state', 'document', 'toast', 'switchRpTab', '_setMapKey', 'buildRoomsZ',
+    '_roomCollisionAt', '_rasterInvalidate', 'pushUndo', 'updateUndoRedoUI', 'scheduleDraw', 'populateEditForm',
+    'OPPOSITE', 'escHtml', 'plPl', 'closeDialog', 'openDialog', 'commitAddExit',
+    COMMIT_SRC + '\nreturn commitRoomEdit;')
+    (state, { getElementById: () => null, querySelector: () => null }, (m) => toasts.push(String(m)),
+      () => {}, (o, k, v) => { o[k] = v; }, () => {}, () => null, () => {},
+      mkPushUndo(state), () => {}, () => {}, () => {},
+      { n: 's', s: 'n', e: 'w', w: 'e' }, (x) => String(x), (n, one) => n + ' ' + one, () => {}, () => {}, () => {});
+  commit();
+  ok(room.exits.n === undefined,
+    'A2.3 (F2.3): exit na nieistniejacy cel NIE utworzony (pre-fix: wiszacy exit do #999)');
+  ok(toasts.some(t => /Pominięto 1 wyj/.test(t)),
+    'A2.3 (F2.3): zbiorczy toast ostrzezenia o pominietym celu');
+}
+
+console.log('— A2.4 (F2.4): tryb add-room — guard zajetosci komorki —');
+{
+  const CASE_SRC = 'function addRoomCase(mx, my) {\n'
+    + blockSlice(HTML, "    case 'add-room': {", "    case 'cl-drawing': {")
+      .replace(/^\s*case 'add-room': \{\n/, '').replace(/\}\s*$/, '') + '\n}';
+  const existing = { id: 1, x: 3, y: 3, z: 0, name: 'R1', env: 1 };
+  const state = {
+    roomById: { 1: existing }, roomArea: { 1: 1 }, areaId: 1, z: 0, isArkadia: true,
+    areas: new Map([[1, { id: 1, name: 'A', rooms: [existing] }]]),
+    roomsZ: [existing], undoStack: [], redoStack: [], deltaLog: [], selected: null, editMode: true,
+  };
+  const toasts = [];
+  const collisionAt = new Function('state', extract(HTML, 'function _roomCollisionAt(x, y, z, excludeId) {')
+    + '\nreturn _roomCollisionAt;')(state);
+  const addRoom = new Function('state', 'toast', 'setCanvasMode', 'buildRoomsZ', 'pushUndo',
+    'updateUndoRedoUI', 'showRoomInfo', 'scheduleDraw', '_roomCollisionAt',
+    CASE_SRC + '\nreturn addRoomCase;')
+    (state, (m) => toasts.push(String(m)), () => {}, () => {}, mkPushUndo(state),
+      () => {}, () => {}, () => {}, collisionAt);
+  addRoom(3.2, 2.9);  // → (3,3,0) zajęte przez #1
+  ok(Object.keys(state.roomById).length === 1,
+    'A2.4 (F2.4): klik na zajeta komorke NIE tworzy pokoju (pre-fix: stackowanie)');
+  ok(toasts.some(t => /zajęte przez pokój #1/.test(t)), 'A2.4 (F2.4): toast kolizji przy add-room');
+  const beforeFree = Object.keys(state.roomById).length;
+  addRoom(8.1, 8.2);  // wolna komórka — kontrola regresji funkcji
+  ok(Object.keys(state.roomById).length === beforeFree + 1,
+    'A2.4: wolna komorka — pokoj tworzony (regresja funkcji)');
+}
+
+console.log('— A2.5 (F2.5): clamp resize etykiety — kotwica nieruchoma —');
+{
+  const BLOCK_SRC = 'function labelResizeDrag(e) {\n'
+    + blockSlice(HTML, '  if (state.labelResizing && state.selectedLabel) {', '  // ── LABEL DRAG') + '\n}';
+  const lbl = { id: 9, x: 10, y: 10, width: 4, height: 2, text: 'L' };
+  const state = {
+    labelResizing: true, selectedLabel: { areaId: 1, labelId: 9 },
+    areas: new Map([[1, { id: 1, labels: [lbl] }]]),
+    labelDragStartMapX: 0, labelDragStartMapY: 0,
+    labelResizeCorner: 'tl', labelResizeOrigW: 4, labelResizeOrigH: 2,
+    labelResizeOrigX: 10, labelResizeOrigY: 10,
+  };
+  const drag = new Function('state', 'screenToMap', 'evX', 'evY', 'scheduleDraw',
+    BLOCK_SRC + '\nreturn labelResizeDrag;')
+    (state, () => [100, -100], () => 0, () => 0, () => {});
+  drag({});
+  ok(lbl.width === 0.5 && Math.abs((lbl.x + lbl.width) - 14) < 1e-9,
+    'A2.5 (F2.5): clamp szerokosci (tl) — prawa krawedz zakotwiczona (pre-fix: kotwica przemieszczona)');
+  ok(lbl.height === 0.2 && Math.abs((lbl.y + lbl.height) - 12) < 1e-9,
+    'A2.5 (F2.5): clamp wysokosci (tl) — kotwica zakotwiczona (pre-fix: kotwica przemieszczona)');
+}
+
+console.log('— A2.6 (F2.6): bledna waga — zero mutacji pokoju —');
+{
+  const COMMIT_SRC = extract(HTML, 'function commitRoomEdit() {');
+  const room = { id: 2, x: 1, y: 1, z: 0, name: 'Stara', env: 5, symbol: '#', exits: {} };
+  const state = {
+    selected: 2, editMode: true, editSnapshot: null, editDirty: true, dirty: false,
+    roomById: { 2: room }, roomArea: { 2: 1 },
+    areas: new Map([[1, { id: 1, name: 'A', rooms: [room] }]]),
+    undoStack: [], redoStack: [], deltaLog: [],
+    pendingExitTarget: {}, pendingEnv: null, pendingDoors: {}, pendingExitWeight: {},
+    pendingExitLock: {}, pendingStubs: new Set(), pendingStubRemovals: new Set(),
+    pendingSpecialExits: null, pendingSpecialExitLocks: null, pendingSpecialDoors: null, pendingSERenames: null,
+  };
+  const toasts = [];
+  const mkInput = (v) => ({ value: v, classList: { add() {}, remove() {} }, focus() {} });
+  const els = { 'rp-name': mkInput('Nowa Nazwa'), 'rp-weight': mkInput('0') };
+  const commit = new Function('state', 'document', 'toast', 'switchRpTab', '_setMapKey', 'buildRoomsZ',
+    '_roomCollisionAt', '_rasterInvalidate', 'pushUndo', 'updateUndoRedoUI', 'scheduleDraw', 'populateEditForm',
+    'OPPOSITE', 'escHtml', 'plPl', 'closeDialog', 'openDialog', 'commitAddExit',
+    COMMIT_SRC + '\nreturn commitRoomEdit;')
+    (state, { getElementById: (id) => els[id] || null, querySelector: () => null },
+      (m) => toasts.push(String(m)),
+      () => {}, (o, k, v) => { o[k] = v; }, () => {}, () => null, () => {},
+      mkPushUndo(state), () => {}, () => {}, () => {},
+      {}, (x) => String(x), (n, one) => n + ' ' + one, () => {}, () => {}, () => {});
+  commit();
+  ok(room.name === 'Stara' && room.env === 5 && room.symbol === '#' && room.weight === undefined,
+    'A2.6 (F2.6): bledna waga → room bez zadnej zmiany (pre-fix: name zmutowane przed walidacja)');
+  ok(toasts.some(t => /Waga musi być/.test(t)), 'A2.6: toast walidacji wagi');
+}
+
+console.log('— A2.7 (F2.7): undo auto-fixu suppressorow — bez pustego custom_lines —');
+{
+  const A = { id: 1, x: 0, y: 0, z: 0, name: 'A', env: 1, exits: { e: 2 },
+    custom_lines: { e: { points: [[0.5, 0.9], [1.5, 0.9]], color: [255, 0, 0] } } };
+  const B = { id: 2, x: 2, y: 0, z: 0, name: 'B', env: 1, exits: { w: 1 } };
+  const state = { roomById: { 1: A, 2: B }, undoStack: [], redoStack: [], deltaLog: [] };
+  const autoFix = new Function('state', 'pushUndo', 'updateUndoRedoUI', 'scheduleDraw', 'toast',
+    extract(HTML, 'function autoFixSuppressors(missing) {') + '\nreturn autoFixSuppressors;')
+    (state, mkPushUndo(state), () => {}, () => {}, () => {});
+  autoFix([{ roomA: 1, dir: 'e', roomB: 2, oppDir: 'w' }]);
+  const entry = state.undoStack[state.undoStack.length - 1];
+  ok(entry && entry.type === 'AUTO_FIX_SUPPRESSORS' && entry.added.length === 1 && !!B.custom_lines?.w,
+    'A2.7: suppressor dodany po stronie B (setup)');
+  ok(entry.added[0].hadContainer === false,
+    'A2.7 (F2.7): hadContainer=false gdy B nie mial kontenera (pre-fix: odwrocona flaga)');
+  const rc = makeRenderCtx([]);
+  rc.state.roomById[1] = A; rc.state.roomById[2] = B;
+  rc.api._dispatchUndo(entry);
+  ok(B.custom_lines === undefined,
+    'A2.7 (F2.7): undo auto-fixu nie zostawia custom_lines: {} (pre-fix: pusty kontener zostaje)');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FALA 2 (v1.48.3) — LOADER .dat (F2.8-F2.11)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Warstwa formatu (wzorzec malformed_dat.js): constants.js -> main + DEPS.
+function formatLayer(html) {
+  const a = html.indexOf('// ── constants.js ──');
+  const b = html.indexOf('// ── main ──');
+  if (a < 0 || b < 0 || b <= a) throw new Error('kotwice warstwy formatu');
+  const c = html.indexOf('const ANSI_PAL = buildAnsiPal();');
+  const d = html.indexOf('function buildColorCache');
+  if (c < 0 || d < 0 || d <= c) throw new Error('kotwice DEPS');
+  return html.slice(a, b) + '\n' + html.slice(c, d);
+}
+const fmt = new Function(formatLayer(HTML)
+  + '\n;return { ReadBuffer, WriteBuffer, readMudletDat, datToArkmap, validate,'
+  + ' writeQMapII, writeQMapIS, writeQMapIC, writeQMapSU, writeQMapSS, writeQFont, writeQMapSI,'
+  + ' writeQListI, writeQMMIPP, writeQVector, writeMudletArea, writeMudletRoom };')();
+
+// Skladnia bufora v20/v21 przez ORYGINALNE prymitywy zapisu (kontrolowane liczniki).
+function buildDatV20(opts) {
+  const { areaCount = 0, areas = [], lblAreaCount = 0, rooms = [], version = 20, v21LabelCount = null } = opts;
+  const w = new fmt.WriteBuffer();
+  w.writeInt32(version);
+  fmt.writeQMapII(w, {}); fmt.writeQMapIS(w, {}); fmt.writeQMapIC(w, {});
+  fmt.writeQMapSU(w, {}); fmt.writeQMapSS(w, {});
+  fmt.writeQFont(w, null); w.writeDouble(1.0); w.writeInt8(0);
+  w.writeInt32(areaCount);
+  for (const [aid, a] of areas) {
+    w.writeInt32(aid);
+    if (version >= 21) {
+      // jak writeMudletArea + v21: mLast2DMapZoom przed userData, labelCount po
+      fmt.writeQListI(w, a.rooms ?? []); fmt.writeQListI(w, []); fmt.writeQMMIPP(w, {});
+      w.writeInt8(0);
+      w.writeInt32(0); w.writeInt32(0); w.writeInt32(0); w.writeInt32(0); w.writeInt32(0); w.writeInt32(0);
+      fmt.writeQVector(w, [0, 0, 0]);
+      fmt.writeQMapII(w, {}); fmt.writeQMapII(w, {}); fmt.writeQMapII(w, {}); fmt.writeQMapII(w, {});
+      fmt.writeQVector(w, [0, 0, 0]);
+      w.writeInt8(0); w.writeInt32(0);
+      w.writeDouble(1.0);
+      fmt.writeQMapSS(w, {});
+      w.writeInt32(v21LabelCount === null ? 0 : v21LabelCount);
+    } else {
+      fmt.writeMudletArea(w, a);
+    }
+  }
+  fmt.writeQMapSI(w, {});
+  if (version < 21) w.writeInt32(lblAreaCount);
+  for (const [rid, room] of rooms) { w.writeInt32(rid); fmt.writeMudletRoom(w, room); }
+  const u8 = w.toUint8Array();
+  return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+}
+function expectDatThrow(fn, re, name) {
+  try { fn(); }
+  catch (e) { ok(re.test(String(e && e.message || e)), name + ' [msg=' + String(e && e.message).slice(0, 70) + ']'); return; }
+  ok(false, name + ' [BRAK WYJATKU — cicha pusta sekcja]');
+}
+
+console.log('— A2.8 (F2.8): ujemne liczniki sekcji .dat → kontrolowany throw —');
+expectDatThrow(() => fmt.datToArkmap(buildDatV20({ areaCount: -1 })),
+  /ujemny licznik sekcji/, 'A2.8 (F2.8): areaCount=-1 → throw (pre-fix: cicha pusta mapa)');
+expectDatThrow(() => fmt.datToArkmap(buildDatV20({ areaCount: 0, lblAreaCount: -1 })),
+  /ujemny licznik sekcji/, 'A2.8 (F2.8): lblAreaCount=-1 → throw (pre-fix: cicho)');
+expectDatThrow(() => fmt.datToArkmap(buildDatV20({ version: 21, areaCount: 1, areas: [[1, { rooms: [] }]], v21LabelCount: -1 })),
+  /ujemny licznik sekcji/, 'A2.8 (F2.8): v21 labelCount=-1 → throw (pre-fix: cicho)');
+
+console.log('— A2.9 (F2.9): duplikaty id → warning + last-wins —');
+{
+  const buf = buildDatV20({
+    areaCount: 2, areas: [[1, { rooms: [1] }], [1, { rooms: [2] }]],
+    rooms: [[1, { area: 1, name: 'PIERWSZY' }], [2, { area: 1, name: 'X' }], [1, { area: 1, name: 'DRUGI' }]],
+  });
+  const raw = fmt.readMudletDat(buf);
+  const iw = raw.importWarnings || [];
+  ok(iw.some(w => /zduplikowany id obszaru #1/.test(w)),
+    'A2.9 (F2.9): duplikat id obszaru → warning (pre-fix: cicho)');
+  ok(iw.some(w => /zduplikowany id pokoju #1/.test(w)),
+    'A2.9 (F2.9): duplikat id pokoju → warning (pre-fix: cicho)');
+  ok(raw.rooms[1] && raw.rooms[1].name === 'DRUGI' && raw.areas[1].rooms.length === 1 && raw.areas[1].rooms[0] === 2,
+    'A2.9: dane last-wins bez zmian (regresja funkcji)');
+}
+const ASYNC_PINS = [];
+ASYNC_PINS.push((async () => {  // A2.9 kanal: loadDat → dialog walidacyjny z anulowaniem
+  const buf = buildDatV20({ areaCount: 1, areas: [[1, { rooms: [1] }]],
+    rooms: [[1, { area: 1, name: 'A' }], [1, { area: 1, name: 'B' }]] });
+  let dialogRes = null, applied = false;
+  const loadDat = new Function('state', 'datToArkmap', 'validate', 'checkSuppressorsInMap', 'showValDialog',
+    'applyMap', 'toast', 'fmtSz',
+    extract(HTML, 'async function loadDat(file) {') + '\nreturn loadDat;')
+    ({}, fmt.datToArkmap, fmt.validate, () => [],
+      async (res) => { dialogRes = res; return false; },  // uzytkownik ANULUJE
+      () => { applied = true; }, () => {}, () => '');
+  await loadDat({ name: 't.dat', size: buf.byteLength, arrayBuffer: async () => buf });
+  ok(dialogRes !== null && (dialogRes.warnings || []).some(w => /zduplikowany id pokoju #1/.test(w)),
+    'A2.9 (F2.9): warning o duplikacie trafia do dialogu walidacyjnego (pre-fix: brak dialogu)');
+  ok(applied === false, 'A2.9 (F2.9): anulowanie dialogu przerywa import (pre-fix: import szedl dalej cicho)');
+})());
+
+console.log('— A2.10 (F2.10): wiszace id / orphan rekordy → warningi importu —');
+{
+  const buf = buildDatV20({ areaCount: 1, areas: [[1, { rooms: [1, 99] }]],
+    rooms: [[1, { area: 1, name: 'OK' }], [5, { area: 1, name: 'ORPHAN' }]] });
+  const map = fmt.datToArkmap(buf);
+  const iw = map._importWarnings || [];
+  ok(iw.some(w => /1 pokoi bez rekordu/.test(w)),
+    'A2.10 (F2.10): wiszace id 99 → warning z liczba zgubionych (pre-fix: cicho)');
+  ok(iw.some(w => /spoza list obszarow/.test(w)),
+    'A2.10 (F2.10): rekord #5 spoza list obszarow → warning orphan (pre-fix: cicho)');
+  ok(map.areas[0].rooms.length === 1 && map.areas[0].rooms[0].id === 1,
+    'A2.10: dane bez zmian — pominiete rekordy jak dotychczas (regresja funkcji)');
+  ok(!JSON.stringify(map).includes('_importWarnings'),
+    'A2.10: _importWarnings poza modelem (nieenumerowalne — zero smieci w zapisie)');
+}
+
+console.log('— A2.11 (F2.11): NaN/Infinity przez walidacje geometrii —');
+{
+  const GOOD_FONT = { family: 'F', point_size: 10, pixel_size: 10, style_hint: 0, weight: 50,
+    underline: false, strike_out: false, fixed_pitch: false, style_setting: false };
+  const meta = () => ({ map_name: 'M', symbol_font: { ...GOOD_FONT }, symbol_font_fudge_factor: 1, use_only_map_font: false });
+  const mapL = { format: 'arkmap', version: 1, meta: meta(), colors: {}, areas: [
+    { id: 1, name: 'A', rooms: [], labels: [
+      { id: 1, x: NaN, y: 0, z: 0, width: Infinity, height: 1, text: 't', fg_color: [0, 0, 0], bg_color: [255, 255, 255] } ] } ] };
+  const resL = fmt.validate(mapL);
+  ok(resL.errors.some(e => /\.x$/.test(e.path) && /must be number/.test(e.msg)),
+    'A2.11 (F2.11): NaN w label.x odrzucone (pre-fix: typeof przepuszcza)');
+  ok(resL.errors.some(e => /\.width$/.test(e.path) && /must be number/.test(e.msg)),
+    'A2.11 (F2.11): Infinity w label.width odrzucone (pre-fix: przepuszcza)');
+  const mapC = { format: 'arkmap', version: 1, meta: meta(), colors: {}, areas: [
+    { id: 1, name: 'A', rooms: [
+      { id: 1, x: 0, y: 0, z: 0, name: 'R1', env: 1, exits: { e: 2 }, custom_lines: { e: { points: [[NaN, 1]] } } },
+      { id: 2, x: 1, y: 0, z: 0, name: 'R2', env: 1 } ] } ] };
+  const resC = fmt.validate(mapC);
+  ok(resC.errors.some(e => /custom_lines\.e\.points\[0\]/.test(e.path) && /must be \[number, number\]/.test(e.msg)),
+    'A2.11 (F2.11): NaN w punkcie CL odrzucone (pre-fix: przepuszcza)');
+}
+
+console.log('— A2.12 (F2.12): innerHTML z danymi sieciowymi → escHtml —');
+{
+  const m = HTML.match(/olSyncInfo\.innerHTML\s*=\s*`[^`]*`/s);
+  const line = m ? m[0] : '';
+  ok(/escHtml\(ver\)/.test(line) && /escHtml\(rev\)/.test(line),
+    'A2.12 (F2.12): ver/rev escHtml-owane w olSyncInfo.innerHTML (pre-fix: surowe dane z index.json)');
+}
+
+console.log('— A2.13 (F2.13): TOCTOU fallback → re-fetch index.json przed plikiem —');
+ASYNC_PINS.push((async () => {
+  const MAPA_RAW = (HTML.match(/const MAPA_RAW_URL = '([^']+)'/) || [null, ''])[1];
+  let mk = null;
+  try {
+    const src = extract(HTML, 'async function olRefreshIndexOnFallback() {');
+    mk = new Function('fetchImpl', 'toastImpl', 'olIndex0', 'olBaseUrl0', 'MAPA_RAW_URL',
+      'let olIndex = olIndex0, olBaseUrl = olBaseUrl0; const fetch = fetchImpl, toast = toastImpl;\n' +
+      src + '\nreturn (async () => { await olRefreshIndexOnFallback(); return { olIndex, olBaseUrl }; })();');
+  } catch (e) { /* baza: brak funkcji → oba piny FAIL nizej */ }
+  if (!mk) {
+    ok(false, 'A2.13 (F2.13): fallback: rozjazd revision → świeży index + toast (pre-fix: brak mechanizmu)');
+    ok(false, 'A2.13 (F2.13): SHA-pinned: bez re-fetchu (pre-fix: brak mechanizmu)');
+    return;
+  }
+  // Scenariusz 1: fallback aktywny, gałąź przesunięta między dialogiem a pobraniem
+  const fresh = { revision: 'bbbbbbb2222', version: '9.9', arkmap_size: 10, dat_size: 20 };
+  const calls = [], toasts = [];
+  const fetchMock = async (url) => { calls.push(url); return { ok: true, json: async () => fresh }; };
+  const r1 = await mk(fetchMock, (m) => toasts.push(m), { revision: 'aaaaaaa1111', version: '1.0' }, MAPA_RAW, MAPA_RAW);
+  ok(r1.olIndex.revision === 'bbbbbbb2222' && calls.length === 1 && toasts.some(t => /kopia zmieniła się w trakcie/i.test(t)),
+    'A2.13 (F2.13): fallback: rozjazd revision → świeży index + toast (pre-fix: plik B opisany jako A)');
+  // Scenariusz 2: SHA-pinned → zero re-fetchu, metadane nietknięte
+  const calls2 = [];
+  const pinned = 'https://raw.githubusercontent.com/Isithunzi000/arkadia-web_standalone-arkmap_studio/' + 'a'.repeat(40) + '/';
+  const idx2 = { revision: 'aaaaaaa1111', version: '1.0' };
+  const r2 = await mk((u) => { calls2.push(u); return fetchMock(u); }, () => {}, idx2, pinned, MAPA_RAW);
+  ok(calls2.length === 0 && r2.olIndex === idx2,
+    'A2.13 (F2.13): SHA-pinned: bez re-fetchu (regresja wydajności)');
+})());
+
+console.log('— A2.14 (F2.14): olFetchFile z twardym limitem bajtów —');
+ok(/const OL_MAX_BYTES = 64 \* 1024 \* 1024/.test(HTML),
+  'A2.14 (F2.14): stała OL_MAX_BYTES = 64 MB (pre-fix: brak limitu)');
+ASYNC_PINS.push((async () => {
+  let of = null;
+  try {
+    const src = extract(HTML, 'async function olFetchFile(');
+    const olMaxExpr = (HTML.match(/const OL_MAX_BYTES = ([^;]+);/) || [null, '0'])[1];
+    of = new Function('fetchImpl', 'olConfirmPrg', 'olConfirmBar',
+      'const OL_MAX_BYTES = ' + olMaxExpr + '; const fetch = fetchImpl;\n' + src + '\nreturn olFetchFile;');
+  } catch (e) { /* baza: niedosiagalne — funkcja istnieje; zostawione dla spojnosci */ }
+  const prgStub = { textContent: '' }, barStub = { style: {} };
+  // Strumień 66 MB (3 × 22 MB) ponad limit — expectedSize nieznany (null)
+  const bigChunks = [22, 22, 22].map(mb => new Uint8Array(mb * 1024 * 1024));
+  const fetchBig = async () => ({ ok: true, headers: { get: () => null },
+    body: { getReader: () => { let i = 0; return {
+      async read() { return i < bigChunks.length ? { done: false, value: bigChunks[i++] } : { done: true }; },
+      releaseLock() {} }; } } });
+  let threw = '';
+  try {
+    await of(fetchBig, prgStub, barStub)('http://x/f', 'f', null, { prg: prgStub, bar: null });
+  } catch (e) { threw = String(e && e.message || e); }
+  ok(/za duży/.test(threw),
+    'A2.14 (F2.14): strumień 66 MB → kontrolowany throw „za duży" (pre-fix: bez limitu)');
+  // Kontrola: mały strumień 300 B przechodzi i bajty się zgadzają (regresja funkcji)
+  const small = [100, 100, 100].map((n, k) => new Uint8Array(n).fill(k + 1));
+  const fetchSmall = async () => ({ ok: true, headers: { get: () => '300' },
+    body: { getReader: () => { let i = 0; return {
+      async read() { return i < small.length ? { done: false, value: small[i++] } : { done: true }; },
+      releaseLock() {} }; } } });
+  let buf = null;
+  try { buf = await of(fetchSmall, prgStub, barStub)('http://x/f', 'f', 300, { prg: prgStub, bar: null }); }
+  catch (e) { /* zostanie null → FAIL */ }
+  ok(buf && buf.length === 300 && buf[0] === 1 && buf[299] === 3,
+    'A2.14: mały strumień bez zmian (regresja funkcji)');
+})());
+
+console.log('— A2.15 (F2.15): planer — omijanie zablokowanych pokoi —');
+{
+  const body = blockSlice(HTML, 'function _heapLt', 'function astarPath(fromId, toId) {')
+    + extract(HTML, 'function astarPath(fromId, toId) {');
+  // Shim DIR_BY_SHORT (poza wycinkiem): pin uzywa wylacznie e/w (kardynalne, idx<=8)
+  const mk = new Function('state', 'wpState',
+    'const DIR_BY_SHORT = { e: { idx: 2 }, w: { idx: 6 } };\n'
+    + body + '\nreturn { dijkstraPath, astarPath };');
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const mkState = (lockId) => ({
+    roomById: {
+      1: { id: 1, x: 0, y: 0, z: 0, exits: { e: 2 }, locked: lockId === 1 },
+      2: { id: 2, x: 1, y: 0, z: 0, exits: { e: 3, w: 1 }, locked: lockId === 2 },
+      3: { id: 3, x: 2, y: 0, z: 0, exits: { w: 2 }, locked: lockId === 3 },
+    },
+    roomArea: { 1: 'A', 2: 'A', 3: 'A' },
+    editMode: false,
+    astarParams: { maxEdgeDist: 1, minEdgeW: 1 },
+  });
+  const wpOn  = { avoidLocked: true,  dirMode: 'all', transportMode: 'off', algorithm: 'dijkstra' };
+  const wpOff = { avoidLocked: false, dirMode: 'all', transportMode: 'off', algorithm: 'dijkstra' };
+  // ON + cel locked → null (oba algorytmy); pre-fix: break przed guardem → trasa przechodzi
+  const Pon = mk(mkState(3), wpOn);
+  ok(Pon.dijkstraPath(1, 3) === null && Pon.astarPath(1, 3) === null,
+    'A2.15 (F2.15): ON — trasa do locked celu = null, oba algorytmy (pre-fix: przechodzi)');
+  // ON + skrót from==to z locked startem → [fromId] zostaje (paritet Mudlet, regresja)
+  const Pself = mk(mkState(1), wpOn);
+  ok(eq(Pself.dijkstraPath(1, 1), [1]) && eq(Pself.astarPath(1, 1), [1]),
+    'A2.15 (F2.15): skrót from==to zostaje przy locked starcie (regresja)');
+  // OFF → routowanie permissive przez locked (styl Dargotha)
+  const Poff = mk(mkState(3), wpOff);
+  ok(eq(Poff.dijkstraPath(1, 3), [1, 2, 3]) && eq(Poff.astarPath(1, 3), [1, 2, 3]),
+    'A2.15 (F2.15): OFF — trasa przez locked dozwolona (regresja przełącznika)');
+  // ON + locked pośredni → null (regresja: działało i ma działać)
+  const Pmid = mk(mkState(2), wpOn);
+  ok(Pmid.dijkstraPath(1, 3) === null && Pmid.astarPath(1, 3) === null,
+    'A2.15: ON — locked pośredni nadal pomijany (regresja)');
+  // Statyczne: domyślne ON w wpState
+  ok(/avoidLocked:\s*true/.test(HTML),
+    'A2.15 (F2.15): wpState.avoidLocked domyślnie ON (pre-fix: brak przełącznika)');
+  // Geometry gate: checkbox w panelu planera — kolejność DOM + wiersz CSS + etykieta
+  const iT = HTML.indexOf('id="wp-transport"'), iC = HTML.indexOf('id="wp-avoidlocked"'), iR = HTML.indexOf('id="wp-route-code"');
+  ok(iT > 0 && iC > iT && iR > iC && /Omijaj zablokowane pokoje/.test(HTML) && /#wp-avoidlocked-row\s*\{/.test(HTML),
+    'A2.15 (F2.15): checkbox w panelu — geometria: kolejność DOM + CSS + etykieta (pre-fix: brak)');
+  // Wiring: change → wpState + re-plan tras
+  ok(/getElementById\('wp-avoidlocked'\)/.test(HTML) && /wpState\.avoidLocked = wpAvoidLockedCb\.checked/.test(HTML),
+    'A2.15 (F2.15): wiring change → wpState + re-plan (pre-fix: brak)');
+}
+
+console.log('— A2.16–A2.18 (F2.16–F2.18): touch — pinch vs narzedzia / tap po pinch / srodek CSS-px —');
+{
+  const slice = blockSlice(HTML, 'let _touches = {};', "cv.addEventListener('wheel', e => {");
+  function mkTouchEnv(opts) {
+    const calls = { revert: 0, commit: 0, click: [], dbl: [], zoom: [], move: [], paint: 0 };
+    const handlers = {};
+    const cv = {
+      width: opts.cvW || 100, height: opts.cvH || 100,
+      addEventListener: (t, fn) => { handlers[t] = fn; },
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: opts.rectW || 100, height: opts.rectH || 100 }),
+      classList: { add() {}, remove() {} },
+    };
+    const state = {
+      editMode: !!opts.editMode, canvasMode: opts.canvasMode || 'normal', selected: opts.selected ?? null,
+      roomsZ: opts.roomsZ || [], roomById: opts.roomById || {},
+      dragging: false, dragX: 0, dragY: 0, ox: 0, oy: 0, zoom: 1,
+      editDraggingRoom: false, editDragCurrentX: 0, editDragCurrentY: 0,
+      editSnapshot: null, _paintHover: null,
+    };
+    const api = new Function('cv', 'state', 'document', 'handlers',
+      '_paintApplyAtScreen', '_paintStrokeCommit', '_paintStrokeRevert',
+      'evX', 'evY', 'screenToMap', 'scheduleDraw', 'zoomAround',
+      'handleClick', 'handleDblClick', '_tryMoveRoomWithPolicy',
+      'let _paintStroke = null;\n' + slice +
+      '\nreturn { handlers, getStroke: () => _paintStroke };')
+      (cv, state, { getElementById: () => null }, handlers,
+        () => { calls.paint++; }, () => { calls.commit++; }, () => { calls.revert++; },
+        t => t.clientX, t => t.clientY, () => [0, 0], () => {},
+        (mx, my, f) => { calls.zoom.push([mx, my, f]); },
+        (x, y) => { calls.click.push([x, y]); }, (x, y) => { calls.dbl.push([x, y]); },
+        (...a) => { calls.move.push(a); return 'ok'; });
+    return { handlers, calls, state, getStroke: api.getStroke };
+  }
+  const T = (id, x, y) => ({ identifier: id, clientX: x, clientY: y });
+  const ev = (touches, changed) => ({ preventDefault() {}, touches, changedTouches: changed || [] });
+
+  // F2.16a: pinch w trakcie paint stroke → revert raz, zero commitu
+  {
+    const env = mkTouchEnv({ editMode: true, canvasMode: 'paint' });
+    env.handlers.touchstart(ev([T(1, 10, 10)]));
+    const strokeStarted = env.getStroke() !== null;
+    env.handlers.touchstart(ev([T(1, 10, 10), T(2, 50, 10)]));
+    env.handlers.touchmove(ev([T(1, 10, 10), T(2, 60, 10)]));
+    env.handlers.touchend(ev([T(1, 10, 10)], [T(2, 60, 10)]));
+    env.handlers.touchend(ev([], [T(1, 10, 10)]));
+    ok(strokeStarted && env.getStroke() === null && env.calls.revert === 1 && env.calls.commit === 0,
+      'A2.16 (F2.16): pinch anuluje paint stroke — revert raz na gest, bez commitu (pre-fix: commit po pinch)');
+  }
+  // F2.16b: pinch w trakcie dragu pokoju → anulowanie, zero MOVE_ROOM
+  {
+    const env = mkTouchEnv({ editMode: true, canvasMode: 'normal', selected: 7,
+      roomsZ: [{ id: 7, x: 0, y: 0 }], roomById: { 7: { id: 7, x: 0, y: 0, z: 0 } } });
+    env.handlers.touchstart(ev([T(1, 10, 10)]));
+    const dragStarted = env.state.editDraggingRoom === true;
+    env.handlers.touchstart(ev([T(1, 10, 10), T(2, 50, 10)]));
+    env.handlers.touchend(ev([T(1, 10, 10)], [T(2, 50, 10)]));
+    env.handlers.touchend(ev([], [T(1, 10, 10)]));
+    ok(dragStarted && env.state.editDraggingRoom === false && env.calls.move.length === 0,
+      'A2.16 (F2.16): pinch anuluje drag pokoju — bez MOVE_ROOM po pinch (pre-fix: commit po pinch)');
+  }
+  // F2.17: tap po pinch zablokowany; swiezy tap po resecie dziala (regresja)
+  {
+    const env = mkTouchEnv({});
+    env.handlers.touchstart(ev([T(1, 10, 10)]));
+    env.handlers.touchstart(ev([T(1, 10, 10), T(2, 50, 10)]));
+    env.handlers.touchend(ev([T(1, 10, 10)], [T(2, 50, 10)]));
+    env.handlers.touchend(ev([], [T(1, 11, 11)]));   // palec 1 w gorze — ruch < 8 px
+    const clickAfterPinch = env.calls.click.length;
+    env.handlers.touchstart(ev([T(3, 20, 20)]));      // swiezy gest jednopalcowy
+    env.handlers.touchend(ev([], [T(3, 21, 21)]));
+    ok(clickAfterPinch === 0 && env.calls.click.length === 1,
+      'A2.17 (F2.17): tap po pinch zablokowany, swiezy tap dziala (pre-fix: widmowy tap po pinch)');
+  }
+  // F2.18: srodek pinch w pikselach canvasu (cv 200 px / rect 100 px → mnoznik 2)
+  {
+    const env = mkTouchEnv({ cvW: 200, cvH: 200, rectW: 100, rectH: 100 });
+    env.handlers.touchstart(ev([T(1, 10, 10)]));
+    env.handlers.touchstart(ev([T(1, 10, 10), T(2, 30, 10)]));
+    env.handlers.touchmove(ev([T(1, 10, 10), T(2, 30, 10)]));   // dist 20 → baseline
+    env.handlers.touchmove(ev([T(1, 10, 10), T(2, 40, 10)]));   // dist 30 → zoom
+    const z = env.calls.zoom[0] || [];
+    ok(env.calls.zoom.length === 1 && z[0] === 50 && z[1] === 20 && Math.abs(z[2] - 1.5) < 1e-9,
+      'A2.18 (F2.18): srodek pinch skalowany do px canvasu (25,10 → 50,20) (pre-fix: bez mnoznika)');
+  }
+}
+
+console.log('— A2.19 (F2.19): zapis na klonie — live model bez mutacji, bajty ≡ dawnej sciezki —');
+{
+  // Wycinek sciezki zapisu (lustro converters_crc: constants + checksum + stableStringify..saveArkmapAs)
+  let api = null;
+  const mkState = (map) => ({ map, areas: new Map(), roomById: {}, roomArea: {}, colorCache: {}, filename: 'x.arkmap', z: 0 });
+  try {
+    const pipe =
+      blockSlice(HTML, '// ── constants.js ──', '// ── validate.js ──') + '\n' +
+      blockSlice(HTML, '// ── checksum.js ──', '// ── mudlet_dat.js ──') + '\n' +
+      blockSlice(HTML, 'function stableStringify(val, indent, _lvl) {', 'function saveArkmapAs()') + '\n' +
+      blockSlice(HTML, 'function _canonicalizeMapForSave(map) {', 'function _arkmapSuggestedName() {') + '\n' +
+      'return { _prepareArkmapForSave, _serializeMap, _serializeMapForSave, _canonicalCloneForSave };';
+    const dummyEl = () => ({ classList: { remove() {}, add() {}, toggle() {} },
+      disabled: false, innerHTML: '', style: {}, title: '', textContent: '', dataset: {} });
+    const mkApi = new Function('state', 'document', 'localStorage', 'searchIn', 'btnSaveArkmap', 'btnSaveDat', 'btnSaveAs2',
+      'buildColorCache', 'buildAreaList', '_recomputeAstarParams', 'selectArea', 'escHtml', 'rebuildLegend',
+      '_pixmapCache', '_hopViaCache', pipe);
+    api = (st) => mkApi(st, { getElementById: () => dummyEl(), querySelector: () => null },
+      { removeItem() {}, getItem: () => null, setItem() {} }, dummyEl(), dummyEl(), dummyEl(), dummyEl(),
+      () => { st.colorCache = {}; }, () => {}, () => {}, () => {}, (s) => String(s), () => {}, new Map(), new Map());
+  } catch (e) { /* baza: brak _canonicalizeMapForSave → piny FAIL nizej */ api = null; }
+  // Fixture: prawdziwa mapa z .dat, potem zaburzona kolejnosc + pole live room.area
+  const fixture = () => {
+    const m = fmt.datToArkmap(buildDatV20({
+      areaCount: 2, areas: [[1, { rooms: [3, 1] }], [2, { rooms: [2] }]],
+      rooms: [[1, { area: 1, name: 'A' }], [2, { area: 2, name: 'B' }], [3, { area: 1, name: 'C' }]],
+    }));
+    m.areas.reverse();
+    for (const area of m.areas) {
+      if (area.rooms) { area.rooms.reverse(); for (const r of area.rooms) { r.area = area.id; r.stubs = ['w', 'n', 'e']; } }
+    }
+    return m;
+  };
+  if (!api) {
+    ok(false, 'A2.19 (F2.19): zloty test bajtowosci — nowa sciezka ≡ dawna (pre-fix: brak _serializeMapForSave)');
+    ok(false, 'A2.19 (F2.19): anulowany save ⇒ live state.map deep-equal przed/po (pre-fix: mutacje zostaja)');
+    ok(false, 'A2.19 (F2.19): kanoniczny klon do .dat (room.area out, checksums in), live nietkniety');
+  } else {
+    // Dawna sciezka (referencja zlota): prepare na live + serialize — obie funkcje dalej w wycinku
+    const stOld = mkState(fixture());
+    const apiOld = api(stOld);
+    apiOld._prepareArkmapForSave();
+    const oldBytes = apiOld._serializeMap();
+    // Nowa sciezka: _serializeMapForSave na klonie
+    const stNew = mkState(fixture());
+    const apiNew = api(stNew);
+    const snapBefore = JSON.stringify(stNew.map);
+    const newBytes = apiNew._serializeMapForSave();
+    ok(newBytes === oldBytes,
+      'A2.19 (F2.19): zloty test bajtowosci — nowa sciezka ≡ dawna (pre-fix: brak _serializeMapForSave)');
+    ok(JSON.stringify(stNew.map) === snapBefore && stNew.map.areas[0].rooms.some(r => 'area' in r),
+      'A2.19 (F2.19): anulowany save ⇒ live state.map deep-equal przed/po (pre-fix: mutacje zostaja)');
+    const stDat = mkState(fixture());
+    const apiDat = api(stDat);
+    const snapDat = JSON.stringify(stDat.map);
+    const clone = apiDat._canonicalCloneForSave();
+    const cloneRooms = (clone.areas || []).flatMap(a => a.rooms || []);
+    ok(cloneRooms.length > 0 && cloneRooms.every(r => !('area' in r)) && !!(clone.meta && clone.meta.checksums)
+      && JSON.stringify(stDat.map) === snapDat,
+      'A2.19 (F2.19): kanoniczny klon do .dat (room.area out, checksums in), live nietkniety');
+  }
+  // Statyczne: call-site'y przelaczone na sciezke klonujaca
+  ok((HTML.match(/const text = _serializeMapForSave\(\);/g) || []).length === 2
+    && /arkmapToDat\(_canonicalCloneForSave\(\)\)/.test(HTML),
+    'A2.19 (F2.19): call-site’y save×2 + eksport .dat na sciezce klonujacej (pre-fix: prepare na live)');
+}
+
+console.log('— A2.20 (F2.20): skroty +/-/f nieaktywne w formularzach —');
+{
+  const slice = blockSlice(HTML, '// ─── KEYBOARD', 'function zoomAround(mx, my, f) {');
+  const calls = { fit: 0, zoom: 0, draw: 0 };
+  let keydownFn = null;
+  const documentStub = { addEventListener: (t, fn) => { if (t === 'keydown') keydownFn = fn; } };
+  const searchInStub = { focus() {}, value: '' };
+  const stateStub = { editMode: false, selected: null, roomById: {}, ox: 0, oy: 0, zoom: 1 };
+  new Function('document', 'searchIn', 'state', 'cv', 'zoomAround', 'fitToView', 'syncZoomSlider', 'scheduleDraw',
+    slice)(documentStub, searchInStub, stateStub, { width: 800, height: 600 },
+    () => { calls.zoom++; }, () => { calls.fit++; }, () => {}, () => { calls.draw++; });
+  const evInForm = (key) => ({ target: { closest: () => ({}) }, key, ctrlKey: false, preventDefault() {}, shiftKey: false });
+  const evOutside = (key) => ({ target: { closest: () => null }, key, ctrlKey: false, preventDefault() {}, shiftKey: false });
+  keydownFn(evInForm('f'));
+  const fitInForm = calls.fit;
+  keydownFn(evInForm('+'));
+  const zoomInForm = calls.zoom;
+  keydownFn(evOutside('f'));
+  ok(fitInForm === 0 && zoomInForm === 0,
+    'A2.20 (F2.20): „f"/„+" wpisane w formularz nie odpala fitToView/zoom (pre-fix: odpala)');
+  ok(calls.fit - fitInForm === 1,
+    'A2.20: „f" poza formularzem nadal dziala (regresja)');
+  const pan = slice.match(/PAN \(viewer \+ edit mode[\s\S]*?\n\}\);/);
+  const guarded = pan && /if \(!inForm && \(e\.key === '\+' \|\| e\.key === '='\)\)/.test(pan[0])
+    && /if \(!inForm && e\.key === '-'\)/.test(pan[0])
+    && /if \(!inForm && \(e\.key === 'f' \|\| e\.key === 'F'\) && !e\.ctrlKey\)/.test(pan[0])
+    && /if \(e\.ctrlKey && e\.key === 'f'\) \{ e\.preventDefault\(\); searchIn\.focus\(\); \}/.test(pan[0]);
+  ok(!!guarded,
+    'A2.20 (F2.20): statycznie — +/-/f z guardem !inForm, ctrl+f bez zmian (pre-fix: bez guarda)');
+}
+
+console.log('— A2.21 (F2.21): drop .json przekazuje nazwe pliku —');
+{
+  const dropBlock = blockSlice(HTML, 'async function handleDropFiles(files) {', '// Cały dokument obsługuje drag&drop');
+  ok(/parsed\?\.format === 'arkmap'\) await loadArkmap\(text, file\.name\);/.test(dropBlock),
+    'A2.21 (F2.21): loadArkmap(text, file.name) w galezi .json (pre-fix: nazwa gubiona)');
+}
+
+Promise.all(ASYNC_PINS).then(() => {
+  console.log('');
+  console.log(`═══ audit_ext: ${pass} OK, ${fail} FAIL ═══`);
+  process.exit(fail ? 1 : 0);
+});

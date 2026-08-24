@@ -3506,12 +3506,13 @@ scenario('E14.saveRace', async () => {
   // przypadek kontrolny: brak edycji w trakcie → dirty czyszczone, pristine == fixpoint
   const ok1 = AEV('E14.race.c1', await eva('(async function(){'
    + ' window.__e14res(true); await new Promise(function(r){ setTimeout(r, 0); });'
-   + ' return { dirty: state.dirty, fix: state.pristineArkmap === _serializeMap() };'
+   // F2.19: fixpoint wzgledem serializatora kanonicznego (live map nie jest kanonizowana)
+   + ' return { dirty: state.dirty, fix: state.pristineArkmap === _serializeMapForSave() };'
    + '})()'), 'zapis bez wspolbieznej edycji');
   if (ok1) A('E14.race.clean', ok1.dirty === false && ok1.fix === true, 'bez edycji w trakcie: dirty=false, pristine=fixpoint ' + JSON.stringify(ok1));
   // wyscig: edycja W TRAKCIE pending zapisu → dirty NIE moze byc skasowane, pristine = zapisany tekst
   ex('_arkmapFileHandle = null; pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 b" });'
-   + ' window.__e14tb = _serializeMap(); _performArkmapSave();');
+   + ' window.__e14tb = _serializeMapForSave(); _performArkmapSave();');  // F2.19: tekst zapisywany = serializacja kanoniczna
   ex('pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 c — edycja w trakcie zapisu" });');
   const race = AEV('E14.race.c2', await eva('(async function(){'
    + ' window.__e14res(true); await new Promise(function(r){ setTimeout(r, 0); });'
@@ -3860,16 +3861,19 @@ scenario('E16.newArea', async () => {
 // fetch stubowany na kontrolowany pending — zero sieci.
 
 scenario('E17.olSerialize', async () => {
+  // F2.13: na fallbacku kazde pobranie = re-fetch index.json (auto-resolve) + fetch pliku (pending)
   ex('window.__e17 = { calls: 0, rej: null };'
    + ' window.__e17fetch = window.fetch;'
    + ' window.fetch = function(u){ window.__e17.calls++;'
+   + '   if (String(u).indexOf("index.json") >= 0) return Promise.resolve({ ok: true, json: function(){ return Promise.resolve({ revision: "e17stub", version: "0" }); } });'
    + '   return new Promise(function(res, rej){ window.__e17.rej = rej; }); };');
-  ex('olLoadDat();');  // pierwsze pobieranie — startuje i wisi na fetchu
-  A('E17.ol.first', ev('window.__e17.calls').val === 1, 'pierwsze pobranie ruszylo (fetch x1)');
+  ex('olLoadDat();');  // pierwsze pobieranie — startuje i wisi na fetchu pliku
+  await eva('new Promise(function(r){ setTimeout(r, 50); })');
+  A('E17.ol.first', ev('window.__e17.calls').val === 2, 'pierwsze pobranie ruszylo (F2.13: re-fetch + plik, fetch x2)');
   ex('olLoadArkmap();');  // drugie — ma zostac odmowione z tostem
   await eva('new Promise(function(r){ setTimeout(r, 50); })');
-  A('E17.ol.refused', ev('window.__e17.calls').val === 1,
-    'drugie pobranie odmowione — fetch nadal x1 [calls=' + ev('window.__e17.calls').val + ']');
+  A('E17.ol.refused', ev('window.__e17.calls').val === 2,
+    'drugie pobranie odmowione — fetch nadal x2 [calls=' + ev('window.__e17.calls').val + ']');
   const tv = AEV('E17.ol.toast.r', ev('({ text: document.getElementById("toast").textContent,'
    + ' cls: document.getElementById("toast").className,'
    + ' shown: document.getElementById("toast").style.display })'), 'odczyt toasta');
@@ -3883,7 +3887,8 @@ scenario('E17.olSerialize', async () => {
   A('E17.ol.released', ev('typeof _olActiveLabel !== "undefined" && _olActiveLabel === null').val === true,
     'flaga zdjeta po bledzie (finally)');
   ex('olLoadDat();');  // kolejne pobranie przechodzi
-  A('E17.ol.after', ev('window.__e17.calls').val === 2, 'po zwolnieniu kolejne pobranie przechodzi (fetch x2)');
+  await eva('new Promise(function(r){ setTimeout(r, 50); })');  // re-fetch index.json → potem fetch pliku (async)
+  A('E17.ol.after', ev('window.__e17.calls').val === 4, 'po zwolnieniu kolejne pobranie przechodzi (F2.13: fetch x4)');
   ex('window.__e17.rej(new Error("cleanup"));');
   await eva('new Promise(function(r){ setTimeout(r, 100); })');
   ex('window.fetch = window.__e17fetch; delete window.__e17; delete window.__e17fetch;');

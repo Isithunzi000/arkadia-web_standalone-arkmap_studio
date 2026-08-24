@@ -45,7 +45,7 @@ const pipeCode =
   block('// ── constants.js ──', '// ── validate.js ──') + '\n' +
   block('// ── checksum.js ──', '// ── mudlet_dat.js ──') + '\n' +
   block('function stableStringify(val, indent, _lvl) {', 'function saveArkmapAs()') + '\n' +
-  block('function _prepareArkmapForSave() {', 'function _arkmapSuggestedName() {') + '\n' +
+  block('function _canonicalizeMapForSave(map) {', 'function _arkmapSuggestedName() {') + '\n' +
   extract(HTML, 'function applyMap(map) {') + '\n' +
   'return { verifyChecksums, _prepareArkmapForSave, _serializeMap, applyMap };';
 

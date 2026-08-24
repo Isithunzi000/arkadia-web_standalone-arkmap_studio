@@ -137,7 +137,9 @@ console.log('── T6: liczniki kotwic ──');
   const cnt = (s, sub) => s.split(sub).length - 1;
   console.log('  [info] _need(: ' + cnt(NEW, '_need(') + ', audyt A7: ' + cnt(NEW, 'audyt A7'));
   ok(cnt(NEW, '_need(') === 9, '_need: definicja + 7 wywołań + 1 w readQPixMap (krok 17), jest: ' + cnt(NEW, '_need('));
-  ok(cnt(NEW, 'audyt A7') === 2, 'audyt A7 ×2 (ReadBuffer + wzmianka w readQPixMap z kroku 17)');
+  // F2.8 (Arc 31, v1.48.3): +1 wzmianka — _datCounter (ujemne liczniki Int32) powoluje sie
+  // na mechanizm A7 (uint32 chronione bounds-checkiem ReadBuffer).
+  ok(cnt(NEW, 'audyt A7') === 3, 'audyt A7 ×3 (ReadBuffer + readQPixMap krok 17 + F2.8 _datCounter)');
   ok(/const APP_VERSION = 'v1\.\d+\.\d+';/.test(NEW), 'APP_VERSION obecne');
   ok(cnt(OLD, '_need(') === 0, 'snapshot 50f37ea nie miał _need');
 }
