@@ -2609,6 +2609,7 @@
         <button class="vd-btn" id="dp-remainder" style="display:none" title="Zapisuje do pliku operacje z kalki, których nie naniesiono (konflikty, niewykonalne, odznaczone) — w pierwotnej postaci">📤 Zapisz resztę kalki&hellip;</button>
         <button class="vd-btn" id="dp-copy-report" title="Kopiuje podsumowanie recenzji kalki (Markdown) do schowka">📋 Kopiuj podsumowanie</button>
         <button class="vd-btn" id="dp-save-md" title="Zapisuje podsumowanie recenzji kalki do pliku .md">⬇ Zapisz raport .md</button>
+        <button class="vd-btn" id="dp-save-html" title="Zapisuje raport recenzji kalki z miniaturami przed/po do pliku .html">⬇ Zapisz raport .html</button>
         <button class="vd-btn close" id="dp-close2">Zamknij</button>
       </div>
       <div id="dp-resize" title="Przeciągnij, aby zmienić rozmiar panelu"></div>
@@ -7278,6 +7279,7 @@ function _withRenderTarget(canvas2, viewState, dataOverride, fn) {
     if ('areaId' in view) swap(state, 'areaId', view.areaId);
     if ('roomsZ' in data)   swap(state, 'roomsZ', data.roomsZ);
     if ('roomById' in data) swap(state, 'roomById', data.roomById);
+    if ('roomArea' in data) swap(state, 'roomArea', data.roomArea);   // F5 (Arc 31): miniatura „po" z cienia kalki
     if ('areas' in data)    swap(state, 'areas', data.areas);
     if (state.map && state.map.colors) {
       if ('envColors' in data)       swap(state.map.colors, 'env_colors', data.envColors);
@@ -9941,6 +9943,7 @@ async function saveWithDialog(defaultName, mimeType, dataFn) {
       'json':     { 'application/json': ['.json'] },
       'dat':      { 'application/octet-stream': ['.dat'] },
       'md':       { 'text/markdown': ['.md'] },
+      'html':     { 'text/html': ['.html'] },
       'png':      { 'image/png': ['.png'] },
       'svg':      { 'image/svg+xml': ['.svg'] },
     };
@@ -13986,7 +13989,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.47.1';
+const APP_VERSION = 'v1.48.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -20033,18 +20036,19 @@ function _deltaClsItem(op, cls, note, jump) {
            jump: jump || null, checked: cls === 'ok' || cls === 'hard' };
 }
 
-function classifyDelta(delta) {
-  const items = [];
-  const sidCls     = new Map();  // sid -> klasa jego ADD-a
-  const sidRoomId  = new Map();  // sid -> numeric roomId (ADD_ROOM 'done')
-  const sidAreaId  = new Map();  // sid -> numeric areaId (ADD_AREA 'done')
-  const sidLabelId = new Map();  // sid -> numeric labelId (ADD_LABEL 'done')
-
-  // ── F1: cien stanu ────────────────────────────────────────────────────────
-  // Klasyfikacja opu N widzi efekt opow 1..N-1 z TEJ SAMEJ kalki. Cien startuje
-  // jako gleboki klon live; po sklasyfikowaniu kazdego opu symulujemy wynik
-  // SUROWEGO applyDelta (z guardami: zajeta komorka/kierunek, braki = brak zmiany).
-  // done = efekt juz obecny w sklonowanym live; impossible = apply skipuje.
+// ── F1: cien stanu — wspoldzielony (Arc 31 F5, v1.48.0) ────────────────────
+// Klasyfikacja opu N widzi efekt opow 1..N-1 z TEJ SAMEJ kalki. Cien startuje
+// jako gleboki klon live; po sklasyfikowaniu kazdego opu symulujemy wynik
+// SUROWEGO applyDelta (z guardami: zajeta komorka/kierunek, braki = brak zmiany).
+// done = efekt juz obecny w sklonowanym live; impossible = apply skipuje.
+// Konsumenci: classifyDelta (klasyfikacja) + raport HTML F5 (render „po").
+// sidDone: mapy sid -> numeryczne id opow klasy 'done' (domyslnie puste —
+// raport renderuje cien czystych opow do naniesienia).
+function _deltaBuildShadow(sidDone) {
+  const _done = sidDone || {};
+  const sidRoomId  = _done.room  || new Map();
+  const sidAreaId  = _done.area  || new Map();
+  const sidLabelId = _done.label || new Map();
   const sh = {
     roomById: JSON.parse(JSON.stringify(state.roomById)),
     roomArea: JSON.parse(JSON.stringify(state.roomArea)),
@@ -20269,6 +20273,25 @@ function classifyDelta(delta) {
   const resA = v => isSid(v) ? (sidAreaId.get(String(v)) ?? sidShArea.get(String(v))) : v;
   const resL = v => isSid(v) ? (sidLabelId.get(String(v)) ?? sidShLabel.get(String(v))) : v;
   // Lancuch: odwolanie do sid, ktorego ADD jest niewykonalny.
+  return { sh, sidShRoom, sidShArea, sidShLabel, roomAt: shRoomAt, opp: _DELTA_OPP,
+           sim: _sim, isSid, resR, resA, resL };
+}
+
+function classifyDelta(delta) {
+  const items = [];
+  const sidCls     = new Map();  // sid -> klasa jego ADD-a
+  const sidRoomId  = new Map();  // sid -> numeric roomId (ADD_ROOM 'done')
+  const sidAreaId  = new Map();  // sid -> numeric areaId (ADD_AREA 'done')
+  const sidLabelId = new Map();  // sid -> numeric labelId (ADD_LABEL 'done')
+
+  // Cien: wspoldzielony builder (wyzej) — klasyfikacja przekazuje swoje mapy
+  // 'done', zeby resR/resA/resL rozwijaly sid-y opow juz obecnych na mapie.
+  const _shc = _deltaBuildShadow({ room: sidRoomId, area: sidAreaId, label: sidLabelId });
+  const sh = _shc.sh;
+  const sidShRoom = _shc.sidShRoom, sidShArea = _shc.sidShArea, sidShLabel = _shc.sidShLabel;
+  const shRoomAt = _shc.roomAt, _DELTA_OPP = _shc.opp, _sim = _shc.sim;
+  const isSid = _shc.isSid;
+  const resR = _shc.resR, resA = _shc.resA, resL = _shc.resL;
   const chainBad = (op) => {
     let bad = null;
     _deltaScanDeep(op, () => {}, v => {
@@ -21619,6 +21642,223 @@ function _deltaReviewReportText() {
   });
 }
 
+// ─── Raport HTML kalki z miniaturami „przed/po" (Arc 31 F5, v1.48.0) ────────
+// Rachunek miniaturek: para (przed=live, po=cien po opach) to 2 rendery
+// 240x160 przez shim F1 — przy capie 60 grup = 120 renderow po ~1-5 ms,
+// jednorazowo na klik uzytkownika (nie na klatke). Okno = bbox geometrii
+// duchow grupy + padding 3 komorki; kubelkowanie po (obszar, z, siatka
+// 40x40 komorek) — deterministyczne (grupy sortowane po min seq).
+// Bramka geometrii F5-geom (pomiar sonda 2026-08-24): 7. przycisk w stopce
+// nie zmienia liczby rzedow wrap (2 przy 560 px, 3 przy 448 px) ani wysokosci
+// stopki — etykieta dluga „Zapisz raport .html" (spojna z siostrzanym .md),
+// szerokosc panelu bez zmian. Piny: report_export T6; E23.dp-geom/deltahtml.
+const DELTA_THUMB_CAP = 60;
+const DELTA_THUMB_W = 240, DELTA_THUMB_H = 160;
+
+// Grupy miniaturek: opy z geometria ducha (jak „Pokaz" w panelu), kubełek
+// = obszar + plaszczyzna + siatka 40x40 od pozycji pierwszego ducha opu.
+function _deltaThumbGroups(R) {
+  const elig = R.items.filter(it => _DELTA_GHOST_TYPES.has(it.type) && it.cls !== 'impossible');
+  if (!elig.length) return [];
+  const geoms = _deltaGhostGeoms(R.delta, R.items, elig.map(it => it.seq), _deltaOverrides);
+  const bySeq = new Map();
+  for (const g of geoms) {
+    if (!bySeq.has(g.seq)) bySeq.set(g.seq, []);
+    bySeq.get(g.seq).push(g);
+  }
+  const buckets = new Map();
+  for (const it of elig) {
+    const gs = (bySeq.get(it.seq) || []).filter(g => g.areaId !== undefined);
+    if (!gs.length) continue;
+    const g0 = gs[0];
+    const gx = g0.x !== undefined ? g0.x : (g0.fromX ?? 0);
+    const gy = g0.y !== undefined ? g0.y : (g0.fromY ?? 0);
+    const key = g0.areaId + ':' + (g0.z ?? 0) + ':' + Math.floor(gx / 40) + ':' + Math.floor(gy / 40);
+    if (!buckets.has(key)) buckets.set(key, { areaId: g0.areaId, z: g0.z ?? 0, seqs: [], geoms: [] });
+    const b = buckets.get(key);
+    b.seqs.push(it.seq);
+    for (const g of gs) b.geoms.push(g);
+  }
+  const groups = [...buckets.values()];
+  for (const g of groups) {
+    g.seqs.sort((a, b) => a - b);
+    g.minSeq = g.seqs[0];
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const gm of g.geoms) {
+      for (const p of [[gm.x, gm.y], [gm.fromX, gm.fromY], [gm.toX, gm.toY]]) {
+        const x = p[0], y = p[1];
+        if (x === undefined || y === undefined) continue;
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      }
+    }
+    g.bbox = { minX, minY, maxX, maxY };
+  }
+  groups.sort((a, b) => a.minSeq - b.minSeq);
+  return groups;
+}
+
+// Para miniaturek jednej grupy. „przed" = live render przez shim F1;
+// „po" = swiezy cien (_deltaBuildShadow — ten sam kod co klasyfikacja) po
+// opach grupy, z nakladka duchow (kreskowana ramka, kolor klasyfikacji).
+// Raster F3: klucz cache nie zawiera danych cienia — uniewaznienie przed/po
+// renderze „po", zeby raster cienia nie zastapil rastra live (i odwrotnie).
+function _deltaRenderComparison(group) {
+  const R = _deltaReview;
+  if (!R) return null;
+  const PAD = 3;
+  const x0 = group.bbox.minX - PAD, x1 = group.bbox.maxX + PAD;
+  const y0 = group.bbox.minY - PAD, y1 = group.bbox.maxY + PAD;
+  const spanX = x1 - x0 + 1, spanY = y1 - y0 + 1;
+  const cellPx = Math.min(DELTA_THUMB_W / spanX, DELTA_THUMB_H / spanY);
+  const view = {
+    zoom: cellPx / CELL,
+    ox: (DELTA_THUMB_W - spanX * cellPx) / 2 + cellPx / 2 - x0 * cellPx,
+    oy: (DELTA_THUMB_H - spanY * cellPx) / 2 + cellPx / 2 + y1 * cellPx,
+    z: group.z, areaId: group.areaId,
+  };
+  const mk = () => {
+    const c = document.createElement('canvas');
+    c.width = DELTA_THUMB_W; c.height = DELTA_THUMB_H;
+    return c;
+  };
+  const c1 = mk();
+  _withRenderTarget(c1, view, {}, () => { draw(); });
+  const bySeq = new Map(); for (const op of R.delta.ops) bySeq.set(op.seq, op);
+  const itBySeq = new Map(); for (const it of R.items) itBySeq.set(it.seq, it);
+  const shc = _deltaBuildShadow();
+  for (const seq of group.seqs) {
+    const op = bySeq.get(seq), it = itBySeq.get(seq);
+    if (op && it) shc.sim(op, it.cls);
+  }
+  // roomsZ cienia DOKLADNIE jak buildRoomsZ: kolejnosc = area.rooms, filtr z.
+  const shArea = shc.sh.areas.get(group.areaId);
+  const rz = ((shArea && shArea.rooms) || []).filter(r => r.z === group.z);
+  const savedGhosts = _deltaGhosts;
+  _deltaGhosts = new Set(group.seqs);
+  const c2 = mk();
+  try {
+    _rasterInvalidate();
+    _withRenderTarget(c2, view, {
+      roomsZ: rz, roomById: shc.sh.roomById, roomArea: shc.sh.roomArea,
+      areas: shc.sh.areas, customEnvColors: shc.sh.colors,
+    }, () => { draw(); });
+  } finally {
+    _deltaGhosts = savedGhosts;
+    _rasterInvalidate();
+  }
+  return { before: c1.toDataURL('image/png'), after: c2.toDataURL('image/png') };
+}
+
+// Czysty builder dokumentu (bez dostepu do stanu — testowalny w Node).
+// Tresc 1:1 z raportem .md + miniatury PNG dataURL (zero taint, dziala
+// z file://). Escapowanie: escHtml na kazdym dynamicznym tekscie; src
+// miniatur tylko z prefiksem data:image/png;base64 (inny protokol odrzucany).
+function _deltaHtmlDoc(opts) {
+  const esc = escHtml;
+  const imgOk = s => typeof s === 'string' && s.startsWith('data:image/png;base64,');
+  const L = [];
+  L.push('<!DOCTYPE html>');
+  L.push('<html lang="pl">');
+  L.push('<head>');
+  L.push('<meta charset="utf-8">');
+  L.push('<title>' + esc((opts.title || 'Raport') + ' — ArkMap Studio') + '</title>');
+  L.push('<style>');
+  L.push('body{background:#0d0f12;color:#e6e6e6;font:13px/1.45 -apple-system,Segoe UI,Roboto,sans-serif;max-width:900px;margin:24px auto;padding:0 16px}');
+  L.push('h1{font-size:18px;border-bottom:1px solid #333;padding-bottom:8px}h2{font-size:15px;margin-top:24px}');
+  L.push('ul{padding-left:20px}li{margin:2px 0}.meta{color:#9da5b4}');
+  L.push('.pairs{display:flex;flex-wrap:wrap;gap:12px}.pair{border:1px solid #333;border-radius:6px;padding:8px}');
+  L.push('.pair img{display:block;width:240px;height:160px;background:#000}');
+  L.push('.pair .lbl{font-size:11px;color:#9da5b4;margin-bottom:4px}');
+  L.push('.pair .row{display:flex;gap:8px}.cap{font-size:10px;color:#9da5b4;text-align:center;margin-top:2px}');
+  L.push('</style>');
+  L.push('</head>');
+  L.push('<body>');
+  L.push('<h1>' + esc((opts.title || 'Raport') + ' — ArkMap Studio') + '</h1>');
+  L.push('<p class="meta">Plik: ' + esc(opts.filename || '—') + '<br>');
+  L.push('Wersja aplikacji: ' + esc(opts.version || '') + '<br>');
+  L.push('Data: ' + esc(opts.dateIso || '') + '</p>');
+  L.push('<h2>Podsumowanie</h2>');
+  L.push('<ul>');
+  if (opts.summaryLines && opts.summaryLines.length) { for (const ln of opts.summaryLines) L.push('<li>' + esc(ln) + '</li>'); }
+  else L.push('<li>(brak)</li>');
+  L.push('</ul>');
+  const thumbs = opts.thumbs || [];
+  L.push('<h2>Miniatury przed/po (' + thumbs.length + ')</h2>');
+  if (thumbs.length) {
+    L.push('<div class="pairs">');
+    for (const t of thumbs) {
+      const b = imgOk(t.before) ? t.before : null;
+      const a = imgOk(t.after) ? t.after : null;
+      if (!b && !a) continue;
+      L.push('<div class="pair"><div class="lbl">' + esc(t.label || '') + '</div><div class="row">');
+      if (b) L.push('<div><img src="' + b + '" alt="przed"><div class="cap">przed</div></div>');
+      if (a) L.push('<div><img src="' + a + '" alt="po"><div class="cap">po</div></div>');
+      L.push('</div></div>');
+    }
+    L.push('</div>');
+  } else {
+    L.push('<p class="meta">(brak)</p>');
+  }
+  if (opts.thumbTruncated > 0) {
+    L.push('<p class="meta">+ ' + opts.thumbTruncated + ' grup ponad cap ' + DELTA_THUMB_CAP + ' — reszta tekstowo (bez miniatur).</p>');
+  }
+  const opLines = opts.opLines || [];
+  L.push('<h2>Operacje (' + opLines.length + ')</h2>');
+  L.push('<ul>');
+  if (opLines.length) { for (const ln of opLines) L.push('<li>' + esc(ln) + '</li>'); }
+  else L.push('<li>(brak)</li>');
+  L.push('</ul>');
+  L.push('</body>');
+  L.push('</html>');
+  return L.join('\n');
+}
+
+// Raport recenzji kalki (.html) — tresc 1:1 z _deltaReviewReportText
+// (te same linie podsumowania i opow), plus miniatury przed/po.
+function _deltaReviewReportHtml() {
+  const R = _deltaReview;
+  if (!R) return '';
+  const counts = { ok: 0, hard: 0, done: 0, impossible: 0 };
+  for (const it of R.items) counts[it.cls]++;
+  const sum = [
+    'Operacji w kalce: ' + R.items.length,
+    'Do naniesienia: ' + counts.ok + ' · Konflikty: ' + counts.hard + ' · Zrobione: ' + counts.done + ' · Niewykonalne: ' + counts.impossible,
+    'Baza kalki: ' + _arkdeltaBaseNote(R.delta.meta.base),
+  ];
+  const lines = R.items.map(it => {
+    let s = '- [#' + it.seq + '] ' + it.label + ' — ' + _DELTA_CLS_BADGE[it.cls][0];
+    if (it.cls === 'done' && it.session) s += ' (naniesione z kalki)';
+    if (it.note) s += ' — ' + it.note;
+    if (it.diff && it.diff.length) s += ' — ' + it.diff.join(' · ');
+    return s;
+  });
+  const groups = _deltaThumbGroups(R);
+  const capped = groups.slice(0, DELTA_THUMB_CAP);
+  const thumbs = [];
+  for (const g of capped) {
+    const pair = _deltaRenderComparison(g);
+    if (!pair) continue;
+    const an = state.areas.get(g.areaId);
+    thumbs.push({
+      label: (an ? an.name : 'obszar ' + g.areaId) + ', z=' + g.z + ' — opy ' + g.seqs.map(s => '#' + s).join(', '),
+      before: pair.before, after: pair.after,
+    });
+  }
+  const html = _deltaHtmlDoc({
+    title: 'Raport recenzji kalki .arkdelta',
+    filename: state.filename || '—',
+    version: APP_VERSION,
+    dateIso: new Date().toISOString(),
+    summaryLines: sum,
+    opLines: lines,
+    thumbs,
+    thumbTruncated: groups.length - capped.length,
+  });
+  scheduleDraw();  // render pod shimem odswieza pasek statusu/slider — przywroc wartosci live
+  return html;
+}
+
 function _renderDeltaPanel() {
   const R = _deltaReview;
   if (!R) return;
@@ -21883,6 +22123,10 @@ btnSaveArkdelta.addEventListener('click', saveDelta);
   document.getElementById('dp-save-md').addEventListener('click', () => {
     const text = _deltaReviewReportText();
     saveWithDialog('raport-recenzji-' + _reportMapName() + '-' + _reportTs() + '.md', 'text/markdown', () => text);
+  });
+  document.getElementById('dp-save-html').addEventListener('click', () => {
+    const html = _deltaReviewReportHtml();
+    saveWithDialog('raport-recenzji-' + _reportMapName() + '-' + _reportTs() + '.html', 'text/html', () => html);
   });
   const closePanel = () => { panel.classList.remove('visible'); _deltaReview = null; _deltaGhostReset(); _deltaAppliedSeqs = new Set(); _deltaSkippedSeqs = new Set(); scheduleDraw(); };
   document.getElementById('dp-close').addEventListener('click', closePanel);

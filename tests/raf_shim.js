@@ -40,11 +40,16 @@ ok(sd.includes('_drawScheduled = true;') && sd.includes('requestAnimationFrame((
 
 // ── B: komplet podmiany call-site'ow ────────────────────────────────────────
 const nSched = (HTML.match(/\bscheduleDraw\(\);/g) || []).length;
-ok(nSched === 121, 'B1: dokladnie 121 call-site\'ow scheduleDraw(); (jest ' + nSched + ')');
+// F5 (Arc 31, v1.48.0): +1 call-site — scheduleDraw() w _deltaReviewReportHtml
+// (przywrocenie paska statusu/slidera po renderach shimowych miniaturek).
+ok(nSched === 122, 'B1: dokladnie 122 call-site\'ow scheduleDraw(); (jest ' + nSched + ')');
 const bareAll = (HTML.match(/\bdraw\(\);/g) || []).length;
 const sdBare = (sd.match(/\bdraw\(\);/g) || []).length;
-ok(bareAll === 1 && sdBare === 1,
-   'B2: dokladnie 1 gole draw(); w pliku i jest wewnatrz scheduleDraw (kontrakt synchroniczny; jest ' + bareAll + '/' + sdBare + ')');
+// F5: +2 gole draw(); w _deltaRenderComparison — render miniatur MUSI byc
+// synchroniczny (offscreen przechwytywany natychmiast przez toDataURL);
+// to nie jest sciezka interaktywna, batching RAF nie ma tu zastosowania.
+ok(bareAll === 3 && sdBare === 1,
+   'B2: gole draw(); tylko w scheduleDraw (kontrakt) i 2 shimowych renderach miniatur F5 (jest ' + bareAll + '/' + sdBare + ')');
 ok(HTML.includes('state.pendingEnv=parseInt(this.value);scheduleDraw()'),
    'B3: inline onchange (rp-env, pendingEnv) tez przez scheduleDraw — sweep objal wariant bez srednika');
 const noLineComments = HTML.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
@@ -60,7 +65,7 @@ const fin = shim.slice(iFin);
 ok(fin.includes('_shimActive = false;') && fin.includes('cv = savedCv;') && fin.includes('ctx = savedCtx;'),
    'C3: finally wylacza flage i przywraca cv/ctx (takze przy wyjatku)');
 ok(shim.includes('undo.push') && fin.includes('o[k] = v'), 'C4: stos undo swapow przywracany w finally');
-for (const key of ["'zoom'", "'ox'", "'oy'", "'z'", "'areaId'", "'roomsZ'", "'roomById'", "'areas'", "'env_colors'", "'custom_env_colors'"]) {
+for (const key of ["'zoom'", "'ox'", "'oy'", "'z'", "'areaId'", "'roomsZ'", "'roomById'", "'roomArea'", "'areas'", "'env_colors'", "'custom_env_colors'"]) {
   ok(shim.includes(key), 'C5: swap pola ' + key + ' obecny w shimie');
 }
 ok(shim.includes("'env_colors'") && shim.includes("'custom_env_colors'") && !shim.includes('state.envColors'),

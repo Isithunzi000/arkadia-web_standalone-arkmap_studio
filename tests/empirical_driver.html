@@ -4601,6 +4601,131 @@ scenario('E23.cull', async () => {
   }
 });
 
+// ═══ E23.dp-geom — Arc 31 F5 (v1.48.0): bramka geometrii stopki panelu kalki ═══
+// Pomiar sonda (2026-08-24, headless Chromium, realny zegar, f5_geom_probe):
+//   stan max (6 przyciskow, rebase+remainder widoczne): content 538 px, suma
+//   przyciskow 846 px + gapy 25 px -> wrap 2 rzedow (ftrH 66 px), out=0.
+//   +7. przycisk „Zapisz raport .html" (148.4 px): rows bez zmian (2), ftrH bez
+//   zmian, out=0; okno 480 px: 3 rzedy we wszystkich wariantach, out=0.
+// Decyzja: dluga etykieta (spojna z siostrzanym „Zapisz raport .md"), BEZ
+// korekty szerokosci panelu (zmierzony koszt = 0).
+scenario('E23.dp-geom', async () => {
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  await loadBase('dat');
+  await eva('new Promise(function(res){ setTimeout(res, 60); })');
+  const g = AEV('E23.dp-geom.run', ev('(function(){'
+    + ' var panel = document.getElementById("delta-panel");'
+    + ' panel.classList.add("visible");'
+    + ' document.getElementById("dp-rebase").style.display = "";'
+    + ' document.getElementById("dp-remainder").style.display = "";'
+    + ' var ftr = panel.querySelector(".vd-ftr");'
+    + ' var fr = ftr.getBoundingClientRect();'
+    + ' var cs = getComputedStyle(ftr);'
+    + ' var padL = parseFloat(cs.paddingLeft), padR = parseFloat(cs.paddingRight);'
+    + ' var out = [], n = 0, hasHtml = false;'
+    + ' var btns = ftr.querySelectorAll("button");'
+    + ' for (var i = 0; i < btns.length; i++) {'
+    + '   var b = btns[i], r = b.getBoundingClientRect();'
+    + '   if (r.width === 0) continue;'
+    + '   n++;'
+    + '   if (b.id === "dp-save-html") hasHtml = true;'
+    + '   if (r.left < fr.left + padL - 1 || r.right > fr.right - padR + 1) out.push(b.id);'
+    + ' }'
+    + ' panel.classList.remove("visible");'
+    + ' document.getElementById("dp-rebase").style.display = "none";'
+    + ' document.getElementById("dp-remainder").style.display = "none";'
+    + ' return JSON.stringify({ n: n, out: out, hasHtml: hasHtml });'
+    + '})()'), 'pomiar geometrii stopki panelu kalki (stan maksymalny, 7 przyciskow)');
+  const gj = g ? JSON.parse(g) : null;
+  if (gj) {
+    EQ('E23.dp-geom.n', gj.n, 7, 'stopka: 7 widocznych przyciskow (w tym dp-save-html)');
+    A('E23.dp-geom.html', gj.hasHtml, 'przycisk „Zapisz raport .html" (dp-save-html) obecny w stopce');
+    EQ('E23.dp-geom.fit', gj.out.length, 0, 'wszystkie przyciski w content box stopki (out: ' + gj.out.join(',') + ')');
+  }
+});
+
+// ═══ E23.deltahtml — Arc 31 F5 (v1.48.0): raport HTML kalki z miniaturami ═══
+// Determinizm bajtow: dwa wywolania w tej samej sesji = identyczne bajty po
+// normalizacji linii daty (toDataURL jest per-build przegladarki — zloty hash
+// miedzy wersjami Chromium NIE jest pinowany, pin jest wewnatrzsesyjny).
+scenario('E23.deltahtml', async () => {
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  await loadBase('dat');
+  await eva('new Promise(function(res){ setTimeout(res, 60); })');
+  ex('state.showPixmaps = false; if (!state.view) state.view = {}; state.view.mudletLabels = false; draw();');
+
+  // Kalka syntetyczna: ADD_ROOM na wolnej komorce + MOVE_ROOM obok (ten sam
+  // kubelek siatki 40x40) + DELETE_ROOM istniejacego (inny kubelek).
+  const setup = AEV('E23.deltahtml.setup', ev('(function(){ try {'
+    + ' var area = state.areaId;'
+    + ' var r0 = state.roomsZ[0], r1 = state.roomsZ[1];'
+    + ' var delta = { meta: { base: null }, ops: ['
+    + '   { seq: 1, type: "ADD_ROOM", target: { areaId: area, roomId: "d:1" },'
+    + '     payload: { room: { x: 500, y: 500, z: 0, name: "f5-thumb", env: 258 } } },'
+    + '   { seq: 2, type: "MOVE_ROOM", target: { roomId: r0.id },'
+    + '     payload: { toX: 501, toY: 500, toZ: 0 } },'
+    + '   { seq: 3, type: "DELETE_ROOM", target: { roomId: r1.id },'
+    + '     payload: { room: JSON.parse(JSON.stringify(r1)) } }'
+    + ' ] };'
+    + ' openDeltaReview(delta);'
+    + ' return JSON.stringify({'
+    + '   cls: _deltaReview.items.map(function(i){ return i.cls; }),'
+    + '   groups: _deltaThumbGroups(_deltaReview).length,'
+    + '   n: _deltaReview.items.length });'
+    + ' } catch (e) { return JSON.stringify({ err: String(e && e.stack || e).slice(0, 400) }); }'
+    + '})()'), 'otwarcie recenzji z kalka syntetyczna');
+  const sj = setup ? JSON.parse(setup) : null;
+  if (sj && sj.err) A('E23.deltahtml.err', false, 'setup wyjatek: ' + sj.err);
+  EQ('E23.deltahtml.cls', sj && sj.cls, ['ok', 'ok', 'ok'], 'klasyfikacja: 3 opy do naniesienia (bez zmian po ekstrakcji _deltaBuildShadow)');
+  EQ('E23.deltahtml.groups', sj && sj.groups, 2, 'grupy miniaturek: kubelek ADD+MOVE razem, DELETE osobno');
+
+  // render pary grupy 1: przed != po (ADD_ROOM rysuje nowy pokoj)
+  const pair = AEV('E23.deltahtml.pair', ev('(function(){'
+    + ' var g = _deltaThumbGroups(_deltaReview)[0];'
+    + ' var p = _deltaRenderComparison(g);'
+    + ' return JSON.stringify({'
+    + '   bOk: p.before.indexOf("data:image/png;base64,") === 0,'
+    + '   aOk: p.after.indexOf("data:image/png;base64,") === 0,'
+    + '   diff: p.before !== p.after });'
+    + '})()'), 'render pary przed/po grupy 1');
+  const pj = pair ? JSON.parse(pair) : null;
+  EQ('E23.deltahtml.pair.fmt', pj && [pj.bOk, pj.aOk], [true, true], 'obie miniatury to PNG dataURL');
+  EQ('E23.deltahtml.pair.diff', pj && pj.diff, true, 'miniatura „po" rozni sie od „przed" (zmiana kalki widoczna)');
+
+  const h1 = AEV('E23.deltahtml.gen1', ev('_deltaReviewReportHtml()'), 'generacja raportu HTML (1)');
+  const h2 = AEV('E23.deltahtml.gen2', ev('_deltaReviewReportHtml()'), 'generacja raportu HTML (2)');
+  A('E23.deltahtml.doctype', !!h1 && h1.indexOf('<!DOCTYPE html>') === 0, 'dokument zaczyna sie od DOCTYPE');
+  A('E23.deltahtml.png', !!h1 && h1.includes('data:image/png;base64,'), 'miniatury osadzone jako PNG dataURL');
+  EQ('E23.deltahtml.pairs', h1 ? (h1.match(/class="pair"/g) || []).length : -1, 2, 'dwie pary miniaturek w dokumencie');
+  const norm = s => s && s.replace(/Data: [0-9T:\.Z-]+/, 'Data: X');
+  EQ('E23.deltahtml.bytes', norm(h2), norm(h1), 'determinizm bajtow raportu (po normalizacji daty ISO)');
+  A('E23.deltahtml.content', !!h1 && h1.includes('Operacji w kalce: 3') && h1.includes('[#1]'),
+    'tresc 1:1 z raportem .md (podsumowanie + opy)');
+
+  const post = AEV('E23.deltahtml.post', ev('(function(){'
+    + ' var pre = ' + JSON.stringify({}) + ';'
+    + ' return JSON.stringify({'
+    + '   sameR: state.roomById !== null,'
+    + '   ghosts: _deltaGhosts.size });'
+    + '})()'), 'stan po generacji');
+  // identycznosc referencji: porownaj przez marker tozsamosci
+  const ident = AEV('E23.deltahtml.ident', ev('(function(){'
+    + ' return JSON.stringify({'
+    + '   ghosts: _deltaGhosts.size,'
+    + '   reviewOpen: !!_deltaReview });'
+    + '})()'), 'duchy przywrocone po renderze „po"');
+  const idJ = ident ? JSON.parse(ident) : null;
+  EQ('E23.deltahtml.ghosts', idJ && idJ.ghosts, 0, '_deltaGhosts przywrocone (puste) po generacji');
+  ex('(function(){'
+    + ' window.__f5ref = { r: state.roomById, a: state.areas, ra: state.roomArea, z: state.roomsZ };'
+    + ' _deltaReviewReportHtml();'
+    + ' window.__f5same = state.roomById === window.__f5ref.r && state.areas === window.__f5ref.a'
+    + '   && state.roomArea === window.__f5ref.ra && state.roomsZ === window.__f5ref.z;'
+    + '})()');
+  EQ('E23.deltahtml.refs', ev('window.__f5same').val, true, 'roomById/areas/roomArea/roomsZ — identycznosc referencji zachowana');
+  ex('document.getElementById("dp-close2").click();');
+});
+
 runAll();
 </script>
 </body>

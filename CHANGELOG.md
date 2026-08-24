@@ -2,6 +2,30 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.48.0 — Raport kalki HTML z miniaturami „przed/po" (Arc 31)
+
+Piaty etap planu Arc 31 (F5) — eksport recenzji kalki do samodzielnego
+pliku HTML:
+
+- Nowy przycisk „⬇ Zapisz raport .html" w stopce panelu kalki: raport
+  z trescia 1:1 z wersja .md plus miniatury PNG (dataURL — plik dziala
+  z file://, zero zewnetrznych zasobow).
+- Miniatury „przed/po" per grupa opow (kubelek: obszar + plaszczyzna +
+  siatka 40x40 komorek; cap 60 grup, reszta tekstowo). „przed" = render
+  live, „po" = render cienia stanu po opach grupy z nakladka duchow
+  (kreskowana ramka, kolor klasyfikacji) — oba przez shim F1
+  `_withRenderTarget` (rozszerzony o swap `roomArea`).
+- Ekstrakcja `_deltaBuildShadow()` z classifyDelta — cien kalki wspoldzielony
+  przez klasyfikacje i render miniaturek; klasyfikacja bez zmian
+  (delta.js 282/282). Rdzen kalki (build/validate/apply) nietkniety.
+- Bramka geometrii F5-geom: pomiar sonda (headless Chromium) — 7. przycisk
+  nie zmienia liczby rzedow wrap stopki (2 przy 560 px, 3 przy 448 px),
+  zero przelewu — dluga etykieta spojna z „⬇ Zapisz raport .md",
+  szerokosc panelu bez zmian. Piny: E23.dp-geom, tier6 B25-B27.
+- Determinizm bajtow raportu pinowany wewnatrzsesyjnie (E23.deltahtml);
+  escapowanie escHtml na kazdym dynamicznym tekscie, src miniatur tylko
+  data:image/png;base64 (piny report_export T6, straznik xss_sinks).
+
 ## v1.47.1 — CullIndex: indeks siatkowy cullingu viewportu (Arc 31)
 
 Czwarty etap optymalizacji renderera (plan Arc 31 F4):

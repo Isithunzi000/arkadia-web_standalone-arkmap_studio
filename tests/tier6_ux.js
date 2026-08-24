@@ -166,6 +166,13 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
      HTML.includes('const vis = _cullQuery(rooms, vx0, vx1, vy0, vy1);'),
     'B24: indeks budowany w buildRoomsZ (kazda mutacja) + draw() culluje przez _cullQuery');
 
+  // ── F5 (v1.48.0): raport HTML kalki z miniaturami przed/po ──
+  ok(HTML.includes('id="dp-save-html"') && HTML.includes('⬇ Zapisz raport .html'),
+    'B25: 7. przycisk stopki panelu kalki — bramka F5-geom (sonda 2026-08-24): dluga etykieta nie zmienia liczby rzedow wrap (2 przy 560 px, 3 przy 448 px) — szerokosc panelu bez zmian');
+  ok(HTML.includes('const DELTA_THUMB_CAP = 60;') && HTML.includes('.slice(0, DELTA_THUMB_CAP)'),
+    'B26: cap miniaturek 60 — grupy ponad cap tekstowo');
+  ok(/finally \{\n    _deltaGhosts = savedGhosts;\n    _rasterInvalidate\(\);/.test(HTML),
+    'B27: render „po" izoluje raster F3 i duchy (finally: restore + uniewaznienie)');
 }
 
 // ═══ Sekcja C: #18 — bramka potwierdzenia importu trasy ═══
@@ -262,7 +269,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.47.1';"), 'V1: pin APP_VERSION v1.47.1');
+ok(HTML.includes("const APP_VERSION = 'v1.48.0';"), 'V1: pin APP_VERSION v1.48.0');
 
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);
