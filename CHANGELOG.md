@@ -2,6 +2,24 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.48.1 — Hartowanie try/finally po audycie zewnetrznym (Arc 31)
+
+Wynik pelnego audytu zewnetrznego (silniki v4 arkmap/arkdelta, renderer,
+diffy Arc 31; 9 przejsc rownoleglych, 3 modele; 20 kandydatow — 0
+potwierdzonych bledow; raport poza repo): dwie kosmetyczne poprawki
+hartujace, zero zmian zachowania:
+
+- H1: `drawRooms` — cialo iteracji per pokoj miedzy `ctx.save()` a
+  `ctx.restore()` opakowane w try/finally. Hipotetyczny wyjatek w srodku
+  iteracji nie zostawia wisiacego save (wyciek globalAlpha faded na
+  kolejne klatki).
+- H2: `_deltaRenderComparison` — przypisanie `_deltaGhosts` grupy
+  przeniesione do bloku try (restore w finally gwarantowany takze przy
+  wyjatku w alokacji canvasa miniaturki).
+
+Piny: B28 (tier6_ux), H2 (report_export). Repro-first: oba piny FAIL
+na v1.48.0, PASS po fixie. Rdzen kalki i silnik checksum v4 nietkniete.
+
 ## v1.48.0 — Raport kalki HTML z miniaturami „przed/po" (Arc 31)
 
 Piaty etap planu Arc 31 (F5) — eksport recenzji kalki do samodzielnego

@@ -7804,125 +7804,128 @@ function drawRooms(rooms, rs) {
     const half = rs / 2;
     const isSelected = r.id === state.selected;
     ctx.save();
-    if (_hidden && _hMode === 'faded') ctx.globalAlpha = 0.35;   // ZAD7 faded (1:1 HIDDEN_ROOM_FADE)
+    try {   // Plan H (H1, audyt 2026-08-24): restore gwarantowany przy wyjatku w iteracji
+      if (_hidden && _hMode === 'faded') ctx.globalAlpha = 0.35;   // ZAD7 faded (1:1 HIDDEN_ROOM_FADE)
 
-    if (isSelected) {
-      // Pulsing halo — thick bright ring + outer glow
-      const t = (Date.now() % 1200) / 1200;
-      const pulse = 0.6 + 0.4 * Math.sin(t * Math.PI * 2);
-      const haloR = half + 4 + 2 * pulse;
-      ctx.save();
-      ctx.shadowColor = '#4a9eff';
-      ctx.shadowBlur  = 12 * pulse;
-      ctx.strokeStyle = `rgba(74,158,255,${0.7 + 0.3 * pulse})`;
-      ctx.lineWidth   = 2.5;
-      ctx.strokeRect(cx - haloR, cy - haloR, haloR * 2, haloR * 2);
-      ctx.restore();
-      // Filled background
-      ctx.fillStyle = '#4a9eff22';
-      ctx.fillRect(cx - haloR - 1, cy - haloR - 1, haloR * 2 + 2, haloR * 2 + 2);
-    }
-
-    // ZAD6: własny obrys per-room (kolor + grubość 1..10) — wygrywa nad domyślnym (1:1 RoomStyle)
-    const _bc = roomBorderColor(r), _bt = roomBorderThickness(r);
-    const _dashed = _hidden && _hMode === 'dashed';      // ZAD7 dashed
-    ctx.fillStyle   = color;
-    if (isSelected)   { ctx.strokeStyle = '#4a9eff'; ctx.lineWidth = 2; }
-    else if (_bc)     { ctx.strokeStyle = _bc; ctx.lineWidth = Math.max(_dashed ? 1.3 : 0.4, state.zoom * 0.4875 * (_bt || 1)); }  // lineWidth × thickness
-    else if (_dashed) { ctx.strokeStyle = 'rgb(225,225,225)'; ctx.lineWidth = Math.max(1.4, state.zoom * 1.4); }  // ukryty: jasny, dobrze widoczny obrys
-    else              { ctx.strokeStyle = 'rgb(225,225,225)'; ctx.lineWidth = Math.max(0.4, state.zoom * 0.4875); }  // domyślny obrys: jasny, grubość = Delwing lineWidth (0.4875 = ROOM_SIZE*CELL*0.025/0.6)
-    if (_dashed) {                                        // ZAD7 dashed: wyraźne kreski
-      ctx.setLineDash([Math.max(4, rs * 0.34), Math.max(3, rs * 0.24)]);
-    }
-    ctx.fillRect(cx - half, cy - half, rs, rs);
-    ctx.strokeRect(cx - half, cy - half, rs, rs);
-    ctx.setLineDash([]);
-
-    const _sym0 = r.symbol || r.user_data?.['system.fallback_symbol'] || '';
-    if (state.zoom > 0.8 && _sym0) {
-      ctx.save();
-      // Symbol 1:1 z Mudletem (audyt A10): pełny tekst bez ucinania; czcionka dopasowana do
-      // kwadratu pokoju (monospace ≈ 0.6 em/znak, emoji/szerokie glify 1.0); zbyt długi → nie rysujemy.
-      const _symCps = [..._sym0];
-      const _symW = _symCps.reduce((a, ch) => a + (ch.codePointAt(0) > 0xFFFF ? 1.0 : 0.6), 0);
-      let symSize;
-      if (_symCps.length > 2) {
-        symSize = Math.min(Math.round(rs * 0.52), Math.floor(rs / _symW));
-      } else {
-        symSize = Math.max(7, Math.round(rs * (_symCps.length > 1 ? 0.52 : 0.7)));
+      if (isSelected) {
+        // Pulsing halo — thick bright ring + outer glow
+        const t = (Date.now() % 1200) / 1200;
+        const pulse = 0.6 + 0.4 * Math.sin(t * Math.PI * 2);
+        const haloR = half + 4 + 2 * pulse;
+        ctx.save();
+        ctx.shadowColor = '#4a9eff';
+        ctx.shadowBlur  = 12 * pulse;
+        ctx.strokeStyle = `rgba(74,158,255,${0.7 + 0.3 * pulse})`;
+        ctx.lineWidth   = 2.5;
+        ctx.strokeRect(cx - haloR, cy - haloR, haloR * 2, haloR * 2);
+        ctx.restore();
+        // Filled background
+        ctx.fillStyle = '#4a9eff22';
+        ctx.fillRect(cx - haloR - 1, cy - haloR - 1, haloR * 2 + 2, haloR * 2 + 2);
       }
-      if (symSize >= 7) {
-        ctx.font         = `bold ${symSize}px monospace`;
-        ctx.textAlign    = 'center';
-        ctx.textBaseline = 'middle';
-        // Kolor symbolu wg Delwinga; halo kontrastuje z kolorem symbolu (ZAD 1)
-        const _symCol = symbolColorFor(r);
-        ctx.strokeStyle = (contrastColor(_symCol) === '#fff') ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.65)';
-        ctx.lineWidth   = Math.max(1.5, symSize * 0.18);
-        ctx.strokeText(_sym0, cx, cy);
-        ctx.fillStyle   = _symCol;
-        ctx.fillText(_sym0, cx, cy);
-      }
-      ctx.restore();
-    }
 
-    // ── Inner exit indicators (up/down/in/out) — trójkąty Delwing-style (ZAD 3) ──
-    {
-      const exits = r.exits || {};
-      if (state.zoom > 0.25) {
-        const R = rs / 5;                      // triRadius
-        const _tri = (px, py, rot) => {        // scaleX 1.4, scaleY 0.8
-          const v = [];
-          for (let i = 0; i < 3; i++) {
-            const a = (2 * Math.PI * i / 3) - Math.PI / 2;
-            const qx = Math.cos(a) * R * 1.4, qy = Math.sin(a) * R * 0.8;
-            v.push(px + qx * Math.cos(rot) - qy * Math.sin(rot),
-                   py + qx * Math.sin(rot) + qy * Math.cos(rot));
-          }
-          return v;
-        };
-        const _polys = {
-          up:   [[cx, cy + rs/4, 0]],
-          down: [[cx, cy - rs/4, Math.PI]],
-          in:   [[cx - rs/4, cy, Math.PI/2], [cx + rs/4, cy, -Math.PI/2]],
-          out:  [[cx - rs/4, cy, -Math.PI/2], [cx + rs/4, cy, Math.PI/2]],
-        };
-        for (const dir of ['up','down','in','out']) {
-          if (!exits[dir]) continue;
-          const door = (r.doors || {})[dir];
-          ctx.fillStyle   = symbolFillFor(r);
-          ctx.strokeStyle = door ? (DOOR_RGB[door] || DOOR_RGB.locked) : symbolColorFor(r);
-          ctx.lineWidth   = Math.max(0.5, state.zoom * 0.6);
-          for (const [px, py, rot] of _polys[dir]) {
-            const v = _tri(px, py, rot);
-            ctx.beginPath();
-            ctx.moveTo(v[0], v[1]);
-            ctx.lineTo(v[2], v[3]);
-            ctx.lineTo(v[4], v[5]);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
+      // ZAD6: własny obrys per-room (kolor + grubość 1..10) — wygrywa nad domyślnym (1:1 RoomStyle)
+      const _bc = roomBorderColor(r), _bt = roomBorderThickness(r);
+      const _dashed = _hidden && _hMode === 'dashed';      // ZAD7 dashed
+      ctx.fillStyle   = color;
+      if (isSelected)   { ctx.strokeStyle = '#4a9eff'; ctx.lineWidth = 2; }
+      else if (_bc)     { ctx.strokeStyle = _bc; ctx.lineWidth = Math.max(_dashed ? 1.3 : 0.4, state.zoom * 0.4875 * (_bt || 1)); }  // lineWidth × thickness
+      else if (_dashed) { ctx.strokeStyle = 'rgb(225,225,225)'; ctx.lineWidth = Math.max(1.4, state.zoom * 1.4); }  // ukryty: jasny, dobrze widoczny obrys
+      else              { ctx.strokeStyle = 'rgb(225,225,225)'; ctx.lineWidth = Math.max(0.4, state.zoom * 0.4875); }  // domyślny obrys: jasny, grubość = Delwing lineWidth (0.4875 = ROOM_SIZE*CELL*0.025/0.6)
+      if (_dashed) {                                        // ZAD7 dashed: wyraźne kreski
+        ctx.setLineDash([Math.max(4, rs * 0.34), Math.max(3, rs * 0.24)]);
+      }
+      ctx.fillRect(cx - half, cy - half, rs, rs);
+      ctx.strokeRect(cx - half, cy - half, rs, rs);
+      ctx.setLineDash([]);
+
+      const _sym0 = r.symbol || r.user_data?.['system.fallback_symbol'] || '';
+      if (state.zoom > 0.8 && _sym0) {
+        ctx.save();
+        // Symbol 1:1 z Mudletem (audyt A10): pełny tekst bez ucinania; czcionka dopasowana do
+        // kwadratu pokoju (monospace ≈ 0.6 em/znak, emoji/szerokie glify 1.0); zbyt długi → nie rysujemy.
+        const _symCps = [..._sym0];
+        const _symW = _symCps.reduce((a, ch) => a + (ch.codePointAt(0) > 0xFFFF ? 1.0 : 0.6), 0);
+        let symSize;
+        if (_symCps.length > 2) {
+          symSize = Math.min(Math.round(rs * 0.52), Math.floor(rs / _symW));
+        } else {
+          symSize = Math.max(7, Math.round(rs * (_symCps.length > 1 ? 0.52 : 0.7)));
+        }
+        if (symSize >= 7) {
+          ctx.font         = `bold ${symSize}px monospace`;
+          ctx.textAlign    = 'center';
+          ctx.textBaseline = 'middle';
+          // Kolor symbolu wg Delwinga; halo kontrastuje z kolorem symbolu (ZAD 1)
+          const _symCol = symbolColorFor(r);
+          ctx.strokeStyle = (contrastColor(_symCol) === '#fff') ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.65)';
+          ctx.lineWidth   = Math.max(1.5, symSize * 0.18);
+          ctx.strokeText(_sym0, cx, cy);
+          ctx.fillStyle   = _symCol;
+          ctx.fillText(_sym0, cx, cy);
+        }
+        ctx.restore();
+      }
+
+      // ── Inner exit indicators (up/down/in/out) — trójkąty Delwing-style (ZAD 3) ──
+      {
+        const exits = r.exits || {};
+        if (state.zoom > 0.25) {
+          const R = rs / 5;                      // triRadius
+          const _tri = (px, py, rot) => {        // scaleX 1.4, scaleY 0.8
+            const v = [];
+            for (let i = 0; i < 3; i++) {
+              const a = (2 * Math.PI * i / 3) - Math.PI / 2;
+              const qx = Math.cos(a) * R * 1.4, qy = Math.sin(a) * R * 0.8;
+              v.push(px + qx * Math.cos(rot) - qy * Math.sin(rot),
+                     py + qx * Math.sin(rot) + qy * Math.cos(rot));
+            }
+            return v;
+          };
+          const _polys = {
+            up:   [[cx, cy + rs/4, 0]],
+            down: [[cx, cy - rs/4, Math.PI]],
+            in:   [[cx - rs/4, cy, Math.PI/2], [cx + rs/4, cy, -Math.PI/2]],
+            out:  [[cx - rs/4, cy, -Math.PI/2], [cx + rs/4, cy, Math.PI/2]],
+          };
+          for (const dir of ['up','down','in','out']) {
+            if (!exits[dir]) continue;
+            const door = (r.doors || {})[dir];
+            ctx.fillStyle   = symbolFillFor(r);
+            ctx.strokeStyle = door ? (DOOR_RGB[door] || DOOR_RGB.locked) : symbolColorFor(r);
+            ctx.lineWidth   = Math.max(0.5, state.zoom * 0.6);
+            for (const [px, py, rot] of _polys[dir]) {
+              const v = _tri(px, py, rot);
+              ctx.beginPath();
+              ctx.moveTo(v[0], v[1]);
+              ctx.lineTo(v[2], v[3]);
+              ctx.lineTo(v[4], v[5]);
+              ctx.closePath();
+              ctx.fill();
+              ctx.stroke();
+            }
           }
         }
       }
-    }
 
-    // ── Special exit marker (✦) — pod przełącznikiem „Znaczniki edytora" (ZAD 5) ──
-    if (state.view?.editorMarkers !== false && state.zoom > 0.5 && r.special_exits && Object.keys(r.special_exits).length) {
-      ctx.save();
-      const mSz = Math.max(6, rs * 0.44);
-      const mCol = contrastColor(color);
-      ctx.font         = `bold ${Math.round(mSz)}px monospace`;
-      ctx.textAlign    = 'right';
-      ctx.textBaseline = 'top';
-      ctx.strokeStyle  = mCol === '#fff' ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.5)';
-      ctx.lineWidth    = Math.max(1, mSz * 0.15);
-      ctx.strokeText('✦', cx + half, cy - half);
-      ctx.fillStyle    = mCol;
-      ctx.fillText('✦', cx + half, cy - half);
-      ctx.restore();
+      // ── Special exit marker (✦) — pod przełącznikiem „Znaczniki edytora" (ZAD 5) ──
+      if (state.view?.editorMarkers !== false && state.zoom > 0.5 && r.special_exits && Object.keys(r.special_exits).length) {
+        ctx.save();
+        const mSz = Math.max(6, rs * 0.44);
+        const mCol = contrastColor(color);
+        ctx.font         = `bold ${Math.round(mSz)}px monospace`;
+        ctx.textAlign    = 'right';
+        ctx.textBaseline = 'top';
+        ctx.strokeStyle  = mCol === '#fff' ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.5)';
+        ctx.lineWidth    = Math.max(1, mSz * 0.15);
+        ctx.strokeText('✦', cx + half, cy - half);
+        ctx.fillStyle    = mCol;
+        ctx.fillText('✦', cx + half, cy - half);
+        ctx.restore();
+      }
+    } finally {
+      ctx.restore();   // ZAD7: domknij ctx.save() pokoju (globalAlpha faded)
     }
-    ctx.restore();   // ZAD7: domknij ctx.save() pokoju (globalAlpha faded)
   }
 }
 
@@ -13989,7 +13992,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.48.0';
+const APP_VERSION = 'v1.48.1';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -21735,9 +21738,9 @@ function _deltaRenderComparison(group) {
   const shArea = shc.sh.areas.get(group.areaId);
   const rz = ((shArea && shArea.rooms) || []).filter(r => r.z === group.z);
   const savedGhosts = _deltaGhosts;
-  _deltaGhosts = new Set(group.seqs);
   const c2 = mk();
   try {
+    _deltaGhosts = new Set(group.seqs);   // Plan H (H2, audyt 2026-08-24): wewnatrz try — restore w finally gwarantowany
     _rasterInvalidate();
     _withRenderTarget(c2, view, {
       roomsZ: rz, roomById: shc.sh.roomById, roomArea: shc.sh.roomArea,

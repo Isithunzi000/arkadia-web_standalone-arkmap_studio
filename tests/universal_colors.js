@@ -112,7 +112,7 @@ ok(count("rgba(100,140,180,0.55)") === 0, 'stary styl stubow (niebieski dash) us
   ok(!body.includes('setLineDash'), 'stuby: pelna linia (zero dash)');
   ok(body.includes('0.5 * cpx()'), 'stuby: dlugosc 0.5 jednostki mapy (Delwing 1:1)');
 }
-ok(count("const APP_VERSION = 'v1.48.0';") === 1, 'APP_VERSION v1.48.0');
+ok(count("const APP_VERSION = 'v1.48.1';") === 1, 'APP_VERSION v1.48.1');
 
 console.log('');
 console.log('universal_colors: ' + pass + ' OK, ' + fail + ' FAIL');

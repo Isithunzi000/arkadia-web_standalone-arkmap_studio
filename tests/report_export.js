@@ -70,7 +70,7 @@ console.log('── T2: buildDiagnosticsReport (funkcjonalnie) ──');
     extract(HTML, 'function _reportTs() {') + '\n' +
     extract(HTML, 'function buildDiagnosticsReport(opts) {') + '\n' +
     'return { buildDiagnosticsReport };';
-  const api = new Function('APP_VERSION', code)('v1.48.0');
+  const api = new Function('APP_VERSION', code)('v1.48.1');
 
   const opts = {
     title: 'Raport testowy', filename: 'm.arkmap',
@@ -85,7 +85,7 @@ console.log('── T2: buildDiagnosticsReport (funkcjonalnie) ──');
   ok(strip(r1) === strip(r2), 'deterministyczny poza linia daty ISO');
   ok(r1.split('\n')[0] === '# Raport testowy — ArkMap Studio', 'naglowek H1 z tytulem');
   ok(r1.includes('- Plik: m.arkmap'), 'naglowek: plik');
-  ok(r1.includes('- Wersja aplikacji: v1.48.0'), 'naglowek: wersja aplikacji');
+  ok(r1.includes('- Wersja aplikacji: v1.48.1'), 'naglowek: wersja aplikacji');
   ok(/- Data: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/.test(r1), 'naglowek: data ISO');
   ok(r1.includes('## Sekcja A') && r1.includes('linia 1\nlinia 2'), 'sekcja z liniami');
   ok(r1.includes('## Pusta\n\n(brak)'), 'pusta sekcja → (brak)');
@@ -167,7 +167,7 @@ console.log('── T4: _deltaReviewReportText (funkcjonalnie) ──');
     extract(HTML, 'function _deltaReviewReportText() {') + '\n' +
     'return { _deltaReviewReportText, set rv(v) { _deltaReview = v; } };';
   const state = { filename: 'mapa-testowa.arkmap', map: null };
-  const api = new Function('APP_VERSION', 'state', code)('v1.48.0', state);
+  const api = new Function('APP_VERSION', 'state', code)('v1.48.1', state);
 
   api.rv = null;
   ok(api._deltaReviewReportText() === '', 'brak otwartej recenzji → pusty tekst (guard)');
@@ -206,7 +206,7 @@ console.log('── T5: regla kompletnosci powierzchni ──');
      'wszystkie 5 powierzchni diagnostycznych ma eksport do schowka');
 }
 
-// ═══ T6: raport HTML kalki z miniaturami przed/po (Arc 31 F5, v1.48.0) ═══
+// ═══ T6: raport HTML kalki z miniaturami przed/po (Arc 31 F5, v1.48.1) ═══
 console.log('── T6: raport HTML kalki (struktura + funkcjonalnie) ──');
 {
   // — piny strukturalne —
@@ -217,6 +217,11 @@ console.log('── T6: raport HTML kalki (struktura + funkcjonalnie) ──');
   }
   ok(/function _deltaThumbGroups\(/.test(HTML), 'grupowanie miniaturek: _deltaThumbGroups');
   ok(/function _deltaRenderComparison\(/.test(HTML), 'render pary przed/po: _deltaRenderComparison');
+  // Plan H (audyt zewnetrzny 2026-08-24, H2): przypisanie duchow grupy WEWNATRZ
+  // try — hipotetyczny wyjatek w mk()/_rasterInvalidate() nie zostawia duchow
+  // wlaczonych na glownej mapie (restore w finally).
+  ok(/const c2 = mk\(\);\n  try \{\n    _deltaGhosts = new Set\(group\.seqs\);/.test(HTML),
+     'H2: duchy grupy ustawiane wewnatrz try (restore w finally gwarantowany)');
   ok(/function _deltaHtmlDoc\(/.test(HTML), 'czysty builder dokumentu: _deltaHtmlDoc');
   ok(/function _deltaReviewReportHtml\(/.test(HTML), 'wejscie raportu HTML: _deltaReviewReportHtml');
   ok(/const DELTA_THUMB_CAP = 60;/.test(HTML), 'cap miniaturek 60 (reszta tekstowo)');
@@ -242,7 +247,7 @@ console.log('── T6: raport HTML kalki (struktura + funkcjonalnie) ──');
   const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==';
   const opts = {
     title: 'Raport recenzji kalki .arkdelta', filename: 'm.arkmap',
-    version: 'v1.48.0', dateIso: '2026-08-24T12:00:00.000Z',
+    version: 'v1.48.1', dateIso: '2026-08-24T12:00:00.000Z',
     summaryLines: ['Operacji w kalce: 2', 'Do naniesienia: 1'],
     opLines: ['- [#1] Dodaj pokoj — do naniesienia', '- [#2] Usun pokoj — konflikt'],
     thumbs: [
@@ -257,7 +262,7 @@ console.log('── T6: raport HTML kalki (struktura + funkcjonalnie) ──');
   ok(h1.startsWith('<!DOCTYPE html>'), 'dokument zaczyna sie od DOCTYPE');
   ok(h1.includes('<html lang="pl">') && h1.includes('<meta charset="utf-8">'), 'lang=pl + charset utf-8 (file:// bez serwera)');
   ok(h1.includes('Raport recenzji kalki .arkdelta — ArkMap Studio'), 'naglowek 1:1 z .md (tytul + ArkMap Studio)');
-  ok(h1.includes('Wersja aplikacji: v1.48.0') && h1.includes('Data: 2026-08-24T12:00:00.000Z'),
+  ok(h1.includes('Wersja aplikacji: v1.48.1') && h1.includes('Data: 2026-08-24T12:00:00.000Z'),
      'naglowek 1:1 z .md (wersja + data ISO)');
   ok(h1.includes('Operacji w kalce: 2') && h1.includes('- [#1] Dodaj pokoj — do naniesienia'),
      'tresc 1:1 z .md (podsumowanie + linie opow)');
