@@ -111,8 +111,9 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
   // wypychane sa w LEWO i obcinane na krawedzi okna (overflow:hidden na #val-modal).
   // Zgloszenie usera: „Kopiuj raport" na krawedzi po dodaniu 2 przyciskow raportu.
   // Repro empiryczne: E9.valmodal-geom (FAIL na 520px, PASS po fixie).
-  ok(/#val-modal\s*\{[^}]*?width:\s*600px/.test(HTML),
-    'B15: #val-modal width:600px (stopka 4 przyciski ~536px + padding 36px; 520px = przelew)');
+  // Arc 32 (UX-1): 600 -> 640 pod 5 przyciskow (+Zapisz .html: 594 > 564 content).
+  ok(/#val-modal\s*\{[^}]*?width:\s*640px/.test(HTML),
+    'B15: #val-modal width:640px (5 przyciskow stopki, +HTML UX-1 ~594px + padding 36px; 520px = przelew)');
   for (const sel of ['#val-modal-footer', '#ol-confirm-footer', '#wp-import-footer', '.edlg-ftr']) {
     const esc = sel.replace(/[.#-]/g, '\\$&');
     const m = HTML.match(new RegExp(esc + '\\s*\\{[^}]*\\}'));
@@ -123,10 +124,11 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
   // Arc 29: dlg-suppressors poszerzony pod 5 przyciskow stopki (eksport raportu, regula N3).
   // Pomiar F0: ~604px content przy najdluzszych etykietach sciezki .dat (500px = przelew
   // stopki nowrap). Repro empiryczne: E22.supp-geom. max-width:90vw klasy chroni mobile.
+  // Arc 32 (UX-1): 660 -> 720 pod 6 przyciskow (+HTML: 604 + 73 + gap 8 = 685 > 628 content).
   {
     const box = HTML.slice(HTML.indexOf('id="dlg-suppressors"'), HTML.indexOf('id="dlg-suppressors"') + 700);
-    ok(box.includes('class="dlg-box wide" style="width:660px"'),
-      'B16: dlg-suppressors width:660px (5 przyciskow stopki; 500px = przelew)');
+    ok(box.includes('class="dlg-box wide" style="width:720px"'),
+      'B16: dlg-suppressors width:720px (6 przyciskow stopki, +HTML UX-1; 500px = przelew)');
   }
 
   // Arc 31 F2: LOD roomsOnly — progi z pomiaru probe_lod (2026-08-23, trasa
@@ -287,7 +289,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.49.1';"), 'V1: pin APP_VERSION v1.49.1');
+ok(HTML.includes("const APP_VERSION = 'v1.49.2';"), 'V1: pin APP_VERSION v1.49.2');
 
 // ═══ A3.10 (DI-7): touchstart — reset flag na starcie KAZDEGO gestu ═══
 console.log('— A3.10 (DI-7): touchstart — reset na starcie kazdego gestu —');

@@ -164,7 +164,7 @@ console.log('— Sekcja C: raport i eksport —');
     'C9 helpery eksportu: _suppCopyReport + _suppDownloadMd');
   ok(HTML.includes("'raport-podwojne-linie-' + _reportMapName() + '-' + _reportTs() + '.md'"),
     'C10 nazwa pliku wg konwencji raport-podwojne-linie-<mapa>-<ts>.md');
-  for (const id of ['supp-copy', 'supp-md', 'suppm-copy', 'suppm-md', 'supp-cancel', 'supp-skip', 'supp-fix'])
+  for (const id of ['supp-copy', 'supp-md', 'supp-html', 'suppm-copy', 'suppm-md', 'suppm-html', 'supp-cancel', 'supp-skip', 'supp-fix'])
     ok(HTML.includes("getElementById('" + id + "')"), 'C11 wiring po id: ' + id);
   ok(!HTML.includes("querySelectorAll('.dlg-ftr button')"),
     'C12 likwidacja wiringu po pozycji w stopce (lekcja Arc 9: btn-lde-*)');

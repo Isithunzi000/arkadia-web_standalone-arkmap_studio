@@ -29,6 +29,7 @@ const PIN_MAP = {
   'v1.48.4': 32,
   'v1.49.0': 32,
   'v1.49.1': 32,
+  'v1.49.2': 32,
 };
 
 ok(tagged.length >= Object.keys(PIN_MAP).length,

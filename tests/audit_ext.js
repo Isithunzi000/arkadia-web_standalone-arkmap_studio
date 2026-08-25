@@ -1311,6 +1311,122 @@ ASYNC_PINS.push((async () => {
     'A3.5 (DI-5): zawieszony re-fetch -> abort po 30 s -> funkcja wraca, dialog odblokowany (pre-fix: hang)');
 })());
 
+// ═══ A4.3 (UX-3): „Zamknij" zamiast „Anuluj" — dirty-confirm zamiast cichego discard ═══
+console.log('— A4.3 (UX-3): Zamknij z niezapisanymi zmianami pyta, nie odrzuca po cichu —');
+{
+  ok(HTML.includes('onclick="cancelRoomEdit()">Zamknij</button>') &&
+     !HTML.includes('onclick="cancelRoomEdit()">Anuluj</button>'),
+    'A4.3 (UX-3): etykieta przycisku panelu pokoju -> „Zamknij" (pre-fix: „Anuluj")');
+  ok(!/function cancelRoomEdit\(\) \{[\s\S]*?_replaceRoomData/.test(
+       HTML.slice(HTML.indexOf('function cancelRoomEdit() {'))
+         .slice(0, HTML.indexOf('function commitRoomEdit() {'))),
+    'A4.3 (UX-3): cancelRoomEdit NIE robi restore sam — restore tylko w sciezce [Porzuc] dialogu (pre-fix: cichy discard)');
+}
+{
+  // Behawioralnie: ekstrakcja trojki funkcji; stuby DOM dla rp-actions / przyciskow / panelu.
+  const SRC = extract(HTML, 'function showDirtyConfirm(continueAction) {') + '\n'
+    + extract(HTML, 'function hideDirtyConfirmIfOpen() {') + '\n'
+    + extract(HTML, 'function _replaceRoomData(room, snapshot) {') + '\n'
+    + extract(HTML, 'function cancelRoomEdit() {') + '\n'
+    + 'return { cancelRoomEdit };';
+  const room = { id: 2, x: 1, y: 1, z: 0, name: 'CHANGED', env: 5 };
+  const snapshot = { id: 2, x: 1, y: 1, z: 0, name: 'ORIG', env: 5 };
+  const state = {
+    selected: 2, editMode: true, editDirty: true, editSnapshot: snapshot,
+    roomById: { 2: room }, roomArea: { 2: 1 }, z: 0, pendingEnv: null,
+    undoStack: [], deltaLog: [],
+  };
+  const mkClassList = () => { const s = new Set(); return {
+    add: (c) => s.add(c), remove: (c) => s.delete(c), contains: (c) => s.has(c) }; };
+  const stdBtns = { style: {} }, dirtyBox = { style: {} };
+  const rpActionsCl = mkClassList();
+  const rpActions = { classList: rpActionsCl, querySelector: (sel) =>
+    sel === '.rp-std-btns' ? stdBtns : sel === '.rp-dirty-box' ? dirtyBox : null };
+  const abandonBtn = {}, saveBtn = {}, badge = { style: {} };
+  const panelCl = mkClassList(); panelCl.add('visible');
+  const els = { 'rp-actions': rpActions, 'rp-dirty-abandon': abandonBtn, 'rp-dirty-save': saveBtn,
+    'rp-unsaved-badge': badge, 'room-panel': { classList: panelCl } };
+  let committed = 0;
+  const api = new Function('state', 'document', 'populateEditForm', 'buildRoomsZ',
+    'scheduleDraw', 'toast', 'updateUndoRedoUI', 'commitRoomEdit', '_updateUnsavedBadge',
+    SRC)
+    (state, { getElementById: (id) => els[id] || null },
+      () => {}, () => {}, () => {}, () => {}, () => {},
+      () => { committed++; }, () => {});
+  api.cancelRoomEdit();
+  ok(rpActionsCl.contains('dirty-confirm') && room.name === 'CHANGED' && state.editDirty === true,
+    'A4.3 (UX-3): Zamknij przy editDirty -> dialog potwierdzenia, pokoj NIE przywrocony (pre-fix: cichy restore do ORIG)');
+  // [Porzuc]: restore + zamkniecie panelu + odznaczenie
+  ok(typeof abandonBtn.onclick === 'function',
+    'A4.3 (UX-3): dialog wystawia handler [Porzuc] (pre-fix: brak dialogu w ogole)');
+  if (typeof abandonBtn.onclick === 'function') {
+    abandonBtn.onclick();
+    ok(room.name === 'ORIG' && state.editDirty === false && state.selected === null &&
+       !panelCl.contains('visible') && !rpActionsCl.contains('dirty-confirm'),
+      'A4.3 (UX-3): [Porzuc] -> restore snapshotu + panel zamkniety + selected=null (regresja F2.x)');
+    ok(committed === 0, 'A4.3: sciezka [Porzuc] nie commituje (regresja)');
+  }
+}
+
+// ═══ A4.4 (UX-4): linie wyjsc w rastrze LOD — Bresenham, dedup par, hide, suppressory ═══
+console.log('— A4.4 (UX-4): raster LOD rysuje linie wyjsc —');
+{
+  const LP = ((140 << 24) | (225 << 16) | (225 << 8) | 225) >>> 0;   // rgba(225,225,225,0.55)
+  const SRC = 'let _rasterCache = null;\n'
+    + extract(HTML, 'function _rasterKey() {') + '\n'
+    + extract(HTML, 'function _buildRoomsRaster() {') + '\n'
+    + 'return { build: _buildRoomsRaster, get cache() { return _rasterCache; } };';
+  const DIR_VEC = { n:[0,-1], ne:[1,-1], e:[1,0], se:[1,1], s:[0,1], sw:[-1,1], w:[-1,0], nw:[-1,-1],
+    up:[0,0], down:[0,0], in:[0,0], out:[0,0] };
+  const mk = (rooms, hMode) => {
+    const state = { roomsZ: rooms, roomById: {}, roomArea: {}, z: 0, areaId: 1,
+      editMode: false, selected: null, pendingEnv: null, view: hMode ? { hiddenRooms: hMode } : {} };
+    for (const r of rooms) { state.roomById[r.id] = r; state.roomArea[r.id] = 1; }
+    let lastImg = null;
+    class ImageDataStub {
+      constructor(w, h) { this.width = w; this.height = h; this.data = new Uint8ClampedArray(w * h * 4); lastImg = this; }
+    }
+    const api = new Function('state', 'document', 'ImageData', '_envOf', 'envColorRgb', 'isRoomHidden', 'DIR_VEC', SRC)
+      (state, { createElement: () => ({ width: 0, height: 0, getContext: () => ({ putImageData: () => {} }) }) },
+       ImageDataStub, (r) => (r.env ?? 1), (e) => [e & 255, e & 255, e & 255],
+       (r) => !!(r && r.user_data && String(r.user_data['system.fallback_hidden']).toLowerCase() === 'true'),
+       DIR_VEC);
+    api.build();
+    return { buf: new Uint32Array(lastImg.data.buffer), cols: api.cache.cols, maxY: api.cache.maxY, minX: api.cache.minX };
+  };
+  const mkRooms = () => ([
+    { id: 1, x: 0, y: 0, z: 0, env: 1, exits: { e: 2 } },
+    { id: 2, x: 3, y: 0, z: 0, env: 1, exits: { w: 1 } },
+    { id: 3, x: 0, y: 2, z: 0, env: 1, exits: { e: 4 } },
+    { id: 4, x: 2, y: 2, z: 0, env: 1, exits: { up: 1 } },
+    { id: 5, x: 0, y: 4, z: 0, env: 1, exits: { e: 6 }, custom_lines: { e: { points: [] } } },
+    { id: 6, x: 2, y: 4, z: 0, env: 1, exits: { w: 5 }, custom_lines: { w: { points: [] } } },
+    { id: 7, x: 6, y: 0, z: 0, env: 1, exits: { w: 2 } },   // one-way 7->2 (wyzsze id -> nizsze)
+  ]);
+  const at = (c, x, y) => c.buf[(c.maxY - y) * c.cols + (x - c.minX)];
+  const g = mk(mkRooms());
+  ok(at(g, 1, 0) === LP && at(g, 2, 0) === LP,
+    'A4.4 (UX-4): para dwukierunkowa — linia miedzy pokojami (pre-fix: raster bez linii)');
+  ok(at(g, 4, 0) === LP && at(g, 5, 0) === LP,
+    'A4.4 (UX-4): one-way od wyzszego id (7->2) tez rysowany — dedup tylko par dwukierunkowych (pre-fix: brak)');
+  ok(at(g, 0, 0) !== LP && at(g, 3, 0) !== LP,
+    'A4.4: pokoje przykrywaja konce linii — linie PRZED pakowaniem pokoi (regresja rastra)');
+  ok(at(g, 1, 2) === LP,
+    'A4.4 (UX-4): one-way 3->4 rysowany (pre-fix: brak)');
+  ok(at(g, 1, 1) === 0,
+    'A4.4 (UX-4): notch up/down/in/out NIE jest linia — vec [0,0] pomijany (regresja mechanizmu)');
+  ok(at(g, 1, 4) === 0,
+    'A4.4 (UX-4): suppressor/custom line (points: []) po obu stronach -> bez linii (regresja ZAD)');
+  const rooms2 = mkRooms(); rooms2[3].user_data = { 'system.fallback_hidden': 'true' };
+  const gh = mk(rooms2, 'hide');
+  ok(at(gh, 1, 2) === 0 && at(gh, 2, 2) === 0,
+    'A4.4 (UX-4): hMode=hide — linia stykajaca ukryty pokoj pomijana (lustro drawExits ZAD7)');
+  const rooms3 = mkRooms(); rooms3[3].user_data = { 'system.fallback_hidden': 'true' };
+  const gf = mk(rooms3, 'faded');
+  ok(at(gf, 1, 2) === LP,
+    'A4.4: hMode=faded — linia zostaje (jak w drawExits; pre-fix: brak linii w ogole)');
+}
+
 Promise.all(ASYNC_PINS).then(() => {
   console.log('');
   console.log(`═══ audit_ext: ${pass} OK, ${fail} FAIL ═══`);

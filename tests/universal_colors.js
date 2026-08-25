@@ -112,7 +112,41 @@ ok(count("rgba(100,140,180,0.55)") === 0, 'stary styl stubow (niebieski dash) us
   ok(!body.includes('setLineDash'), 'stuby: pelna linia (zero dash)');
   ok(body.includes('0.5 * cpx()'), 'stuby: dlugosc 0.5 jednostki mapy (Delwing 1:1)');
 }
-ok(count("const APP_VERSION = 'v1.49.1';") === 1, 'APP_VERSION v1.49.1');
+ok(count("const APP_VERSION = 'v1.49.2';") === 1, 'APP_VERSION v1.49.2');
+
+// ═══ A4.2 (UX-2): kontrasty tekstow WCAG ≥ 4.5:1 na obu tlach aplikacji ═══
+console.log('— A4.2 (UX-2): kontrasty WCAG vs --bg #0d0f12 i --panel #141720 —');
+{
+  const SELS = [
+    ['.ec.no', 'tekst pustej komorki'],
+    ['.cl-del', 'kasowanie custom line'],
+    ['.wp-field::placeholder', 'placeholder pol trasy'],
+    ['.ec.stub', 'tekst stub'],
+    ['.spec-del', 'kasowanie spec-exit'],
+    ['#mob-clear-btn', 'mobilne usuwanie trasy'],
+    ['.arkmap-only-badge', 'badge arkmap-only'],
+    ['.vd-arr', 'strzalki walidacji'],
+    ['.vd-num', 'numeracja walidacji'],
+    ['.tag-chip span', 'kasowanie tagu'],
+  ];
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const lum = (hex) => { const n = parseInt(hex.slice(1), 16);
+    return 0.2126 * lin(n >> 16 & 255) + 0.7152 * lin(n >> 8 & 255) + 0.0722 * lin(n & 255); };
+  const ratio = (fg, bg) => { const a = lum(fg), b = lum(bg);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); };
+  const cssColor = (sel) => {
+    const esc = sel.replace(/[.*+?^${}()|[\]\\#]/g, '\\$&');
+    const m = HTML.match(new RegExp(esc + '\\s*\\{[^}]*?color:\\s*(#[0-9a-fA-F]{6})'));
+    return m && m[1];
+  };
+  for (const [sel, label] of SELS) {
+    const fg = cssColor(sel);
+    const r1 = fg ? ratio(fg, '#0d0f12') : 0, r2 = fg ? ratio(fg, '#141720') : 0;
+    ok(fg !== null && r1 >= 4.5 && r2 >= 4.5,
+      'A4.2 (UX-2): ' + sel + ' (' + label + ') >= 4.5:1 vs obie plaszczyzny'
+      + ' [fg=' + fg + ' bg=' + (fg ? r1.toFixed(2) : '?') + ' panel=' + (fg ? r2.toFixed(2) : '?') + ']');
+  }
+}
 
 console.log('');
 console.log('universal_colors: ' + pass + ' OK, ' + fail + ' FAIL');

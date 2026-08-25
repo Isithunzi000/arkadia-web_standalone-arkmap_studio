@@ -1605,8 +1605,10 @@ scenario('E5.save-flow', async () => {
     + ' return JSON.stringify({ ok: v.ok, n: v.ok ? v.delta.ops.length : 0 }); })()').val);
   A('E5.save-flow.valid', v.ok, 'zapisana kalka przechodzi walidacje');
   EQ('E5.save-flow.ops', v.n, 2, 'zapisana kalka: 2 operacje');
-  A('E5.save-flow.toast', (ev("document.getElementById('toast').textContent").val || '').indexOf('Zapisano:') >= 0,
-    'toast potwierdza zapis');
+  // Arc 32 (UX-6): toast fallbacku zmieniony „Zapisano:" -> „…plik trafil do Pobranych: <nazwa>"
+  // (scenariusz wymusza sciezke fallback — showSaveFilePicker=undefined wyzej).
+  A('E5.save-flow.toast', (ev("document.getElementById('toast').textContent").val || '').indexOf('Pobranych:') >= 0,
+    'toast fallbacku informuje o pliku w Pobranych (UX-6)');
 });
 
 scenario('E5.load-flow', async () => {
@@ -2115,7 +2117,8 @@ scenario('E9.valmodal-geom', async () => {
     + ' })()');
   const g = AEV('E9.valmodal-geom.run', r, 'pomiar geometrii stopki val-modal');
   if (g) {
-    EQ('E9.valmodal-geom.n', g.n, 4, 'stopka: 4 widoczne przyciski (copy/md/load/cancel)');
+    // Arc 32 (UX-1): +Zapisz .html -> 5 przyciskow (copy/md/html/load/cancel), modal poszerzony do 640px
+    EQ('E9.valmodal-geom.n', g.n, 5, 'stopka: 5 widocznych przyciskow (copy/md/html/load/cancel) (UX-1)');
     EQ('E9.valmodal-geom.fit', g.out, 0, 'wszystkie przyciski w content box stopki — brak przelewu w lewo');
   }
 });
@@ -3529,6 +3532,8 @@ scenario('E14.saveFallback', async () => {
   await loadBase('dat');
   ex('startLocalEditMode()');
   // sukces fallbacku: nowy handle musi zostac zachowany + przycisk odswiezony
+  // Arc 32 (UX-5A): scenariusz najpierw przechodzi przez gate potwierdzenia nadpisu
+  // (pierwszy zapis na handle) — klik [Nadpisz], potem mechanika T6-F3 bez zmian.
   const r = AEV('E14.fallback.r', await eva('(async function(){'
    + ' window.__e14orig2 = window.saveWithDialog;'
    + ' var fh2 = { name: "nowa.arkmap" };'
@@ -3537,18 +3542,23 @@ scenario('E14.saveFallback', async () => {
    + ' _updateSaveButtonText();'
    + ' pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 fallback" });'
    + ' _performArkmapSave();'
+   + ' var gateOpen = document.getElementById("dlg-confirm-overwrite").classList.contains("open");'
+   + ' document.getElementById("cow-ok").click();'   // [Nadpisz] -> flaga=true -> re-entry -> write-error -> fallback
    + ' await new Promise(function(r2){ setTimeout(r2, 0); });'
-   + ' return { isNew: _arkmapFileHandle === fh2, btn: document.getElementById("btn-save-arkmap").textContent, dirty: state.dirty };'
-   + '})()'), 'fallback po write-error (sukces)');
+   + ' return { gate: gateOpen, isNew: _arkmapFileHandle === fh2, btn: document.getElementById("btn-save-arkmap").textContent, dirty: state.dirty };'
+   + '})()'), 'fallback po write-error (sukces, przez gate UX-5A)');
   if (r) {
+    A('E14.fallback.gate', r.gate === true, 'UX-5A: pierwszy zapis na handle -> dlg-confirm-overwrite otwarty (gate przed write)');
     A('E14.fallback.handle', r.isNew === true, 'T6-F3: fallback zachowuje nowy handle ' + JSON.stringify(r));
     A('E14.fallback.btn', r.btn === 'Zapisz .arkmap', 'T6-F3: tekst przycisku odswiezony (bez wielokropka)');
     A('E14.fallback.dirty', r.dirty === false, 'T6-F3: udany fallback kasuje dirty');
   }
   // anulowanie fallbacku: handle null, przycisk z wielokropkiem, dirty nietkniete
+  // (flaga=true — gate pokryty wyzej; tu testujemy sama mechanike anulowania T6-F3)
   const c = AEV('E14.fallback.c', await eva('(async function(){'
    + ' window.saveWithDialog = function(){ return Promise.resolve(false); };'
    + ' _arkmapFileHandle = { name: "stara.arkmap", createWritable: function(){ return Promise.reject(new Error("denied")); } };'
+   + ' _arkmapOverwriteConfirmed = true;'
    + ' _updateSaveButtonText();'
    + ' pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 fallback-cancel" });'
    + ' _performArkmapSave();'
@@ -3557,7 +3567,7 @@ scenario('E14.saveFallback', async () => {
    + '})()'), 'fallback po write-error (anulowanie)');
   if (c) A('E14.fallback.cancel', c.handle === null && c.btn === 'Zapisz .arkmap…' && c.dirty === true,
     'T6-F3: anulowany fallback → handle null, przycisk z wielokropkiem, dirty zostaje ' + JSON.stringify(c));
-  ex('window.saveWithDialog = window.__e14orig2; _arkmapFileHandle = null; _updateSaveButtonText();');
+  ex('window.saveWithDialog = window.__e14orig2; _arkmapFileHandle = null; _arkmapOverwriteConfirmed = false; _updateSaveButtonText();');
 });
 
 scenario('E14.paintStroke', async () => {
@@ -4109,13 +4119,15 @@ scenario('E22.supp-geom', async () => {
   await t.pending;
   ex('openCheckSuppressors();');
   const g1 = JSON.parse(ev(_e22Geom('dlg-suppressors-manual')).val);
-  EQ('E22.geom.manual-n', g1.n, 4, 'dlg-suppressors-manual: 4 widoczne przyciski');
+  // Arc 32 (UX-1): +Zapisz .html -> 5 przyciskow, dialog z inline width:600px
+  EQ('E22.geom.manual-n', g1.n, 5, 'dlg-suppressors-manual: 5 widocznych przyciskow (UX-1)');
   EQ('E22.geom.manual-fit', g1.out, 0, 'dlg-suppressors-manual: wszystkie przyciski w content box stopki');
   ex('closeDialog("dlg-suppressors-manual");');
   ex('_openSuppressorsDialog(checkSuppressors(),'
      + ' { cancelLabel: "Anuluj eksport", skipLabel: "Eksportuj mimo to", fixLabel: "Napraw i eksportuj" });');
   const g2 = JSON.parse(ev(_e22Geom('dlg-suppressors')).val);
-  EQ('E22.geom.gate-n', g2.n, 5, 'dlg-suppressors: 5 widocznych przyciskow (najdluzsze etykiety .dat)');
+  // Arc 32 (UX-1): +Zapisz .html -> 6 przyciskow, dialog poszerzony do 720px
+  EQ('E22.geom.gate-n', g2.n, 6, 'dlg-suppressors: 6 widocznych przyciskow (najdluzsze etykiety .dat) (UX-1)');
   EQ('E22.geom.gate-fit', g2.out, 0, 'dlg-suppressors: brak przelewu stopki (inline width po F0)');
   ex('closeDialog("dlg-suppressors");');
 });
@@ -4509,6 +4521,62 @@ scenario('E23.raster', async () => {
   }
 });
 
+// ═══ E23.raster.lines — Arc 32 (UX-4, v1.49.2): linie wyjsc w rastrze LOD ═══
+// Linie Bresenhama pakowane do bufora rastra PRZED pokojami. Asercje na
+// pikselach offscreen rastra (_rasterCache.canvas), odporne na virtual-time.
+scenario('E23.raster.lines', async () => {
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  await loadBase('dat');
+  await eva('new Promise(function(res){ setTimeout(res, 60); })');
+  ex('state.showGrid = false; state.selected = null;');
+  // Szukamy kardynalnej pary wyjsc z odstepem >= 2 i pusta komorka kroku:
+  // komorka (r + 1 krok) jest ZAWSZE na linii Bresenhama dla kardynalnych.
+  const ls = AEV('E23.raster.lines.probe', ev('(function(){'
+    + ' state.zoom = 0.163; draw();'
+    + ' var c = _rasterCache; if (!c) return JSON.stringify({ err: "brak cache rastra" });'
+    + ' var occupied = {};'
+    + ' for (var i = 0; i < state.roomsZ.length; i++) occupied[state.roomsZ[i].x + "," + state.roomsZ[i].y] = true;'
+    + ' var dirs = { e:[1,0], w:[-1,0], n:[0,-1], s:[0,1] };'
+    + ' var found = null;'
+    + ' for (var i = 0; i < state.roomsZ.length && !found; i++) {'
+    + '   var r = state.roomsZ[i];'
+    + '   if (!r.exits || isRoomHidden(r)) continue;'
+    + '   for (var d in dirs) {'
+    + '     var tid = r.exits[d]; if (tid == null) continue;'
+    + '     var t = state.roomById[tid];'
+    + '     if (!t || t.z !== state.z || isRoomHidden(t)) continue;'
+    + '     if (r.custom_lines && r.custom_lines[d]) continue;'
+    + '     var dx = t.x - r.x, dy = t.y - r.y;'
+    + '     if (dx !== 0 && dy !== 0) continue;'              // tylko kardynalne — komorka kroku gwarantowana
+    + '     if (Math.abs(dx) + Math.abs(dy) < 2) continue;'
+    + '     var sx = dx !== 0 ? (dx > 0 ? 1 : -1) : 0, sy = dy !== 0 ? (dy > 0 ? 1 : -1) : 0;'
+    + '     if (occupied[(r.x + sx) + "," + (r.y + sy)]) continue;'  // komorka kroku zajeta przez inny pokoj
+    + '     found = { cx: (r.x + sx) - c.minX, cy: c.maxY - (r.y + sy), from: r.id, to: tid, dir: d };'
+    + '     break;'
+    + '   }'
+    + ' }'
+    + ' if (!found) return JSON.stringify({ err: "brak pary testowej na plaszczyznie" });'
+    + ' var g = c.canvas.getContext("2d");'
+    + ' var px = g.getImageData(found.cx, found.cy, 1, 1).data;'
+    + ' found.a = px[3]; found.rgb = [px[0], px[1], px[2]];'
+    + ' draw();'   // determinizm: drugi paint, ten sam piksel rastra
+    + ' var px2 = _rasterCache.canvas.getContext("2d").getImageData(found.cx, found.cy, 1, 1).data;'
+    + ' found.a2 = px2[3]; found.rgb2 = [px2[0], px2[1], px2[2]];'
+    + ' return JSON.stringify(found);'
+    + '})()'), 'sonda linii rastra na bazie realnej mapy');
+  const pl = ls ? JSON.parse(ls) : null;
+  A('E23.raster.lines.found', pl && !pl.err,
+    'para kardynalna z odstepem >= 2 znaleziona' + (pl && pl.err ? ' (' + pl.err + ')' : ''));
+  if (pl && !pl.err) {
+    EQ('E23.raster.lines.alpha', pl.a, 140,
+      'komorka linii ma alfe 140 = rgba(225,225,225,0.55) (pre-fix: brak linii — alfa 0)');
+    A('E23.raster.lines.rgb', pl.rgb[0] >= 215 && pl.rgb[0] <= 235 && pl.rgb[1] >= 215 && pl.rgb[1] <= 235 && pl.rgb[2] >= 215 && pl.rgb[2] <= 235,
+      'kolor linii ~225 (tolerancja na premultiply canvasu): ' + pl.rgb.join(','));
+    EQ('E23.raster.lines.bytes', [pl.a2, pl.rgb2], [pl.a, pl.rgb],
+      'linia deterministyczna miedzy paintami (ten sam cache, te same bajty)');
+  }
+});
+
 // ═══ E23.cull — Arc 31 F4 (v1.47.1): CullIndex (uniform grid) ═══
 // Indeks siatkowy nad punktami pokoi per plaszczyzna; fallback liniowy <256.
 // Asercje behawioralne (paritet bitowy + bajty canvasu), odporne na
@@ -4697,8 +4765,9 @@ scenario('E23.deltahtml', async () => {
   EQ('E23.deltahtml.pair.fmt', pj && [pj.bOk, pj.aOk], [true, true], 'obie miniatury to PNG dataURL');
   EQ('E23.deltahtml.pair.diff', pj && pj.diff, true, 'miniatura „po" rozni sie od „przed" (zmiana kalki widoczna)');
 
-  const h1 = AEV('E23.deltahtml.gen1', ev('_deltaReviewReportHtml()'), 'generacja raportu HTML (1)');
-  const h2 = AEV('E23.deltahtml.gen2', ev('_deltaReviewReportHtml()'), 'generacja raportu HTML (2)');
+  // Arc 32 (UX-6): _deltaReviewReportHtml async (yield rAF per grupa) — await zamiast sync call
+  const h1 = AEV('E23.deltahtml.gen1', await eva('(async function(){ return await _deltaReviewReportHtml(); })()'), 'generacja raportu HTML (1)');
+  const h2 = AEV('E23.deltahtml.gen2', await eva('(async function(){ return await _deltaReviewReportHtml(); })()'), 'generacja raportu HTML (2)');
   A('E23.deltahtml.doctype', !!h1 && h1.indexOf('<!DOCTYPE html>') === 0, 'dokument zaczyna sie od DOCTYPE');
   A('E23.deltahtml.png', !!h1 && h1.includes('data:image/png;base64,'), 'miniatury osadzone jako PNG dataURL');
   EQ('E23.deltahtml.pairs', h1 ? (h1.match(/class="pair"/g) || []).length : -1, 2, 'dwie pary miniaturek w dokumencie');
@@ -4723,7 +4792,10 @@ scenario('E23.deltahtml', async () => {
   EQ('E23.deltahtml.ghosts', idJ && idJ.ghosts, 0, '_deltaGhosts przywrocone (puste) po generacji');
   ex('(function(){'
     + ' window.__f5ref = { r: state.roomById, a: state.areas, ra: state.roomArea, z: state.roomsZ };'
-    + ' _deltaReviewReportHtml();'
+    + '})()');
+  // Arc 32 (UX-6): generacja async — identycznosc referencji sprawdzana po await
+  await eva('(async function(){'
+    + ' await _deltaReviewReportHtml();'
     + ' window.__f5same = state.roomById === window.__f5ref.r && state.areas === window.__f5ref.a'
     + '   && state.roomArea === window.__f5ref.ra && state.roomsZ === window.__f5ref.z;'
     + '})()');

@@ -273,7 +273,7 @@
   .vd-area { color:#d2a8ff; white-space:nowrap; }
   .vd-tf { color:var(--dim); word-break:break-word; }
   .vd-bad { color:#ff7b72; font-weight:bold; }
-  .vd-arr { color:#6e7681; }
+  .vd-arr { color:#aab2be; }
   .vd-ex { color:#3fb950; }
   .vd-badge { font-size:9px; color:#f0883e; border:1px solid #6b4a1f; border-radius:3px; padding:0 4px; white-space:nowrap; }
   .vd-row.fixed { opacity:.6; }
@@ -293,7 +293,7 @@
   @keyframes vdFlash { 0%{background:#2a3550} 100%{background:transparent} }
   .rp-sec-flash { animation:vdFlash 1.4s ease-out; border-radius:5px; }
   /* ── Walidacja kierunków: numeracja, zaznaczenie, akceptacje (v1.4.57) ── */
-  .vd-num { color:#6e7681; font-weight:bold; min-width:1.7em; text-align:right; flex:0 0 auto; }
+  .vd-num { color:#aab2be; font-weight:bold; min-width:1.7em; text-align:right; flex:0 0 auto; }
   .vd-row.selected { background:var(--sel); border-color:var(--accent); box-shadow:inset 3px 0 0 var(--accent); }
   .vd-acc, .vd-unacc { font-size:9px; padding:1px 7px; border:1px solid var(--border); border-radius:3px; background:none; color:var(--dim); cursor:pointer; margin-left:auto; white-space:nowrap; flex:0 0 auto; }
   .vd-acc:hover { color:var(--ok); border-color:var(--ok); }
@@ -685,7 +685,7 @@
     user-select: text !important;
     pointer-events: all !important;
   }
-  .wp-field::placeholder { color: #445566; font-style: italic; }
+  .wp-field::placeholder { color: #7d8ea3; font-style: italic; }
   .wp-field:focus { border-color: #4a9eff; box-shadow: 0 0 0 2px rgba(74,158,255,0.12); outline: none; }
   .wp-row.wp-active .wp-field {
     border-color: var(--accent); background: rgba(0,200,150,0.04);
@@ -1032,9 +1032,10 @@
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
-    /* 600px: stopka 4 przyciski (raport ×2 + Załaduj + Anuluj) ≈ 536px + padding 36px;
+    /* 640px (UX-1: +przycisk .html): stopka 5 przyciskow (raport ×3 + Zaladuj + Anuluj)
+       ~594px content (geometria Arc 32) + padding 36px;
        przy 520px przelew w lewo obcinał pierwszy przycisk (flex-end bez wrap). */
-    width: 600px; max-width: 94vw; max-height: 80vh;
+    width: 640px; max-width: 94vw; max-height: 80vh;
     box-shadow: 0 16px 64px rgba(0,0,0,.85);
     overflow: hidden; display: flex; flex-direction: column;
   }
@@ -1189,7 +1190,7 @@
       position: fixed; top: 210px; left: 10px; z-index: 500;
       padding: 6px 12px; border-radius: 6px;
       background: var(--panel); border: 1px solid #c04040;
-      color: #c04040; font: 11px var(--font);
+      color: #e06868; font: 11px var(--font);
       box-shadow: 0 2px 8px #0008; cursor: pointer;
     }
     #mob-clear-btn.visible { display: flex; }
@@ -1350,11 +1351,11 @@
   .exits-grid { display: grid; grid-template-columns: repeat(3,24px); grid-template-rows: repeat(3,24px); gap: 2px; margin: 4px 0; }
   .ec { display: flex; align-items: center; justify-content: center; font-size: 9px; border-radius: 2px; }
   .ec.has { background: #1a2535; border: 1px solid #3a4a6a; color: #aaccee; cursor: pointer; }
-  .ec.no  { background: #0d0f12; border: 1px solid #1a1e28; color: #3a4050; cursor: pointer; }
+  .ec.no  { background: #0d0f12; border: 1px solid #1a1e28; color: #9aa5ba; cursor: pointer; }
   .ec.pending { background: #1a1a0a; border: 1px dashed #8a7a30; color: #cca830; cursor: pointer; }
   .ec.pending:hover { border-color: var(--edit); background: #2a2010; color: var(--edit); }
   .ec.ctr  { background: none; border: 1px solid #252b3a; color: var(--dim); cursor: default; font-size: 8px; }
-  .ec.stub { background: #0f1a20; border: 1px dashed #2a3a4a; color: #4a6878; cursor: pointer; }
+  .ec.stub { background: #0f1a20; border: 1px dashed #2a3a4a; color: #82acc4; cursor: pointer; }
   .ec.stub:hover { border-color: var(--accent); background: #0d1a28; color: var(--accent); }
   .ec.has:hover { border-color: var(--edit); background: #1a1510; color: #ffc070; }
   .ec.no:hover  { border-color: var(--ok); background: #0d2010; color: var(--ok); }
@@ -1647,14 +1648,14 @@
   .spec-row input:focus { outline: none; border-color: var(--edit); }
   .spec-cmd { flex: 1.5; }
   .spec-id  { flex: 1; }
-  .spec-del { border: 1px solid #3a1818; color: #886060; background: none;
+  .spec-del { border: 1px solid #3a1818; color: #c48a8a; background: none;
     padding: 3px 7px; font-size: 11px; cursor: pointer; border-radius: 2px; }
   .spec-del:hover { border-color: var(--err); color: var(--err); }
 
   /* Dane tab — notes, tags, user_data */
   .arkmap-only-badge {
     display: inline-block; font-size: 9px; padding: 1px 4px; border-radius: 2px;
-    background: #1a2035; color: #5570a0; border: 1px solid #253050;
+    background: #1a2035; color: #8fa8d8; border: 1px solid #253050;
     margin-left: 4px; vertical-align: middle; letter-spacing: 0.3px;
     font-weight: normal; white-space: nowrap;
   }
@@ -1668,7 +1669,7 @@
   .tag-list { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
   .tag-chip { background: #1a2035; border: 1px solid #3a4a6a; border-radius: 2px;
     padding: 2px 6px; font-size: 11px; color: #aaccee; display: flex; align-items: center; gap: 4px; }
-  .tag-chip span { cursor: pointer; color: #6a7a9a; font-size: 12px; line-height: 1; }
+  .tag-chip span { cursor: pointer; color: #9eb2d2; font-size: 12px; line-height: 1; }
   .tag-chip span:hover { color: var(--err); }
   .ud-row { display: flex; gap: 4px; margin-bottom: 3px; align-items: center; }
   .ud-key { flex: 1; background: #0d0f12; border: 1px solid #3a3020; color: var(--text);
@@ -1803,7 +1804,7 @@
   .cl-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
   .cl-dir { color: var(--text); min-width: 24px; font-weight: bold; }
   .cl-info { color: var(--dim); flex: 1; }
-  .cl-del { color: #604040; font-size: 12px; cursor: pointer; background: none; border: none; padding: 0 2px; }
+  .cl-del { color: #c08080; font-size: 12px; cursor: pointer; background: none; border: none; padding: 0 2px; }
   .cl-del:hover { color: var(--err); }
   .cl-editor { background: #0a0c10; border: 1px solid #252b3a; border-radius: 3px;
     padding: 8px; display: flex; flex-direction: column; gap: 6px; }
@@ -1954,6 +1955,7 @@
       <button id="btn-save-arkmap" disabled>Zapisz .arkmap&hellip;</button>
       <button id="btn-save-arkmap-as" disabled style="display:none">Zapisz jako…</button>
       <button id="btn-save-dat" disabled>Eksportuj Mudlet .dat</button>
+      <button id="btn-backups" style="margin-top:6px">🕓 Kopie zapasowe&hellip;</button>
       <input type="file" id="fi-arkdelta" accept=".arkdelta">
       <button id="btn-load-arkdelta" disabled style="margin-top:6px">Wczytaj .arkdelta&hellip;</button>
       <button id="btn-diff-kalka" style="margin-top:6px">⇄ Stwórz kalkę mapy&hellip;</button>
@@ -2583,7 +2585,7 @@
       <div class="vd-ftr">
         <button class="vd-btn" id="vd-copy">📋 Kopiuj</button>
         <button class="vd-btn" id="vd-md">⬇ MD</button>
-        <button class="vd-btn" id="vd-png">⬇ PNG</button>
+        <button class="vd-btn" id="vd-html">⬇ HTML</button>
         <button class="vd-btn" id="vd-clear">Schowaj naprawione</button>
         <button class="vd-btn close" id="vd-close2">Zamknij</button>
       </div>
@@ -2799,7 +2801,7 @@
         <div class="rp-std-btns" style="display:flex;gap:4px;width:100%">
           <button class="ok" style="font-size: 11px" onclick="commitRoomEdit()">✓ Zapisz pokój</button>
           <button style="font-size: 11px;border-color:var(--err);color:var(--err)" onclick="if(state.selected)showDeleteRoomDialog(state.selected)">Usuń pokój</button>
-          <button style="font-size: 11px" onclick="cancelRoomEdit()">Anuluj</button>
+          <button style="font-size: 11px" onclick="cancelRoomEdit()">Zamknij</button>
         </div>
         <div class="rp-dirty-box">
           <div class="rp-dirty-warn">Masz niezapisane zmiany.</div>
@@ -2945,6 +2947,7 @@
     <div id="val-modal-footer">
       <button id="val-btn-copy" class="dialog-btn" title="Kopiuje pelny raport diagnostyczny (Markdown) do schowka">📋 Kopiuj raport</button>
       <button id="val-btn-md" class="dialog-btn" title="Zapisuje pelny raport diagnostyczny do pliku .md">⬇ Zapisz raport .md</button>
+      <button id="val-btn-html" class="dialog-btn" title="Zapisuje pelny raport diagnostyczny do pliku .html">⬇ Zapisz raport .html</button>
       <button id="val-btn-load" class="dialog-btn ok-btn">Załaduj mimo to</button>
       <button id="val-btn-cancel" class="dialog-btn">Anuluj</button>
     </div>
@@ -3111,6 +3114,46 @@
     <div class="dlg-ftr">
       <button class="dlg-cancel" onclick="closeDialog('dlg-delete-room')">Anuluj</button>
       <button class="btn-err" id="dlg-delete-room-confirm">Usuń pokój</button>
+    </div>
+  </div>
+</div>
+
+<!-- Arc 32 (UX-5A): potwierdzenie pierwszego nadpisu istniejacego pliku .arkmap -->
+<div id="dlg-confirm-overwrite" class="dlg-bg">
+  <div class="dlg-box narrow">
+    <div class="dlg-hdr">
+      <div class="dlg-icon">💾</div>
+      <div class="dlg-hdr-text">
+        <div class="dlg-title warn">Nadpisać plik?</div>
+        <div class="dlg-sub">Dotychczasowa zawartość trafi do kopii zapasowych</div>
+      </div>
+    </div>
+    <div class="dlg-body">
+      <p id="cow-msg"></p>
+    </div>
+    <div class="dlg-ftr">
+      <button class="dlg-cancel" onclick="closeDialog('dlg-confirm-overwrite')">Anuluj</button>
+      <button class="ok" id="cow-ok">Nadpisz</button>
+    </div>
+  </div>
+</div>
+
+<!-- Arc 32 (UX-5B): archiwum kopii zapasowych .arkmap (IndexedDB, rotacja 5 na plik) -->
+<div id="dlg-backups" class="dlg-bg">
+  <div class="dlg-box wide">
+    <div class="dlg-hdr">
+      <div class="dlg-icon">🕓</div>
+      <div class="dlg-hdr-text">
+        <div class="dlg-title">Kopie zapasowe .arkmap</div>
+        <div class="dlg-sub">Automatyczne — przed każdym nadpisem istniejącego pliku (maks. 5 na plik)</div>
+      </div>
+    </div>
+    <div class="dlg-body">
+      <div id="bak-list" style="max-height:320px;overflow-y:auto"></div>
+    </div>
+    <div class="dlg-ftr">
+      <button class="btn-err" id="bak-clear">Wyczyść wszystkie</button>
+      <button class="dlg-cancel" onclick="closeDialog('dlg-backups')">Zamknij</button>
     </div>
   </div>
 </div>
@@ -3707,11 +3750,11 @@
 
 <!-- ✎ DIALOG: WALIDATOR PODWÓJNYCH LINII — wywołany przy eksporcie -->
 <div id="dlg-suppressors" class="dlg-bg">
-  <!-- width:660px — stopka 5 przyciskow (Anuluj/Kopiuj/MD/Kontynuuj/Napraw) ≈ 604px content
-       (pomiar empiryczny F0 Arc 29, najdluzsze etykiety sciezki .dat) + padding 2×16px + zapas;
+  <!-- width:720px (UX-1: +przycisk HTML) — stopka 6 przyciskow (Anuluj/Kopiuj/MD/HTML/Kontynuuj/
+       Napraw) ~685px content (604px F0 Arc 29 + 73px HTML + gap; geometria Arc 32) + padding 2×16px;
        max-width:90vw z .dlg-box chroni mobile. Przy 500px skrajne przyciski wyszlyby poza stope
        (.dlg-ftr jest nowrap — decyzja Arc 15). -->
-  <div class="dlg-box wide" style="width:660px">
+  <div class="dlg-box wide" style="width:720px">
     <div class="dlg-hdr">
       <div class="dlg-icon">⚑</div>
       <div class="dlg-hdr-text">
@@ -3732,6 +3775,7 @@
       <button class="dlg-cancel" id="supp-cancel" onclick="closeDialog('dlg-suppressors')">Anuluj eksport</button>
       <button id="supp-copy" title="Kopiuje raport podwójnych linii (Markdown) do schowka">📋 Kopiuj</button>
       <button id="supp-md" title="Zapisuje raport podwójnych linii do pliku .md">⬇ MD</button>
+      <button id="supp-html" title="Zapisuje raport podwójnych linii do pliku .html">⬇ HTML</button>
       <button id="supp-skip" style="border-color:#886020;color:#ffcc44" onclick="closeDialog('dlg-suppressors')">Eksportuj mimo to</button>
       <button id="supp-fix" class="btn-primary" onclick="closeDialog('dlg-suppressors')">Napraw i eksportuj</button>
     </div>
@@ -3740,7 +3784,9 @@
 
 <!-- ✎ DIALOG: WALIDATOR PODWÓJNYCH LINII — wywołany ręcznie (Sprawdź spójność) -->
 <div id="dlg-suppressors-manual" class="dlg-bg">
-  <div class="dlg-box wide">
+  <!-- width:600px (UX-1: +przycisk HTML) — stopka 5 przyciskow ~460px sandbox + 15% fontu
+       wlasciciela = ~529px > 468px content .dlg-box.wide (geometria Arc 32) -->
+  <div class="dlg-box wide" style="width:600px">
     <div class="dlg-hdr">
       <div class="dlg-icon">⚑</div>
       <div class="dlg-hdr-text">
@@ -3761,6 +3807,7 @@
       <button class="dlg-cancel" id="suppm-cancel" onclick="closeDialog('dlg-suppressors-manual')">Zamknij</button>
       <button id="suppm-copy" title="Kopiuje raport podwójnych linii (Markdown) do schowka">📋 Kopiuj</button>
       <button id="suppm-md" title="Zapisuje raport podwójnych linii do pliku .md">⬇ MD</button>
+      <button id="suppm-html" title="Zapisuje raport podwójnych linii do pliku .html">⬇ HTML</button>
       <button class="btn-primary" id="suppm-fix" onclick="closeDialog('dlg-suppressors-manual')">Napraw automatycznie</button>
     </div>
   </div>
@@ -7420,6 +7467,44 @@ function _buildRoomsRaster() {
   const img = new ImageData(cols, rows);
   const buf = new Uint32Array(img.data.buffer);   // ABGR (little-endian)
   const pack = new Map();   // envId -> uint32 (osobno wariant faded: bit znaku)
+  // Arc 32 (UX-4): linie wyjsc w LOD — Bresenham miedzy srodkami komorek, PRZED pakowaniem
+  // pokoi (pokoje przykrywaja konce linii). Bez notch (up/down/in/out: vec [0,0]), bez
+  // custom/suppressor, cel musi byc na tej plaszczyznie (roomsZ = obszar+Z), tryb hide
+  // pomija linie stykajace ukryte (lustro drawExits ZAD7). Dedup: para dwukierunkowa
+  // rysowana raz (od nizszego id), one-way zawsze. Bez blokady oddalania — sam raster
+  // jest LOD, linie sa jego czescia. Kolor jak wektor (225,225,225), alfa 0.55.
+  {
+    const linePk = ((140 << 24) | (225 << 16) | (225 << 8) | 225) >>> 0;
+    const idSet = new Set();
+    for (const r of rooms) idSet.add(r.id);
+    const _OPP = { n:'s', ne:'sw', e:'w', se:'nw', s:'n', sw:'ne', w:'e', nw:'se' };
+    for (const r of rooms) {
+      if (isRoomHidden(r) && hMode === 'hide') continue;
+      const exits = r.exits || {};
+      for (const [dir, targetId] of Object.entries(exits)) {
+        const vec = DIR_VEC[dir];
+        if (!vec || (!vec[0] && !vec[1])) continue;              // up/down/in/out = notch, nie linia
+        if (r.custom_lines && r.custom_lines[dir]) continue;     // suppressor / custom line
+        if (!idSet.has(targetId)) continue;                      // cel poza plaszczyzna -> strzalka, nie linia
+        const t = state.roomById[targetId];
+        if (!t) continue;
+        if (hMode === 'hide' && isRoomHidden(t)) continue;
+        const oneWay = !t.exits || t.exits[_OPP[dir]] !== r.id;
+        if (!oneWay && r.id > targetId) continue;                // para dwukierunkowa: rysuj raz
+        let x0 = r.x - minX, y0 = maxY - r.y, x1 = t.x - minX, y1 = maxY - t.y;
+        const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+        const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+        let err = dx + dy;
+        for (;;) {
+          buf[y0 * cols + x0] = linePk;
+          if (x0 === x1 && y0 === y1) break;
+          const e2 = 2 * err;
+          if (e2 >= dy) { err += dy; x0 += sx; }
+          if (e2 <= dx) { err += dx; y0 += sy; }
+        }
+      }
+    }
+  }
   for (const r of rooms) {
     const hidden = isRoomHidden(r);
     if (hidden && hMode === 'hide') continue;
@@ -7684,6 +7769,9 @@ let _mmDragging = false;
 
 // ─── BRAKUJĄCE MODULE-LEVEL VARS (Pass 67/68) ────────────────────────────────
 let _arkmapFileHandle = null;  // FileSystemFileHandle do Ctrl+S bez dialogu (Pass 59/68)
+// Arc 32 (UX-5A): false przy KAZDYM nowym handle/mapie -> pierwszy cichy zapis na tym
+// handle pyta „Nadpisac <nazwa>?"; po potwierdzeniu dalsze zapisy w sesji bez pytania.
+let _arkmapOverwriteConfirmed = false;
 let _ctxRoomId   = null;       // roomId przy prawym kliku (Pass 57/68)
 let _ctxMapX     = null;       // mapX pustego miejsca przy prawym kliku (Pass 57/68)
 let _ctxMapY     = null;       // mapY pustego miejsca przy prawym kliku (Pass 57/68)
@@ -10104,7 +10192,9 @@ async function saveWithDialog(defaultName, mimeType, dataFn) {
   } else {
     download(defaultName, data, mimeType);
   }
-  toast('✓ Zapisano: ' + defaultName + (hasFSAPI ? '' : ' [pobrano domyślnie]'));
+  // Arc 32 (UX-6): fallback bez wyboru sciezki (brak FS API lub odrzucony picker) —
+  // user musi wiedziec, GDZIE trafil plik (wczesniej tylko „Zapisano" / dopisek).
+  toast('✓ Przeglądarka nie wspiera wyboru ścieżki — plik trafił do Pobranych: ' + defaultName);
   return true;
 }
 
@@ -10149,6 +10239,7 @@ function restoreLastSave() {
   catch { toast('✗ Nie mozna przywrocic ostatniego zapisu', true); return; }
   applyMap(map);
   _arkmapFileHandle = fh;
+  _arkmapOverwriteConfirmed = false;  // Arc 32 (UX-5A): re-przypisanie handle = nowa sesja potwierdzenia
   state.pendingEnv = null;   // wrapper applyMap nie rusza pendingEnv (T5/F4) — czyscimy tu
   if (typeof _updateSaveButtonText === 'function') _updateSaveButtonText();
   toast('✓ Przywrocono ostatni zapis');
@@ -10180,7 +10271,7 @@ function _performArkmapSaveAs() {
   const hasFSAPI = typeof window.showSaveFilePicker === 'function';
   if (hasFSAPI) {
     saveWithDialog(suggestedName, 'application/json', () => text)
-      .then(fh => { if (fh) { if ((state.editRev || 0) === saveRev) state.dirty = false; state.pristineArkmap = text; _arkmapFileHandle = fh; _updateSaveButtonText(); } });  // T6-F2
+      .then(fh => { if (fh) { if ((state.editRev || 0) === saveRev) state.dirty = false; state.pristineArkmap = text; _arkmapFileHandle = fh; _arkmapOverwriteConfirmed = false; _updateSaveButtonText(); } });  // T6-F2 + UX-5A: nowy handle = nowa sesja potwierdzenia
   } else {
     saveWithDialog(suggestedName, 'application/json', () => text)
       .then(r => { if (r) { if ((state.editRev || 0) === saveRev) state.dirty = false; state.pristineArkmap = text; } });  // T6-F1 klamry + T6-F2
@@ -10269,6 +10360,127 @@ function saveArkmap(onSaved) {
   _performArkmapSave(onSaved);
 }
 
+// ─── Arc 32 (UX-5B): autobackup .arkmap w IndexedDB ─────────────────────────
+// Przed kazdym nadpisem istniejacego pliku jego dotychczasowa zawartosc
+// (state.pristineArkmap) trafia do bazy arkmap-backups — store per NAZWA pliku,
+// rotacja N=5 (6. wpis kasuje najstarszy). Awarie IndexedDB NIGDY nie blokuja
+// zapisu (wywolanie owiniate try/catch w miejscu zapisu).
+const _BAK_MAX = 5;
+function _bakOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('arkmap-backups', 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('backups')) {
+        const st = db.createObjectStore('backups', { keyPath: 'id', autoIncrement: true });
+        st.createIndex('byName', 'name', { unique: false });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+function _bakReq(req) {
+  return new Promise((resolve, reject) => { req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); });
+}
+async function _bakPut(name, text) {
+  if (typeof indexedDB === 'undefined') return;
+  let rooms = 0;
+  try { for (const a of (state.areas ? [...state.areas.values()] : [])) rooms += (a.rooms || []).length; } catch { rooms = 0; }
+  const db = await _bakOpen();
+  try {
+    await _bakReq(db.transaction('backups', 'readwrite').objectStore('backups')
+      .add({ name, ts: Date.now(), rooms, size: text.length, text }));
+    // Rotacja N=5 per nazwa pliku — kasuj najstarsze ponad limit
+    const idx = db.transaction('backups', 'readwrite').objectStore('backups').index('byName');
+    const all = await _bakReq(idx.getAll(name));
+    if (all.length > _BAK_MAX) {
+      all.sort((a, b) => a.ts - b.ts || a.id - b.id);
+      const st = db.transaction('backups', 'readwrite').objectStore('backups');
+      for (let i = 0; i < all.length - _BAK_MAX; i++) await _bakReq(st.delete(all[i].id));
+    }
+  } finally { db.close(); }
+}
+async function _bakList() {
+  if (typeof indexedDB === 'undefined') return [];
+  const db = await _bakOpen();
+  try {
+    const all = await _bakReq(db.transaction('backups', 'readonly').objectStore('backups').getAll());
+    all.sort((a, b) => b.ts - a.ts || b.id - a.id);
+    return all;
+  } finally { db.close(); }
+}
+async function _bakDelete(id) {
+  if (typeof indexedDB === 'undefined') return;
+  const db = await _bakOpen();
+  try { await _bakReq(db.transaction('backups', 'readwrite').objectStore('backups').delete(id)); }
+  finally { db.close(); }
+}
+async function _bakClear() {
+  if (typeof indexedDB === 'undefined') return;
+  const db = await _bakOpen();
+  try { await _bakReq(db.transaction('backups', 'readwrite').objectStore('backups').clear()); }
+  finally { db.close(); }
+}
+function _bakFmtSize(n) {
+  if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+  if (n >= 1024) return (n / 1024).toFixed(1) + ' KB';
+  return n + ' B';
+}
+function _bakTs(ts) {
+  const d = new Date(ts);
+  const p = (x) => String(x).padStart(2, '0');
+  return '' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
+async function showBackupsDialog() {
+  openDialog('dlg-backups');
+  const list = document.getElementById('bak-list');
+  if (!list) return;
+  list.innerHTML = '<p style="color:var(--dim)">Ładowanie…</p>';
+  let entries = [];
+  try { entries = await _bakList(); }
+  catch (e) {
+    console.error(e);
+    list.innerHTML = '<p style="color:var(--dim)">Archiwum kopii niedostępne w tej przeglądarce.</p>';
+    return;
+  }
+  if (!entries.length) {
+    list.innerHTML = '<p style="color:var(--dim)">Brak kopii zapasowych — powstaną automatycznie przed pierwszym nadpisem istniejącego pliku.</p>';
+    return;
+  }
+  list.innerHTML = '';
+  for (const en of entries) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)';
+    row.innerHTML = '<div style="flex:1;min-width:0">'
+      + '<div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(en.name) + '</div>'
+      + '<div style="color:var(--dim);font-size:11px">' + new Date(en.ts).toLocaleString('pl-PL')
+      + ' · ' + (en.rooms || 0) + ' pokoi · ' + _bakFmtSize(en.size || 0) + '</div>'
+      + '</div>'
+      + '<button data-dl style="white-space:nowrap">⬇ Pobierz .arkmap</button>'
+      + '<button data-del class="btn-err" style="white-space:nowrap">Usuń</button>';
+    row.querySelector('[data-dl]').onclick = () => {
+      const base = String(en.name || 'mapa').replace(/\.arkmap$/i, '');
+      saveWithDialog(base + '.kopia-' + _bakTs(en.ts) + '.arkmap', 'application/json', () => en.text)
+        .catch(err => { console.error(err); toast('✗ Zapis kopii — błąd: ' + (err && err.message || err), true); });
+    };
+    row.querySelector('[data-del]').onclick = async () => {
+      try { await _bakDelete(en.id); } catch (e) { console.error(e); }
+      showBackupsDialog();
+    };
+    list.appendChild(row);
+  }
+}
+// Arc 32 (UX-5A): potwierdzenie pierwszego nadpisu istniejacego pliku w sesji
+function _showOverwriteConfirm(name, onConfirm) {
+  const msg = document.getElementById('cow-msg');
+  if (msg) msg.textContent = 'Plik „' + name + '" zostanie nadpisany bieżącą mapą. '
+    + 'Przed zapisem jego dotychczasowa zawartość trafi do kopii zapasowych (🕓 Kopie zapasowe…).';
+  const okBtn = document.getElementById('cow-ok');
+  if (okBtn) okBtn.onclick = () => { closeDialog('dlg-confirm-overwrite'); onConfirm(); };
+  openDialog('dlg-confirm-overwrite');
+}
+
 function _performArkmapSave(onSaved) {
   if (!state.map) return;
   const text = _serializeMapForSave();  // T6/D2: serializuj raz — zapis + bufor (audyt ext F2.19: na klonie)
@@ -10278,9 +10490,22 @@ function _performArkmapSave(onSaved) {
 
   // K6: jeśli mamy istniejący handle → zapisz bezpośrednio (Pass 59)
   if (_arkmapFileHandle) {
+    // Arc 32 (UX-5A): pierwszy cichy zapis na tym handle — potwierdz nadpis istniejacego pliku
+    if (!_arkmapOverwriteConfirmed) {
+      _showOverwriteConfirm(_arkmapFileHandle.name, () => {
+        _arkmapOverwriteConfirmed = true;
+        _performArkmapSave(onSaved);
+      });
+      return;
+    }
     (async () => {
       try {
         const writable = await _arkmapFileHandle.createWritable();
+        // Arc 32 (UX-5B): autobackup poprzedniej zawartosci PRZED nadpisem (awaria IDB nie blokuje zapisu)
+        if (state.pristineArkmap) {
+          try { await _bakPut(_arkmapFileHandle.name, state.pristineArkmap); }
+          catch (bakErr) { console.error(bakErr); }
+        }
         await writable.write(text);
         await writable.close();
         if ((state.editRev || 0) === saveRev) state.dirty = false;  // T6-F2
@@ -10294,7 +10519,7 @@ function _performArkmapSave(onSaved) {
             if (r) {
               if ((state.editRev || 0) === saveRev) state.dirty = false;  // T6-F2
               state.pristineArkmap = text;
-              if (typeof r === 'object') _arkmapFileHandle = r;  // T6-F3: zachowaj nowy handle z fallbacku
+              if (typeof r === 'object') { _arkmapFileHandle = r; _arkmapOverwriteConfirmed = false; }  // T6-F3: zachowaj nowy handle z fallbacku + UX-5A: nowa sesja potwierdzenia
               if (onSaved) onSaved();
             }
             _updateSaveButtonText();  // T6-F3: etykieta zgodna ze stanem handle (takze po anulowaniu)
@@ -10313,7 +10538,7 @@ function _performArkmapSave(onSaved) {
   const hasFSAPI = typeof window.showSaveFilePicker === 'function';
   if (hasFSAPI) {
     saveWithDialog(suggestedName, 'application/json', () => text)
-      .then(fh => { if (fh) { if ((state.editRev || 0) === saveRev) state.dirty = false; state.pristineArkmap = text; _arkmapFileHandle = fh; _updateSaveButtonText(); if (onSaved) onSaved(); } });  // T6-F2
+      .then(fh => { if (fh) { if ((state.editRev || 0) === saveRev) state.dirty = false; state.pristineArkmap = text; _arkmapFileHandle = fh; _arkmapOverwriteConfirmed = false; _updateSaveButtonText(); if (onSaved) onSaved(); } });  // T6-F2 + UX-5A: nowy handle = nowa sesja potwierdzenia
   } else {
     saveWithDialog(suggestedName, 'application/json', () => text)
       .then(r => { if (r) { if ((state.editRev || 0) === saveRev) state.dirty = false; state.pristineArkmap = text; if (onSaved) onSaved(); } });  // T6-F2
@@ -10411,6 +10636,11 @@ function _suppCopyReport(missing) { _copyReportToClipboard(_suppReportText(missi
 function _suppDownloadMd(missing) {
   saveWithDialog('raport-podwojne-linie-' + _reportMapName() + '-' + _reportTs() + '.md', 'text/markdown', () => _suppReportText(missing));
 }
+function _suppDownloadHtml(missing) {
+  saveWithDialog('raport-podwojne-linie-' + _reportMapName() + '-' + _reportTs() + '.html', 'text/html',
+    () => _reportHtmlDoc({ title: 'Raport podwójnych linii wyjść', filename: state.filename || undefined,
+      version: APP_VERSION, dateIso: new Date().toISOString(), text: _suppReportText(missing) }));
+}
 
 // Otwiera dlg-suppressors z dynamiczną treścią — reużywany przez .dat i .arkmap
 function _openSuppressorsDialog(missing, opts) {
@@ -10446,6 +10676,8 @@ function _openSuppressorsDialog(missing, opts) {
   if (fixBtn)    { fixBtn.textContent    = opts.fixLabel    || 'Napraw';       fixBtn.onclick    = () => { autoFixSuppressors(missing); closeDialog('dlg-suppressors'); if (opts.fixAction) opts.fixAction(); }; }
   if (copyBtn)   { copyBtn.onclick = () => _suppCopyReport(missing); }
   if (mdBtn)     { mdBtn.onclick   = () => _suppDownloadMd(missing); }
+  const htmlBtn   = document.getElementById('supp-html');
+  if (htmlBtn)   { htmlBtn.onclick = () => _suppDownloadHtml(missing); }
 
   openDialog('dlg-suppressors');
 }
@@ -12711,6 +12943,13 @@ fiDat.addEventListener('change', async e => {
 btnSaveArkmap.addEventListener('click',  () => saveArkmap());   // audyt A16: bez wrappera listener przekazałby Event jako onSaved
 const btnSaveAs = document.getElementById('btn-save-arkmap-as');
 if (btnSaveAs) btnSaveAs.addEventListener('click', saveArkmapAs);
+const btnBackups = document.getElementById('btn-backups');   // Arc 32 (UX-5B)
+if (btnBackups) btnBackups.addEventListener('click', showBackupsDialog);
+const bakClearBtn = document.getElementById('bak-clear');
+if (bakClearBtn) bakClearBtn.addEventListener('click', async () => {
+  try { await _bakClear(); } catch (e) { console.error(e); }
+  showBackupsDialog();
+});
 btnSaveDat.addEventListener('click',    saveDat);
 
 // ─── Drag & drop (zapobiegamy pobieraniu pliku przez przeglądarkę) ─────────────
@@ -13223,6 +13462,34 @@ function _reportMapName() {
   return raw.replace(/\.(dat|arkmap|json|arkdelta)$/i, '').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'mapa';
 }
 function _reportTs() { return new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-'); }
+// audyt deep UX-1: wspolny dokument HTML raportow tekstowych — uogolnienie
+// _deltaHtmlDoc (ten sam styl, escHtml na dynamicznym tekscie, zero miniatur).
+// Tresc = te same linie co eksport .md (pin A4.1: sekcje raportu obecne w HTML).
+function _reportHtmlDoc(opts) {
+  const esc = escHtml;
+  const L = [];
+  L.push('<!DOCTYPE html>');
+  L.push('<html lang="pl">');
+  L.push('<head>');
+  L.push('<meta charset="utf-8">');
+  L.push('<title>' + esc((opts.title || 'Raport') + ' — ArkMap Studio') + '</title>');
+  L.push('<style>');
+  L.push('body{background:#0d0f12;color:#e6e6e6;font:13px/1.45 -apple-system,Segoe UI,Roboto,sans-serif;max-width:900px;margin:24px auto;padding:0 16px}');
+  L.push('h1{font-size:18px;border-bottom:1px solid #333;padding-bottom:8px}');
+  L.push('.meta{color:#9da5b4}');
+  L.push('pre{background:#10141a;border:1px solid #2a2f3a;border-radius:6px;padding:12px;overflow:auto;font:12px/1.4 "DejaVu Sans Mono","Liberation Mono",monospace;white-space:pre-wrap}');
+  L.push('</style>');
+  L.push('</head>');
+  L.push('<body>');
+  L.push('<h1>' + esc((opts.title || 'Raport') + ' — ArkMap Studio') + '</h1>');
+  L.push('<p class="meta">Plik: ' + esc(opts.filename || '—') + '<br>');
+  L.push('Wersja aplikacji: ' + esc(opts.version || '') + '<br>');
+  L.push('Data: ' + esc(opts.dateIso || '') + '</p>');
+  L.push('<pre>' + esc(opts.text || '') + '</pre>');
+  L.push('</body>');
+  L.push('</html>');
+  return L.join('\n');
+}
 function buildDiagnosticsReport(opts) {
   const L = [];
   L.push('# ' + (opts.title || 'Raport diagnostyczny') + ' — ArkMap Studio');
@@ -13305,6 +13572,14 @@ function _valReportSections(valRes, chkRes, suppMissing) {
     e.stopPropagation();
     const text = _currentValReport();
     saveWithDialog('raport-diagnostyki-' + _reportMapName() + '-' + _reportTs() + '.md', 'text/markdown', () => text);
+  });
+  const btnHtml  = document.getElementById('val-btn-html');
+  if (btnHtml) btnHtml.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const text = _currentValReport();
+    saveWithDialog('raport-diagnostyki-' + _reportMapName() + '-' + _reportTs() + '.html', 'text/html',
+      () => _reportHtmlDoc({ title: 'Raport diagnostyczny pliku', filename: (_curValArgs || {}).filename,
+        version: APP_VERSION, dateIso: new Date().toISOString(), text }));
   });
 
   function closeModal(result) {
@@ -14206,7 +14481,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.49.1';
+const APP_VERSION = 'v1.49.2';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -15201,6 +15476,7 @@ applyMap = function(map) {
   state.canvasMode = 'normal';
   cv.style.cursor = 'default';  // Audit3: reset cursor
   _arkmapFileHandle = null;  // Reset file handle przy nowej mapie (Pass 59) — krok 6
+  _arkmapOverwriteConfirmed = false;  // Arc 32 (UX-5A): nowa mapa = nowa sesja potwierdzenia
   state.currentFileName = null;  // krok 7
   state.currentFileName = state.filename?.replace(/\.arkmap$/, '') ?? null;  // krok 8
   hideBanners();
@@ -15909,55 +16185,11 @@ function _vdSuggestedName(ext){
   return 'walidacja-kierunkow-' + _vdMapName() + '-' + ts + '.' + ext;
 }
 function vdDownloadMd(){ saveWithDialog(_vdSuggestedName('md'), 'text/markdown', () => '```\n'+_vdReportText()+'\n```\n'); }
-
-function _vdWrap(ctx, text, maxW){
-  const out=[]; let line='';
-  for (const ch of String(text)){ const t=line+ch; if(ctx.measureText(t).width>maxW && line){ out.push(line); line=ch; } else line=t; }
-  if(line) out.push(line); return out.length?out:[''];
-}
-function vdDownloadPng(){
-  const res = _vdView().open;
-  const items=[];
-  if (res.tf.length){ items.push({hdr:'ROZJAZDY TEAM_FOLLOW ('+res.tf.length+')', kind:'tf'});
-    res.tf.forEach(it=> items.push({id:'#'+it.id, area:it.area, c3:it.tf, bad:it.bad.join(', '), ex:it.exits.join(', '), badge:it.alsoDb?'(+ pusty bind)':''})); }
-  if (res.db.length){ items.push({hdr:'PUSTE BINDY KIERUNKÓW ('+res.db.length+')', kind:'db'});
-    res.db.forEach(it=> items.push({id:'#'+it.id, area:it.area, c3:it.db, bad:it.empty.join(', '), ex:'(pusta komenda)', badge:it.alsoTf?'(+ team_follow)':''})); }
-  let _n=0; items.forEach(it=>{ if(!it.hdr) it.num = ++_n; });
-  const DPR=2, PAD=22, GAP=14, COL=[84,140,360,250], LH=18, ROWPAD=9, HDRH=28, CHH=18;
-  const W = PAD*2 + COL[0]+COL[1]+COL[2]+COL[3] + GAP*3;
-  const colX=[PAD, PAD+COL[0]+GAP, PAD+COL[0]+COL[1]+GAP*2, PAD+COL[0]+COL[1]+COL[2]+GAP*3];
-  const font='13px "DejaVu Sans Mono","Liberation Mono",monospace';
-  const m=document.createElement('canvas').getContext('2d'); m.font=font;
-  let y=PAD+62; const lay=[];
-  for (const it of items){
-    if (it.hdr){ lay.push({t:'hdr', text:it.hdr, y}); y+=HDRH; lay.push({t:'colhdr', kind:it.kind, y}); y+=CHH; continue; }
-    const c3=_vdWrap(m,it.c3,COL[2]); const ex=_vdWrap(m,'→ '+it.ex,COL[3]);
-    const rh=Math.max(c3.length, ex.length+1, 1)*LH+ROWPAD;
-    lay.push({t:'row', it, c3, ex, y, rh}); y+=rh;
-  }
-  const H=y+PAD;
-  const cv2=document.createElement('canvas'); cv2.width=W*DPR; cv2.height=H*DPR;
-  const ctx=cv2.getContext('2d'); ctx.scale(DPR,DPR); ctx.textBaseline='top';
-  ctx.fillStyle='#0d1117'; ctx.fillRect(0,0,W,H);
-  ctx.fillStyle='#e6edf3'; ctx.font='bold 17px "DejaVu Sans Mono",monospace'; ctx.fillText('Niespojne kierunki — ' + _vdMapName(), PAD, PAD);
-  ctx.fillStyle='#8b949e'; ctx.font='12px "DejaVu Sans Mono",monospace'; ctx.fillText((res.tf.length+res.db.length)+' pokoi · skroty i polskie nazwy OK', PAD, PAD+24);
-  ctx.font=font;
-  for (const L of lay){
-    if (L.t==='hdr'){ ctx.fillStyle='#1f6feb'; ctx.fillRect(PAD,L.y,W-PAD*2,HDRH-6); ctx.fillStyle='#fff'; ctx.font='bold 12px "DejaVu Sans Mono",monospace'; ctx.fillText(L.text,PAD+8,L.y+4); ctx.font=font; continue; }
-    if (L.t==='colhdr'){ ctx.fillStyle='#6e7681'; ctx.font='bold 10px "DejaVu Sans Mono",monospace';
-      ctx.fillText('Lp / Pokój', colX[0], L.y); ctx.fillText('Obszar', colX[1], L.y);
-      ctx.fillText(L.kind==='tf'?'team_follow':'dir_bind', colX[2], L.y); ctx.fillText('Co źle', colX[3], L.y);
-      ctx.font=font; continue; }
-    const it=L.it;
-    ctx.fillStyle='#58a6ff'; ctx.fillText(it.num+'. '+it.id, colX[0], L.y+2);
-    ctx.fillStyle='#d2a8ff'; ctx.fillText(it.area.slice(0,17), colX[1], L.y+2);
-    ctx.fillStyle='#8b949e'; L.c3.forEach((ln,i)=> ctx.fillText(ln, colX[2], L.y+2+i*LH));
-    ctx.fillStyle='#ff7b72'; ctx.fillText(it.bad, colX[3], L.y+2);
-    ctx.fillStyle='#3fb950'; L.ex.forEach((ln,i)=> ctx.fillText(ln, colX[3], L.y+2+(i+1)*LH));
-    if (it.badge){ ctx.fillStyle='#f0883e'; ctx.fillText(it.badge, colX[2], L.y+2+L.c3.length*LH); }
-    ctx.strokeStyle='#21262d'; ctx.beginPath(); ctx.moveTo(PAD,L.y+L.rh-3); ctx.lineTo(W-PAD,L.y+L.rh-3); ctx.stroke();
-  }
-  cv2.toBlob(b=>{ saveWithDialog(_vdSuggestedName('png'), 'image/png', () => b); }, 'image/png');
+// audyt deep UX-1: eksport HTML zamiast PNG (tekst zaznaczalny, mniejszy plik)
+function vdDownloadHtml(){
+  saveWithDialog(_vdSuggestedName('html'), 'text/html', () => _reportHtmlDoc({
+    title: 'Niespojne kierunki', filename: state.filename || undefined,
+    version: APP_VERSION, dateIso: new Date().toISOString(), text: _vdReportText() }));
 }
 
 // ── Wiring panelu + drag ─────────────────────────────────────────────────────
@@ -15968,7 +16200,7 @@ function vdDownloadPng(){
   ['vd-close','vd-close2'].forEach(id=>{ const el=$(id); if(el) el.onclick=close; });
   if($('vd-copy')) $('vd-copy').onclick=vdCopyReport;
   if($('vd-md'))   $('vd-md').onclick=vdDownloadMd;
-  if($('vd-png'))  $('vd-png').onclick=vdDownloadPng;
+  if($('vd-html')) $('vd-html').onclick=vdDownloadHtml;
   if($('vd-clear'))$('vd-clear').onclick=()=>{ panel.querySelectorAll('.vd-row.fixed').forEach(r=>r.remove()); };
   const store=$('vd-store'); if(store){ store.value=_acceptStore(); store.onchange=()=>{ localStorage.setItem('arkmap_accept_store', store.value); _renderVdPanel(); }; }
   if($('vd-migrate')) $('vd-migrate').onclick=_vdMigrate;
@@ -16777,18 +17009,17 @@ function cancelRoomEdit() {
     scheduleDraw();
     return;
   }
-  // Są niezatwierdzone zmiany — przywróć editSnapshot
-  if (room && state.editSnapshot) {
-    _replaceRoomData(room, JSON.parse(JSON.stringify(state.editSnapshot)));
-    // Restore Z level if posLivePreview changed it
-    if (room.z !== state.z) { state.z = room.z; buildRoomsZ(); }
-    populateEditForm(room);
-  }
-  state.editDirty = false;
-  hideDirtyConfirmIfOpen();
-  const badge = document.getElementById('rp-unsaved-badge');
-  if (badge) badge.style.display = 'none';
-  scheduleDraw();
+  // Arc 32 (UX-3): „Zamknij" z niezapisanymi zmianami pyta zamiast po cichu je odrzucac.
+  // [Porzuc] = restore + zamkniecie, [Zapisz] = commit + zamkniecie; continueAction NIE robi
+  // restore (sciezka Zapisz commituje najpierw przez commitRoomEdit — restore wymazalby commit).
+  showDirtyConfirm(() => {
+    if (room && room.z !== state.z) { state.z = room.z; buildRoomsZ(); }
+    state.selected = null;
+    state.editSnapshot = null;
+    const rp = document.getElementById('room-panel');
+    if (rp) rp.classList.remove('visible');
+    scheduleDraw();
+  });
 }
 
 // ── commitRoomEdit() — zapis pokoju z undo (Pass 60) ─────────────────────────
@@ -18674,6 +18905,8 @@ function openCheckSuppressors() {
     if (copyBtn) copyBtn.onclick = () => _suppCopyReport(missing);
     const mdBtn = document.getElementById('suppm-md');
     if (mdBtn) mdBtn.onclick = () => _suppDownloadMd(missing);
+    const htmlBtn = document.getElementById('suppm-html');
+    if (htmlBtn) htmlBtn.onclick = () => _suppDownloadHtml(missing);
   }
   openDialog('dlg-suppressors-manual');
 }
@@ -22248,7 +22481,12 @@ function _deltaHtmlDoc(opts) {
 
 // Raport recenzji kalki (.html) — tresc 1:1 z _deltaReviewReportText
 // (te same linie podsumowania i opow), plus miniatury przed/po.
-function _deltaReviewReportHtml() {
+// Arc 32 (UX-6): async — petla miniaturek z yieldem rAF per grupa (60 x [cien + 2 draw
+// + toDataURL] synchronicznie w handlerze kliku dawalo zwieche i wypalenie transient
+// activation). Semantyka 1:1: te same miniatury w tej samej kolejnosci, izolowany cien
+// per grupa (poprawny dla recenzji — swiadomie NIE optymalizowane wspolnym cieniem),
+// scheduleDraw() na koncu bez zmian (raf_shim B1).
+async function _deltaReviewReportHtml(onProgress) {
   const R = _deltaReview;
   if (!R) return '';
   const counts = { ok: 0, hard: 0, done: 0, impossible: 0 };
@@ -22268,14 +22506,19 @@ function _deltaReviewReportHtml() {
   const groups = _deltaThumbGroups(R);
   const capped = groups.slice(0, DELTA_THUMB_CAP);
   const thumbs = [];
+  let done = 0;
   for (const g of capped) {
     const pair = _deltaRenderComparison(g);
-    if (!pair) continue;
-    const an = state.areas.get(g.areaId);
-    thumbs.push({
-      label: (an ? an.name : 'obszar ' + g.areaId) + ', z=' + g.z + ' — opy ' + g.seqs.map(s => '#' + s).join(', '),
-      before: pair.before, after: pair.after,
-    });
+    if (pair) {
+      const an = state.areas.get(g.areaId);
+      thumbs.push({
+        label: (an ? an.name : 'obszar ' + g.areaId) + ', z=' + g.z + ' — opy ' + g.seqs.map(s => '#' + s).join(', '),
+        before: pair.before, after: pair.after,
+      });
+    }
+    done++;
+    if (onProgress) onProgress(done, capped.length);
+    await new Promise(r => requestAnimationFrame(r));   // yield: UI zyje miedzy grupami
   }
   const html = _deltaHtmlDoc({
     title: 'Raport recenzji kalki .arkdelta',
@@ -22556,9 +22799,22 @@ btnSaveArkdelta.addEventListener('click', saveDelta);
     const text = _deltaReviewReportText();
     saveWithDialog('raport-recenzji-' + _reportMapName() + '-' + _reportTs() + '.md', 'text/markdown', () => text);
   });
-  document.getElementById('dp-save-html').addEventListener('click', () => {
-    const html = _deltaReviewReportHtml();
-    saveWithDialog('raport-recenzji-' + _reportMapName() + '-' + _reportTs() + '.html', 'text/html', () => html);
+  // Arc 32 (UX-6): raport liczony async (yield rAF per grupa) — przycisk disabled
+  // + label postepu na czas liczenia; transient activation i tak wygasa po yieldach,
+  // wiec o fallbacku do Pobranych informuje toast w saveWithDialog.
+  document.getElementById('dp-save-html').addEventListener('click', async () => {
+    const btn = document.getElementById('dp-save-html');
+    const orig = btn.textContent;
+    btn.disabled = true;
+    try {
+      const html = await _deltaReviewReportHtml((done, total) => {
+        btn.textContent = '⏳ Liczenie miniaturek… ' + done + '/' + total;
+      });
+      saveWithDialog('raport-recenzji-' + _reportMapName() + '-' + _reportTs() + '.html', 'text/html', () => html);
+    } finally {
+      btn.textContent = orig;
+      btn.disabled = false;
+    }
   });
   const closePanel = () => { panel.classList.remove('visible'); _deltaReview = null; _deltaGhostReset(); _deltaAppliedSeqs = new Set(); _deltaSkippedSeqs = new Set(); scheduleDraw(); };
   document.getElementById('dp-close').addEventListener('click', closePanel);

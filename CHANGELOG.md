@@ -2,6 +2,17 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.49.2 — Audyt gleboki, fala 4: UX — eksporty HTML, kontrasty, Zamknij, linie LOD, backup zapisu (Arc 32)
+
+Szesc poprawek UX z glebokiego audytu kodu (deep inspection). Wszystkie objete pinami repro-first: tests/report_export.js A4.1/A4.6, tests/universal_colors.js A4.2, tests/audit_ext.js A4.3/A4.4, tests/save_dialogs.js A4.5/A4.6 + scenariusz empiryczny E23.raster.lines.
+
+- UX-1: eksport raportow do .html obok .md/schowka na wszystkich 5 powierzchniach diagnostycznych (walidacja kierunkow, diagnostyka pliku, suppressory auto/manual, recenzja kalki) — wspolny builder _reportHtmlDoc (te same linie co .md, escHtml na dynamicznym tekscie, zero miniaturek). Eksport PNG z walidacji kierunkow usuniety (byte-chromium w jednoplikowej apce); szerokosci dialogow pod nowe przyciski: #val-modal 640px, dlg-suppressors 720px, dlg-suppressors-manual 600px (piny tier6_ux B15/B16).
+- UX-2: rozjasnienie 10 najciemniejszych szarosci tekstu do progu WCAG AA >= 4.5:1 na tle panelu (pin A4.2 liczy kontrasty z CSS: .ec.no, .cl-del, placeholdery wp-field, .ec.stub, .spec-del, #mob-clear-btn, .arkmap-only-badge, .vd-arr/.vd-num, .tag-chip).
+- UX-3: przycisk „Anuluj" w panelu pokoju -> „Zamknij"; przy niezapisanych zmianach pokazuje dialog [Porzuc]/[Zapisz] zamiast po cichu odrzucac edycje. continueAction NIE robi restore — sciezka [Zapisz] commituje najpierw, restore wymazalby commit (pin A4.3).
+- UX-4: raster LOD (ekstremalne oddalenie) rysuje linie wyjsc — Bresenham pakowany do bufora rastra PRZED pokojami (pokoje przykrywaja konce), rgba(225,225,225,0.55). Bez notch up/down/in/out, bez custom/suppressor, cel musi byc na tej plaszczyznie, tryb hide pomija linie stykajace ukryte (lustro drawExits ZAD7); para dwukierunkowa rysowana raz, one-way zawsze. Bez blokady oddalania.
+- UX-5: zapis .arkmap na istniejacym handle — (A) pierwszy cichy zapis sesji pyta „Nadpisac <nazwa>?" (flaga _arkmapOverwriteConfirmed resetowana przy kazdym nowym handle/mapie, dialog dlg-confirm-overwrite 360px); (B) autobackup w IndexedDB (baza arkmap-backups, rotacja 5 na nazwe pliku): przed kazdym nadpisem dotychczasowa zawartosc (pristineArkmap) trafia do archiwum; przycisk „Kopie zapasowe…" w sidebarze + dialog dlg-backups (lista: nazwa, data, pokoje, rozmiar; pobierz .arkmap z sugerowana nazwa <nazwa>.kopia-<ts>.arkmap, usun, wyczysc wszystkie). Awarie IndexedDB nigdy nie blokuja zapisu.
+- UX-6: eksport HTML recenzji kalki liczony async — yield rAF per grupa miniaturek (60 x [cien + 2 draw + toDataURL] synchronicznie w handlerze kliku dawalo zwieche i wypalenie transient activation), przycisk z labelem postepu X/Y; output bajtowo 1:1 (golden tresci, pin A4.6); call-site scheduleDraw zachowany (raf_shim B1 bez zmian). Fallback saveWithDialog (brak FS API lub odrzucony picker) informuje toastem: „plik trafil do Pobranych: <nazwa>".
+
 ## v1.49.1 — Audyt gleboki, fala 3: gesty dotykowe + kalka cleanup + edytor (Arc 32)
 
 Szesc poprawek z glebokiego audytu kodu (deep inspection). Wszystkie objete pinami repro-first: tests/tier6_ux.js A3.10, tests/delta.js A3.11-A3.12, tests/audit_ext.js A3.13-A3.15.

@@ -28,7 +28,7 @@ for (const a of ['const OPPOSITE = {', 'function _findMissingSuppressors(roomByI
                  'async function saveWithDialog(defaultName, mimeType, dataFn) {',
                  'function kalkaSave() {', 'function saveDelta() {', 'function saveDeltaRemainder() {',
                  'function finalize(canvas, fmt, basename) {', 'function vdDownloadMd(){',
-                 'function vdDownloadPng(){', 'function _kalkaSuggestName() {',
+                 'function vdDownloadHtml(){', 'function _kalkaSuggestName() {',
                  'function _vdSuggestedName(ext){']) {
   if (HTML.indexOf(a) !== HTML.lastIndexOf(a)) throw new Error('kotwica nieunikalna: ' + a);
 }
@@ -198,9 +198,11 @@ console.log('— Sekcja B: piny strukturalne —');
   ok(vdMd.includes("saveWithDialog(_vdSuggestedName('md')") && !/[^_a-zA-Z]download\(/.test(vdMd),
     'B9 vdDownloadMd → saveWithDialog (smart-nazwa)');
 
-  const vdPng = extract(HTML, 'function vdDownloadPng(){');
-  ok(vdPng.includes("saveWithDialog(_vdSuggestedName('png')") && !vdPng.includes('map_master3'),
-    'B10 vdDownloadPng → saveWithDialog + naglowek bez zahardkodowanej nazwy mapy');
+  // (guard kotwicy: pre-fix funkcji nie ma — czysty FAIL zamiast wyjatku ekstrakcji)
+  const vdHtml = HTML.includes('function vdDownloadHtml(){') ? extract(HTML, 'function vdDownloadHtml(){') : '';
+  ok(vdHtml.includes("saveWithDialog(_vdSuggestedName('html')") && vdHtml.includes('_reportHtmlDoc(')
+    && !vdHtml.includes('map_master3'),
+    'B10 vdDownloadHtml → saveWithDialog + _reportHtmlDoc (UX-1: HTML zamiast PNG)');
 
   const sug = extract(HTML, 'function _kalkaSuggestName() {');
   ok(sug.includes("'--' + fmtA + '-do-' + fmtB + '.arkdelta'") && sug.includes('🌐 online · '),
@@ -222,7 +224,206 @@ console.log('— Sekcja B: piny strukturalne —');
 
 // ═══ Sekcja C — pin wersji ═══
 console.log('— Sekcja C: pin wersji —');
-ok(HTML.includes("const APP_VERSION = 'v1.49.1';"), 'C1 APP_VERSION = v1.49.1');
+ok(HTML.includes("const APP_VERSION = 'v1.49.2';"), 'C1 APP_VERSION = v1.49.2');
 
-console.log(`\n═══ save_dialogs.js: PASS ${pass} / FAIL ${fail} ═══`);
-process.exit(fail ? 1 : 0);
+// ═══ A4.5 (UX-5): potwierdzenie pierwszego nadpisu + autobackup IndexedDB ═══
+console.log('— A4.5 (UX-5): confirm nadpisu + backup IndexedDB —');
+const ASYNC_PINS_SD = [];
+{
+  // — statyczne —
+  ok(HTML.includes('let _arkmapOverwriteConfirmed = false;'),
+    'A4.5 (UX-5A): flaga _arkmapOverwriteConfirmed zadeklarowana (pre-fix: brak)');
+  ok((HTML.match(/_arkmapOverwriteConfirmed = false/g) || []).length === 6,
+    'A4.5 (UX-5A): reset flagi przy KAZDYM przypisaniu handle (deklaracja + 5 miejsc: restoreLastSave, save-as, fallback, save-dialog, applyMap)');
+  ok(HTML.includes('id="dlg-confirm-overwrite"') && HTML.includes('id="cow-ok"') &&
+     HTML.includes('id="dlg-backups"') && HTML.includes('id="bak-list"') &&
+     HTML.includes('id="btn-backups"') && HTML.includes('id="bak-clear"'),
+    'A4.5 (UX-5): dialogi dlg-confirm-overwrite + dlg-backups + przyciski w DOM (pre-fix: brak)');
+  const pas = HTML.includes('function _performArkmapSave(onSaved) {') ? extract(HTML, 'function _performArkmapSave(onSaved) {') : '';
+  const iGate = pas.indexOf('_showOverwriteConfirm('), iCreate = pas.indexOf('createWritable(');
+  const iBak = pas.indexOf('_bakPut('), iWrite = pas.indexOf('writable.write(');
+  ok(iGate !== -1 && iCreate !== -1 && iGate < iCreate,
+    'A4.5 (UX-5A): gate potwierdzenia PRZED createWritable w bloku handle (pre-fix: zapis bez pytania)');
+  ok(iBak !== -1 && iWrite !== -1 && iBak < iWrite,
+    'A4.5 (UX-5B): _bakPut PRZED writable.write — backup poprzedniej zawartosci (pre-fix: brak backupu)');
+  const sbd = HTML.includes('async function showBackupsDialog() {') ? extract(HTML, 'async function showBackupsDialog() {') : '';
+  ok(sbd.includes('.kopia-') && sbd.includes('_bakTs(en.ts)') && sbd.includes("'.arkmap'"),
+    'A4.5 (UX-5B): [Pobierz] -> sugerowana nazwa <nazwa>.kopia-<ts>.arkmap');
+  ok(sbd.includes('Brak kopii zapasowych'),
+    'A4.5 (UX-5B): pusty stan dialogu kopii');
+}
+{
+  // — behawioralny A: pierwszy zapis pyta, drugi cicho; backup przed write —
+  const SRC = 'let _arkmapFileHandle = handle0, _arkmapOverwriteConfirmed = false;\n'
+    + extract(HTML, 'function _performArkmapSave(onSaved) {') + '\n'
+    + 'return { save: _performArkmapSave, get confirmed() { return _arkmapOverwriteConfirmed; } };';
+  const state = { map: { format: 'arkmap' }, editRev: 0, pristineArkmap: 'OLD', dirty: true };
+  const seq = [], writes = [];
+  let confirmCalls = 0, confirmCb = null, confirmName = null;
+  const handle0 = {
+    name: 'mapa.arkmap',
+    createWritable: async () => ({
+      write: async (t) => { seq.push('write'); writes.push(t); },
+      close: async () => {},
+    }),
+  };
+  const api = new Function('state', '_serializeMapForSave', '_arkmapSuggestedName', 'saveWithDialog',
+    'toast', '_updateSaveButtonText', '_showOverwriteConfirm', '_bakPut', 'handle0', SRC)
+    (state, () => 'NEW', () => 'mapa.arkmap', async () => null, () => {}, () => {},
+      (name, cb) => { confirmCalls++; confirmName = name; confirmCb = cb; },
+      async (name, text) => { seq.push('bak:' + name + ':' + text); },
+      handle0);
+  ASYNC_PINS_SD.push((async () => {
+    api.save();
+    await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
+    ok(confirmCalls === 1 && confirmName === 'mapa.arkmap' && writes.length === 0,
+      'A4.5 (UX-5A): pierwszy zapis na handle -> confirm „Nadpisac mapa.arkmap?", write WSTRZYMANY (pre-fix: write od razu, bez pytania)');
+    if (!confirmCb) { ok(false, 'A4.5 (UX-5B): po [Nadpisz] -> _bakPut przed write (pre-fix: brak confirmu w ogole)'); return; }
+    confirmCb();   // [Nadpisz]
+    await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
+    await new Promise(r => setImmediate(r));
+    ok(writes.length === 1 && writes[0] === 'NEW' && seq[0] === 'bak:mapa.arkmap:OLD' && seq[1] === 'write',
+      'A4.5 (UX-5B): po [Nadpisz] -> _bakPut(pristine) PRZED writable.write (kolejnosc), potem nowy zapis');
+    ok(state.dirty === false && state.pristineArkmap === 'NEW' && api.confirmed === true,
+      'A4.5: po zapisie dirty czyszczone, bufor odswiezony, flaga ustawiona (regresja T6-F2)');
+    api.save();    // drugi zapis — juz bez pytania
+    await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
+    await new Promise(r => setImmediate(r));
+    ok(confirmCalls === 1 && writes.length === 2,
+      'A4.5 (UX-5A): drugi zapis w sesji -> cicho (confirm tylko raz na handle)');
+  })());
+}
+{
+  // — behawioralny B: rotacja N=5 na in-memory IndexedDB —
+  // (guard kotwic: pre-fix modulu nie ma — czysty FAIL zamiast wyjatku ekstrakcji)
+  const hasBak = HTML.includes('function _bakOpen() {') && HTML.includes('async function _bakPut(name, text) {');
+  if (!hasBak) {
+    ok(false, 'A4.5 (UX-5B): rotacja N=5 — modul backupu IndexedDB (pre-fix: brak modulu)');
+    ok(false, 'A4.5 (UX-5B): wpis ma metadane (ts, size, pokoje) (pre-fix: brak modulu)');
+  }
+  const BAK_SRC = !hasBak ? 'return { _bakPut: async () => {}, _bakList: async () => [] };'
+    : 'const _BAK_MAX = 5;\n'
+    + extract(HTML, 'function _bakOpen() {') + '\n'
+    + extract(HTML, 'function _bakReq(req) {') + '\n'
+    + extract(HTML, 'async function _bakPut(name, text) {') + '\n'
+    + extract(HTML, 'async function _bakList() {') + '\n'
+    + 'return { _bakPut, _bakList };';
+  let autoId = 0;
+  const records = new Map();
+  const mkReq = (result) => {
+    const r = { result, onsuccess: null, onerror: null };
+    queueMicrotask(() => { if (r.onsuccess) r.onsuccess(); });
+    return r;
+  };
+  const mkStore = () => ({
+    add(rec) { const id = ++autoId; records.set(id, Object.assign({}, rec, { id })); return mkReq(id); },
+    delete(id) { records.delete(id); return mkReq(undefined); },
+    clear() { records.clear(); return mkReq(undefined); },
+    getAll() { return mkReq([...records.values()]); },
+    index() { return { getAll: (name) => mkReq([...records.values()].filter(x => x.name === name)) }; },
+  });
+  const dbStub = {
+    objectStoreNames: { contains: () => true },
+    createObjectStore: () => ({ createIndex: () => {} }),
+    transaction: () => ({ objectStore: () => mkStore() }),
+    close: () => {},
+  };
+  const idbStub = {
+    open() {
+      const r = { result: dbStub, onsuccess: null, onerror: null, onupgradeneeded: null };
+      queueMicrotask(() => { if (r.onupgradeneeded) r.onupgradeneeded(); if (r.onsuccess) r.onsuccess(); });
+      return r;
+    },
+  };
+  const bak = new Function('state', 'indexedDB', BAK_SRC)({ areas: new Map() }, idbStub);
+  if (hasBak) ASYNC_PINS_SD.push((async () => {
+    for (let i = 1; i <= 6; i++) await bak._bakPut('mapa.arkmap', 'T' + i);
+    await bak._bakPut('inna.arkmap', 'X1');   // inna nazwa — osobna rotacja
+    const list = await bak._bakList();
+    const mapa = list.filter(e => e.name === 'mapa.arkmap').map(e => e.text).sort();
+    ok(list.length === 6 && mapa.length === 5 && mapa.join(',') === 'T2,T3,T4,T5,T6',
+      'A4.5 (UX-5B): rotacja N=5 — 6. zapis kasuje najstarszy wpis TEJ nazwy, inne nazwy nietkniete');
+    ok(list.every(e => typeof e.ts === 'number' && typeof e.size === 'number' && e.rooms === 0),
+      'A4.5 (UX-5B): wpis ma metadane (ts, size, pokoje) do listowania w dialogu');
+  })());
+}
+{
+  // — behawioralny C: dialog listuje wpisy; [Pobierz] -> saveWithDialog z sugerowana nazwa —
+  // (guard kotwic: pre-fix dialogu nie ma — czysty FAIL zamiast wyjatku ekstrakcji)
+  const hasDlg = HTML.includes('async function showBackupsDialog() {');
+  if (!hasDlg) {
+    ok(false, 'A4.5 (UX-5B): dialog listuje wpisy (pre-fix: brak showBackupsDialog)');
+    ok(false, 'A4.5 (UX-5B): [Pobierz .arkmap] -> saveWithDialog (pre-fix: brak dialogu)');
+  }
+  const DLG_SRC = !hasDlg ? 'return { showBackupsDialog: async () => {} };'
+    : extract(HTML, 'function _bakFmtSize(n) {') + '\n'
+    + extract(HTML, 'function _bakTs(ts) {') + '\n'
+    + extract(HTML, 'async function showBackupsDialog() {') + '\n'
+    + 'return { showBackupsDialog };';
+  const rows = [];
+  const listEl = {
+    innerHTML: '',
+    appendChild(r) { rows.push(r); },
+  };
+  const mkRow = () => {
+    const btns = {};
+    return {
+      style: {},
+      innerHTML: '',
+      querySelector(sel) { return btns[sel] || (btns[sel] = { onclick: null }); },
+    };
+  };
+  const opened = [], saves = [];
+  const entries = [{ id: 7, name: 'mapa.arkmap', ts: 1760000000000, rooms: 1234, size: 2 * 1048576, text: 'TXT' }];
+  const dlg = new Function('document', 'openDialog', 'closeDialog', 'escHtml', 'saveWithDialog', 'toast',
+    '_bakList', '_bakDelete', DLG_SRC)
+    ({ getElementById: (id) => (id === 'bak-list' ? listEl : null), createElement: () => mkRow() },
+      (id) => opened.push(id), () => {}, (s) => String(s),
+      async (name, mime, fn) => { saves.push({ name, mime, text: fn() }); return null; },
+      () => {}, async () => entries, async () => {});
+  if (hasDlg) ASYNC_PINS_SD.push((async () => {
+    await dlg.showBackupsDialog();
+    ok(opened[0] === 'dlg-backups' && rows.length === 1 &&
+       rows[0].innerHTML.includes('mapa.arkmap') && rows[0].innerHTML.includes('1234 pokoi') && rows[0].innerHTML.includes('2.0 MB'),
+      'A4.5 (UX-5B): dialog listuje wpisy (nazwa, pokoje, rozmiar) — pre-fix: brak dialogu');
+    rows[0].querySelector('[data-dl]').onclick();
+    await new Promise(r => setImmediate(r));
+    ok(saves.length === 1 && /^mapa\.kopia-\d{8}-\d{6}\.arkmap$/.test(saves[0].name) &&
+       saves[0].mime === 'application/json' && saves[0].text === 'TXT',
+      'A4.5 (UX-5B): [Pobierz .arkmap] -> saveWithDialog z sugerowana nazwa <nazwa>.kopia-<ts>.arkmap i trescia wpisu');
+  })());
+}
+
+// ═══ A4.6 (UX-6): fallback saveWithDialog informuje o Pobranych ═══
+console.log('— A4.6 (UX-6): toast fallbacku saveWithDialog —');
+ASYNC_PINS_SD.push((async () => {
+  const src = extract(HTML, 'async function saveWithDialog(defaultName, mimeType, dataFn) {') + '\nreturn saveWithDialog;';
+  const mk = (win) => {
+    const toasts = [], dls = [];
+    const fn = new Function('window', 'toast', 'download', 'downloadBinary', 'fmtSz', src)
+      (win, (m) => toasts.push(String(m)), (n, t) => dls.push([n, t]), (n) => dls.push([n]), () => '');
+    return { fn, toasts, dls };
+  };
+  // Sciezka 1: brak FS API
+  const a = mk({});
+  const ra = await a.fn('raport.html', 'text/html', () => 'TRESC');
+  ok(ra === true && a.dls.length === 1 && a.dls[0][0] === 'raport.html',
+    'A4.6: fallback <a download> bez FS API dziala (regresja helpera)');
+  ok(a.toasts.some(t => /nie wspiera wyboru/.test(t) && /Pobranych: raport\.html/.test(t)),
+    'A4.6 (UX-6): brak FS API -> toast „plik trafil do Pobranych: <nazwa>" (pre-fix: „[pobrano domyslnie]" bez wyjasnienia)');
+  // Sciezka 2: picker odrzucony bledem (np. wygasla aktywacja po async yieldach)
+  const b = mk({ showSaveFilePicker: async () => { const e = new Error('gest wygasl'); e.name = 'SecurityError'; throw e; } });
+  const rb = await b.fn('r2.md', 'text/markdown', () => 'T');
+  ok(rb === true && b.dls.length === 1 && b.toasts.some(t => /Pobranych: r2\.md/.test(t)),
+    'A4.6 (UX-6): odrzucony picker -> fallback z tym samym toastem o Pobranych (pre-fix: „Zapisano" sugerujace wybor sciezki)');
+  // Regresja: anulowanie przez usera = cisza (bez toastu o Pobranych)
+  const c = mk({ showSaveFilePicker: async () => { const e = new Error('abort'); e.name = 'AbortError'; throw e; } });
+  const rc = await c.fn('r3.md', 'text/markdown', () => 'T');
+  ok(rc === false && c.dls.length === 0 && !c.toasts.some(t => /Pobranych/.test(t)),
+    'A4.6: AbortError (anulowanie) -> bez fallbacku, bez toastu (regresja K6)');
+})());
+
+Promise.all(ASYNC_PINS_SD).then(() => {
+  console.log(`\n═══ save_dialogs.js: PASS ${pass} / FAIL ${fail} ═══`);
+  process.exit(fail ? 1 : 0);
+});

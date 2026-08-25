@@ -63,6 +63,45 @@ console.log('── T1: piny strukturalne (builder, DOM, wiring) ──');
      'nazwa pliku: raport-podwojne-linie-<mapa>-<ts>.md');
 }
 
+// ═══ T1b (A4.1, UX-1): eksport HTML we wszystkich raportach; PNG z walidacji OUT ═══
+console.log('── T1b (A4.1, UX-1): eksport HTML wszedzie ──');
+{
+  // Statyczne obecnosci: 4 nowe przyciski + wspolny builder + PNG usuniete
+  ok(HTML.includes('id="vd-html"') && !HTML.includes('id="vd-png"'),
+     'A4.1: walidacja kierunkow — vd-html w DOM, vd-png usuniety (UX-1)');
+  ok(HTML.includes('id="val-btn-html"') && HTML.includes('id="supp-html"') && HTML.includes('id="suppm-html"'),
+     'A4.1: przyciski HTML w val-modal + obu dialogach suppressorow');
+  ok(/function _reportHtmlDoc\(opts\)/.test(HTML) && !/function vdDownloadPng\(/.test(HTML),
+     'A4.1: wspolny builder _reportHtmlDoc; vdDownloadPng usuniety');
+  ok(HTML.includes("getElementById('supp-html')") && HTML.includes("getElementById('suppm-html')")
+    && HTML.includes("getElementById('val-btn-html')") && HTML.includes("$('vd-html')"),
+     'A4.1: wiring wszystkich 4 przyciskow HTML po id');
+  ok(HTML.includes("'.html', 'text/html'") || (HTML.match(/'text\/html'/g) || []).length >= 4,
+     'A4.1: eksporty HTML przez saveWithDialog z mime text/html');
+
+  // Behawioralny: _reportHtmlDoc — te same linie co .md, escapowanie dynamicznego tekstu
+  // (guard kotwicy: pre-fix buildera nie ma — czysty FAIL zamiast wyjatku ekstrakcji)
+  if (!/function _reportHtmlDoc\(opts\)/.test(HTML)) {
+    ok(false, 'A4.1: HTML zawiera sekcje/linie raportu (pre-fix: brak _reportHtmlDoc)');
+    ok(false, 'A4.1: dynamiczny tekst escapowany (pre-fix: brak _reportHtmlDoc)');
+    ok(false, 'A4.1: dokument samodzielny (pre-fix: brak _reportHtmlDoc)');
+  } else {
+    const code =
+      extract(HTML, 'function escHtml(s) {') + '\n' +
+      extract(HTML, 'function _reportHtmlDoc(opts) {') + '\n' +
+      'return _reportHtmlDoc;';
+    const doc = new Function(code)();
+    const text = '=== Rozjazdy team_follow (2) ===\n1. #100  Obszar <nazwa> & "cudzyslow"\n   zle: n, e';
+    const html = doc({ title: 'Raport testowy', filename: 'm.arkmap', version: 'vX', dateIso: '2026-01-01', text });
+    ok(html.includes('Rozjazdy team_follow (2)') && html.includes('#100  Obszar'),
+       'A4.1: HTML zawiera sekcje/linie raportu (te same linie co .md)');
+    ok(html.includes('&lt;nazwa&gt; &amp; &quot;cudzyslow&quot;') && !html.includes('<nazwa>'),
+       'A4.1: dynamiczny tekst escapowany (escHtml — zero miniatur, zero HTML z raportu)');
+    ok(html.startsWith('<!DOCTYPE html>') && html.includes('ArkMap Studio'),
+       'A4.1: dokument samodzielny (DOCTYPE + brand)');
+  }
+}
+
 // ═══ T2: buildDiagnosticsReport — struktura md, determinizm, puste sekcje ═══
 console.log('── T2: buildDiagnosticsReport (funkcjonalnie) ──');
 {
@@ -288,5 +327,102 @@ console.log('── T6: raport HTML kalki (struktura + funkcjonalnie) ──');
      .includes('(brak)'), 'puste sekcje → (brak) — paritet z buildDiagnosticsReport');
 }
 
-console.log('report_export: ' + pass + ' OK, ' + fail + ' FAIL');
-process.exit(fail ? 1 : 0);
+// ═══ A4.6 (UX-6): raport HTML recenzji — async z yieldami rAF, output 1:1 ═══
+console.log('── A4.6 (UX-6): async eksport HTML recenzji ──');
+const ASYNC_PINS_RE = [];
+{
+  // — statyczne —
+  const hasAsync = /async function _deltaReviewReportHtml\(onProgress\) \{/.test(HTML);
+  ok(hasAsync,
+    'A4.6 (UX-6): _deltaReviewReportHtml async z callbackiem postepu (pre-fix: sync w handlerze kliku)');
+  const fnSrc = hasAsync ? extract(HTML, 'async function _deltaReviewReportHtml(onProgress) {')
+    : (HTML.includes('function _deltaReviewReportHtml() {') ? extract(HTML, 'function _deltaReviewReportHtml() {') : '');
+  ok(/await new Promise\(r => requestAnimationFrame\(r\)\)/.test(fnSrc),
+    'A4.6 (UX-6): yield rAF per grupa miniaturek (pre-fix: 60 grup synchronicznie = zwiecha + wypalenie transient activation)');
+  ok(fnSrc.includes('scheduleDraw();'),
+    'A4.6: call-site scheduleDraw zachowany w async wersji (raf_shim B1 bez zmian liczb)');
+  ok(HTML.includes('Liczenie miniaturek… ') && /btn\.disabled = true/.test(HTML),
+    'A4.6 (UX-6): handler dp-save-html — disable przycisku + label postepu X/Y (pre-fix: brak)');
+}
+{
+  // — funkcjonalnie: golden tresci + licznik yieldy (guard kotwicy: czysty FAIL pre-fix) —
+  const hasAsync = /async function _deltaReviewReportHtml\(onProgress\) \{/.test(HTML);
+  if (!hasAsync) {
+    ok(false, 'A4.6 (UX-6): output bajtowo 1:1 ze sync semantyka (pre-fix: brak async wersji)');
+    ok(false, 'A4.6 (UX-6): licznik yieldy rAF >= 1 przy >1 grupie (pre-fix: brak yieldow)');
+  } else {
+    const capConst = HTML.match(/const DELTA_THUMB_CAP = \d+;/)[0];
+    const code =
+      extract(HTML, 'const _DELTA_CLS_BADGE = {') + '\n'
+      + capConst + '\n'
+      + extract(HTML, 'function escHtml(') + '\n'
+      + extract(HTML, 'function _deltaHtmlDoc(opts) {') + '\n'
+      + extract(HTML, 'function _arkdeltaBaseNote(base) {') + '\n'
+      + 'let _deltaReview = null;\n'
+      + extract(HTML, 'async function _deltaReviewReportHtml(onProgress) {') + '\n'
+      + 'return { report: _deltaReviewReportHtml, doc: _deltaHtmlDoc, set rv(v) { _deltaReview = v; } };';
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==';
+    const groupsStub = [
+      { areaId: 5, z: 0, seqs: [1, 2] },
+      { areaId: 5, z: 1, seqs: [3] },
+    ];
+    const state = { filename: 'mapa-testowa.arkmap', areas: new Map([[5, { name: 'Obszar 5' }]]) };
+    let yields = 0;
+    class DateStub { toISOString() { return '2026-08-25T00:00:00.000Z'; } }
+    const api = new Function('APP_VERSION', 'state', '_deltaThumbGroups', '_deltaRenderComparison',
+      'scheduleDraw', 'requestAnimationFrame', 'Date', code)
+      ('vTEST', state, () => groupsStub, () => ({ before: PNG, after: PNG }),
+        () => {}, (cb) => { yields++; setTimeout(() => cb(0), 0); }, DateStub);
+    api.rv = {
+      delta: { meta: { base: null }, ops: [] },
+      items: [
+        { seq: 1, label: 'Dodaj pokój', type: 'ADD_ROOM', cls: 'ok', checked: true },
+        { seq: 2, label: 'Edytuj pokój 10', type: 'EDIT_ROOM', cls: 'hard', checked: true, note: 'mapa nowsza' },
+        { seq: 3, label: 'Usuń pokój 11', type: 'DELETE_ROOM', cls: 'done', checked: false, session: true },
+        { seq: 4, label: 'Przesuń pokój 12', type: 'MOVE_ROOM', cls: 'impossible', checked: false, note: 'zajęta komórka' },
+      ],
+    };
+    // Golden: sync referencja semantyki pre-fix na tym samym ekstrahowanym _deltaHtmlDoc
+    const refLines = [
+      '- [#1] Dodaj pokój — do naniesienia',
+      '- [#2] Edytuj pokój 10 — konflikt — mapa nowsza',
+      '- [#3] Usuń pokój 11 — już na mapie (naniesione z kalki)',
+      '- [#4] Przesuń pokój 12 — niewykonalne — zajęta komórka',
+    ];
+    const refThumbs = groupsStub.map(g => ({
+      label: 'Obszar 5, z=' + g.z + ' — opy ' + g.seqs.map(s => '#' + s).join(', '),
+      before: PNG, after: PNG,
+    }));
+    const expected = api.doc({
+      title: 'Raport recenzji kalki .arkdelta',
+      filename: 'mapa-testowa.arkmap',
+      version: 'vTEST',
+      dateIso: '2026-08-25T00:00:00.000Z',
+      summaryLines: [
+        'Operacji w kalce: 4',
+        'Do naniesienia: 1 · Konflikty: 1 · Zrobione: 1 · Niewykonalne: 1',
+        'Baza kalki: Kalka bez informacji o wersji mapy, na której ją zapisano.',
+      ],
+      opLines: refLines,
+      thumbs: refThumbs,
+      thumbTruncated: 0,
+    });
+    ASYNC_PINS_RE.push((async () => {
+      const progress = [];
+      const out = await api.report((d, t) => progress.push([d, t]));
+      ok(out === expected,
+        'A4.6 (UX-6): output bajtowo identyczny ze sync golden (ta sama zawartosc, inna mechanika)');
+      ok(yields >= 1,
+        'A4.6 (UX-6): licznik yieldy rAF >= 1 przy 2 grupach (pre-fix: 0 — petla synchroniczna)');
+      ok(JSON.stringify(progress) === JSON.stringify([[1, 2], [2, 2]]),
+        'A4.6 (UX-6): callback postepu X/Y per grupa (1/2, 2/2)');
+      api.rv = null;
+      ok(await api.report() === '', 'A4.6: brak otwartej recenzji -> pusty string (guard, regresja)');
+    })());
+  }
+}
+
+Promise.all(ASYNC_PINS_RE).then(() => {
+  console.log('report_export: ' + pass + ' OK, ' + fail + ' FAIL');
+  process.exit(fail ? 1 : 0);
+});
