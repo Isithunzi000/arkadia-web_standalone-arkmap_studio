@@ -2,6 +2,12 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.49.3 — Obserwacje uzytkownika: lite linie wyjsc przy fit (Arc 33)
+
+Pierwsza poprawka z paczki obserwacji uzytkownika (2026-08-25, testy na mapie online 26 988 pokoi). Pin repro-first: tier6_ux B22 + scenariusz empiryczny E23.lod.lines (dedup przeliczany niezaleznie: 594 segmenty = (1192 - customSkip - oneWay)/2 + oneWay).
+
+- Przy fit (LOD roomsOnly, cellPx 3-9 px) mapa byla samymi prostokatami — zero kresek miedzy pokojami, topologia nieczytelna. roomsOnly rysuje teraz lekkie linie wyjsc (drawExitsLite): JEDEN batch path = 1x stroke na klatke, odcinki miedzy srodkami pokoi (konce chowaja sie pod kwadratami — pokoje rysowane pozniej), rgba(225,225,225,0.45). Bez strzalek, daszy one-way, etykiet cross-area, stubow i custom lines (subpikselowy szum przy tym zoomie — zostaja skip). Dedup par dwukierunkowych po przeciwnym kierunku (jak raster UX-4), tryb hide pomija linie stykajace ukryte (lustro ZAD7). Tooltip wskaznika LOD zaktualizowany.
+
 ## v1.49.2 — Audyt gleboki, fala 4: UX — eksporty HTML, kontrasty, Zamknij, linie LOD, backup zapisu (Arc 32)
 
 Szesc poprawek UX z glebokiego audytu kodu (deep inspection). Wszystkie objete pinami repro-first: tests/report_export.js A4.1/A4.6, tests/universal_colors.js A4.2, tests/audit_ext.js A4.3/A4.4, tests/save_dialogs.js A4.5/A4.6 + scenariusz empiryczny E23.raster.lines.

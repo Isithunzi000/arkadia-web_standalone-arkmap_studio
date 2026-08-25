@@ -4378,7 +4378,10 @@ scenario('E23.lod', async () => {
   const lod = lodRaw ? JSON.parse(lodRaw) : null;
   if (lod) {
     EQ('E23.lod.mode.out', lod.mode, 'roomsOnly', 'tryb roomsOnly przy cellPx 4.4 (pasmo 3-9 px; F3: nizej raster)');
-    EQ('E23.lod.skip.lines', lod.lt, 0, 'zero linii wyjsc/stubow/custom lines w roomsOnly');
+    // Arc 33 (v1.49.3): pin ewoluowany — roomsOnly rysuje lite linie wyjsc
+    // (batch 1x stroke, bez strzalek/daszy/stubow/custom lines). Pelne warstwy
+    // wyjsc nadal skip; asercja szczegolowa: E23.lod.lines.
+    A('E23.lod.skip.lines', lod.lt > 0, 'lite linie wyjsc rysuja w roomsOnly (lineTo=' + lod.lt + '; pelne warstwy nadal skip)');
     A('E23.lod.keep.rooms', lod.sre >= 400, 'pokoje NADAL rysowane (strokeRect=' + lod.sre + ' przy vis=' + lod.vis + ')');
     EQ('E23.lod.ind.out', ev('getComputedStyle(document.getElementById("msb-lod")).display').val !== 'none', true,
        'wskaznik LOD widoczny w roomsOnly');
@@ -4394,6 +4397,66 @@ scenario('E23.lod', async () => {
     A('E23.lod.full.lines', full.lt > 400, 'linie wyjsc rysuja w full (lineTo=' + full.lt + ')');
     EQ('E23.lod.ind.in', ev('getComputedStyle(document.getElementById("msb-lod")).display').val, 'none',
        'wskaznik LOD ukryty w full');
+  }
+});
+
+// ═══ E23.lod.lines — Arc 33 (v1.49.3): lite linie wyjsc w roomsOnly ═══
+// Obserwacja uzytkownika (2026-08-25, zrzut fit 518 pokoi): przy fit mapa to
+// same prostokaty — zero kresek miedzy pokojami, topologia nieczytelna.
+// roomsOnly rysuje lekkie linie wyjsc: jeden batch path (1x stroke na klatke),
+// bez strzalek/daszy/etykiet; dedup par dwukierunkowych (jak w rastrze UX-4).
+scenario('E23.lod.lines', async () => {
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  await loadBase('dat');
+  await eva('new Promise(function(res){ setTimeout(res, 60); })');
+  A('E23.lod.lite.fn', ev('typeof drawExitsLite').val === 'function',
+    'drawExitsLite zdefiniowane (lite linie wyjsc dla roomsOnly)');
+  const raw = AEV('E23.lod.lite.run', ev('(function(){'
+   + ' if (typeof drawExitsLite !== "function") return null;'
+   + ' var lt = 0, st = 0;'
+   + ' var olt = ctx.lineTo, ost = ctx.stroke;'
+   + ' ctx.lineTo = function(){ lt++; return olt.apply(this, arguments); };'
+   + ' ctx.stroke = function(){ st++; return ost.apply(this, arguments); };'
+   + ' state.showGrid = false; state.zoom = 0.245; draw();'
+   + ' ctx.lineTo = olt; ctx.stroke = ost;'
+   + ' return JSON.stringify({ mode: _lodMode, lt: lt, st: st });'
+   + '})()'), 'prymitywy ctx w roomsOnly (zoom 0.245 = cellPx 4.4; siatka off izoluje lineTo)');
+  const m = raw ? JSON.parse(raw) : null;
+  if (m) {
+    EQ('E23.lod.lite.mode', m.mode, 'roomsOnly', 'tryb roomsOnly przy cellPx 4.4');
+    A('E23.lod.lite.lines', m.lt > 300, 'lite linie wyjsc rysuja w roomsOnly (lineTo=' + m.lt + ' przy 518 pokoi)');
+    A('E23.lod.lite.batch', m.st <= 60, 'linie batched — malo wywolan stroke (stroke=' + m.st + '; batch lite = 1 wywolanie)');
+  }
+  // dedup par dwukierunkowych: niezalezne przeliczenie oczekiwanej liczby
+  // segmentow = (total - customSkip - oneWay)/2 + oneWay; EQ na liczniku lineTo.
+  const dRaw = AEV('E23.lod.lite.dedup', ev('(function(){'
+   + ' if (typeof drawExitsLite !== "function") return null;'
+   + ' var OPP = {n:"s",ne:"sw",e:"w",se:"nw",s:"n",sw:"ne",w:"e",nw:"se"};'
+   + ' var rooms = state.roomsZ;'
+   + ' var roomSet = new Set(rooms.map(function(r){ return r.id; }));'
+   + ' var total = 0, customSkip = 0, oneWay = 0;'
+   + ' for (var i = 0; i < rooms.length; i++) {'
+   + '   var r = rooms[i], ex2 = r.exits || {};'
+   + '   for (var d in ex2) {'
+   + '     var v = DIR_VEC[d]; if (!v || (!v[0] && !v[1])) continue;'
+   + '     var t = state.roomById[ex2[d]];'
+   + '     if (!t || !roomSet.has(ex2[d]) || state.roomArea[ex2[d]] !== state.areaId) continue;'
+   + '     total++;'
+   + '     if (r.custom_lines && r.custom_lines[d]) { customSkip++; continue; }'
+   + '     if (!(t.exits && t.exits[OPP[d]] === r.id)) oneWay++;'
+   + '   }'
+   + ' }'
+   + ' var lt = 0; var olt = ctx.lineTo;'
+   + ' ctx.lineTo = function(){ lt++; return olt.apply(this, arguments); };'
+   + ' drawExitsLite(rooms, 4);'
+   + ' ctx.lineTo = olt;'
+   + ' var expected = (total - customSkip - oneWay) / 2 + oneWay;'
+   + ' return JSON.stringify({ total: total, lt: lt, expected: expected });'
+   + '})()'), 'segmenty lite vs niezaleznie przeliczona oczekiwana liczba');
+  const d = dRaw ? JSON.parse(dRaw) : null;
+  if (d) {
+    EQ('E23.lod.lite.dedupn', d.lt, d.expected,
+       'dedup par dwukierunkowych + skip custom lines: ' + d.lt + ' segmentow = oczekiwane ' + d.expected + ' (wyjsc kierunkowych ' + d.total + ')');
   }
 });
 

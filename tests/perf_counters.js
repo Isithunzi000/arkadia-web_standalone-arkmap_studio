@@ -66,9 +66,12 @@ for (const name of TICKS) {
 ok(orderOk, 'B4: ticki w ustawionej kolejnosci warstw: ' + TICKS.join(' → '));
 
 // tick bezposrednio po callu warstwy — dozwolony tylko komentarz liniowy miedzy
+// Arc 33 (v1.49.3): warstwa exits ma dwie sciezki renderu (full drawExits /
+// roomsOnly drawExitsLite) w jednej linii — tick „exits" mierzy obie, regex
+// dopuszcza galaz lite miedzy callem full a tickiem.
 const C = String.raw`(\s*//[^\n]*)?\s*`;
 const PAIRS = [
-  [new RegExp(String.raw`drawExits\(vis, rs\);` + C + String.raw`_perfTick\(_pc, 'exits'\)`), 'exits'],
+  [new RegExp(String.raw`drawExits\(vis, rs\);( else if \(_lodMode === 'roomsOnly'\) drawExitsLite\(vis, rs\);)?` + C + String.raw`_perfTick\(_pc, 'exits'\)`), 'exits'],
   [new RegExp(String.raw`drawStubs\(vis, rs\);` + C + String.raw`_perfTick\(_pc, 'stubs'\)`), 'stubs'],
   [new RegExp(String.raw`drawPendingExitLines\(rs\);` + C + String.raw`_perfTick\(_pc, 'pending'\)`), 'pending'],
   [new RegExp(String.raw`drawCustomLines\(vis\);` + C + String.raw`_perfTick\(_pc, 'custom_lines'\)`), 'custom_lines'],

@@ -2077,7 +2077,7 @@
         <span id="msb-area">—</span>
         <span style="flex-shrink:0">Z=<span id="msb-z">0</span></span>
         <span style="flex-shrink:0"><span id="msb-rooms">0</span> pokoi</span>
-        <span id="msb-lod" style="display:none;flex-shrink:0" title="Duże oddalenie — uproszczony render (LOD). „LOD" = tylko pokoje: wyjścia/stuby/custom lines są przy tym zoomie subpikselowym szumem. „LOD·R" = ekstremalne oddalenie: pokoje jako podkład rastrowy (piksel na komórkę). Przybliż, aby zobaczyć szczegóły.">LOD</span>
+        <span id="msb-lod" style="display:none;flex-shrink:0" title="Duże oddalenie — uproszczony render (LOD). „LOD" = pokoje + uproszczone linie wyjść (bez strzałek, stubów i custom lines — przy tym zoomie to subpikselowy szum). „LOD·R" = ekstremalne oddalenie: pokoje jako podkład rastrowy (piksel na komórkę). Przybliż, aby zobaczyć szczegóły.">LOD</span>
       </div>
       <!-- ✎ EDIT MODE TOGGLE (mockup) -->
       <div id="msb-undoredo"><button class="ur-btn" id="ur-undo-all" title="Cofnij wszystko">↩↩</button><button class="ur-btn" id="ur-undo" title="Cofnij (Ctrl+Z)">↩</button><button class="ur-btn" id="ur-redo" disabled title="Ponów (Ctrl+Y)">↪</button><button class="ur-btn" id="ur-redo-all" disabled title="Ponów wszystko">↪↪</button></div>      <div id="msb-lock-timer" title="Masz aktywnego locka na mapę">🔒 lock aktywny</div>      <div id="msb-change-count" onclick="toggleChangelog(event)" title="Kliknij aby zobaczyć historię zmian"><div class="cc-dot"></div><span id="cc-num">12 zmian</span></div>
@@ -7411,6 +7411,9 @@ function _withRenderTarget(canvas2, viewState, dataOverride, fn) {
 // plaszczyzny, NIE od ox/oy — przesuwanie mapy nigdy nie przelacza trybu.
 // Progi z pomiaru probe_lod (2026-08-23): kroki p95 trasy kamery maja
 // cellPx <= 8.81. Piny: tier6 B17/B18/B19; scenariusze E23.lod / E23.lod-geom.
+// Arc 33 (v1.49.3): roomsOnly rysuje LITE linie wyjsc (drawExitsLite — batch
+// 1x stroke, bez strzalek/daszy/stubow/custom); same prostokaty przy fit
+// byly nieczytelne. Piny: tier6 B22; scenariusz E23.lod.lines.
 const LOD_MIN_CELL_PX = 9;
 const LOD_ROOMS_BUDGET = 200;
 // ─── LOD „raster" (Arc 31 F3, v1.47.0) ───────────────────────────────────────
@@ -7647,7 +7650,7 @@ function draw() {
   // 13 warstw licznikow F0 niezmieniona (pominiete warstwa = tick ~0).
   _lodMode = computeLodMode(rooms.length, cpx(), W, H);
   const _lodFull = _lodMode === 'full';
-  if (_lodFull) drawExits(vis, rs); _perfTick(_pc, 'exits');  // warstwa 1-4
+  if (_lodFull) drawExits(vis, rs); else if (_lodMode === 'roomsOnly') drawExitsLite(vis, rs); _perfTick(_pc, 'exits');  // warstwa 1-4 (+ Arc 33: lite linie w roomsOnly)
   if (_lodFull) drawStubs(vis, rs); _perfTick(_pc, 'stubs');  // warstwa 1a (stub tick marks)
   drawPendingExitLines(rs); _perfTick(_pc, 'pending');        // warstwa 1b (preview pending exits)
   if (_lodFull) drawCustomLines(vis); _perfTick(_pc, 'custom_lines');
@@ -8098,6 +8101,47 @@ function edgePt(cx, cy, half, vec) {
   // Zwraca punkt na krawędzi kwadratu pokoju w kierunku vec.
   // Kardynalne: środek krawędzi; Diagonalne: narożnik.
   return [cx + vec[0] * half, cy + vec[1] * half];
+}
+
+// ─── Lite linie wyjsc dla LOD roomsOnly (Arc 33, v1.49.3) ────────────────────
+// Obserwacja uzytkownika (2026-08-25, zrzut fit 518 pokoi): przy fit mapa to
+// same prostokaty — zero kresek, topologia nieczytelna. Pelne warstwy wyjsc
+// (strzalki, dasze one-way, grot, etykiety cross-area) zostaja skip — przy
+// cellPx 3-9 px to subpikselowy szum — ale proste odcinki miedzy srodkami
+// pokoi niosa topologie przy znikomym koszcie: JEDEN batch path = 1x stroke
+// na klatke (nie per-linia). Pokoje rysowane PO wyjsciach, wiec konce linii
+// chowaja sie pod kwadratami (jak w rastrze UX-4). Dedup par dwukierunkowych
+// po przeciwnym kierunku (jak _OPP w drawExits / rastrze). Zwraca liczbe
+// segmentow (do pinow). Piny: tier6 B22; scenariusz E23.lod.lines.
+function drawExitsLite(rooms, rs) {
+  const roomSet = new Set(state.roomsZ.map(r => r.id));
+  const _hMode = state.view?.hiddenRooms || 'faded';
+  const _OPP = {n:'s',ne:'sw',e:'w',se:'nw',s:'n',sw:'ne',w:'e',nw:'se'};
+  ctx.beginPath();
+  let n = 0;
+  for (const r of rooms) {
+    const exits = r.exits || {};
+    const cx = wx(r.x), cy = wy(r.y);
+    for (const [dir, targetId] of Object.entries(exits)) {
+      const vec = DIR_VEC[dir];
+      if (!vec || (!vec[0] && !vec[1])) continue;          // up/down/in/out — notchy, bez linii
+      const target = state.roomById[targetId];
+      if (!target || !roomSet.has(targetId)) continue;     // cross-area / inne Z / nieznany cel
+      if (state.roomArea[targetId] !== state.areaId) continue;
+      if (_hMode === 'hide' && (isRoomHidden(r) || isRoomHidden(target))) continue;  // ZAD7 hide
+      if (r.custom_lines?.[dir]) continue;                 // custom line przejmuje kierunek (w lite pomijamy)
+      const twoWay = target.exits && target.exits[_OPP[dir]] === r.id;
+      if (twoWay && r.id > targetId) continue;             // dedup: pare rysuje nizsze id
+      ctx.moveTo(cx, cy); ctx.lineTo(wx(target.x), wy(target.y)); n++;
+    }
+  }
+  if (n) {
+    ctx.strokeStyle = 'rgba(225,225,225,0.45)';
+    ctx.lineWidth   = Math.max(0.5, state.zoom * 0.5);
+    ctx.setLineDash([]);
+    ctx.stroke();
+  }
+  return n;
 }
 
 function drawExits(rooms, rs) {
@@ -14481,7 +14525,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.49.2';
+const APP_VERSION = 'v1.49.3';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)

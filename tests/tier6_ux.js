@@ -156,6 +156,17 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
      /function buildColorCache\([\s\S]*?_rasterInvalidate\(\);/.test(HTML),
     'B21: uniewaznienie rastra podpieciete w buildRoomsZ i buildColorCache');
 
+  // Arc 33 (v1.49.3): lite linie wyjsc w roomsOnly — obserwacja uzytkownika
+  // (2026-08-25): przy fit mapa to same prostokaty, zero topologii. roomsOnly
+  // rysuje lekkie linie miedzy srodkami pokoi (jeden batch path = 1x stroke,
+  // bez strzalek/daszy/etykiet/stubow/custom lines; dedup par dwukierunkowych).
+  // Pokoje rysowane PO wyjsciach, wiec konce linii chowaja sie pod kwadratami.
+  // Repro empiryczne: E23.lod.lines.
+  ok(/function drawExitsLite\(/.test(HTML),
+    'B22a: drawExitsLite zdefiniowane (lite linie wyjsc dla roomsOnly)');
+  ok(/if \(_lodFull\) drawExits\(vis, rs\); else if \(_lodMode === 'roomsOnly'\) drawExitsLite\(vis, rs\);/.test(HTML),
+    'B22b: draw() wywoluje drawExitsLite w roomsOnly (full zachowuje drawExits)');
+
   // Arc 31 F4: CullIndex — uniform grid nad PUNKTAMI pokoi (custom lines
   // rysowane per pokoj z vis, nie wchodza do indeksu). Fallback liniowy <256:
   // skan 255 pokoi to mikrosekundy — indeks sie nie oplaca. Komorka 16x16
@@ -289,7 +300,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.49.2';"), 'V1: pin APP_VERSION v1.49.2');
+ok(HTML.includes("const APP_VERSION = 'v1.49.3';"), 'V1: pin APP_VERSION v1.49.3');
 
 // ═══ A3.10 (DI-7): touchstart — reset flag na starcie KAZDEGO gestu ═══
 console.log('— A3.10 (DI-7): touchstart — reset na starcie kazdego gestu —');
