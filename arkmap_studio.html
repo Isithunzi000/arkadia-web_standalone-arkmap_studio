@@ -8666,7 +8666,7 @@ cv.addEventListener('mousedown', e => {
         if (Math.abs(evX(e) - _c.cx) <= _hs && Math.abs(evY(e) - _c.cy) <= _hs) {
           state.labelResizing = true;
           state.labelResizeCorner = _c.id;
-          state.labelResizeOrigW = _rLbl.width ?? 4;
+          state.labelResizeOrigW = Math.max(0.5, _rLbl.width ?? 4);  // audyt deep N9: korekcja kotwicy zaklada W >= 0.5 — bez progu label przeskakiwal przy pierwszym resize
           state.labelResizeOrigH = _rLbl.height ?? 1.2;
           state.labelResizeOrigX = _rLbl.x;
           state.labelResizeOrigY = _rLbl.y;
@@ -9076,12 +9076,19 @@ let _pinchToolCancelled = false;  // audyt ext F2.16: anulowanie narzedzia raz n
 
 cv.addEventListener('touchstart', e => {
   e.preventDefault();
-  if (e.touches.length === 1) {
+  // audyt deep DI-7: reset na starcie KAZDEGO gestu. Predykat: changedTouches == touches
+  // (wszystkie dotkniecia nowe) — rejestr _touches nie jest przycinany w touchend,
+  // wiec Object.keys(_touches) nie nadaje sie do detekcji startu; gest 2-palcowy
+  // zaraz po 1-palcowym dziedziczyl stary _pinchToolCancelled i pinch nie anulowal
+  // narzedzia. Dokladanie palca w trakcie gestu (changed < touches) bez resetu.
+  const _gestureStart = e.changedTouches.length === e.touches.length;
+  if (e.touches.length === 1 || _gestureStart) {
     // audyt ext F2.17: gest startuje od zera dotkniec — swiezy rejestr + reset flag
     _touches = {};
     _gestureMulti = false;
     _pinchToolCancelled = false;
-  } else if (e.touches.length >= 2) {
+  }
+  if (e.touches.length >= 2) {
     _gestureMulti = true;  // audyt ext F2.17: pinch w tym gescie → tap/dbltap zablokowane
   }
   for (const t of e.touches) _touches[t.identifier] = { x: t.clientX, y: t.clientY };
@@ -14199,7 +14206,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.49.0';
+const APP_VERSION = 'v1.49.1';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -16200,6 +16207,12 @@ function openExitDetail(room, dir, isStub) {
       if (isNaN(tid) || !state.roomById[tid]) { toast('⚠ Podaj prawidłowe ID pokoju docelowego', true); return; }
       const _postAdd = (bidi) => {
         commitAddExit(room.id, dir, tid, bidi);
+        // audyt deep N8: konsumpcja pendingu tego kierunku — bez kasowania petla
+        // pendingow przy „Zapisz pokoj" trafiala na staly wpis (toast A12/F2.3).
+        delete state.pendingExitTarget[dir];
+        delete state.pendingExitWeight[dir];
+        delete state.pendingDoors[dir];
+        delete state.pendingExitLock[dir];
         updateExitGrid(state.roomById[room.id] || room);
         openExitDetail(room, dir, false);
       };
@@ -16361,12 +16374,18 @@ function updateSpecialeTab(room) {
     if (delBtn)  delBtn.onclick  = () => {
       // audyt ext F2.2: delete po currentCmd (tracker rename), nie po origCmd — po rename
       // foo→bar klucz 'bar' zostawal w pending i wskrzeszal spec-exit przy commicie.
-      delete state.pendingSpecialExits[currentCmd];
-      if (state.pendingSERenames) {
-        // rekord rename kasowany tylko gdy dotyczy kasowanego wiersza (lustro kolapsu lancucha)
-        const ren = state.pendingSERenames;
-        for (const k of Object.keys(ren)) if (ren[k] === currentCmd) delete ren[k];
-        if (currentCmd) delete ren[currentCmd];
+      // audyt deep N7: pending kasowany tylko gdy ZADEN inny wiersz nie uzywa tej
+      // komendy — dwa wiersze A→X i B→X: delete A nie zabiera pendingu dla B.
+      const _stillUsed = [...container.querySelectorAll('.spec-row')].some(r2 => r2 !== row
+        && r2.querySelector('.spec-cmd') && r2.querySelector('.spec-cmd').value === currentCmd);
+      if (!_stillUsed) {
+        delete state.pendingSpecialExits[currentCmd];
+        if (state.pendingSERenames) {
+          // rekord rename kasowany tylko gdy dotyczy kasowanego wiersza (lustro kolapsu lancucha)
+          const ren = state.pendingSERenames;
+          for (const k of Object.keys(ren)) if (ren[k] === currentCmd) delete ren[k];
+          if (currentCmd) delete ren[currentCmd];
+        }
       }
       setEditDirty();
       updateSpecialeTab(room);
@@ -20505,7 +20524,7 @@ function _deltaBuildShadow(sidDone) {
         const r = sh.roomById[resR(T.roomId)];
         if (!r) break;                                           // apply: skip
         // audyt ext F1.1: guard zajetosci (lustro applyDelta) — zajeta komorka = cien bez ruchu
-        const occM = shRoomAt(sh.roomArea[r.id], P.toX, P.toY, P.toZ);
+        const occM = shRoomAt(sh.roomArea[r.id], P.toX, P.toY, P.toZ ?? (r.z ?? 0));  // audyt deep N2: bez toZ guard na z pokoju (konwencja ?? fz)
         if (occM && occM.id !== r.id) break;
         r.x = P.toX; r.y = P.toY; r.z = P.toZ ?? r.z;            // no-move = bez zmian
         break;
@@ -20805,7 +20824,7 @@ function classifyDelta(delta) {
         const room = sh.roomById[id];
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje')); break; }
         if (room.x === P.toX && room.y === P.toY && (room.z ?? 0) === P.toZ) { items.push(_deltaClsItem(op, 'done', 'już na mapie', roomJump(id))); break; }
-        const occ = shRoomAt(sh.roomArea[id], P.toX, P.toY, P.toZ);
+        const occ = shRoomAt(sh.roomArea[id], P.toX, P.toY, P.toZ ?? (room.z ?? 0));  // audyt deep N2: j.w. — classifyDelta
         if (occ && occ.id !== id) {
           const _it = _deltaClsItem(op, 'hard', 'pole docelowe (' + P.toX + ',' + P.toY + ',' + (P.toZ ?? 0) + ') jest zajęte przez pokój #' + occ.id + ' — kolizja; wybierz Autopozycję / Ręcznie albo odznacz tę operację', roomJump(id));
           _it.coll = true;  // M3: kolizja pozycji
@@ -21167,8 +21186,8 @@ function applyDelta(delta, onlySeq, overrides, seedSids) {
           toArea.rooms = toArea.rooms || []; toArea.rooms.push(room);
           room.area = toAreaId;
           state.roomArea[room.id] = toAreaId;
-          // effect-check po operacji (niespojnosci -> skip bez wpisu)
-          if (state.roomArea[room.id] !== toAreaId || !(toArea.rooms || []).includes(room)) { skip('efekt nieutrwalony'); break; }
+          // cleanup N1 (audyt deep): tautologiczny effect-check usuniety — oba koniunkty
+          // spelnione z definicji po przypisaniach wyzej; realne guardy (wyzej) zostaja.
           _deltaPush({ type: 'MOVE_ROOM_TO_AREA', roomId: room.id, fromAreaId, toAreaId, label: op.label });
           _deltaMovedArea = true;
           if (fromAreaId === state.areaId || toAreaId === state.areaId) _deltaMovedCurrentArea = true;  // audyt deep DI-1

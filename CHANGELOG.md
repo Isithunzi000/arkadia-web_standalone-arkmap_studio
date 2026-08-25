@@ -2,6 +2,17 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.49.1 — Audyt gleboki, fala 3: gesty dotykowe + kalka cleanup + edytor (Arc 32)
+
+Szesc poprawek z glebokiego audytu kodu (deep inspection). Wszystkie objete pinami repro-first: tests/tier6_ux.js A3.10, tests/delta.js A3.11-A3.12, tests/audit_ext.js A3.13-A3.15.
+
+- DI-7: touchstart — reset flag gestu (_touches/_gestureMulti/_pinchToolCancelled) na starcie KAZDEGO gestu (predykat: changedTouches == touches — rejestr _touches nie jest przycinany w touchend, wiec planowy predykat po rejestrze nie mogl zadzialac; odchylenie wychwycone pinem A3.10). Gest startujacy od 2 palcow zaraz po poprzednim dziedziczyl stary _pinchToolCancelled — pinch nie anulowal aktywnego narzedzia, a rejestr dotkniec narastal. Dokladanie palca w trakcie gestu bez resetu (multi-flag zachowana).
+- N1: usuniecie tautologicznego effect-checku z applyDelta MOVE_ROOM_TO_AREA (oba koniunkty spelnione z definicji po przypisaniach) — martwy kod obronny; realne guardy wyzej bez zmian.
+- N2: guard zajetosci shRoomAt w sim/classify MOVE_ROOM liczony na P.toZ ?? (z pokoju) — op bez toZ (poza walidatorem) liczyl kolizje na z=0 zamiast na z pokoju; guard na zywo w applyDelta juz mial konwencje ?? fz.
+- N7: kasowanie wiersza spec-exit nie zabiera pendingu komendy, gdy inny wiersz uzywa tej samej komendy (dwa wiersze A->X i B->X: delete A zostawia pending[X] dla B; rename-mirror w tym samym warunku, lustro F2.2 przy ostatnim wierszu).
+- N8: _postAdd (dodawanie wyjscia z detalu pokoju) konsumuje pending kierunku (target/weight/doors/lock) — bez tego petla pendingow przy „Zapisz pokoj" trafiala na staly wpis (toast A12 „kierunek zajety" albo skip-toast F2.3).
+- N9: labelResizeOrigW clampowane do >= 0.5 przy mousedown — korekcja kotwicy w resize zaklada W >= 0.5, wiec label waski (< 0.5) przeskakiwal o 0.3 przy pierwszym przeciagu.
+
 ## v1.49.0 — Audyt gleboki, fala 2: sufit pobierania online + walidator kalki + planer (Arc 32)
 
 Trzy poprawki z glebokiego audytu kodu (deep inspection). Wszystkie objete pinami repro-first: tests/audit_ext.js A3.7, tests/delta.js A3.8, tests/transport.js A3.9.

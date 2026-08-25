@@ -287,7 +287,49 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.49.0';"), 'V1: pin APP_VERSION v1.49.0');
+ok(HTML.includes("const APP_VERSION = 'v1.49.1';"), 'V1: pin APP_VERSION v1.49.1');
+
+// ═══ A3.10 (DI-7): touchstart — reset flag na starcie KAZDEGO gestu ═══
+console.log('— A3.10 (DI-7): touchstart — reset na starcie kazdego gestu —');
+{
+  const src = blockSlice("cv.addEventListener('touchstart'", "cv.addEventListener('touchmove'");
+  const mk = () => {
+    const cv = { addEventListener(t, fn) { this.__h = fn; } };
+    const state = { editMode: false, dragging: false, editDraggingRoom: false,
+      editDragCurrentX: 0, editDragCurrentY: 0, selected: null, roomById: {}, roomsZ: [],
+      canvasMode: 'normal', _paintHover: null };
+    let draws = 0;
+    const api = new Function('cv', 'state', 'scheduleDraw', 'document',
+      '_paintStrokeRevert', 'screenToMap', 'evX', 'evY', '_paintApplyAtScreen',
+      'let _touches = {}, _gestureMulti = false, _pinchToolCancelled = false, _lastPinchDist = null, _paintStroke = null;\n'
+      + src
+      + '\n;return { fire: (e) => cv.__h(e),'
+      + ' snap: () => ({ n: Object.keys(_touches).length, multi: _gestureMulti, pinch: _pinchToolCancelled }) };')
+      (cv, state, () => { draws++; }, { getElementById: () => null },
+       () => {}, () => [0, 0], (t) => t.clientX, (t) => t.clientY, () => {});
+    return { fire: api.fire, snap: api.snap, draws: () => draws, state };
+  };
+  const t = (id, x) => ({ identifier: id, clientX: x, clientY: 0 });
+  const ev = (touches, changed) => ({ preventDefault() {}, touches, changedTouches: changed || touches });
+
+  // Gest 1: pinch 2-palcowy — anuluje narzedzie (draws=1); flaga/rejestr zostaja po touchend
+  // (touchend w aplikacji nie przycina _touches ani _pinchToolCancelled — symulacja: bez fire)
+  const g = mk();
+  g.fire(ev([t(1, 0), t(2, 10)]));
+  ok(g.snap().multi === true && g.snap().pinch === true && g.draws() === 1,
+    'A3.10: gest 1 (pinch) — multi + anulowanie narzedzia (setup)');
+  // Gest 2 startuje od 2 palcow: reset flag + swiezy rejestr + PONOWNE anulowanie narzedzia
+  g.fire(ev([t(3, 0), t(4, 10)]));
+  ok(g.snap().n === 2 && g.snap().multi === true && g.draws() === 2,
+    'A3.10 (DI-7): gest 2-palcowy po poprzednim — flagi zresetowane, rejestr swiezy, pinch znowu anuluje'
+    + ' (pre-fix: stale flagi, rejestr 4 wpisy, brak anulowania)');
+  // Dokladanie palca W TRAKCIE gestu (changed < touches): bez resetu rejestru
+  const g2 = mk();
+  g2.fire(ev([t(5, 0)]));
+  g2.fire(ev([t(5, 0), t(6, 10)], [t(6, 10)]));
+  ok(g2.snap().n === 2 && g2.snap().multi === true,
+    'A3.10 (DI-7): dokladanie palca w trakcie gestu — bez resetu rejestru (multi-flag zachowana)');
+}
 
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);

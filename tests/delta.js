@@ -266,7 +266,7 @@ console.log('— T2: buildDelta — determinizm i kształt pliku —');
   c2.state.deltaLog = sampleDeltaLog(c2.state);
   ok(t1 === c2.api.buildDelta(), 'buildDelta: świeży kontekst, ten sam log → identyczne bajty (determinizm)');
   const d = JSON.parse(t1);
-  ok(d.meta.format === 'arkdelta' && d.meta.format_version === 2, 'meta: format + format_version 2 (v1.49.0)');
+  ok(d.meta.format === 'arkdelta' && d.meta.format_version === 2, 'meta: format + format_version 2 (v1.49.1)');
   ok(d.meta.ops_count === d.ops.length && d.ops.length === 10, 'meta.ops_count == liczba opów');
   ok(d.meta.base && d.meta.base.crc === c1.state.baseInfo.crc && d.meta.base.version === '9.9.9',
     'meta.base: crc + version z baseInfo');
@@ -456,11 +456,11 @@ ok(HTML.includes('loadArkdeltaBtn.disabled = !isEdit'), 'integracja: updateEditU
 ok(HTML.includes('id="btn-save-arkdelta" class="etb-check" disabled'), 'markup: btn-save-arkdelta pod walidacją (disabled)');
 ok(HTML.includes('id="dlg-arkdelta"') && HTML.includes('id="arkdelta-body"'), 'markup: dialog dlg-arkdelta (błędy walidacji)');
 ok(HTML.includes('state.baseInfo = _computeBaseInfo(null, state._pendingComputed);'),
-  'integracja: baseInfo w wrapperze applyMap z reużyciem computed z verify (v1.49.0)');
+  'integracja: baseInfo w wrapperze applyMap z reużyciem computed z verify (v1.49.1)');
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.49.0';"), 'wersja: v1.49.0');
+ok(HTML.includes("const APP_VERSION = 'v1.49.1';"), 'wersja: v1.49.1');
 
 // — W3 (v1.35.0): etykiety kalki zachowane przez 6 niskopoziomowych sciezek commit —
 {
@@ -830,7 +830,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
   ok(HTML.includes('const _DELTA_TYPE_PL = {') && HTML.includes("MOVE_ROOM: 'przesunięcie pokoju'")
     && HTML.includes("AUTO_FIX_SUPPRESSORS: 'automatyczna naprawa podwójnych linii'"),
     'W1 karta: typy opów po polsku (_DELTA_TYPE_PL)');
-  ok(HTML.includes("const APP_VERSION = 'v1.49.0';"), 'wersja v1.49.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.49.1';"), 'wersja v1.49.1');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -866,7 +866,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.49.0';"), 'wersja v1.49.0 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.49.1';"), 'wersja v1.49.1 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji
@@ -970,7 +970,7 @@ console.log('— T11: audyt T1 — klasyfikator ≡ apply —');
   ok(HTML.includes("if (aid <= 0) { items.push(_deltaClsItem(op, 'impossible', 'obszar domyślny"), 'T1: klasyfikator guard DELETE_AREA <= 0');
   ok(HTML.includes('kierunek przeciwny u pokoju docelowego jest zajęty'), 'T1: klasyfikator ADD_EXIT guard przeciwnego kierunku');
   ok(HTML.includes('return false;  // audyt T1/W15'), 'T1: commitDeleteArea jawny zwrot false');
-  ok(HTML.includes("const APP_VERSION = 'v1.49.0';"), 'wersja v1.49.0');
+  ok(HTML.includes("const APP_VERSION = 'v1.49.1';"), 'wersja v1.49.1');
 }
 
 
@@ -1315,6 +1315,43 @@ console.log('— A3.8 (N3): roomId wymagane w PAINT_BATCH.changes i AUTO_FIX add
     const r = c.api.validateDeltaText(JSON.stringify(KALKA));
     ok(r.ok === true, 'A3.8 (N3): kalka korpusowa 763 opy nadal przechodzi walidacje (regresja zaostrzenia)');
   }
+}
+
+// ═══ A3.11 (N1): tautologiczny effect-check w MOVE_ROOM_TO_AREA usuniety ═══
+console.log('— A3.11 (N1): cleanup effect-checku —');
+{
+  ok(!HTML.includes('efekt nieutrwalony'),
+    'A3.11 (N1): martwy effect-check usuniety z applyDelta (pre-fix: skip(\'efekt nieutrwalony\') po tautologii)');
+  // Regresja: MOVE_ROOM_TO_AREA nadal aplikuje sie data-only (pokoj realnie w nowym obszarze)
+  const c = makeDeltaCtx();
+  const { state, api } = c;
+  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+    { seq: 1, type: 'MOVE_ROOM_TO_AREA', target: { roomId: 10 }, payload: { toAreaId: 2 }, label: '' } ] };
+  const res = api.applyDelta(delta);
+  ok(res.applied === 1 && state.roomArea[10] === 2
+    && state.areas.get(2).rooms.some(r => r.id === 10)
+    && !state.areas.get(1).rooms.some(r => r.id === 10),
+    'A3.11 (N1): MOVE_ROOM_TO_AREA nadal applied — pokoj realnie przeniesiony (regresja)');
+}
+
+// ═══ A3.12 (N2): MOVE_ROOM bez toZ — guard zajetosci liczony na z pokoju ═══
+console.log('— A3.12 (N2): shRoomAt z fallbackiem z pokoju —');
+{
+  const c = makeDeltaCtx();
+  const { state, api } = c;
+  state.roomById[10].z = 5; state.roomById[11].z = 5;  // oba pokoje na z=5; 11 stoi na (1,0,5)
+  // Op BEZ toZ w payloadzie (obejscie walidatora — _DELTA_SCHEMA wymusza toZ, tu celowo bez)
+  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+    { seq: 1, type: 'MOVE_ROOM', target: { roomId: 10 },
+      payload: { fromX: 0, fromY: 0, fromZ: 5, toX: 1, toY: 0 }, label: '' } ] };
+  const items = api.classifyDelta(delta);
+  ok(items[0].cls === 'hard' && /zajęte/.test(items[0].note || ''),
+    'A3.12 (N2): classify MOVE_ROOM bez toZ -> hard, pole (1,0,5) zajete przez #11 (pre-fix: z=undefined->0 -> ok)');
+  const res = api.applyDelta(delta);
+  ok(res.applied === 0 && state.roomById[10].x === 0 && state.roomById[10].z === 5,
+    'A3.12 (N2): applyDelta — pokoj NIE przesuniety na zajeta komorke, brak crashu (regresja guarda na zywo)');
+  ok((HTML.match(/shRoomAt\([^)]*P\.toZ \?\? \(/g) || []).length === 2,
+    'A3.12 (N2): oba guardy shRoomAt (sim + classify) z fallbackiem P.toZ ?? (z pokoju) — krotnosc 2');
 }
 
 console.log('');

@@ -522,6 +522,67 @@ console.log('— A2.2 (F2.2): rename spec-exit foo→bar + delete wiersza —');
     'A2.2 (F2.2): rekord rename dotyczacy wiersza skasowany (lustro kolapsu lancucha)');
 }
 
+console.log('— A3.13 (N7): dwa wiersze na te sama komende — delete nie zabiera pendingu —');
+{
+  const WIRE = 'function wireSpecRows(container, room) {\n'
+    + blockSlice(HTML, "  container.querySelectorAll('.spec-row').forEach(row => {",
+      "  const addBtn = document.getElementById('spec-add-btn');") + '\n}';
+  const mkRow = (cmd) => {
+    const cmdIn  = { dataset: { orig: cmd }, value: cmd, oninput: null, onfocus: null };
+    const idIn   = { value: '7', oninput: null, onfocus: null };
+    const lockChk = { checked: false, onchange: null };
+    const delBtn = { onclick: null };
+    const confirmBtn = { onclick: null };
+    const row = { querySelector: (s) => ({ '.spec-cmd': cmdIn, '.spec-id': idIn,
+      'input[type=checkbox]': lockChk, '.spec-del': delBtn, '.spec-confirm': confirmBtn })[s] || null,
+      nextElementSibling: null };
+    return { row, cmdIn, delBtn };
+  };
+  const A = mkRow('foo'), B = mkRow('bar');
+  const rows = [A.row, B.row];
+  const container = { querySelectorAll: (s) => (s === '.spec-row' ? rows.slice() : []) };
+  const state = {
+    roomById: { 7: { id: 7, name: 'Cel' } },
+    pendingSpecialExits: { foo: 7, bar: 7 }, pendingSpecialExitLocks: {}, pendingSERenames: {},
+    _activeSpecialExit: null,
+  };
+  const room = { id: 1, special_exits: { foo: 7, bar: 7 } };
+  const wire = new Function('state', '_setMapKey', 'setEditDirty', 'scheduleDraw', 'updateSpecialeTab',
+    'commitRoomEdit', WIRE + '\nreturn wireSpecRows;')
+    (state, (o, k, v) => { o[k] = v; }, () => {}, () => {}, () => {}, () => {});
+  wire(container, room);
+  A.cmdIn.value = 'X'; A.cmdIn.oninput();  // rename foo → X
+  B.cmdIn.value = 'X'; B.cmdIn.oninput();  // rename bar → X (ta sama komenda, inny wiersz)
+  ok(state.pendingSpecialExits.X === 7, 'A3.13: oba wiersze przemianowane na X — pending[X] zyje (setup)');
+  A.delBtn.onclick();  // ✕ na wierszu A — wiersz B nadal uzywa X
+  ok(state.pendingSpecialExits.X === 7,
+    'A3.13 (N7): delete A -> pending[X] ZOSTAJE dla B (pre-fix: skasowany, B ginie przy commicie)');
+  rows.shift();        // re-render po delete A (updateSpecialeTab stub) — wiersza A juz nie ma
+  B.delBtn.onclick();  // ✕ na ostatnim wierszu z X
+  ok(!('X' in state.pendingSpecialExits),
+    'A3.13 (N7): delete ostatniego wiersza z X -> pending[X] skasowany (regresja F2.2)');
+}
+
+console.log('— A3.14 (N8): _postAdd konsumuje pending kierunku —');
+{
+  const src = blockSlice(HTML, 'const _postAdd = (bidi) => {', 'openExitDetail(room, dir, false);')
+    + 'openExitDetail(room, dir, false);\n      };';
+  const calls = [];
+  const state = { roomById: { 1: { id: 1 } },
+    pendingExitTarget: { n: 5 }, pendingExitWeight: { n: 2 },
+    pendingDoors: { n: 1 }, pendingExitLock: { n: true } };
+  const room = { id: 1 };
+  const postAdd = new Function('commitAddExit', 'state', 'updateExitGrid', 'openExitDetail', 'room', 'dir', 'tid',
+    src + '\nreturn _postAdd;')
+    ((sid, d, t, bidi) => calls.push([sid, d, t, bidi]), state, () => {}, () => {}, room, 'n', 5);
+  postAdd(false);
+  ok(calls.length === 1 && calls[0][0] === 1 && calls[0][1] === 'n' && calls[0][2] === 5 && calls[0][3] === false,
+    'A3.14: _postAdd commituje wyjscie n -> 5 (setup)');
+  ok(state.pendingExitTarget.n === undefined && state.pendingExitWeight.n === undefined
+    && state.pendingDoors.n === undefined && state.pendingExitLock.n === undefined,
+    'A3.14 (N8): pending kierunku skonsumowany (pre-fix: wpisy zostaja -> toast A12/F2.3 przy „Zapisz pokoj")');
+}
+
 console.log('— A2.3 (F2.3): pendingExitTarget na nieistniejacy pokoj —');
 {
   const COMMIT_SRC = extract(HTML, 'function commitRoomEdit() {');
@@ -600,6 +661,36 @@ console.log('— A2.5 (F2.5): clamp resize etykiety — kotwica nieruchoma —')
     'A2.5 (F2.5): clamp szerokosci (tl) — prawa krawedz zakotwiczona (pre-fix: kotwica przemieszczona)');
   ok(lbl.height === 0.2 && Math.abs((lbl.y + lbl.height) - 12) < 1e-9,
     'A2.5 (F2.5): clamp wysokosci (tl) — kotwica zakotwiczona (pre-fix: kotwica przemieszczona)');
+}
+
+console.log('— A3.15 (N9): label origW < 0.5 — pierwszy resize bez skoku pozycji —');
+{
+  ok(HTML.includes('state.labelResizeOrigW = Math.max(0.5, _rLbl.width ?? 4);'),
+    'A3.15 (N9): origW clampowane do >= 0.5 przy mousedown (pre-fix: surowe _rLbl.width ?? 4)');
+  const BLOCK_SRC = 'function labelResizeDrag(e) {\n'
+    + blockSlice(HTML, '  if (state.labelResizing && state.selectedLabel) {', '  // ── LABEL DRAG') + '\n}';
+  const mkDrag = (origW) => {
+    const lbl = { id: 9, x: 10, y: 10, width: 0.2, height: 2, text: 'L' };
+    const state = {
+      labelResizing: true, selectedLabel: { areaId: 1, labelId: 9 },
+      areas: new Map([[1, { id: 1, labels: [lbl] }]]),
+      labelDragStartMapX: 0, labelDragStartMapY: 0,
+      labelResizeCorner: 'bl', labelResizeOrigW: origW, labelResizeOrigH: 2,
+      labelResizeOrigX: 10, labelResizeOrigY: 10,
+    };
+    const drag = new Function('state', 'screenToMap', 'evX', 'evY', 'scheduleDraw',
+      BLOCK_SRC + '\nreturn labelResizeDrag;')
+      (state, () => [-0.05, 0], () => 0, () => 0, () => {});  // minimalny drag: dmx = -0.05
+    return { lbl, drag };
+  };
+  // Mechanizm buga: surowe origW = 0.2 — korekta kotwicy przesuwa x o (0.2 - 0.5) = -0.3
+  const buggy = mkDrag(0.2); buggy.drag({});
+  ok(Math.abs(buggy.lbl.x - 9.7) < 1e-9,
+    'A3.15: mechanizm — origW 0.2 bez progu skacze o -0.3 przy pierwszym resize (demonstracja)');
+  // Po fixie mousedown daje origW = Math.max(0.5, 0.2) = 0.5 — x podaza za kursorem, zero skoku
+  const fixed = mkDrag(Math.max(0.5, 0.2)); fixed.drag({});
+  ok(Math.abs(fixed.lbl.x - 9.95) < 1e-9 && Math.abs((fixed.lbl.x + fixed.lbl.width) - 10.5) < 1e-9,
+    'A3.15 (N9): origW z progiem 0.5 — pierwszy resize bez skoku pozycji, kotwica stoi (pre-fix: skok o 0.3)');
 }
 
 console.log('— A2.6 (F2.6): bledna waga — zero mutacji pokoju —');
