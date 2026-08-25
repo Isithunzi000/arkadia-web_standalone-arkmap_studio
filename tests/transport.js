@@ -241,5 +241,38 @@ console.log('── A3.2 (DI-2): krawędzie transportowe respektują avoidLocked
     'A3.2 (DI-2): avoidLocked OFF -> statek do locked przepuszczony [1,50] (regresja)');
 }
 
+console.log('── A3.9 (N6): wyjątek STARTU w guardzie locked — z locked można wyjść ──');
+{
+  // Lancuch 1—…—50 pieszo; pokoj 1 (START) zablokowany. Pop-guard z wyjatkiem
+  // cur !== fromId: start ekspanduje normalnie, guard tnie dopiero dalsza trase.
+  // Pre-fix: start locked + avoidLocked ON -> null (planer „martwy" z locked pokoju).
+  const st = mkSynthetic();
+  st.roomById[1].locked = true;
+  st.roomById[50].locked = true;   // inny locked jako cel — nadal nieosiagalny
+  const wpOn = { algorithm: 'dijkstra', dirMode: 'all', transportMode: 'off', avoidLocked: true };
+  const apiOn = buildApi(NEW, st, wpOn, DEFS_SYN);
+  ok(J(apiOn.findPath(1, 10)) === J([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+    'A3.9 (N6): start locked + ON -> trasa NA ZEWN. istnieje [1..10] (pre-fix: null)');
+  ok(apiOn.findPath(1, 50) === null,
+    'A3.9 (N6): cel w INNYM locked + ON -> null (regresja: guard celu bez zmian)');
+  ok(apiOn.findPath(10, 1) === null,
+    'A3.9 (N6): locked start jako CEL innej trasy + ON -> null (wyjatek tylko dla startu)');
+  const st2 = mkSynthetic();
+  st2.roomById[1].locked = true;
+  st2.roomById[50].locked = true;
+  const wpOff = { algorithm: 'dijkstra', dirMode: 'all', transportMode: 'off', avoidLocked: false };
+  const apiOff = buildApi(NEW, st2, wpOff, DEFS_SYN);
+  ok(J(apiOff.findPath(1, 50)) === J(Array.from({ length: 50 }, (_, i) => i + 1)),
+    'A3.9 (N6): OFF -> oba locked przepuszczone (regresja permissive)');
+  const wpA = { algorithm: 'astar', dirMode: 'all', transportMode: 'off', avoidLocked: true };
+  const st3 = mkSynthetic();
+  st3.roomById[1].locked = true;
+  const apiA = buildApi(NEW, st3, wpA, DEFS_SYN);
+  ok(J(apiA.findPath(1, 10)) === J([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+    'A3.9 (N6): A* — ten sam wyjatek startu (obie strony transformu)');
+  ok((NEW.match(/wpState\.avoidLocked && cur !== fromId/g) || []).length === 2,
+    'A3.9 (N6): wyjatek startu w OBU pop-guardach (Dijkstra + A*) — pin statyczny');
+}
+
 console.log(`\n═══ PODSUMOWANIE: ${pass} OK, ${fail} FAIL ═══`);
 process.exit(fail ? 1 : 0);

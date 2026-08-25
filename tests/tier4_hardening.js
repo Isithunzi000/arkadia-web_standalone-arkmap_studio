@@ -442,19 +442,21 @@ console.log('── T9: piny ──');
   // pin P1 (S4): NADPISANY decyzja F2.15 (Arc 31, v1.48.3) — domyslnie paritet z Mudletem
   // (locked nieosiagalny tez jako CEL), przelacznik „Omijaj zablokowane pokoje" → OFF = permissive.
   // Dawniej: locked-cel dozwolony (break przed locked). Piny behawioralne: audit_ext A2.15.
+  // N6 (Arc 32, v1.49.0): pop-guard z wyjatkiem STARTU (cur !== fromId) — zablokowany
+  // start nie ucina trasy u zrodla; relaksacja do locked bez zmian. Piny: transport A3.9.
   const dij = extract(NEW, 'function dijkstraPath(fromId, toId) {');
-  ok(dij.indexOf('if (room.locked && wpState.avoidLocked) continue;') >= 0
-    && dij.indexOf('if (room.locked && wpState.avoidLocked) continue;') < dij.indexOf('if (cur === toId) break;')
+  ok(dij.indexOf('if (room.locked && wpState.avoidLocked && cur !== fromId) continue;') >= 0
+    && dij.indexOf('if (room.locked && wpState.avoidLocked && cur !== fromId) continue;') < dij.indexOf('if (cur === toId) break;')
     && dij.includes('if (wpState.avoidLocked && nbr.locked) continue;'),
-    'pin P1: F2.15 — guard locked (ON=paritet Mudlet) PRZED breakiem + przy relaksacji; OFF=permissive');
+    'pin P1: F2.15 — guard locked (ON=paritet Mudlet) PRZED breakiem + przy relaksacji; OFF=permissive; N6: wyjatek startu');
   // piny wersji
-  ok(NEW.includes("const APP_VERSION = 'v1.48.4';"), 'pin: APP_VERSION v1.48.4');
+  ok(NEW.includes("const APP_VERSION = 'v1.49.0';"), 'pin: APP_VERSION v1.49.0');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok(deltaSrc.split('v1.48.4').length - 1 === 10, 'pin: delta.js 10x v1.48.4');
+  ok(deltaSrc.split('v1.49.0').length - 1 === 10, 'pin: delta.js 10x v1.49.0');
   const t2 = fs.readFileSync(path.join(ROOT, 'tests', 'tier2_state.js'), 'utf8');
-  ok(t2.includes("wersja: v1.48.4"), 'pin: tier2_state.js v1.48.4');
+  ok(t2.includes("wersja: v1.49.0"), 'pin: tier2_state.js v1.49.0');
   const t3 = fs.readFileSync(path.join(ROOT, 'tests', 'tier3_format.js'), 'utf8');
-  ok(t3.includes("pin: APP_VERSION v1.48.4"), 'pin: tier3_format.js v1.48.4');
+  ok(t3.includes("pin: APP_VERSION v1.49.0"), 'pin: tier3_format.js v1.49.0');
 }
 
 // ═══ T10: bramka — wlasne kalki zawsze z sid (K7 nie zabija wlasnych eksportow) ═══

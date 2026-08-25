@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.49.0 — Audyt gleboki, fala 2: sufit pobierania online + walidator kalki + planer (Arc 32)
+
+Trzy poprawki z glebokiego audytu kodu (deep inspection). Wszystkie objete pinami repro-first: tests/audit_ext.js A3.7, tests/delta.js A3.8, tests/transport.js A3.9.
+
+- DI-6: sufit absolutny pobierania online OL_MAX_BYTES_HARD = 256 MB — 125% z klamliwego expectedSize (index.json) moglo przepuscic transfer dowolnej wielkosci (np. expected 300 MB -> limit 375 MB); sufit wygrywa zawsze, niezaleznie od metadanych. Limit 125% + floor 64 MB bez zmian ponizej sufitu.
+- N3: walidator kalki wymaga roomId w PAINT_BATCH i AUTO_FIX (added/removed) — op z brakujacym roomId przechodzil walidacje typow i wybuchal dopiero w apply; teraz kontrolowane ok:false z opisem opu, zanim cokolwiek sie wykona.
+- N6: planer (Dijkstra + A*) — pop-guard avoidLocked nie pomija pokoju STARTU, nawet gdy jest zablokowany (wyjatek startu); trasa z zablokowanego startu do odblokowanego celu znowu sie liczy, a zablokowany cel nadal daje null.
+
 ## v1.48.4 — Audyt gleboki, fala 1: konflikty kalki + planer + import online + walidator (Arc 32)
 
 Szesc poprawek z glebokiego audytu kodu (deep inspection). Wszystkie objete pinami repro-first: tests/audit_ext.js A3.1/A3.3/A3.5, tests/transport.js A3.2, tests/delta.js A3.4 + A3.6a-e.

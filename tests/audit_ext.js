@@ -833,13 +833,18 @@ ASYNC_PINS.push((async () => {
 console.log('— A2.14 (F2.14): olFetchFile z twardym limitem bajtów —');
 ok(/const OL_MAX_BYTES = 64 \* 1024 \* 1024/.test(HTML),
   'A2.14 (F2.14): stała OL_MAX_BYTES = 64 MB (pre-fix: brak limitu)');
+// Wspoldzielony wrapper olFetchFile (A2.14 + A3.7) — wstrzykuje obie stale limitu.
+const mkOlFetch = () => {
+  const src = extract(HTML, 'async function olFetchFile(');
+  const olMaxExpr = (HTML.match(/const OL_MAX_BYTES = ([^;]+);/) || [null, '0'])[1];
+  const olHardExpr = (HTML.match(/const OL_MAX_BYTES_HARD = ([^;]+);/) || [null, 'Infinity'])[1];
+  return new Function('fetchImpl', 'olConfirmPrg', 'olConfirmBar',
+    'const OL_MAX_BYTES = ' + olMaxExpr + '; const OL_MAX_BYTES_HARD = ' + olHardExpr + '; const fetch = fetchImpl;\n' + src + '\nreturn olFetchFile;');
+};
 ASYNC_PINS.push((async () => {
   let of = null;
   try {
-    const src = extract(HTML, 'async function olFetchFile(');
-    const olMaxExpr = (HTML.match(/const OL_MAX_BYTES = ([^;]+);/) || [null, '0'])[1];
-    of = new Function('fetchImpl', 'olConfirmPrg', 'olConfirmBar',
-      'const OL_MAX_BYTES = ' + olMaxExpr + '; const fetch = fetchImpl;\n' + src + '\nreturn olFetchFile;');
+    of = mkOlFetch();
   } catch (e) { /* baza: niedosiagalne — funkcja istnieje; zostawione dla spojnosci */ }
   const prgStub = { textContent: '' }, barStub = { style: {} };
   // Strumień 66 MB (3 × 22 MB) ponad limit — expectedSize nieznany (null)
@@ -865,6 +870,41 @@ ASYNC_PINS.push((async () => {
   catch (e) { /* zostanie null → FAIL */ }
   ok(buf && buf.length === 300 && buf[0] === 1 && buf[299] === 3,
     'A2.14: mały strumień bez zmian (regresja funkcji)');
+})());
+
+console.log('— A3.7 (DI-6): sufit absolutny OL_MAX_BYTES_HARD = 256 MB —');
+ok(/const OL_MAX_BYTES_HARD = 256 \* 1024 \* 1024/.test(HTML)
+   && /Math\.min\(Math\.max\(Number\.isFinite\(expectedSize\)[^)]*\?[^:]*:[^,]*, OL_MAX_BYTES\), OL_MAX_BYTES_HARD\)/.test(HTML),
+  'A3.7 (DI-6): formula limitu z sufitem Math.min(..., OL_MAX_BYTES_HARD) (pre-fix: 125% expectedSize bez sufitu)');
+ASYNC_PINS.push((async () => {
+  const of = mkOlFetch();
+  const prgStub = { textContent: '' }, barStub = { style: {} };
+  // expectedSize kłamie: 300 MB -> 125% = 375 MB. Bez sufitu strumień 300 MB
+  // przeszedlby w calosci; z sufitem 256 MB throw po 260 MB (13. chunk).
+  const chunk = new Uint8Array(20 * 1024 * 1024);
+  const fetch300 = async () => ({ ok: true, headers: { get: () => null },
+    body: { getReader: () => { let i = 0; return {
+      async read() { return i < 15 ? { done: false, value: chunk, i0: i++ } : { done: true }; },
+      releaseLock() {} }; } } });
+  // (wyzej: value: chunk = ten sam 20 MB chunk za kazdym razem; i0 tylko inkrementuje licznik)
+  let threw = '';
+  try {
+    await of(fetch300, prgStub, barStub)('http://x/f', 'f', 300 * 1024 * 1024, { prg: prgStub, bar: null });
+  } catch (e) { threw = String(e && e.message || e); }
+  ok(/za duży/.test(threw),
+    'A3.7 (DI-6): expectedSize 300 MB + strumien 300 MB -> throw przy 256 MB (pre-fix: lecial do 375 MB)');
+  // Regresja: expectedSize 100 MB (125% = 125 MB) + strumien 130 MB -> limit 125 MB wygrywa (floor dziala jak byl)
+  const chunk10 = new Uint8Array(10 * 1024 * 1024);
+  const fetch130 = async () => ({ ok: true, headers: { get: () => null },
+    body: { getReader: () => { let i = 0; return {
+      async read() { return i < 13 ? { done: false, value: chunk10, i0: i++ } : { done: true }; },  // 13 x 10 MB = 130 MB
+      releaseLock() {} }; } } });
+  let threw2 = '';
+  try {
+    await of(fetch130, prgStub, barStub)('http://x/f', 'f', 100 * 1024 * 1024, { prg: prgStub, bar: null });
+  } catch (e) { threw2 = String(e && e.message || e); }
+  ok(/za duży/.test(threw2),
+    'A3.7 (DI-6): expectedSize 100 MB + strumien 130 MB -> limit 125% bez zmian (regresja F2.14)');
 })());
 
 console.log('— A2.15 (F2.15): planer — omijanie zablokowanych pokoi —');

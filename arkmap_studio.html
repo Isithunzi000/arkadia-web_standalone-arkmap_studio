@@ -10623,6 +10623,10 @@ olConfirmBg.addEventListener('click', e => { if (e.target === olConfirmBg) close
 // (albo index.json być podmieniony), a content-length bywa skompresowane. Limit:
 // floor 64 MB ORAZ 125% zadeklarowanego rozmiaru (zapas na błąd metadanych).
 const OL_MAX_BYTES = 64 * 1024 * 1024;
+// audyt deep DI-6: sufit absolutny 256 MB — 125% z kłamliwego expectedSize mogło
+// przepuścić transfer dowolnej wielkości (np. expected 300 MB -> limit 375 MB);
+// sufit wygrywa zawsze, niezaleznie od metadanych.
+const OL_MAX_BYTES_HARD = 256 * 1024 * 1024;
 
 async function olFetchFile(url, label, expectedSize, prog) {
   // F1: prog = { prg, bar } — opcjonalny cel postepu (dialog kalki); domyslnie ol-confirm
@@ -10648,7 +10652,8 @@ async function olFetchFile(url, label, expectedSize, prog) {
     chunks.push(value);
     loaded += value.length;
     // audyt ext F2.14: limit bajtów — ponad max(125% expectedSize, OL_MAX_BYTES) → stop
-    if (loaded > Math.max(Number.isFinite(expectedSize) ? expectedSize * 1.25 : 0, OL_MAX_BYTES)) {
+    // audyt deep DI-6: ...ale nigdy ponad sufit OL_MAX_BYTES_HARD
+    if (loaded > Math.min(Math.max(Number.isFinite(expectedSize) ? expectedSize * 1.25 : 0, OL_MAX_BYTES), OL_MAX_BYTES_HARD)) {
       throw new Error(`plik za duży (${(loaded/1024/1024).toFixed(1)} MB — ponad limit)`);
     }
     if (total) {
@@ -10998,7 +11003,7 @@ function dijkstraPath(fromId, toId) {
     if (!room) continue;
     // audyt ext F2.15: guard PRZED breakiem cur===toId — locked nieosiągalny też jako cel;
     // ON = paritet z Mudletem, OFF = routowanie permissive (styl klienta Dargotha)
-    if (room.locked && wpState.avoidLocked) continue;
+    if (room.locked && wpState.avoidLocked && cur !== fromId) continue;  // audyt deep N6: wyjatek STARTU — z locked mozna WYJSC, guard tnie dalsza trase
     if (cur === toId) break;
 
     const exitLockSet = new Set(room.exit_locks || []);
@@ -11109,7 +11114,7 @@ function astarPath(fromId, toId) {
     if (!room) continue;
     // audyt ext F2.15: guard PRZED breakiem cur===toId — locked nieosiągalny też jako cel;
     // ON = paritet z Mudletem, OFF = routowanie permissive (styl klienta Dargotha)
-    if (room.locked && wpState.avoidLocked) continue;
+    if (room.locked && wpState.avoidLocked && cur !== fromId) continue;  // audyt deep N6: wyjatek STARTU — z locked mozna WYJSC, guard tnie dalsza trase
     if (cur === toId) break;
     const gCur = g.get(cur) ?? Infinity;
 
@@ -14194,7 +14199,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.48.4';
+const APP_VERSION = 'v1.49.0';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -20115,12 +20120,17 @@ function _deltaValidateOpTypes(op) {
     case 'DELETE_CL': case 'DELETE_SUPPRESSOR': case 'ADD_SUPPRESSOR': refT('roomId'); break;
     case 'PAINT_BATCH': arrP('changes');
       // audyt ext F1.6: ksztalt elementow (obiekt; roomId ref: numer albo sid)
+      // audyt deep N3: roomId WYMAGANE — element bez roomId przechodzil walidacje
+      // i byl cicho pomijany przy apply (klasyfikator: „zaden pokoj nie istnieje")
       if (Array.isArray(P.changes) && P.changes.some(ch => !ch || typeof ch !== 'object' || Array.isArray(ch)
-          || (ch.roomId !== undefined && typeof ch.roomId !== 'number' && typeof ch.roomId !== 'string'))) bad.push(pl('changes'));
+          || ch.roomId === undefined || (typeof ch.roomId !== 'number' && typeof ch.roomId !== 'string'))) bad.push(pl('changes'));
       break;
     case 'AUTO_FIX_SUPPRESSORS': arrP('added'); arrP('removed');
-      if (Array.isArray(P.added) && P.added.some(ch => !ch || typeof ch !== 'object' || Array.isArray(ch))) bad.push(pl('added'));
-      if (Array.isArray(P.removed) && P.removed.some(ch => !ch || typeof ch !== 'object' || Array.isArray(ch))) bad.push(pl('removed'));
+      // audyt deep N3: roomId WYMAGANE w added/removed (jak PAINT_BATCH wyzej)
+      if (Array.isArray(P.added) && P.added.some(ch => !ch || typeof ch !== 'object' || Array.isArray(ch)
+          || ch.roomId === undefined || (typeof ch.roomId !== 'number' && typeof ch.roomId !== 'string'))) bad.push(pl('added'));
+      if (Array.isArray(P.removed) && P.removed.some(ch => !ch || typeof ch !== 'object' || Array.isArray(ch)
+          || ch.roomId === undefined || (typeof ch.roomId !== 'number' && typeof ch.roomId !== 'string'))) bad.push(pl('removed'));
       break;
     case 'ADD_LABEL': refT('areaId'); objP('label'); break;
     case 'EDIT_LABEL': refT('areaId'); refT('labelId'); objP('before'); objP('after'); break;

@@ -266,7 +266,7 @@ console.log('— T2: buildDelta — determinizm i kształt pliku —');
   c2.state.deltaLog = sampleDeltaLog(c2.state);
   ok(t1 === c2.api.buildDelta(), 'buildDelta: świeży kontekst, ten sam log → identyczne bajty (determinizm)');
   const d = JSON.parse(t1);
-  ok(d.meta.format === 'arkdelta' && d.meta.format_version === 2, 'meta: format + format_version 2 (v1.48.4)');
+  ok(d.meta.format === 'arkdelta' && d.meta.format_version === 2, 'meta: format + format_version 2 (v1.49.0)');
   ok(d.meta.ops_count === d.ops.length && d.ops.length === 10, 'meta.ops_count == liczba opów');
   ok(d.meta.base && d.meta.base.crc === c1.state.baseInfo.crc && d.meta.base.version === '9.9.9',
     'meta.base: crc + version z baseInfo');
@@ -456,11 +456,11 @@ ok(HTML.includes('loadArkdeltaBtn.disabled = !isEdit'), 'integracja: updateEditU
 ok(HTML.includes('id="btn-save-arkdelta" class="etb-check" disabled'), 'markup: btn-save-arkdelta pod walidacją (disabled)');
 ok(HTML.includes('id="dlg-arkdelta"') && HTML.includes('id="arkdelta-body"'), 'markup: dialog dlg-arkdelta (błędy walidacji)');
 ok(HTML.includes('state.baseInfo = _computeBaseInfo(null, state._pendingComputed);'),
-  'integracja: baseInfo w wrapperze applyMap z reużyciem computed z verify (v1.48.4)');
+  'integracja: baseInfo w wrapperze applyMap z reużyciem computed z verify (v1.49.0)');
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.48.4';"), 'wersja: v1.48.4');
+ok(HTML.includes("const APP_VERSION = 'v1.49.0';"), 'wersja: v1.49.0');
 
 // — W3 (v1.35.0): etykiety kalki zachowane przez 6 niskopoziomowych sciezek commit —
 {
@@ -830,7 +830,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
   ok(HTML.includes('const _DELTA_TYPE_PL = {') && HTML.includes("MOVE_ROOM: 'przesunięcie pokoju'")
     && HTML.includes("AUTO_FIX_SUPPRESSORS: 'automatyczna naprawa podwójnych linii'"),
     'W1 karta: typy opów po polsku (_DELTA_TYPE_PL)');
-  ok(HTML.includes("const APP_VERSION = 'v1.48.4';"), 'wersja v1.48.4');
+  ok(HTML.includes("const APP_VERSION = 'v1.49.0';"), 'wersja v1.49.0');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -866,7 +866,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.48.4';"), 'wersja v1.48.4 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.49.0';"), 'wersja v1.49.0 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji
@@ -970,7 +970,7 @@ console.log('— T11: audyt T1 — klasyfikator ≡ apply —');
   ok(HTML.includes("if (aid <= 0) { items.push(_deltaClsItem(op, 'impossible', 'obszar domyślny"), 'T1: klasyfikator guard DELETE_AREA <= 0');
   ok(HTML.includes('kierunek przeciwny u pokoju docelowego jest zajęty'), 'T1: klasyfikator ADD_EXIT guard przeciwnego kierunku');
   ok(HTML.includes('return false;  // audyt T1/W15'), 'T1: commitDeleteArea jawny zwrot false');
-  ok(HTML.includes("const APP_VERSION = 'v1.48.4';"), 'wersja v1.48.4');
+  ok(HTML.includes("const APP_VERSION = 'v1.49.0';"), 'wersja v1.49.0');
 }
 
 
@@ -1258,6 +1258,62 @@ console.log('— A3.6 (DI-9): konflikty kalki — normalizacja kaskad, korpus 76
     const h = histOf(c.api.classifyDelta(delta));
     ok((h.hard || 0) === 0 && (h.ok || 0) === 2,
       'A3.6f (DI-9): kalka sekwencyjna (before = stan posredni po kaskadzie, z doors) -> ok, bez hard (regresja E1)');
+  }
+}
+
+console.log('— A3.8 (N3): roomId wymagane w PAINT_BATCH.changes i AUTO_FIX added/removed —');
+{
+  const mkKalka = (c, ops) => {
+    const meta = { format: 'arkdelta', format_version: 2, ops_count: ops.length };
+    return JSON.stringify({ meta, ops, checksums: c.api._deltaChecksums(meta, ops) });
+  };
+  // PAINT_BATCH: element bez roomId (pre-fix: przechodzil walidacje, cicho pomijany przy apply)
+  {
+    const c = makeDeltaCtx();
+    const r = c.api.validateDeltaText(mkKalka(c, [
+      { seq: 1, type: 'PAINT_BATCH', target: {}, payload: { changes: [{ afterEnv: 5, afterSymbol: '' }] } },
+    ]));
+    ok(r.ok === false && /lista zmian/.test((r.errors || []).join(' ')),
+      'A3.8 (N3): PAINT_BATCH changes bez roomId -> walidator odrzuca (pre-fix: przepuszcza)');
+  }
+  // AUTO_FIX: added/removed bez roomId
+  {
+    const c = makeDeltaCtx();
+    const r = c.api.validateDeltaText(mkKalka(c, [
+      { seq: 1, type: 'AUTO_FIX_SUPPRESSORS', target: {}, payload: { added: [{ dir: 'e', snapshot: {} }], removed: [] } },
+    ]));
+    ok(r.ok === false && /dodane wpisy/.test((r.errors || []).join(' ')),
+      'A3.8 (N3): AUTO_FIX added bez roomId -> walidator odrzuca (pre-fix: przepuszcza)');
+    const c2 = makeDeltaCtx();
+    const r2 = c2.api.validateDeltaText(mkKalka(c2, [
+      { seq: 1, type: 'AUTO_FIX_SUPPRESSORS', target: {}, payload: { added: [], removed: [{ dir: 'e', snapshot: {} }] } },
+    ]));
+    ok(r2.ok === false && /usunięte wpisy/.test((r2.errors || []).join(' ')),
+      'A3.8 (N3): AUTO_FIX removed bez roomId -> walidator odrzuca (pre-fix: przepuszcza)');
+  }
+  // Regresja: poprawne wpisy (z roomId, takze sid) przechodza
+  {
+    const c = makeDeltaCtx();
+    const r = c.api.validateDeltaText(mkKalka(c, [
+      { seq: 1, type: 'ADD_ROOM', target: { roomId: 'd:1', areaId: 1 },
+        payload: { room: { x: 9, y: 9, z: 0, name: 'N', env: 1 } } },
+      { seq: 2, type: 'PAINT_BATCH', target: {}, payload: { changes: [{ roomId: 10, afterEnv: 5, afterSymbol: '' }, { roomId: 'd:1', afterEnv: 6 }] } },
+      { seq: 3, type: 'AUTO_FIX_SUPPRESSORS', target: {}, payload: { added: [{ roomId: 10, dir: 'e', snapshot: {} }], removed: [{ roomId: 11, dir: 'w', snapshot: {} }] } },
+    ]));
+    ok(r.ok === true, 'A3.8 (N3): PAINT_BATCH/AUTO_FIX z roomId (numer + sid) nadal przechodza (regresja)'
+      + (r.ok ? '' : ' :: ' + (r.errors || [])[0]));
+  }
+  // Regresja korpus: kalka korpusowa (763 opy) nadal waliduje sie OK
+  {
+    const FIX = path.join(ROOT, 'map_master3.dat');
+    if (!fs.existsSync(FIX)) {
+      console.error('BRAK FIXTURE: map_master3.dat — pobierz: bash tests/fetch-fixture.sh');
+      process.exit(2);
+    }
+    const KALKA = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'kalka_korpus_di9.arkdelta'), 'utf8'));
+    const c = makeDeltaCtx();
+    const r = c.api.validateDeltaText(JSON.stringify(KALKA));
+    ok(r.ok === true, 'A3.8 (N3): kalka korpusowa 763 opy nadal przechodzi walidacje (regresja zaostrzenia)');
   }
 }
 
