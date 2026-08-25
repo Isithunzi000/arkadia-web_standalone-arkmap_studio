@@ -300,7 +300,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.49.4';"), 'V1: pin APP_VERSION v1.49.4');
+ok(HTML.includes("const APP_VERSION = 'v1.49.5';"), 'V1: pin APP_VERSION v1.49.5');
 
 // ═══ A3.10 (DI-7): touchstart — reset flag na starcie KAZDEGO gestu ═══
 console.log('— A3.10 (DI-7): touchstart — reset na starcie kazdego gestu —');
@@ -344,20 +344,42 @@ console.log('— A3.10 (DI-7): touchstart — reset na starcie kazdego gestu —
     'A3.10 (DI-7): dokladanie palca w trakcie gestu — bez resetu rejestru (multi-flag zachowana)');
 }
 
-// ── B23 (Arc 34, v1.49.4, obs 7): domyslna skala interfejsu 105% ─────────────
-console.log('— B23 (Arc 34, obs 7): domyslna skala UI 105% —');
+// ── B23: domyslna skala interfejsu ──────────────────────────────────────────
+// Arc 34 (v1.49.4, obs 7): 105%. Arc 35 (v1.49.5) EWALUACJA 105->100:
+// font 13px + stack Consolas/Menlo/DejaVu/Liberation/Courier daje czytelnosc
+// bez zoomu; zoom=1 znosi rozjazdy gBCR/computed przy eksporcie i dragach.
+console.log('— B23: domyslna skala UI 100% (Arc 35; Arc 34: 105%) —');
 {
-  ok(HTML.includes('--ui-scale: 1.05;'),
-    'B23a: :root --ui-scale = 1.05 (pre-fix: 1)');
-  ok(/id="ui-scale-slider"[^>]*value="105"/.test(HTML) && HTML.includes('>105%</span>'),
-    'B23b: suwak startuje na 105 i etykieta 105% (pre-fix: 100)');
+  ok(HTML.includes('--ui-scale: 1;'),
+    'B23a: :root --ui-scale = 1 (Arc 35; Arc 34: 1.05)');
+  ok(/id="ui-scale-slider"[^>]*value="100"/.test(HTML) && HTML.includes('>100%</span>'),
+    'B23b: suwak startuje na 100 i etykieta 100% (Arc 35; Arc 34: 105)');
   ok(!HTML.includes('saved.uiScale !== 100')
     && HTML.includes("typeof saved.uiScale === 'number' && isFinite(saved.uiScale)"),
     'B23c: loadSettings stosuje zapisana wartosc ZAWSZE (pre-fix: warunek !== 100 zjadalby swiadome 100)');
-  ok(HTML.includes('parseInt(_uiScaleSlider.value) || 105'),
-    'B23d: saveSettings fallback 105 (pre-fix: 100)');
-  ok(HTML.includes('applyUiScale(105)'),
-    'B23e: resetAllDefaults wraca do 105, nie 100');
+  ok(HTML.includes('parseInt(_uiScaleSlider.value) || 100'),
+    'B23d: saveSettings fallback 100 (Arc 35; Arc 34: 105)');
+  ok(HTML.includes('applyUiScale(100)'),
+    'B23e: resetAllDefaults wraca do 100 (Arc 35; Arc 34: 105)');
+}
+
+// ── B24 (Arc 35, v1.49.5): stack fontu mono + baza 13px ─────────────────────
+// Strażnik miny fc-match: 'Cascadia Code' rozwiazuje sie w CI do Noto Sans
+// (PROPORCJONALNY) — zlamalby mono-layout. Stack musi zaczynac sie od Consolas
+// (CI: Noto Sans Mono, mono 0,6em — najszerszy, wiec overflow lapany w CI
+// oznacza luz u usera na wezszym Consolas 0,55em).
+console.log('— B24 (Arc 35): stack fontu mono + baza 13px —');
+{
+  ok(HTML.includes("--font:    Consolas, Menlo, 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace;"),
+    'B24a: --font = pelny stack mono zaczynajacy sie od Consolas');
+  ok(!HTML.includes('Cascadia'),
+    'B24b: ZERO Cascadia w calym pliku (mina fc-match: CI -> Noto Sans proporcjonalny)');
+  ok(HTML.includes('font: 13px/1.45 var(--font);'),
+    'B24c: baza 13px/1.45 (pre-fix: 12px/1.4)');
+  ok(!HTML.includes("font-family: 'Courier New'"),
+    'B24d: zero hardkodow CSS na Courier New — wszystko przez var(--font)');
+  const n = HTML.split('Consolas,Menlo,"DejaVu Sans Mono","Liberation Mono","Courier New",monospace').length - 1;
+  ok(n === 7, 'B24e: stack literalnie we wszystkich 7 miejscach renderera canvas (jest: ' + n + ')');
 }
 
 console.log('');

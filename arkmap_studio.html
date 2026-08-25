@@ -24,14 +24,14 @@
     --dim:     #d2dce8;
     --fg:      #e0e8f4;
     --sel:     #4a9eff22;
-    --font:    'Courier New', monospace;
+    --font:    Consolas, Menlo, 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace;  /* Arc 35 (v1.49.5): stack mono; pin B24b pilnuje, by nie dodac fontu rozwizujacego sie w CI do proporcjonalnego (fc-match) */
     --sidebar: 240px;
-    --ui-scale: 1.05;  /* Arc 34 (v1.49.4): domyslna skala 105% — sweet spot czytelnosci (raport uzytkownika) */
+    --ui-scale: 1;  /* Arc 35 (v1.49.5): powrot do 100% — font 13px/stack mono daje czytelnosc bez zoomu */
   }
   html { zoom: var(--ui-scale); }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 100%; height: 100%; background: var(--bg); color: var(--text);
-    font: 12px/1.4 var(--font); overflow: hidden; }
+    font: 13px/1.45 var(--font); overflow: hidden; }
   /* Wyłącz domyślny focus ring przeglądarki dla wszystkich interaktywnych el. */
   button:focus, button:focus-visible,
   input[type="range"]:focus, input[type="range"]:focus-visible { outline: none !important; box-shadow: none !important; }
@@ -457,6 +457,8 @@
     position: fixed; top: 112px; left: calc(var(--sidebar) + 46px);
     background: var(--panel); border: 1px solid var(--border);
     border-radius: 4px; padding: 10px 14px 12px;
+    /* Arc 35: vh nie skaluje sie z html zoom — dzielimy vh, POTEM odejmujemy offset top */
+    max-height: calc(100vh / var(--ui-scale) - 122px); overflow-y: auto;
     z-index: 202; min-width: 200px;
     display: none; flex-direction: column; gap: 10px;
     box-shadow: 0 4px 16px rgba(0,0,0,0.5);
@@ -921,7 +923,11 @@
     display: none;
   }
   #wp-overview.visible { display: block; }
-  #wp-overview-label { display: none !important; }
+  /* Arc 35 (v1.49.5): etykieta "Trasa" nad canvasem overview — widoczna gdy
+     overview widoczny; trafia tez do eksportu HUD (buildHudLayer) */
+  #wp-overview-label { display: none; font-size: 10px; color: var(--dim);
+    padding: 2px 6px 0; justify-content: space-between; }
+  #wp-overview.visible #wp-overview-label { display: flex; }
   #wp-overview-canvas { width: 100%; height: 100%; display: block; }
 
 
@@ -952,7 +958,7 @@
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
-    width: 520px; max-width: 96vw; max-height: 90vh; /* v1.5.41: 480 → 520 */
+    width: 520px; max-width: 96vw; max-height: calc(90vh / var(--ui-scale)); /* v1.5.41: 480 → 520; Arc 35: vh nie skaluje sie z html zoom — dzielenie kompensuje */
     box-shadow: 0 16px 64px rgba(0,0,0,.8);
     overflow: hidden; display: flex; flex-direction: column;
   }
@@ -986,7 +992,7 @@
   #about-modal-body {
     padding: 18px 24px 20px;
     display: flex; flex-direction: column; gap: 14px;
-    overflow-y: auto; flex: 1;
+    overflow-y: auto; flex: 1; min-height: 0; /* Arc 35: bez min-height:0 flex-dziecko nie kurczy sie ponizej tresci — max-height modala bylo ignorowane */
   }
   .about-desc {
     font-size: 12px; color: var(--fg); line-height: 1.7;
@@ -1573,7 +1579,7 @@
   .oauth-url  { font-size: 12px; color: var(--dim); margin-bottom: 8px; }
   .oauth-url span { color: var(--accent); }
   .oauth-num  { font-size: 28px; letter-spacing: 6px; color: var(--text);
-    font-family: 'Courier New', monospace; margin: 8px 0; }
+    font-family: var(--font); margin: 8px 0; }
   .oauth-copy { font-size: 11px; color: var(--dim); cursor: pointer;
     border: 1px solid var(--border); padding: 3px 10px; border-radius: 3px;
     background: none; }
@@ -1600,7 +1606,7 @@
   .supp-list { background: #0a0c10; border: 1px solid var(--border);
     border-radius: 4px; max-height: 160px; overflow-y: auto; }
   .supp-item { padding: 6px 10px; border-bottom: 1px solid #1a1e28; font-size: 11px;
-    color: var(--fg); font-family: 'Courier New', monospace; line-height: 1.5; }
+    color: var(--fg); font-family: var(--font); line-height: 1.5; }
   .supp-item:last-child { border-bottom: none; }
   .supp-item span { color: #ffcc44; }
 
@@ -1720,7 +1726,7 @@
   .dlg-color-row { display:flex; align-items:center; gap:6px; margin:2px 0 4px; }
   .dlg-color-swatch { width:22px; height:22px; border-radius:3px; border:1px solid #3a4a5a; flex-shrink:0; }
   .dlg-color-nums { display:flex; gap:3px; align-items:center; }
-  .dlg-color-nums input { width:40px; text-align:center; }
+  .dlg-color-nums input { width:56px; text-align:center; }
   .dlg-color-lbl { font-size: 10px; color:var(--dim); width:14px; text-align:center; flex-shrink:0; }
   .dlg-alpha-row { display:flex; align-items:center; gap:6px; margin-top:3px; }
   .dlg-alpha-row input[type=range] { flex:1; height:4px; accent-color:var(--edit); }
@@ -2303,9 +2309,9 @@
           <span>rozmiar tekstu i paneli</span>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
-          <input type="range" id="ui-scale-slider" min="80" max="150" value="105" step="5"
+          <input type="range" id="ui-scale-slider" min="80" max="150" value="100" step="5"
             style="width:80px;accent-color:var(--accent)">
-          <span id="ui-scale-val" style="font-size: 11px;color:var(--dim);min-width:30px;text-align:right">105%</span>
+          <span id="ui-scale-val" style="font-size: 11px;color:var(--dim);min-width:30px;text-align:right">100%</span>
         </div>
       </div>
       <div class="sp-row">
@@ -2552,7 +2558,7 @@
         </div>
       </div>
       <div id="ap-actions">
-        <button class="save-btn" style="border-color:var(--ok);color:var(--ok);font-size: 11px;padding:5px 0">✓ Zapisz obszar</button>
+        <button class="save-btn" style="border-color:var(--ok);color:var(--ok);font-size: 11px;padding:5px 0">✓ Zapisz</button>
         <button style="font-size: 11px;padding:5px 0;color:var(--dim)" onclick="closeAreaPanel()">Anuluj</button>
         <button id="ap-del-area-btn" style="font-size: 11px;padding:5px 0;border-color:var(--err);color:var(--err)" onclick="openDeleteAreaDialog()">✕ Usuń</button>
       </div>
@@ -4086,9 +4092,9 @@
           <div class="dlg-color-swatch" id="dle-fg-swatch" style="background:rgb(200,200,100);cursor:pointer" title="Kliknij aby wybrać kolor"></div>
           <input type="color" id="dle-fg-picker" style="display:none">
           <div class="dlg-color-nums">
-            <span class="dlg-color-lbl">R</span><input class="rp-einput-sm" type="number" id="dle-fg-r" min="0" max="255" value="200" style="width:46px">
-            <span class="dlg-color-lbl">G</span><input class="rp-einput-sm" type="number" id="dle-fg-g" min="0" max="255" value="200" style="width:46px">
-            <span class="dlg-color-lbl">B</span><input class="rp-einput-sm" type="number" id="dle-fg-b" min="0" max="255" value="100" style="width:46px">
+            <span class="dlg-color-lbl">R</span><input class="rp-einput-sm" type="number" id="dle-fg-r" min="0" max="255" value="200">
+            <span class="dlg-color-lbl">G</span><input class="rp-einput-sm" type="number" id="dle-fg-g" min="0" max="255" value="200">
+            <span class="dlg-color-lbl">B</span><input class="rp-einput-sm" type="number" id="dle-fg-b" min="0" max="255" value="100">
           </div>
         </div>
       </div>
@@ -4103,7 +4109,7 @@
             <span class="dlg-color-lbl">R</span><input class="rp-einput-sm" type="number" id="dle-bg-r" min="0" max="255" value="13" style="width:46px">
             <span class="dlg-color-lbl">G</span><input class="rp-einput-sm" type="number" id="dle-bg-g" min="0" max="255" value="15" style="width:46px">
             <span class="dlg-color-lbl">B</span><input class="rp-einput-sm" type="number" id="dle-bg-b" min="0" max="255" value="18" style="width:46px">
-            <span class="dlg-color-lbl">A</span><input class="rp-einput-sm" type="number" id="dle-bg-a" min="0" max="255" value="178" style="width:46px">
+            <span class="dlg-color-lbl">A</span><input class="rp-einput-sm" type="number" id="dle-bg-a" min="0" max="255" value="178">
           </div>
         </div>
         <div class="dlg-alpha-row">
@@ -13223,8 +13229,8 @@ document.addEventListener('click', (e) => {
       if (ts) ts.checked = saved.showSuppressors;
     }
     if (saved.lockDuration) state.lockDuration = saved.lockDuration;
-    // Arc 34 (v1.49.4): zapisana wartosc stosowana ZAWSZE (domyslna to 105 —
-    // warunek !== 100 zjadlby swiadomie ustawione 100 albo 105)
+    // Arc 34 (v1.49.4): zapisana wartosc stosowana ZAWSZE (domyslna to 100 —
+    // warunek !== 100 zjadlby swiadomie ustawiona wartosc; Arc 35: default 100)
     if (typeof saved.uiScale === 'number' && isFinite(saved.uiScale)) {
       const pct = Math.max(80, Math.min(150, saved.uiScale));
       document.documentElement.style.setProperty('--ui-scale', pct / 100);
@@ -13273,7 +13279,7 @@ function saveSettings() {
       showSuppressors: !!state.showSuppressors,
       showPixmaps:     !!state.showPixmaps,
       lockDuration:    state.lockDuration || 30,
-      uiScale:         parseInt(_uiScaleSlider.value) || 105,
+      uiScale:         parseInt(_uiScaleSlider.value) || 100,
     }));
   } catch(e) {}
 }
@@ -13402,8 +13408,8 @@ function resetAllDefaults() {
   const tML  = document.getElementById('toggle-mudlet-labels');    if (tML)  tML.checked  = true;
   const tHM  = document.getElementById('view-hidden-mode');        if (tHM)  tHM.value    = 'faded';
   if (typeof _syncPixmapDisabled === 'function') _syncPixmapDisabled();
-  // Reset skali interfejsu do domyslnej (Arc 34: 105%)
-  if (typeof applyUiScale === 'function') applyUiScale(105);
+  // Reset skali interfejsu do domyslnej (Arc 35: 100%)
+  if (typeof applyUiScale === 'function') applyUiScale(100);
   // Reset sidebar width
   const sidebar = document.getElementById('sidebar');
   if (sidebar) sidebar.style.width = '';
@@ -13894,41 +13900,12 @@ function _valReportSections(valRes, chkRes, suppMissing) {
         // Bez paneli — po prostu skopiuj canvas mapy
         sourceCanvas = mapCanvas;
       } else {
-        // Z panelami — zbuduj ten sam kompozyt co buildCompositePNG
-        const mapRect = mapCanvas.getBoundingClientRect();
-        const W = mapCanvas.width, H = mapCanvas.height;
+        // Z panelami — ten sam kompozyt co PNG/SVG (wspolny builder, Arc 35)
         sourceCanvas = document.createElement('canvas');
-        sourceCanvas.width = W; sourceCanvas.height = H;
+        sourceCanvas.width = mapCanvas.width; sourceCanvas.height = mapCanvas.height;
         const ctx = sourceCanvas.getContext('2d');
         ctx.drawImage(mapCanvas, 0, 0);
-        drawAreaBar(ctx, W);
-        for (const id of ['room-panel', 'wp-panel', 'draw-tools-panel']) {
-          const el = document.getElementById(id);
-          if (!el || !el.classList.contains('visible')) continue;
-          renderPanelToCanvas(ctx, el, mapRect);
-        }
-        const minimapEl = document.getElementById('minimap');
-        const minimapCv = document.getElementById('minimap-cv');
-        if (minimapEl && minimapEl.classList.contains('visible') && minimapCv) {
-          const mr = minimapEl.getBoundingClientRect();
-          const mx = Math.round(mr.left - mapRect.left), my = Math.round(mr.top - mapRect.top);
-          const mw = Math.round(mr.width), mh = Math.round(mr.height);
-          ctx.fillStyle = '#0d0f12cc'; ctx.fillRect(mx, my, mw, mh);
-          ctx.drawImage(minimapCv, mx, my, mw, mh);
-          ctx.strokeStyle = '#252b3a'; ctx.lineWidth = 1;
-          ctx.strokeRect(mx + .5, my + .5, mw - 1, mh - 1);
-        }
-        const ovEl = document.getElementById('wp-overview');
-        const ovCv = document.getElementById('wp-overview-canvas');
-        if (ovEl && ovEl.classList.contains('visible') && ovCv) {
-          const or = ovEl.getBoundingClientRect();
-          const ox = Math.round(or.left - mapRect.left), oy = Math.round(or.top - mapRect.top);
-          const ow = Math.round(or.width), oh = Math.round(or.height);
-          ctx.fillStyle = '#141720ee'; ctx.fillRect(ox, oy, ow, oh);
-          ctx.drawImage(ovCv, ox, oy, ow, oh);
-          ctx.strokeStyle = '#252b3a'; ctx.lineWidth = 1;
-          ctx.strokeRect(ox + .5, oy + .5, ow - 1, oh - 1);
-        }
+        ctx.drawImage(buildHudLayer(mapCanvas), 0, 0);
       }
 
       // canvas → Blob → ClipboardItem
@@ -13946,52 +13923,125 @@ function _valReportSections(valRes, chkRes, suppMissing) {
   // foreignObject jest ZABRONIONY na canvas (taints canvas → toBlob fail)
   // Zamiast tego: canvas text rendering z Text_NODE grouped by Y.
   // ════════════════════════════════════════════════════════════
-  function buildCompositePNG(mapCanvas) {
+  // ── Wspolny kompozyt HUD (Arc 35, v1.49.5) ──────────────────────────────
+  // Jeden builder warstwy HUD dla PNG/SVG/schowka (przedtem 3 kopie).
+  // Przelicznik r = mapCanvas.width / mapRect.width (px bitmapy na px ekranu):
+  // gBCR mnozy przez html zoom, wiec cala warstwa rysowana w px EKRANU pod
+  // transformem r — pozycje/rozmiary trafiaja w px bitmapy przy dowolnym
+  // zoomu 80-150% (bug A: pre-fix HUD uciekal z kadru przy skali != 100%).
+  // Fonty: computedStyle dzieli zoom (css px), wiec rozmiar = css * zoom
+  // (px ekranu) — pod transformem r daje css * dpr: proporcje tekstu
+  // identyczne jak przy zoom=100%, dpr=1 (referencja).
+  function buildHudLayer(mapCanvas) {
     const mapRect = mapCanvas.getBoundingClientRect();
-    const W = mapCanvas.width;
-    const H = mapCanvas.height;
+    const W = mapCanvas.width, H = mapCanvas.height;
+    const r = mapRect.width > 0 ? mapCanvas.width / mapRect.width : 1;
+    const layer = document.createElement('canvas');
+    layer.width = W; layer.height = H;
+    const ctx = layer.getContext('2d');
 
-    const off = document.createElement('canvas');
-    off.width = W; off.height = H;
-    const ctx = off.getContext('2d');
-
-    ctx.drawImage(mapCanvas, 0, 0);
+    // Pasek obszaru — przestrzen bitmapy (jak zawsze)
     drawAreaBar(ctx, W);
 
-    // Panele — canvas text rendering
+    // Reszta warstwy — przestrzen ekranu pod transformem r
+    ctx.save();
+    ctx.setTransform(r, 0, 0, r, -mapRect.left * r, -mapRect.top * r);
+
+    // Panele plywajace + panele tresci i toolbar (Arc 35 Praca 2: 100% pokrycia
+    // tego co user widzi; decyzja wlasciciela 2026-08-26). Wykluczone chrome:
+    // sidebar / export-panel / settings-panel / menu / dropdowny / toast.
     const floatingIds = ['room-panel', 'wp-panel', 'draw-tools-panel'];
     for (const id of floatingIds) {
       const el = document.getElementById(id);
       if (!el || !el.classList.contains('visible')) continue;
-      renderPanelToCanvas(ctx, el, mapRect);
+      renderPanelToCanvas(ctx, el);
     }
+    for (const id of ['area-panel', 'validate-panel', 'delta-panel']) {
+      const el = document.getElementById(id);
+      if (!el || !el.classList.contains('visible')) continue;
+      renderPanelToCanvas(ctx, el);
+    }
+    const toolbarEl = document.getElementById('toolbar');
+    if (toolbarEl) renderPanelToCanvas(ctx, toolbarEl);
 
-    // Minimap
+    // Minimap (+ ramka viewportu, Arc 35)
     const minimapEl = document.getElementById('minimap');
     const minimapCv = document.getElementById('minimap-cv');
-    if (minimapEl && minimapEl.classList.contains('visible') && minimapCv) {
+    if (minimapEl && minimapEl.classList.contains('visible') && minimapCv && minimapCv.width > 0) {
       const mr = minimapEl.getBoundingClientRect();
-      const mx = Math.round(mr.left - mapRect.left), my = Math.round(mr.top - mapRect.top);
-      const mw = Math.round(mr.width), mh = Math.round(mr.height);
-      ctx.fillStyle = '#0d0f12cc'; ctx.fillRect(mx, my, mw, mh);
-      ctx.drawImage(minimapCv, mx, my, mw, mh);
+      ctx.fillStyle = '#0d0f12cc'; ctx.fillRect(mr.left, mr.top, mr.width, mr.height);
+      ctx.drawImage(minimapCv, mr.left, mr.top, mr.width, mr.height);
       ctx.strokeStyle = '#252b3a'; ctx.lineWidth = 1;
-      ctx.strokeRect(mx + .5, my + .5, mw - 1, mh - 1);
+      ctx.strokeRect(mr.left + .5, mr.top + .5, mr.width - 1, mr.height - 1);
+      const mmVp = document.getElementById('minimap-viewport');
+      if (mmVp) {
+        const vr = mmVp.getBoundingClientRect();
+        if (vr.width > 0 && vr.height > 0) {
+          ctx.strokeStyle = '#4a9eff';
+          ctx.strokeRect(vr.left + .5, vr.top + .5, vr.width - 1, vr.height - 1);
+        }
+      }
     }
 
-    // Overview trasy
+    // Overview trasy (+ etykieta "Trasa", Arc 35)
     const ovEl = document.getElementById('wp-overview');
     const ovCv = document.getElementById('wp-overview-canvas');
-    if (ovEl && ovEl.classList.contains('visible') && ovCv) {
+    if (ovEl && ovEl.classList.contains('visible') && ovCv && ovCv.width > 0) {
       const or = ovEl.getBoundingClientRect();
-      const ox = Math.round(or.left - mapRect.left), oy = Math.round(or.top - mapRect.top);
-      const ow = Math.round(or.width), oh = Math.round(or.height);
-      ctx.fillStyle = '#141720ee'; ctx.fillRect(ox, oy, ow, oh);
-      ctx.drawImage(ovCv, ox, oy, ow, oh);
+      ctx.fillStyle = '#141720ee'; ctx.fillRect(or.left, or.top, or.width, or.height);
+      ctx.drawImage(ovCv, or.left, or.top, or.width, or.height);
       ctx.strokeStyle = '#252b3a'; ctx.lineWidth = 1;
-      ctx.strokeRect(ox + .5, oy + .5, ow - 1, oh - 1);
+      ctx.strokeRect(or.left + .5, or.top + .5, or.width - 1, or.height - 1);
+      const ovLbl = document.getElementById('wp-overview-label');
+      if (ovLbl) {
+        const lr = ovLbl.getBoundingClientRect();
+        if (lr.width > 0 && lr.height > 0) {
+          const lcs = getComputedStyle(ovLbl);
+          const z2 = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+          ctx.font = `${(parseFloat(lcs.fontSize) || 10) * z2}px Consolas,Menlo,"DejaVu Sans Mono","Liberation Mono","Courier New",monospace`;
+          ctx.fillStyle = lcs.color || '#8a94a8'; ctx.textBaseline = 'top';
+          ctx.fillText(ovLbl.textContent.trim(), lr.left, lr.top);
+        }
+      }
     }
 
+    // ── Okna modalne (Arc 35, decyzja wlasciciela: kazde okienko na eksporcie)
+    // 42 x .dlg-bg.open + 7 modali wlasnych. Przyciemnione tlo = computed bg
+    // backdropu; okno renderowane tym samym rendererem co panele.
+    const dimUnder = (backdropEl) => {
+      const bg = getComputedStyle(backdropEl).backgroundColor;
+      ctx.fillStyle = (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent')
+        ? bg : 'rgba(0,0,0,0.75)';
+      ctx.fillRect(mapRect.left, mapRect.top, mapRect.width, mapRect.height);
+    };
+    document.querySelectorAll('.dlg-bg.open').forEach(dlg => {
+      const box = dlg.querySelector('.dlg-box');
+      if (!box) return;
+      dimUnder(dlg);
+      renderPanelToCanvas(ctx, box);
+    });
+    [['edit-dlg-bg', 'edit-dlg'], ['wp-import-overlay', 'wp-import-modal'],
+     ['about-modal-overlay', 'about-modal'], ['val-modal-overlay', 'val-modal'],
+     ['ol-confirm-bg', 'ol-confirm'],
+     ['cheatsheet-overlay', null], ['changelog-popup', null]].forEach(([bgId, boxId]) => {
+      const bg = document.getElementById(bgId);
+      if (!bg || (!bg.classList.contains('open') && !bg.classList.contains('visible'))) return;
+      const box = boxId ? document.getElementById(boxId) : bg;
+      if (!box) return;
+      dimUnder(bg);
+      renderPanelToCanvas(ctx, box);
+    });
+
+    ctx.restore();
+    return layer;
+  }
+
+  function buildCompositePNG(mapCanvas) {
+    const off = document.createElement('canvas');
+    off.width = mapCanvas.width; off.height = mapCanvas.height;
+    const ctx = off.getContext('2d');
+    ctx.drawImage(mapCanvas, 0, 0);
+    ctx.drawImage(buildHudLayer(mapCanvas), 0, 0);
     finalize(off, 'png', 'arkmap_hud');
   }
 
@@ -14019,12 +14069,16 @@ function _valReportSections(valRes, chkRes, suppMissing) {
     return true;
   }
 
-  function renderPanelToCanvas(ctx, el, mapRect) {
+  // Arc 35 (v1.49.5): panel rysowany w px EKRANU — ctx buildera ma transform r
+  // (ekran -> bitmapa), wiec gBCR uzywane wprost. Fonty: computedStyle podaje
+  // css px (bez zoomu), ekran = css * z; pod transformem r -> css * dpr.
+  function renderPanelToCanvas(ctx, el) {
+    const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
     const er = el.getBoundingClientRect();
-    const px = Math.round(er.left - mapRect.left);
-    const py = Math.round(er.top  - mapRect.top);
-    const pw = Math.round(er.width);
-    const ph = Math.round(er.height);
+    const px = er.left;
+    const py = er.top;
+    const pw = er.width;
+    const ph = er.height;
     if (px + pw < 0 || py + ph < 0) return;
 
     const R = 6;
@@ -14040,18 +14094,21 @@ function _valReportSections(valRes, chkRes, suppMissing) {
     // Ramka
     ctx.strokeStyle = '#252b3a'; ctx.lineWidth = 1;
     _rrect(ctx, px + .5, py + .5, pw - 1, ph - 1, R); ctx.stroke();
-    // Nagłówek
-    const HEADER_H = 34;
-    ctx.fillStyle = '#1e2435';
-    _rrect(ctx, px, py, pw, HEADER_H, R, true); ctx.fill();
-    ctx.fillStyle = '#252b3a'; ctx.fillRect(px, py + HEADER_H - 1, pw, 1);
-    // Tytuł nagłówka
-    const titleEl = el.querySelector('.rp-title, #rp-title, .wp-panel-title, [id$="-title"]');
-    if (titleEl) {
-      ctx.font = 'bold 11px "Courier New",monospace';
+    // Nagłówek — wysokosc mierzona z rzeczywistego elementu tytulu
+    // (Arc 35: toolbar/delta/validate maja inny/albo zaden naglowek; sztywne
+    // 34px obcinalo gore tresci paneli bez naglowka). Bez tytulu = bez pasa.
+    const titleEl = el.querySelector('.rp-title, #rp-title, .wp-panel-title, [id$="-title"], .dlg-title, .edlg-title, .cs-title, .vd-title');
+    const HEADER_H = titleEl
+      ? Math.min(ph, titleEl.getBoundingClientRect().bottom - py + 6 * z)
+      : 0;
+    if (HEADER_H > 0) {
+      ctx.fillStyle = '#1e2435';
+      _rrect(ctx, px, py, pw, HEADER_H, R, true); ctx.fill();
+      ctx.fillStyle = '#252b3a'; ctx.fillRect(px, py + HEADER_H - 1, pw, 1);
+      ctx.font = `bold ${11 * z}px Consolas,Menlo,"DejaVu Sans Mono","Liberation Mono","Courier New",monospace`;
       ctx.fillStyle = '#4a9eff'; ctx.textBaseline = 'middle';
       ctx.save(); ctx.rect(px + 2, py, pw - 40, HEADER_H); ctx.clip();
-      ctx.fillText(titleEl.textContent.trim(), px + 10, py + HEADER_H / 2);
+      ctx.fillText(titleEl.textContent.trim(), px + 10 * z, py + HEADER_H / 2);
       ctx.restore();
     }
 
@@ -14063,6 +14120,69 @@ function _valReportSections(valRes, chkRes, suppMissing) {
     const contentH = ph - HEADER_H;
     ctx.save();
     ctx.rect(px + 2, contentY, pw - 4, contentH); ctx.clip();
+
+    // ── Pass kontrolek (Arc 35, bug B): button/select/textarea/checkbox ─────
+    // Whitelist zamiast blacklisty: przyciski naglowka i akcje destrukcyjne
+    // pomijane (rp-close, wp-panel-close, panel-collapse-btn, wp-del, wp-mv).
+    // Tekst przyciskow NIE tu — plynie walkerem (Range, pozycja z layoutu).
+    el.querySelectorAll('button, select, textarea, input').forEach(ctl => {
+      if (ctl.tagName === 'INPUT' && !['checkbox', 'radio'].includes(ctl.type)) return; // tekstowe: pass lineMap nizej
+      if (ctl.id === 'rp-close' || ctl.id === 'wp-panel-close' ||
+          ctl.classList.contains('panel-collapse-btn') ||
+          ctl.classList.contains('wp-del') || ctl.classList.contains('wp-mv')) return;
+      const cr = ctl.getBoundingClientRect();
+      if (cr.width === 0 || cr.height === 0) return;
+      if (!_isVisibleInScrollAncestors(cr, ctl, el)) return;
+      const cs = getComputedStyle(ctl);
+      if (ctl.tagName === 'BUTTON') {
+        // pudlo z computedStyle — stan aktywny (wp-algo-on/wp-sp-on) ma wlasne tlo/border
+        const bg = cs.backgroundColor;
+        ctx.fillStyle = (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') ? bg : '#1a2030';
+        _rrect(ctx, cr.left, cr.top, cr.width, cr.height, 3); ctx.fill();
+        const bc = cs.borderColor;
+        ctx.strokeStyle = (bc && bc !== 'rgba(0, 0, 0, 0)' && bc !== 'transparent') ? bc : '#252b3a';
+        ctx.lineWidth = 1;
+        _rrect(ctx, cr.left + .5, cr.top + .5, cr.width - 1, cr.height - 1, 3); ctx.stroke();
+      } else if (ctl.tagName === 'SELECT') {
+        ctx.fillStyle = '#1a2030';
+        ctx.fillRect(cr.left, cr.top, cr.width, cr.height);
+        ctx.strokeStyle = '#252b3a'; ctx.lineWidth = 1;
+        ctx.strokeRect(cr.left + .5, cr.top + .5, cr.width - 1, cr.height - 1);
+        const opt = ctl.options[ctl.selectedIndex];
+        const label = opt ? opt.text.trim() : '';
+        if (label) {
+          ctx.font = `${(parseFloat(cs.fontSize) || 11) * z}px Consolas,Menlo,"DejaVu Sans Mono","Liberation Mono","Courier New",monospace`;
+          ctx.fillStyle = cs.color || '#e8eef8'; ctx.textBaseline = 'middle';
+          ctx.save(); ctx.rect(cr.left + 2, cr.top, cr.width - 4, cr.height); ctx.clip();
+          ctx.fillText(label, cr.left + 4, cr.top + cr.height / 2);
+          ctx.restore();
+        }
+      } else if (ctl.tagName === 'TEXTAREA') {
+        ctx.fillStyle = '#1a2030';
+        ctx.fillRect(cr.left, cr.top, cr.width, cr.height);
+        ctx.strokeStyle = '#252b3a'; ctx.lineWidth = 1;
+        ctx.strokeRect(cr.left + .5, cr.top + .5, cr.width - 1, cr.height - 1);
+        const val = ctl.value || ctl.placeholder || '';
+        if (val) {
+          ctx.font = `${(parseFloat(cs.fontSize) || 11) * z}px Consolas,Menlo,"DejaVu Sans Mono","Liberation Mono","Courier New",monospace`;
+          ctx.fillStyle = ctl.value ? (cs.color || '#e8eef8') : '#556070';
+          ctx.textBaseline = 'top';
+          ctx.save(); ctx.rect(cr.left + 2, cr.top, cr.width - 4, cr.height); ctx.clip();
+          fillTextWrapped(ctx, val, cr.left + 4, cr.top + 3, cr.width - 8, 14 * z, cr.top + cr.height);
+          ctx.restore();
+        }
+      } else { // checkbox / radio
+        ctx.fillStyle = '#1a2030';
+        ctx.fillRect(cr.left, cr.top, cr.width, cr.height);
+        ctx.strokeStyle = '#252b3a'; ctx.lineWidth = 1;
+        ctx.strokeRect(cr.left + .5, cr.top + .5, cr.width - 1, cr.height - 1);
+        if (ctl.checked) {
+          ctx.font = `bold ${Math.max(9, cr.height - 2)}px Consolas,Menlo,"DejaVu Sans Mono","Liberation Mono","Courier New",monospace`;
+          ctx.fillStyle = '#4a9eff'; ctx.textBaseline = 'middle';
+          ctx.fillText('✓', cr.left + 2, cr.top + cr.height / 2);
+        }
+      }
+    });
 
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     const lineMap = new Map(); // key = Math.round(top) → [{text, left, cs, nr}]
@@ -14078,7 +14198,11 @@ function _valReportSections(valRes, chkRes, suppMissing) {
       const par = tn.parentElement;
       if (!par) continue;
       const tag = par.tagName;
-      if (['BUTTON','TEXTAREA','SELECT','SCRIPT','STYLE'].includes(tag)) continue;
+      // Arc 35 (bug B): BUTTON usuniety z skipu — etykiety przyciskow plyną
+      // walkerem (Range daje dokladna pozycje, layout sam centruje tekst).
+      // TEXTAREA/SELECT zostaja: ich tresc renderowana explicite w pass kontrolek
+      // (value / wybrana opcja), nie z ukrytych text_node.
+      if (['TEXTAREA','SELECT','SCRIPT','STYLE'].includes(tag)) continue;
       if (par.id === 'rp-close' || par.id === 'wp-panel-close' ||
           par.classList.contains('panel-collapse-btn') ||
           par.classList.contains('wp-del') || par.classList.contains('wp-mv')) continue;
@@ -14095,7 +14219,9 @@ function _valReportSections(valRes, chkRes, suppMissing) {
     }
 
     // INPUT: renderuj osobno (Text_NODE walker nie odczyta value)
+    // Arc 35: checkbox/radio pomijane tu — obsluguje je pass kontrolek (stan ✓)
     el.querySelectorAll('input').forEach(inp => {
+      if (inp.type === 'checkbox' || inp.type === 'radio') return;
       const val = inp.value || inp.placeholder || '';
       if (!val) return;
       const nr = inp.getBoundingClientRect();
@@ -14113,14 +14239,11 @@ function _valReportSections(valRes, chkRes, suppMissing) {
     const sortedLines = Array.from(lineMap.entries())
       .sort((a, b) => a[0] - b[0]);
 
-    const erTop = er.top;
-    const erLeft = er.left;
-
     for (const [topPx, segs] of sortedLines) {
       segs.sort((a, b) => a.left - b.left);
       for (const seg of segs) {
-        const tx = px + Math.round(seg.left - erLeft);
-        const ty = contentY + Math.round(seg.nr.top - erTop) - HEADER_H;
+        const tx = seg.left;
+        const ty = seg.nr.top;
         if (ty < contentY - 2 || ty > contentY + contentH) continue;
 
         if (seg.isInput) {
@@ -14134,7 +14257,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
           ? (seg.hasValue ? (cs.color || '#e8eef8') : '#556070')
           : (cs.color || '#e8eef8');
         const fw = cs.fontWeight !== 'normal' ? cs.fontWeight + ' ' : '';
-        ctx.font = `${fw}${cs.fontSize || '11px'} "Courier New",monospace`;
+        ctx.font = `${fw}${(parseFloat(cs.fontSize) || 11) * z}px Consolas,Menlo,"DejaVu Sans Mono","Liberation Mono","Courier New",monospace`;
         ctx.textBaseline = 'top';
 
         // maxW: minimum to szerokość samego węzła tekstowego (zapobiega zawijaniu
@@ -14148,8 +14271,8 @@ function _valReportSections(valRes, chkRes, suppMissing) {
         let curLineY = ty;
         for (const rawLine of rawLines) {
           const tl = rawLine.trim();
-          if (!tl) { curLineY += 14; if (curLineY > contentY + contentH) break; continue; }
-          curLineY = fillTextWrapped(ctx, tl, Math.max(px + 4, tx), curLineY, maxW, 14, contentY + contentH);
+          if (!tl) { curLineY += 14 * z; if (curLineY > contentY + contentH) break; continue; }
+          curLineY = fillTextWrapped(ctx, tl, Math.max(px + 4, tx), curLineY, maxW, 14 * z, contentY + contentH);
           if (curLineY === null) break; // maxY reached
         }
       }
@@ -14251,7 +14374,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
     ctx.fillRect(0, 0, W, BAR_H);
     ctx.fillStyle = '#252b3a';
     ctx.fillRect(0, BAR_H - 1, W, 1);
-    ctx.font = 'bold 11px "Courier New", monospace';
+    ctx.font = 'bold 11px Consolas,Menlo,"DejaVu Sans Mono","Liberation Mono","Courier New",monospace';
     ctx.fillStyle = '#4a9eff';
     ctx.textBaseline = 'middle';
     ctx.fillText(areaName, 10, BAR_H / 2);
@@ -14263,13 +14386,15 @@ function _valReportSections(valRes, chkRes, suppMissing) {
   // SVG Z PANELAMI — czysty dokument SVG, foreignObject (zero taint)
   // Nie używamy canvas do kompozytu — mapa embedded jako base64 PNG.
   // ════════════════════════════════════════════════════════════
+  // Arc 35 (v1.49.5): SVG konsumuje wspolny kompozyt HUD — mapa + JEDNA
+  // warstwa <image> z buildHudLayer (przelicznik r w srodku). Zero osobnych
+  // obrazow paneli, zero haka +40, zero fake mapRect (byly _svgPanelAsImage /
+  // _svgAreaBar usuniete). foreignObject nadal nieuzywany (librsvg-safe).
   async function buildCompositeSVG(mapCanvas) {
-    const mapRect = mapCanvas.getBoundingClientRect();
     const W = mapCanvas.width;
     const H = mapCanvas.height;
 
     const svgNS = 'http://www.w3.org/2000/svg';
-    const xhNS  = 'http://www.w3.org/1999/xhtml';
     const root  = document.createElementNS(svgNS, 'svg');
     root.setAttribute('xmlns',   svgNS);
     root.setAttribute('width',   W);
@@ -14277,140 +14402,24 @@ function _valReportSections(valRes, chkRes, suppMissing) {
     root.setAttribute('viewBox', `0 0 ${W} ${H}`);
 
     // 1. Mapa jako base64 PNG (canvas jeszcze czysty)
-    const mapDataUrl = mapCanvas.toDataURL('image/png');
     const mapImg = document.createElementNS(svgNS, 'image');
-    mapImg.setAttribute('href', mapDataUrl);
+    mapImg.setAttribute('href', mapCanvas.toDataURL('image/png'));
     mapImg.setAttribute('x', 0); mapImg.setAttribute('y', 0);
     mapImg.setAttribute('width', W); mapImg.setAttribute('height', H);
     root.appendChild(mapImg);
 
-    // 2. Pasek obszaru
-    _svgAreaBar(root, svgNS, W);
-
-    // 3. Panele — render do offscreen canvas, embed jako <image> PNG
-    // Powód: foreignObject nie jest wspierany przez librsvg (GNOME viewer, Inkscape itp.)
-    const floatingIds = ['room-panel', 'wp-panel', 'draw-tools-panel'];
-    for (const id of floatingIds) {
-      const el = document.getElementById(id);
-      if (!el || !el.classList.contains('visible')) continue;
-      _svgPanelAsImage(root, svgNS, el, mapRect);
-    }
-
-    // 4. Minimap
-    const minimapEl = document.getElementById('minimap');
-    const minimapCv = document.getElementById('minimap-cv');
-    if (minimapEl && minimapEl.classList.contains('visible') && minimapCv) {
-      const mr = minimapEl.getBoundingClientRect();
-      const mx = Math.round(mr.left - mapRect.left), my = Math.round(mr.top - mapRect.top);
-      const mw = Math.round(mr.width), mh = Math.round(mr.height);
-      // tło
-      const bg = document.createElementNS(svgNS, 'rect');
-      bg.setAttribute('x', mx); bg.setAttribute('y', my);
-      bg.setAttribute('width', mw); bg.setAttribute('height', mh);
-      bg.setAttribute('fill', '#0d0f12'); root.appendChild(bg);
-      // canvas jako image
-      const mImg = document.createElementNS(svgNS, 'image');
-      mImg.setAttribute('href', minimapCv.toDataURL('image/png'));
-      mImg.setAttribute('x', mx); mImg.setAttribute('y', my);
-      mImg.setAttribute('width', mw); mImg.setAttribute('height', mh);
-      root.appendChild(mImg);
-      // ramka
-      const mBorder = document.createElementNS(svgNS, 'rect');
-      mBorder.setAttribute('x', mx + .5); mBorder.setAttribute('y', my + .5);
-      mBorder.setAttribute('width', mw - 1); mBorder.setAttribute('height', mh - 1);
-      mBorder.setAttribute('fill', 'none'); mBorder.setAttribute('stroke', '#252b3a');
-      mBorder.setAttribute('stroke-width', '1'); root.appendChild(mBorder);
-    }
-
-    // 5. Overview trasy
-    const ovEl = document.getElementById('wp-overview');
-    const ovCv = document.getElementById('wp-overview-canvas');
-    if (ovEl && ovEl.classList.contains('visible') && ovCv) {
-      const or = ovEl.getBoundingClientRect();
-      const ox = Math.round(or.left - mapRect.left), oy = Math.round(or.top - mapRect.top);
-      const ow = Math.round(or.width), oh = Math.round(or.height);
-      const ovBg = document.createElementNS(svgNS, 'rect');
-      ovBg.setAttribute('x', ox); ovBg.setAttribute('y', oy);
-      ovBg.setAttribute('width', ow); ovBg.setAttribute('height', oh);
-      ovBg.setAttribute('fill', '#141720'); root.appendChild(ovBg);
-      const ovImg = document.createElementNS(svgNS, 'image');
-      ovImg.setAttribute('href', ovCv.toDataURL('image/png'));
-      ovImg.setAttribute('x', ox); ovImg.setAttribute('y', oy);
-      ovImg.setAttribute('width', ow); ovImg.setAttribute('height', oh);
-      root.appendChild(ovImg);
-      const ovBorder = document.createElementNS(svgNS, 'rect');
-      ovBorder.setAttribute('x', ox + .5); ovBorder.setAttribute('y', oy + .5);
-      ovBorder.setAttribute('width', ow - 1); ovBorder.setAttribute('height', oh - 1);
-      ovBorder.setAttribute('fill', 'none'); ovBorder.setAttribute('stroke', '#252b3a');
-      ovBorder.setAttribute('stroke-width', '1'); root.appendChild(ovBorder);
-    }
+    // 2. Wspolna warstwa HUD (pasek obszaru + panele + minimap + overview)
+    const hudImg = document.createElementNS(svgNS, 'image');
+    hudImg.setAttribute('href', buildHudLayer(mapCanvas).toDataURL('image/png'));
+    hudImg.setAttribute('x', 0); hudImg.setAttribute('y', 0);
+    hudImg.setAttribute('width', W); hudImg.setAttribute('height', H);
+    root.appendChild(hudImg);
 
     // Serializuj i pobierz
     const serializer = new XMLSerializer();
     const svgSrc = serializer.serializeToString(root);
     const ts = new Date().toISOString().slice(0,16).replace(/[T:]/g,'-');
     saveWithDialog(`arkmap_hud_${ts}.svg`, 'image/svg+xml', () => svgSrc);
-  }
-
-  // ── Helper: pasek obszaru w SVG ─────────────────────────────────────────
-  function _svgAreaBar(root, svgNS, W) {
-    const areaName = (() => {
-      if (typeof state === 'undefined' || state.areaId == null) return null;
-      const a = state.areas && state.areas.get(state.areaId);
-      return a ? (a.name || `Obszar ${state.areaId}`) : null;
-    })();
-    if (!areaName) return;
-    const BAR_H = 24;
-    const bg = document.createElementNS(svgNS, 'rect');
-    bg.setAttribute('x', 0); bg.setAttribute('y', 0);
-    bg.setAttribute('width', W); bg.setAttribute('height', BAR_H);
-    bg.setAttribute('fill', 'rgba(20,23,32,0.88)'); root.appendChild(bg);
-    const line = document.createElementNS(svgNS, 'rect');
-    line.setAttribute('x', 0); line.setAttribute('y', BAR_H - 1);
-    line.setAttribute('width', W); line.setAttribute('height', 1);
-    line.setAttribute('fill', '#252b3a'); root.appendChild(line);
-    const txt = document.createElementNS(svgNS, 'text');
-    txt.setAttribute('x', 10); txt.setAttribute('y', BAR_H / 2);
-    txt.setAttribute('dominant-baseline', 'middle');
-    txt.setAttribute('font-family', 'Courier New, monospace');
-    txt.setAttribute('font-size', '11'); txt.setAttribute('font-weight', 'bold');
-    txt.setAttribute('fill', '#4a9eff');
-    txt.textContent = areaName; root.appendChild(txt);
-  }
-
-  // ── Helper: panel DOM jako PNG w SVG ──────────────────────────────────
-  // Renderuje panel do offscreen canvas, pobiera jako PNG, wstawia <image>.
-  // Bezpieczne we wszystkich przeglądarkach i viewerach SVG (nie używa foreignObject).
-  function _svgPanelAsImage(root, svgNS, el, mapRect) {
-    try {
-      const er = el.getBoundingClientRect();
-      const px = Math.round(er.left - mapRect.left);
-      const py = Math.round(er.top  - mapRect.top);
-      const pw = Math.ceil(Math.max(er.width, el.offsetWidth, el.scrollWidth));
-      const ph = Math.ceil(Math.max(er.height, el.offsetHeight, el.scrollHeight)) + 40;
-      if (px + pw < 0 || py + ph < 0) return;
-
-      // Offscreen canvas — panel renderowany tak jakby był w (0,0)
-      const offCanvas = document.createElement('canvas');
-      offCanvas.width  = pw;
-      offCanvas.height = ph;
-      const offCtx = offCanvas.getContext('2d');
-
-      // Fake mapRect: przesuwa układ współrzędnych tak żeby panel zaczął się w (0,0)
-      const fakeMapRect = { left: er.left, top: er.top };
-      renderPanelToCanvas(offCtx, el, fakeMapRect);
-
-      // Embed jako <image> w SVG
-      const imgEl = document.createElementNS(svgNS, 'image');
-      imgEl.setAttribute('href', offCanvas.toDataURL('image/png'));
-      imgEl.setAttribute('x', px);
-      imgEl.setAttribute('y', py);
-      imgEl.setAttribute('width',  pw);
-      imgEl.setAttribute('height', ph);
-      root.appendChild(imgEl);
-    } catch(e) {
-      console.error('_svgPanelAsImage error for #' + el.id + ':', e);
-    }
   }
 
 })();
@@ -14517,7 +14526,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.49.4';
+const APP_VERSION = 'v1.49.5';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -19373,12 +19382,20 @@ function toggleChangelog(e) {
         return `<div class="cl-entry" style="cursor:pointer" onclick="undoToIndex(${idx})" title="Kliknij aby cofnąć tę zmianę i wszystkie nowsze"><span class="cl-sym">${sym}</span> ${escHtml(entry.label)}</div>`;
       }).join('') || '<div style="color:var(--dim);padding:6px">Brak zmian</div>';
     }
-    // Pozycjonuj
+    // Pozycjonuj (Arc 35: clamp do viewportu z kompensacja html zoom —
+    // gBCR zwraca px urzadzenia, style.left/top przyjmuja px layoutu;
+    // trigger w dolnym pasku wypychal popup poza ekran)
     const trigger = document.getElementById('msb-change-count');
     if (trigger) {
+      const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
       const tr = trigger.getBoundingClientRect();
-      popup.style.left = tr.left + 'px';
-      popup.style.top  = (tr.bottom + 4) + 'px';
+      const vwL = window.innerWidth / z, vhL = window.innerHeight / z;
+      const pw = popup.offsetWidth, ph = popup.offsetHeight;
+      let left = tr.left / z, top = tr.bottom / z + 4;
+      if (left + pw > vwL - 4) left = Math.max(4, vwL - pw - 4);
+      if (top + ph > vhL - 4) top = Math.max(4, tr.top / z - ph - 4);  // flip nad trigger
+      popup.style.left = left + 'px';
+      popup.style.top  = top + 'px';
     }
   }
 }
@@ -20655,18 +20672,22 @@ function _deltaRoomDiffRows(before, after, resolve) {
     (k) => '−wyjście specjalne „' + k + '"',
     (k, bv, av) => 'specjalne „' + k + '": ' + res(bv) + ' → ' + res(av),
     v => res(v));
+  // Arc 35 (v1.49.5): prawdziwe wartosci zamiast placeholderow „stare"/"nowe".
+  // CL: podsumowanie punktow (N -> M); drzwi: stan tekstowy (open/closed/locked).
+  const clDisp = v => { const n = (v && Array.isArray(v.points)) ? v.points.length : 0; return n + ' pkt'; };
   mapDiff('custom_lines', 'custom_lines', 'custom line ',
-    (k) => '+custom line ' + k,
-    (k) => '−custom line ' + k,
-    (k) => 'custom line ' + k + ': zmiana',
-    () => 'narysowana',
-    () => ['stare punkty', 'nowe punkty']);
+    (k, v) => '+custom line ' + k + ' (' + clDisp(v) + ')',
+    (k, v) => '−custom line ' + k + ' (' + clDisp(v) + ')',
+    (k, bv, av) => 'custom line ' + k + ': ' + clDisp(bv) + ' → ' + clDisp(av),
+    v => clDisp(v),
+    (k, bv, av) => [clDisp(bv), clDisp(av)]);
+  const doorDisp = v => (typeof DOOR_STR === 'object' && DOOR_STR[v]) ? DOOR_STR[v] : String(v);
   mapDiff('doors', 'doors', 'drzwi ',
-    (k) => '+drzwi ' + k,
-    (k) => '−drzwi ' + k,
-    (k) => 'drzwi ' + k + ': zmiana',
-    () => 'są',
-    () => ['stare', 'nowe']);
+    (k, v) => '+drzwi ' + k + ' (' + doorDisp(v) + ')',
+    (k, v) => '−drzwi ' + k + ' (' + doorDisp(v) + ')',
+    (k, bv, av) => 'drzwi ' + k + ': ' + doorDisp(bv) + ' → ' + doorDisp(av),
+    v => doorDisp(v),
+    (k, bv, av) => [doorDisp(bv), doorDisp(av)]);
   mapDiff('exit_weights', 'exit_weights', 'waga wyjścia ',
     (k) => '+waga wyjścia ' + k,
     (k) => '−waga wyjścia ' + k,
@@ -20675,7 +20696,120 @@ function _deltaRoomDiffRows(before, after, resolve) {
   const bl = new Set(b.exit_locks || []), al = new Set(a.exit_locks || []);
   for (const k of al) if (!bl.has(k)) row('zamek ' + k, '—', 'jest', '+zamek ' + k);
   for (const k of bl) if (!al.has(k)) row('zamek ' + k, 'jest', '—', '−zamek ' + k);
-  if (stableStringify(b.user_data || {}) !== stableStringify(a.user_data || {})) row('user_data', 'stare', 'nowe', 'dane użytkownika (user_data)');
+  // Arc 35 (v1.49.5): user_data per-klucz z prawdziwymi wartosciami
+  // (pre-fix: jeden wiersz z literalnymi slowami „stare"/"nowe").
+  const fmtUd = v => (v !== null && typeof v === 'object') ? JSON.stringify(v) : String(v);
+  const bud = b.user_data || {}, aud = a.user_data || {};
+  for (const k of Object.keys(aud)) {
+    if (bud[k] === undefined)
+      row('user_data.' + k, '—', fmtUd(aud[k]), '+user_data ' + k + ' = ' + fmtUd(aud[k]));
+    else if (stableStringify(bud[k]) !== stableStringify(aud[k]))
+      row('user_data.' + k, fmtUd(bud[k]), fmtUd(aud[k]), 'user_data ' + k + ': ' + fmtUd(bud[k]) + ' → ' + fmtUd(aud[k]));
+  }
+  for (const k of Object.keys(bud)) {
+    if (aud[k] === undefined)
+      row('user_data.' + k, fmtUd(bud[k]), '—', '−user_data ' + k + ' (bylo ' + fmtUd(bud[k]) + ')');
+  }
+  return rows;
+}
+
+// ── Arc 35 (v1.49.5): diffRows dla kolejnych typow opow ────────────────────
+// Wartosci z payloadu zamiast generycznego fallbacku. Karmi: wiersz panelu,
+// karte kliku (tabela parametr|aktualnie|w kalce), raport .md i .html.
+// Czysta warstwa prezentacji — payload opow i checksumy NIETKNIETE.
+function _deltaOpExtraDiffRows(op, resolve) {
+  const P = op.payload || {};
+  const rows = [];
+  const row = (p, bv, av, str) => rows.push({ p, b: bv, a: av, str });
+  const res = v => { const r = resolve ? resolve(v) : v; return (typeof r === 'number') ? ('#' + r) : String(r); };
+  const fmt = v => (v !== null && typeof v === 'object') ? JSON.stringify(v) : String(v ?? '—');
+  const pos3 = o => '(' + (o.x ?? 0) + ',' + (o.y ?? 0) + ',' + (o.z ?? 0) + ')';
+  const pos2 = (x, y) => '(' + (x ?? 0) + ',' + (y ?? 0) + ')';
+  const clSum = v => { const n = (v && Array.isArray(v.points)) ? v.points.length : 0; return n + ' pkt'; };
+  switch (op.type) {
+    case 'EDIT_LABEL': {
+      const bb = P.before || {}, aa = P.after || {};
+      if ((bb.text || '') !== (aa.text || ''))
+        row('tekst', '„' + (bb.text || '') + '"', '„' + (aa.text || '') + '"', 'tekst: „' + (bb.text || '') + '" → „' + (aa.text || '') + '"');
+      if ((bb.x ?? 0) !== (aa.x ?? 0) || (bb.y ?? 0) !== (aa.y ?? 0) || (bb.z ?? 0) !== (aa.z ?? 0))
+        row('pozycja', pos3(bb), pos3(aa), 'pozycja ' + pos3(bb) + ' → ' + pos3(aa));
+      if ((bb.width ?? 0) !== (aa.width ?? 0) || (bb.height ?? 0) !== (aa.height ?? 0))
+        row('rozmiar', (bb.width ?? 0) + '×' + (bb.height ?? 0), (aa.width ?? 0) + '×' + (aa.height ?? 0),
+          'rozmiar ' + (bb.width ?? 0) + '×' + (bb.height ?? 0) + ' → ' + (aa.width ?? 0) + '×' + (aa.height ?? 0));
+      break;
+    }
+    case 'ADD_LABEL': {
+      const l = P.label || {};
+      row('tekst', '—', '„' + (l.text || '') + '"', '+etykieta „' + (l.text || '') + '"');
+      row('pozycja', '—', pos3(l), 'pozycja ' + pos3(l));
+      break;
+    }
+    case 'DELETE_LABEL': {
+      const l = P.label || {};
+      row('tekst', '„' + (l.text || '') + '"', '—', '−etykieta „' + (l.text || '') + '"');
+      row('pozycja', pos3(l), '—', 'pozycja ' + pos3(l));
+      break;
+    }
+    case 'MOVE_LABEL':
+      row('pozycja', pos2(P.fromX, P.fromY), pos2(P.toX, P.toY),
+        'pozycja ' + pos2(P.fromX, P.fromY) + ' → ' + pos2(P.toX, P.toY));
+      break;
+    case 'RESIZE_LABEL':
+      row('rozmiar', (P.fromW ?? 0) + '×' + (P.fromH ?? 0), (P.toW ?? 0) + '×' + (P.toH ?? 0),
+        'rozmiar ' + (P.fromW ?? 0) + '×' + (P.fromH ?? 0) + ' → ' + (P.toW ?? 0) + '×' + (P.toH ?? 0));
+      if ((P.fromX ?? 0) !== (P.toX ?? 0) || (P.fromY ?? 0) !== (P.toY ?? 0))
+        row('pozycja', pos2(P.fromX, P.fromY), pos2(P.toX, P.toY),
+          'pozycja ' + pos2(P.fromX, P.fromY) + ' → ' + pos2(P.toX, P.toY));
+      break;
+    case 'EDIT_CL': {
+      const bb = P.before || {}, aa = P.after || {};
+      const bn = (Array.isArray(bb.points) ? bb.points.length : 0), an = (Array.isArray(aa.points) ? aa.points.length : 0);
+      if (bn !== an) row('punkty', bn + ' pkt', an + ' pkt', 'punkty: ' + bn + ' → ' + an);
+      if ((bb.color || '') !== (aa.color || ''))
+        row('kolor', String(bb.color || '—'), String(aa.color || '—'), 'kolor: ' + (bb.color || '—') + ' → ' + (aa.color || '—'));
+      if ((bb.style || '') !== (aa.style || ''))
+        row('styl', String(bb.style || '—'), String(aa.style || '—'), 'styl: ' + (bb.style || '—') + ' → ' + (aa.style || '—'));
+      if (!rows.length) row('custom line', clSum(bb), clSum(aa), 'custom line: zmiana');
+      break;
+    }
+    case 'EDIT_AREA':
+      if ((P.beforeName || '') !== (P.name || ''))
+        row('nazwa', '„' + (P.beforeName || '') + '"', '„' + (P.name || '') + '"',
+          'nazwa: „' + (P.beforeName || '') + '" → „' + (P.name || '') + '"');
+      if (stableStringify(P.beforeUserData || {}) !== stableStringify(P.user_data || {}))
+        row('user_data', fmt(P.beforeUserData || {}), fmt(P.user_data || {}), 'user_data obszaru: zmiana');
+      break;
+    case 'DELETE_SPECIAL_EXIT':
+      row('polecenie', '„' + (P.cmd || '') + '"', '—', '−wyjście specjalne „' + (P.cmd || '') + '"');
+      if (P.targetId !== undefined) row('cel', res(P.targetId), '—', 'cel: ' + res(P.targetId));
+      break;
+    case 'DELETE_ROOM': {
+      const r = P.room || {};
+      row('pokój', '„' + (r.name || '') + '" (' + res(r.id) + ')', '—', '−pokój „' + (r.name || '') + '" (' + res(r.id) + ')');
+      row('pozycja', pos3(r), '—', 'pozycja ' + pos3(r));
+      break;
+    }
+    case 'EDIT_ENV_COLOR': {
+      const cFmt = c => Array.isArray(c) ? ('rgb(' + c.join(',') + ')') : 'domyślny';
+      row('kolor env ' + (op.target && op.target.envId), cFmt(P.oldColor), cFmt(P.newColor),
+        'kolor env: ' + cFmt(P.oldColor) + ' → ' + cFmt(P.newColor));
+      break;
+    }
+    case 'PAINT_BATCH': {
+      const ch = (P.changes || []).filter(c => !!c);  // F1.6: guard jak w classifyDelta — wrogie null-e nie rzucaja
+      row('zmiany', '—', String(ch.length), 'malowanie: ' + ch.length + ' pokoi');
+      const CAP = 5;
+      for (let i = 0; i < Math.min(ch.length, CAP); i++) {
+        const c = ch[i];
+        const bDesc = 'env ' + (c.beforeEnv ?? '—') + ' / „' + (c.beforeSymbol ?? '') + '"';
+        const aDesc = 'env ' + (c.afterEnv ?? '—') + ' / „' + (c.afterSymbol ?? '') + '"';
+        row('#' + c.roomId, bDesc, aDesc, res(c.roomId) + ': ' + bDesc + ' → ' + aDesc);
+      }
+      if (ch.length > CAP) row('…', '—', '+' + (ch.length - CAP), '… i ' + (ch.length - CAP) + ' wiecej');
+      break;
+    }
+    default: break;
+  }
   return rows;
 }
 
@@ -21278,6 +21412,7 @@ function classifyDelta(delta) {
     if (items.length > _beforeLen) _sim(op, items[items.length - 1].cls);
   }
   // M5: diff before->after (wiersz panelu + etykieta ducha) dla edycji pokoi/wyjść;
+  // M5b: pozostałe typy opów dostają wiersze z _deltaOpExtraDiffRows;
   // areaInfo dla ok-ADD_AREA (klik = informacja — obszar jeszcze nie istnieje).
   for (let i = 0; i < delta.ops.length; i++) {
     const op = delta.ops[i], it = items[i];
@@ -21289,6 +21424,11 @@ function classifyDelta(delta) {
       const sid = String(op.target.areaId);
       it.areaInfo = { name: (op.payload.area && op.payload.area.name) || '',
         rooms: delta.ops.filter(o => o.type === 'ADD_ROOM' && String(o.target.areaId) === sid).length };
+    }
+    // M5b: pozostałe typy opów — realne wartości zamiast samych etykiet
+    if (!it.diffRows) {
+      const extra = _deltaOpExtraDiffRows(op, resR);
+      if (extra.length) { it.diffRows = extra; it.diff = extra.map(r => r.str); }
     }
     // M6c: dane strukturalne karty konfliktu (tabela parametr | aktualnie | w kalce)
     if (it.coll && (op.type === 'ADD_ROOM' || op.type === 'MOVE_ROOM')) {

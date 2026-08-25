@@ -2,6 +2,17 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.49.5 — Eksport: 100% pokrycia pod zoomem, kalka z prawdziwymi wartosciami, font mono 13px, audyt geometrii (Arc 35)
+
+Paczka z decyzji wlasciciela: wszystko co user widzi ma byc mozliwe do zrzucenia (poza chrome aplikacji). Piny repro-first: diff_kalka D6 (19 pinow), tier6_ux B23/B24, scenariusze empiryczne E26 (kompozyt eksportu) i E27 (audyt geometrii 61 kontenerow x 3 skale).
+
+- Eksport PNG/SVG pod zoomem UI: HUD (minimap, podglad trasy, panele, modale) rysowany wspolnym kompozytem z przelicznikiem r = bitmapa/ekran — pre-fix przy skali != 100% nakladki ladowaly poza kadrem. Kompozyt konsumowany tez przez kopie do schowka.
+- Pokrycie eksportu 100%: panele tresci (Obszar, Walidacja kierunkow, Kalka), toolbar i wszystkie 49 okien modalnych (42 dlg-bg + 7 wlasnych) z przyciemnionym tlem; kontrolki formularzy (przyciski, selecty, textarea, checkboxy) renderowane z wartosciami. Jawne wykluczenia chrome: sidebar, panele eksportu/ustawien, menu, toast, tooltipy.
+- Kalka .arkdelta: karta operacji pokazuje prawdziwe wartosci zamiast placeholderow — user_data per-klucz (bylo literalne „stare"/"nowe"), custom lines z liczba punktow, drzwi ze stanami tekstowymi; wiersze diff dla kolejnych 10 typow opow (etykiety, EDIT_CL, EDIT_AREA, DELETE_ROOM, PAINT_BATCH i in.). Jedna poprawka karmi wiersz panelu, karte kliku, raport .md i .html; payload opow i checksumy nietkniete.
+- Font UI: stack Consolas/Menlo/DejaVu Sans Mono/Liberation Mono/Courier New (bez Cascadia — w CI rozwiazywal sie do fontu proporcjonalnego), baza 13px/1.45, wspolny stack w rendererze canvas eksportu.
+- Domyslna skala interfejsu wraca na 100% (ewaluacja Arc 34 105%: font 13px daje czytelnosc bez zoomu; zoom=1 znosi rozjazdy pomiarowe przy eksporcie i dragach).
+- Audyt geometrii kazdego okna i klawisza: popup historii zmian clampowany do viewportu z kompensacja zoomu (pre-fix wypadl poza ekran z dolnego paska), about-modal i panel ustawien z max-height kompensujacym zoom (vh nie skaluje sie z html zoom), pola RGB poszerzone (spinner nie uciety), przycisk zapisu obszaru bez zawijania.
+
 ## v1.49.4 — Obserwacje uzytkownika: determinizm kalki, nawias w kopiach, akceptacje w undo, reset avoidLocked, skala 105% (Arc 34)
 
 Druga paczka z obserwacji uzytkownika (2026-08-25, analiza materialow testowych: pary map orig/edycja/undoAll, 4 warianty kalki, eksporty PNG/SVG, raporty). Piny repro-first: delta T2b, save_dialogs A4.5 (UX-5C), dir_validation obs3 (12 pinow + anty-drift), planner_ui P7 (obs 4), tier6_ux B23, scenariusze empiryczne E24/E25.

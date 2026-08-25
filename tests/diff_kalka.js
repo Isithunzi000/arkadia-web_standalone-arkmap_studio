@@ -331,6 +331,118 @@ console.log('— D5: piny UI (standalone, D7) —');
   ok(HTML.indexOf('if (!validateDeltaText(text).ok)') !== -1, 'autowalidacja przed zapisem');
 }
 
+console.log('— D6: realne wartosci w wierszach diff (Arc 35, v1.49.5) —');
+{
+  // Kazdy op w formacie .arkdelta (target/payload jak z buildDelta). diffRows
+  // karmia: wiersz panelu, karte kliku, raport .md/.html i etykiete ducha.
+  const A = mapBase();
+  const c = makeCtx(A);
+  const r1 = A.areas[0].rooms[0], r2 = A.areas[0].rooms[1], r3 = A.areas[0].rooms[2];
+  const r20 = A.areas[1].rooms[0];
+  const mkUd = (base, ud) => Object.assign({}, clone(base), { user_data: ud });
+  const ops = [
+    // 1: EDIT_ROOM — user_data per-klucz (pre-fix: jeden wiersz „stare"/"nowe")
+    { seq: 1, type: 'EDIT_ROOM', target: { roomId: 1 },
+      payload: { before: mkUd(r1, { klucz: 'a' }), after: mkUd(r1, { klucz: 'b', nowy: 5 }) } },
+    // 2: EDIT_ROOM — custom_lines (N pkt) + drzwi (stany tekstowe)
+    { seq: 2, type: 'EDIT_ROOM', target: { roomId: 3 },
+      payload: {
+        before: Object.assign({}, clone(r3), { custom_lines: { n: { points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] } }, doors: { n: 1 } }),
+        after:  Object.assign({}, clone(r3), { custom_lines: { n: { points: [{ x: 0, y: 0 }] } }, doors: { n: 3 } }) } },
+    // 3-7: etykiety
+    { seq: 3, type: 'EDIT_LABEL', target: { areaId: 1, labelId: 1 },
+      payload: { before: { id: 1, text: 'L1', x: 0, y: 0, z: 0, width: 4, height: 1.2 },
+                 after:  { id: 1, text: 'L1x', x: 2, y: 0, z: 0, width: 4, height: 1.2 } } },
+    { seq: 4, type: 'ADD_LABEL', target: { areaId: 1 },
+      payload: { label: { id: 'd:9', text: 'NOWA', x: 3, y: 3, z: 0, width: 2, height: 1 } } },
+    { seq: 5, type: 'DELETE_LABEL', target: { areaId: 1, labelId: 1 },
+      payload: { label: { id: 1, text: 'L1', x: 0, y: 0, z: 0, width: 4, height: 1.2 } } },
+    { seq: 6, type: 'MOVE_LABEL', target: { areaId: 1, labelId: 1 },
+      payload: { fromX: 0, fromY: 0, toX: 5, toY: 6 } },
+    { seq: 7, type: 'RESIZE_LABEL', target: { areaId: 1, labelId: 1 },
+      payload: { fromW: 4, fromH: 1.2, fromX: 0, fromY: 0, toW: 6, toH: 2, toX: 0, toY: 0 } },
+    // 8: EDIT_CL — punkty + kolor
+    { seq: 8, type: 'EDIT_CL', target: { roomId: 1, dir: 'n' },
+      payload: { before: { points: [{ x: 0, y: 0 }, { x: 1, y: 1 }], color: '#111', style: 'solid' },
+                 after:  { points: [{ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 2 }], color: '#222', style: 'solid' } } },
+    // 9: EDIT_AREA — nazwa
+    { seq: 9, type: 'EDIT_AREA', target: { areaId: 1 },
+      payload: { name: 'Area One X', user_data: {}, beforeName: 'Area One', beforeUserData: {} } },
+    // 10: DELETE_SPECIAL_EXIT — polecenie + cel
+    { seq: 10, type: 'DELETE_SPECIAL_EXIT', target: { roomId: 2 },
+      payload: { cmd: 'wspinacz', targetId: 3 } },
+    // 11: DELETE_ROOM — nazwa + pozycja
+    { seq: 11, type: 'DELETE_ROOM', target: { roomId: 20, areaId: 2 },
+      payload: { room: clone(r20) } },
+    // 12: EDIT_ENV_COLOR — rgb
+    { seq: 12, type: 'EDIT_ENV_COLOR', target: { envId: 300 },
+      payload: { oldColor: null, newColor: [10, 20, 30] } },
+    // 13: PAINT_BATCH — liczba + wiersze per pokoj
+    { seq: 13, type: 'PAINT_BATCH', target: {},
+      payload: { changes: [
+        { roomId: 1, beforeEnv: 258, beforeSymbol: '', afterEnv: 262, afterSymbol: '#' },
+        { roomId: 2, beforeEnv: 258, beforeSymbol: '', afterEnv: 262, afterSymbol: '#' } ] } },
+    // 14: MOVE_ROOM — typ poza zakresem PRACY 3: nadal BEZ diffRows (guard)
+    { seq: 14, type: 'MOVE_ROOM', target: { roomId: 3 },
+      payload: { fromX: 2, fromY: 0, fromZ: 0, toX: 9, toY: 0, toZ: 0 } },
+  ];
+  const cls = c.api.classifyDelta({ ops });
+  const at = seq => cls.find(i => i.seq === seq);
+  const rows = seq => (at(seq).diffRows || []);
+  const strs = seq => rows(seq).map(r => r.str).join(' | ');
+
+  // — EDIT_ROOM: user_data z prawdziwymi wartosciami (pin dyskryminujacy) —
+  ok(rows(1).some(r => r.p === 'user_data.klucz' && r.b === 'a' && r.a === 'b'),
+    'user_data: wiersz per-klucz z wartosciami a -> b || ' + strs(1));
+  ok(rows(1).some(r => r.p === 'user_data.nowy' && r.b === '—' && r.a === '5'),
+    'user_data: nowy klucz jako osobny wiersz');
+  ok(!rows(1).some(r => r.b === 'stare' || r.a === 'nowe'),
+    'user_data: ZERO literalow „stare"/"nowe" (placeholder usuniety)');
+
+  // — EDIT_ROOM: custom line i drzwi —
+  ok(rows(2).some(r => r.p === 'custom line n' && r.b === '2 pkt' && r.a === '1 pkt'),
+    'custom line: podsumowanie punktow 2 pkt -> 1 pkt || ' + strs(2));
+  ok(rows(2).some(r => r.p === 'drzwi n' && r.b === 'open' && r.a === 'locked'),
+    'drzwi: stan tekstowy open -> locked || ' + strs(2));
+
+  // — tabela per typ (M5b: _deltaOpExtraDiffRows podpieta w dispatch) —
+  ok(strs(3).includes('tekst: „L1" → „L1x"') && strs(3).includes('pozycja (0,0,0) → (2,0,0)'),
+    'EDIT_LABEL: tekst + pozycja || ' + strs(3));
+  ok(strs(4).includes('+etykieta „NOWA"') && strs(4).includes('pozycja (3,3,0)'),
+    'ADD_LABEL: tekst + pozycja || ' + strs(4));
+  ok(strs(5).includes('−etykieta „L1"'),
+    'DELETE_LABEL: tekst || ' + strs(5));
+  ok(strs(6).includes('pozycja (0,0) → (5,6)'),
+    'MOVE_LABEL: pozycja 2D || ' + strs(6));
+  ok(strs(7).includes('rozmiar 4×1.2 → 6×2'),
+    'RESIZE_LABEL: rozmiar || ' + strs(7));
+  ok(strs(8).includes('punkty: 2 → 3') && strs(8).includes('kolor: #111 → #222'),
+    'EDIT_CL: punkty + kolor || ' + strs(8));
+  ok(strs(9).includes('nazwa: „Area One" → „Area One X"'),
+    'EDIT_AREA: nazwa || ' + strs(9));
+  ok(strs(10).includes('−wyjście specjalne „wspinacz"') && strs(10).includes('cel: #3'),
+    'DELETE_SPECIAL_EXIT: polecenie + cel || ' + strs(10));
+  ok(strs(11).includes('−pokój „R20" (#20)') && strs(11).includes('pozycja (5,5,0)'),
+    'DELETE_ROOM: nazwa + pozycja || ' + strs(11));
+  ok(rows(12).some(r => r.p === 'kolor env 300' && r.b === 'domyślny' && r.a === 'rgb(10,20,30)'),
+    'EDIT_ENV_COLOR: domyslny -> rgb(10,20,30) || ' + strs(12));
+  ok(strs(13).includes('malowanie: 2 pokoi') && strs(13).includes('#1: env 258 / „" → env 262 / „#"'),
+    'PAINT_BATCH: liczba + wiersze per pokoj || ' + strs(13));
+
+  // — guard: typy poza zakresem nadal bez diffRows —
+  ok(at(14).diffRows === undefined && at(14).diff === undefined,
+    'MOVE_ROOM: bez diffRows (typ poza zakresem — zachowanie nietkniete)');
+
+  // — spojnosc: legacy it.diff === diffRows.map(str) —
+  ok(cls.filter(i => i.diffRows).every(i => JSON.stringify(i.diff) === JSON.stringify(i.diffRows.map(r => r.str))),
+    'kazdy item z diffRows ma zsynchronizowane legacy diff');
+
+  // — determinizm: dwukrotna klasyfikacja daje identyczne wiersze —
+  const cls2 = c.api.classifyDelta({ ops: JSON.parse(JSON.stringify(ops)) });
+  ok(JSON.stringify(cls2.map(i => i.diffRows || null)) === JSON.stringify(cls.map(i => i.diffRows || null)),
+    'classifyDelta x2: diffRows deterministyczne');
+}
+
 console.log('');
 console.log('═══ diff_kalka: ' + pass + ' OK, ' + fail + ' FAIL ═══');
 process.exit(fail ? 1 : 0);

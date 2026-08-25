@@ -1,7 +1,8 @@
 // Harness — raf_shim.js: straznik RAF-batchinga i shima render-to-offscreen
 // (Arc 31 F1, v1.46.0). Pinuje:
 //  A. strukture scheduleDraw (flaga koalescencji, RAF -> draw(), rearm),
-//  B. komplet podmiany call-site'ow: 121x scheduleDraw(); i DOKLADNIE 1 gole
+//  B. komplet podmiany call-site'ow: 123x scheduleDraw(); (Arc 35: wyrownane
+//     po Arc 34 — pin B1 liczy aktualna wartoscia) i DOKLADNIE 1 gole
 //     draw(); w calym pliku (wewnatrz scheduleDraw — kontrakt synchroniczny),
 //  C. strukture _withRenderTarget (try/finally, przywracanie cv/ctx i pol,
 //     lista swapow, komentarz decyzji D1),

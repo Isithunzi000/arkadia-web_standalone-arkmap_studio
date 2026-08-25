@@ -15,7 +15,7 @@ if [ -n "${CHROMIUM_BIN:-}" ] || command -v chromium >/dev/null 2>&1; then
   # wylacznie na sygnature CZYSTEJ zawiechy srodowiska (rc!=0 LUB BRAK SUMMARY)
   # **i zero linii R|FAIL w outpucie**. FAIL asercji nigdy nie jest retry'owany
   # ani maskowany — run od razu czerwieni (doktryna jak w bloku E15).
-  CAMP_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13 E14 E16 E17 E18 E19 E20 E21 E22 E23 E24 E25"
+  CAMP_GROUPS="SMOKE E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 E11 E12 E13 E14 E16 E17 E18 E19 E20 E21 E22 E23 E24 E25 E26 E27"
   CAMP_OUT="$(ARKTEST_GROUPS="$CAMP_GROUPS" ARKTEST_BUDGET=300000 ARKTEST_TIMEOUT=420 bash tests/empirical.sh 2>&1)" && CAMP_RC=0 || CAMP_RC=$?
   echo "$CAMP_OUT"
   if [ "$CAMP_RC" -ne 0 ] && ! printf '%s\n' "$CAMP_OUT" | grep -q 'R|FAIL'; then

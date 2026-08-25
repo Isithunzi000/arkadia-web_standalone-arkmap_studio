@@ -99,13 +99,14 @@ function loadBase(fmt) {
           + ' crc: state.baseInfo && state.baseInfo.crc, deltaLog: state.deltaLog.length })');
 }
 
-// Izolacja zoomu (Arc 34, v1.49.4): domyslna skala to 105%. Czesc pinow mierzy
-// MATEMATYKE layoutu/dragu w css px (dopasowanie okien przy 105% bada osobno E25).
+// Izolacja zoomu (Arc 34, v1.49.4): czesc pinow mierzy MATEMATYKE layoutu/dragu
+// w css px (dopasowanie okien przy skali domyslnej bada osobno E25/E27).
 // API pomiarowe Chrome pod zoom sa niespojne (getBoundingClientRect mnozy,
 // getComputedStyle dzieli, style.* wychodza ulamkowe) i zaleza od wersji silnika,
-// wiec piny dokladnych pikseli jada na izolowanym 100% z przywroceniem 105%.
+// wiec piny dokladnych pikseli jada na izolowanym 100% z przywroceniem domyslnej.
+// Arc 35 (v1.49.5): domyslna skala to 100% — restore = 100.
 function zoomIsolate100() { ex('if (typeof applyUiScale === "function") applyUiScale(100);'); }
-function zoomRestoreDefault() { ex('if (typeof applyUiScale === "function") applyUiScale(105);'); }
+function zoomRestoreDefault() { ex('if (typeof applyUiScale === "function") applyUiScale(100);'); }
 
 // ── Rejestr scenariuszy ──────────────────────────────────────────────────────
 const SC = [];
@@ -4227,10 +4228,14 @@ scenario('E24.accept-undo', async () => {
   }
 });
 
-// ═══ Arc 34 (v1.49.4, obs 7 + obs 2): E25 — domyslne 105% + bramka geometrii ═══
-// Zoom skaluje proporcje (kontener i tekst razem), wiec przy 105% nie wolno
-// znalezc ZADNEGO poziomego overflow w dialogach. Enumeracja dynamiczna —
-// przyszle okna wchodza do bramki automatycznie.
+// ═══ E25 — domyslna skala UI + bramka geometrii ═══
+// Arc 34 (v1.49.4, obs 7 + obs 2): domyslne 105% + bramka przy 105%.
+// Arc 35 (v1.49.5) EWALUACJA 105->100: font 13px + stack Consolas/Menlo/DejaVu/
+// Liberation/Courier daje czytelnosc bez zoomu; default wraca na 100% (zoom=1
+// znosi tez cala klase rozjazdow gBCR/computed przy eksporcie i dragach).
+// Zoom skaluje proporcje (kontener i tekst razem), wiec przy skali domyslnej
+// nie wolno znalezc ZADNEGO poziomego overflow w dialogach. Enumeracja
+// dynamiczna — przyszle okna wchodza do bramki automatycznie.
 scenario('E25.uiscale', async () => {
   ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
   await loadBase('dat');
@@ -4240,17 +4245,17 @@ scenario('E25.uiscale', async () => {
     + " var root = getComputedStyle(document.documentElement).getPropertyValue('--ui-scale').trim();"
     + " var sl = document.getElementById('ui-scale-slider');"
     + " var def = sl ? sl.defaultValue : null;"
-    + " applyUiScale(105);"
+    + " applyUiScale(100);"
     + " return JSON.stringify({ root: root, def: def,"
     + "   zoom: getComputedStyle(document.documentElement).zoom,"
     + "   val: document.getElementById('ui-scale-val').textContent });"
-    + "})()"), 'domyslna skala z :root + suwak + applyUiScale(105)');
+    + "})()"), 'domyslna skala z :root + suwak + applyUiScale(100)');
   if (d) {
     const o = JSON.parse(d);
-    EQ('E25.root', o.root, '1.05', '--ui-scale z :root = 1.05 (pre-fix: 1)');
-    EQ('E25.slider', o.def, '105', 'defaultValue suwaka = 105 (pre-fix: 100)');
-    EQ('E25.zoom', o.zoom, '1.05', 'computed zoom = 1.05 po applyUiScale(105)');
-    EQ('E25.label', o.val, '105%', 'etykieta suwaka 105%');
+    EQ('E25.root', o.root, '1', '--ui-scale z :root = 1 (Arc 35; Arc 34: 1.05)');
+    EQ('E25.slider', o.def, '100', 'defaultValue suwaka = 100 (Arc 35; Arc 34: 105)');
+    EQ('E25.zoom', o.zoom, '1', 'computed zoom = 1 po applyUiScale(100)');
+    EQ('E25.label', o.val, '100%', 'etykieta suwaka 100%');
   }
   // obs 2: nawias podtytulu dlg-backups w jednym prostokacie (nowrap)
   const sp = AEV('E25.bakspan', ev("(function(){"
@@ -4262,7 +4267,7 @@ scenario('E25.uiscale', async () => {
     + " return n;"
     + "})()"), 'nowrap span nawiasu w dlg-backups');
   EQ('E25.bakspan1', sp, 1, 'nawias „(maks. 5 na plik)" nie lamie sie w srodku (1 prostokat; pre-fix: brak spanu)');
-  // bramka geometrii: wszystkie dialogi przy 105%, poziomy overflow przyciskow i tekstow
+  // bramka geometrii: wszystkie dialogi przy skali domyslnej (100%, Arc 35), poziomy overflow przyciskow i tekstow
   const g = AEV('E25.geom', ev("(function(){"
     + " var bad = [];"
     + " var dlgs = document.querySelectorAll('.dlg-bg');"
@@ -4278,13 +4283,418 @@ scenario('E25.uiscale', async () => {
     + "   dlg.classList.remove('open');"
     + " }"
     + " return JSON.stringify({ n: dlgs.length, bad: bad });"
-    + "})()"), 'sweep wszystkich dialogow (.dlg-bg) przy skali 105%');
+    + "})()"), 'sweep wszystkich dialogow (.dlg-bg) przy skali domyslnej 100%');
   if (g) {
     const o = JSON.parse(g);
     A('E25.geom.ok', o.bad.length === 0,
-      'brak poziomego overflow w ' + o.n + ' dialogach przy 105%'
+      'brak poziomego overflow w ' + o.n + ' dialogach przy 100%'
       + (o.bad.length ? ' — naruszenia: ' + o.bad.slice(0, 4).join(' | ') : ''));
   }
+});
+
+// ═══ GRUPA E26 (Arc 35, v1.49.5) — kompozyt eksportu pod zoomem ═══
+// Diagnoza: pre-fix kompozyt dimensionuje z mapCanvas.width/height (px bitmapy),
+// a HUD pozycjonuje z gBCR (px ekranu — mnozone przez html zoom). Przy skali
+// != 100% minimap/overview/panele lądują poza kadrem (zrzuty uzytkownika).
+// Pomiar: haki na setTransform/drawImage/fillText licza EFEKTYWNE px bitmapy
+// (args x biezaca macierz transformacji) — pin bada wynik, nie implementacje.
+// Repro-first: pre-fix FAIL przy 80/105/150, PASS przy 100 (kotwica regresji).
+function installE26Hooks() {
+  ex('window.__e26imgs = []; window.__e26texts = []; window.__e26err = null;'
+   + '(function(){'
+   + ' var P = CanvasRenderingContext2D.prototype;'
+   + ' if (P.__e26hooked) return; P.__e26hooked = 1;'
+   + ' var M = new WeakMap();'
+   + ' function mx(c){ var x = M.get(c); if (!x){ x = {a:1,d:1,e:0,f:0}; M.set(c,x); } return x; }'
+   + ' var cv = document.getElementById("cv");'
+   + ' function isComp(c){ return c.canvas && c.canvas !== cv && !c.canvas.id'
+   + '   && c.canvas.width === cv.width && c.canvas.height === cv.height; }'
+   + ' var ost = P.setTransform, odi = P.drawImage, oft = P.fillText;'
+   + ' P.setTransform = function(a,b,c,d,e,f){ var x = mx(this);'
+   + '   if (a && typeof a === "object"){ x.a=a.a; x.d=a.d; x.e=a.e; x.f=a.f; }'
+   + '   else { x.a=a; x.d=d; x.e=e; x.f=f; } return ost.apply(this, arguments); };'
+   + ' P.drawImage = function(img){ var a = Array.prototype.slice.call(arguments, 1);'
+   + '   if (a.length >= 4 && isComp(this)) { var x = mx(this);'
+   + '     window.__e26imgs.push({ id: (img && img.id) || "?",'
+   + '       x: a[0]*x.a+x.e, y: a[1]*x.d+x.f, w: a[2]*x.a, h: a[3]*x.d }); }'
+   + '   return odi.apply(this, arguments); };'
+   + ' P.fillText = function(t, tx, ty){ if (isComp(this)) { var x = mx(this);'
+   + '   window.__e26texts.push({ t: String(t), x: tx*x.a+x.e, y: ty*x.d+x.f }); }'
+   + '   return oft.apply(this, arguments); };'
+   + '})();');
+  ex('window.showSaveFilePicker = undefined;'
+   + ' console.error = function(){ window.__e26err = Array.from(arguments).map(String).join(" "); };'
+   + ' URL.createObjectURL = function(b){ window.__e26 = b; return "blob:e26"; };');
+}
+// odczyt pomiaru: teksty + obrazy nagrane podczas ostatniego eksportu
+function readE26Capture() {
+  return ev('JSON.stringify({ texts: window.__e26texts.map(function(t){ return t.t; }),'
+   + ' imgs: window.__e26imgs, err: window.__e26err })');
+}
+
+scenario('E26.exportFrame', async () => {
+  await loadBase('dat');
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  await eva('new Promise(function(res){ setTimeout(res, 60); })');
+  // haki pomiarowe — jednorazowo, idempotentnie
+  installE26Hooks();
+  const near = (a, b) => Math.abs(a - b) <= 2.5;
+  const SCALES = [80, 100, 105, 150];
+  for (const s of SCALES) {
+    const tag = 's' + s;
+    // zoom -> CZEKAMY na resize canvasu (applyUiScale: setTimeout(resize, 50))
+    // -> wymus widocznosc -> reset pomiaru -> eksport PNG
+    ex('applyUiScale(' + s + ');');
+    await eva('new Promise(function(res){ setTimeout(res, 140); })');
+    ex(' if (typeof updateMinimap === "function") updateMinimap();'
+     + ' document.getElementById("minimap").classList.add("visible");'
+     + ' document.getElementById("room-panel").classList.add("visible");'
+     + ' document.getElementById("wp-overview").classList.add("visible");'
+     + ' window.__e26 = null; window.__e26err = null;'
+     + ' window.__e26imgs.length = 0; window.__e26texts.length = 0;'
+     + ' document.getElementById("ep-toggle-panels").checked = true;'
+     + ' document.getElementById("ep-fmt-png").click();'
+     + ' document.getElementById("ep-do-btn").click();');
+    // eksport odpala sie przez requestAnimationFrame (stub: setTimeout 0) —
+    // czekamy na blob zanim odczytamy pomiar hakow
+    await eva('(async function(){ for (var i = 0; i < 240 && !window.__e26 && !window.__e26err; i++)'
+     + ' await new Promise(function(res){ setTimeout(res, 50); }); })()');
+    const d = AEV('E26.' + tag + '.cap', ev('(function(){'
+     + ' var cv = document.getElementById("cv"), mr = cv.getBoundingClientRect();'
+     + ' var r = cv.width / mr.width;'
+     + ' function xp(id){ var b = document.getElementById(id).getBoundingClientRect();'
+     + '   return { x: (b.left-mr.left)*r, y: (b.top-mr.top)*r, w: b.width*r, h: b.height*r }; }'
+     + ' var t = document.querySelector("#room-panel .rp-title, #rp-title");'
+     + ' return JSON.stringify({ W: cv.width, H: cv.height,'
+     + '   mm: xp("minimap"), ov: xp("wp-overview"), rp: xp("room-panel"),'
+     + '   rpTitle: t ? t.textContent.trim() : null,'
+     + '   imgs: window.__e26imgs, texts: window.__e26texts.slice(0, 60),'
+     + '   err: window.__e26err });'
+     + '})()'), 'pomiar kompozytu przy skali ' + s + '%');
+    if (!d) continue;
+    const o = JSON.parse(d);
+    if (o.err) FAIL('E26.' + tag + '.err', 'console.error podczas eksportu: ' + o.err);
+    const imgMm = o.imgs.find(i => i.id === 'minimap-cv');
+    const imgOv = o.imgs.find(i => i.id === 'wp-overview-canvas');
+    const txtRp = o.rpTitle ? o.texts.find(t => t.t === o.rpTitle) : null;
+    A('E26.' + tag + '.mm.pos', !!imgMm && near(imgMm.x, o.mm.x) && near(imgMm.y, o.mm.y)
+      && near(imgMm.w, o.mm.w) && near(imgMm.h, o.mm.h),
+      'minimap w px bitmapy zgodna z gBCR*r przy ' + s + '% '
+      + JSON.stringify({ got: imgMm || null, exp: o.mm }));
+    A('E26.' + tag + '.mm.frame', !!imgMm && imgMm.x >= -1 && imgMm.y >= -1
+      && imgMm.x + imgMm.w <= o.W + 1 && imgMm.y + imgMm.h <= o.H + 1,
+      'minimap w kadrze ' + o.W + 'x' + o.H + ' przy ' + s + '%');
+    A('E26.' + tag + '.ov.pos', !!imgOv && near(imgOv.x, o.ov.x) && near(imgOv.y, o.ov.y)
+      && near(imgOv.w, o.ov.w) && near(imgOv.h, o.ov.h),
+      'overview w px bitmapy zgodne z gBCR*r przy ' + s + '% '
+      + JSON.stringify({ got: imgOv || null, exp: o.ov }));
+    A('E26.' + tag + '.ov.frame', !!imgOv && imgOv.x >= -1 && imgOv.y >= -1
+      && imgOv.x + imgOv.w <= o.W + 1 && imgOv.y + imgOv.h <= o.H + 1,
+      'overview w kadrze ' + o.W + 'x' + o.H + ' przy ' + s + '%');
+    A('E26.' + tag + '.rp.pos', !!txtRp && txtRp.x >= o.rp.x - 1 && txtRp.x <= o.rp.x + o.rp.w + 1
+      && txtRp.y >= o.rp.y - 1 && txtRp.y <= o.rp.y + o.rp.h + 1,
+      'tytul room-panel wewnatrz prostokata panelu (px bitmapy) przy ' + s + '% '
+      + JSON.stringify({ got: txtRp || null, rp: o.rp }));
+  }
+  // porzadkowanie stanu (idempotentnosc)
+  ex('document.getElementById("room-panel").classList.remove("visible");'
+   + ' document.getElementById("wp-overview").classList.remove("visible");');
+  zoomRestoreDefault();
+});
+
+// E26.svgLayer: unifikacja — SVG konsumuje wspolny kompozyt HUD (mapa + 1 warstwa),
+// zero osobnych obrazow paneli, wszystko w px bitmapy. Pre-fix: 4+ <image> z
+// pozycjami w px ekranu (zoom 150%) -> FAIL.
+scenario('E26.svgLayer', async () => {
+  await loadBase('dat');
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };'
+   + ' window.showSaveFilePicker = undefined;'
+   + ' window.__e26 = null; window.__e26err = null;'
+   + ' console.error = function(){ window.__e26err = Array.from(arguments).map(String).join(" "); };'
+   + ' URL.createObjectURL = function(b){ window.__e26 = b; return "blob:e26"; };'
+   + ' applyUiScale(150);');
+  await eva('new Promise(function(res){ setTimeout(res, 140); })');
+  ex(' if (typeof updateMinimap === "function") updateMinimap();'
+   + ' document.getElementById("minimap").classList.add("visible");'
+   + ' document.getElementById("room-panel").classList.add("visible");'
+   + ' document.getElementById("wp-overview").classList.add("visible");'
+   + ' document.getElementById("ep-toggle-panels").checked = true;'
+   + ' document.getElementById("ep-fmt-svg").click();'
+   + ' document.getElementById("ep-do-btn").click();');
+  const d = AEV('E26.svg.cap', await eva('(async function(){'
+   + ' for (var i = 0; i < 240 && !window.__e26; i++) await new Promise(function(res){ setTimeout(res, 50); });'
+   + ' var b = window.__e26; if (!b) return null;'
+   + ' var t = await b.text();'
+   + ' var cv = document.getElementById("cv");'
+   + ' var imgs = [];'
+   + ' t.replace(/<image\\b[^>]*>/g, function(m){'
+   + '   function at(n){ var x = m.match(new RegExp(n + "=\\"([^\\"]*)\\"")); return x ? x[1] : null; }'
+   + '   imgs.push({ x: at("x"), y: at("y"), w: at("width"), h: at("height") }); return m; });'
+   + ' return JSON.stringify({ err: window.__e26err, W: cv.width, H: cv.height, imgs: imgs });'
+   + '})()'), 'blob SVG przy skali 150%');
+  zoomRestoreDefault();
+  if (!d) return;
+  const o = JSON.parse(d);
+  A('E26.svg.err', !o.err, 'brak console.error podczas eksportu SVG' + (o.err ? ': ' + o.err : ''));
+  A('E26.svg.imgs', o.imgs.length === 2,
+    'SVG = mapa + jedna warstwa HUD (2 obrazy; pre-fix: ' + o.imgs.length + ')');
+  A('E26.svg.geom', o.imgs.length === 2 && o.imgs.every(i =>
+      +i.x === 0 && +i.y === 0 && +i.w === o.W && +i.h === o.H),
+    'oba obrazy pelnoklatkowe 0,0 ' + o.W + 'x' + o.H + ' ' + JSON.stringify(o.imgs.map(i => [i.x, i.y, i.w, i.h])));
+});
+
+// E26.controls (Arc 35, bug B): kontrolki w eksporcie — przyciski planera
+// (Dijkstra/A*, kierunki, transport, presety), checkbox ze stanem, select
+// z wartoscia, textarea z value. Pre-fix: walker skipowal BUTTON/TEXTAREA/
+// SELECT -> wszystkie asercje FAIL.
+scenario('E26.controls', async () => {
+  await loadBase('dat');
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  installE26Hooks();
+  ex('document.getElementById("wp-panel").classList.add("visible");'
+   + ' document.getElementById("room-panel").classList.add("visible");'
+   + ' document.getElementById("area-panel").classList.add("visible");'
+   + ' document.getElementById("ap-notes").value = "notatka testowa E26";'
+   + ' window.__e26 = null; window.__e26err = null;'
+   + ' window.__e26imgs.length = 0; window.__e26texts.length = 0;'
+   + ' document.getElementById("ep-toggle-panels").checked = true;'
+   + ' document.getElementById("ep-fmt-png").click();'
+   + ' document.getElementById("ep-do-btn").click();');
+  await eva('(async function(){ for (var i = 0; i < 240 && !window.__e26 && !window.__e26err; i++)'
+   + ' await new Promise(function(res){ setTimeout(res, 50); }); })()');
+  const d = AEV('E26.ctrl.cap', readE26Capture(), 'pomiar kontrolek w eksporcie PNG');
+  ex('document.getElementById("wp-panel").classList.remove("visible");'
+   + ' document.getElementById("room-panel").classList.remove("visible");'
+   + ' document.getElementById("area-panel").classList.remove("visible");'
+   + ' document.getElementById("ap-notes").value = "";');
+  if (!d) return;
+  const o = JSON.parse(d);
+  const ts = o.texts;
+  for (const label of ['Dijkstra', 'A*', 'Kardynalne', 'Pieszo', '1s', '3s', '5s', '10s']) {
+    A('E26.ctrl.btn.' + label.replace(/[^a-z0-9]/gi, ''), ts.includes(label),
+      'przycisk planera „' + label + '" w eksporcie');
+  }
+  A('E26.ctrl.checkbox', ts.includes('✓'),
+    'zaznaczony checkbox „Omijaj zablokowane pokoje" (stan ✓) w eksporcie');
+  A('E26.ctrl.select', ts.some(t => t.indexOf('(brak)') >= 0),
+    'select rp-env z wybrana wartoscia w eksporcie');
+  A('E26.ctrl.textarea', ts.includes('notatka testowa E26'),
+    'textarea ap-notes z value w eksporcie [sample: ' + ts.slice(0, 40).join(' | ') + ']');
+});
+
+// E26.coverage (Arc 35, decyzja wlasciciela: 100% pokrycia): panele tresci
+// (area/validate/delta) + toolbar obecne w eksporcie. Pre-fix: kompozyt
+// znal tylko 3 floatingIds + minimap + overview -> FAIL.
+scenario('E26.coverage', async () => {
+  await loadBase('dat');
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  installE26Hooks();
+  ex('["area-panel", "validate-panel", "delta-panel"].forEach(function(id){'
+   + ' document.getElementById(id).classList.add("visible"); });'
+   + ' window.__e26 = null; window.__e26err = null;'
+   + ' window.__e26imgs.length = 0; window.__e26texts.length = 0;'
+   + ' document.getElementById("ep-toggle-panels").checked = true;'
+   + ' document.getElementById("ep-fmt-png").click();'
+   + ' document.getElementById("ep-do-btn").click();');
+  await eva('(async function(){ for (var i = 0; i < 240 && !window.__e26 && !window.__e26err; i++)'
+   + ' await new Promise(function(res){ setTimeout(res, 50); }); })()');
+  const d = AEV('E26.cov.cap', readE26Capture(), 'pomiar pokrycia paneli w eksporcie');
+  ex('["area-panel", "validate-panel", "delta-panel"].forEach(function(id){'
+   + ' document.getElementById(id).classList.remove("visible"); });');
+  if (!d) return;
+  const ts = JSON.parse(d).texts;
+  A('E26.cov.toolbar', ts.some(t => t.indexOf('Poziomy') >= 0), 'toolbar w eksporcie [n=' + ts.length + ' sample: ' + ts.slice(0, 40).join(' | ') + ']');
+  A('E26.cov.validate', ts.some(t => t.indexOf('Walidacja kierunków') >= 0), 'validate-panel w eksporcie');
+  A('E26.cov.delta', ts.some(t => t.indexOf('Kalka .arkdelta') >= 0), 'delta-panel w eksporcie [sample: ' + ts.slice(0, 40).join(' | ') + ']');
+  A('E26.cov.area', ts.some(t => t.indexOf('Obszar') >= 0), 'area-panel w eksporcie');
+});
+
+// E26.modal (Arc 35, decyzja wlasciciela: kazde okienko): dialog .dlg-bg.open
+// i modal wlasny (wp-import-overlay) trafiaja do eksportu z przyciemnionym
+// tlem. Pre-fix: modale nie byly komponowane wcale -> FAIL.
+scenario('E26.modal', async () => {
+  await loadBase('dat');
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  installE26Hooks();
+  ex('document.getElementById("dlg-backups").classList.add("open");'
+   + ' document.getElementById("wp-import-overlay").classList.add("open");'
+   + ' window.__e26 = null; window.__e26err = null;'
+   + ' window.__e26imgs.length = 0; window.__e26texts.length = 0;'
+   + ' document.getElementById("ep-toggle-panels").checked = true;'
+   + ' document.getElementById("ep-fmt-png").click();'
+   + ' document.getElementById("ep-do-btn").click();');
+  await eva('(async function(){ for (var i = 0; i < 240 && !window.__e26 && !window.__e26err; i++)'
+   + ' await new Promise(function(res){ setTimeout(res, 50); }); })()');
+  const d = AEV('E26.modal.cap', readE26Capture(), 'pomiar modali w eksporcie');
+  ex('document.getElementById("dlg-backups").classList.remove("open");'
+   + ' document.getElementById("wp-import-overlay").classList.remove("open");');
+  if (!d) return;
+  const ts = JSON.parse(d).texts;
+  A('E26.modal.dlg', ts.some(t => t.indexOf('Kopie zapasowe') >= 0),
+    'dialog .dlg-bg (dlg-backups) w eksporcie');
+  A('E26.modal.own', ts.some(t => t.indexOf('Import trasy') >= 0),
+    'modal wlasny (wp-import-overlay) w eksporcie');
+});
+
+// ═══ GRUPA E27 (Arc 35, v1.49.5) — audyt geometrii: kazdy klawisz, kazde okno ═══
+// Sweep 61 kontenerow (42 .dlg-bg + 7 modali wlasnych + 12 overlay) x 3 skale
+// (80/100/150). Trzy klasy naruszen: (1) overflow poziomy kontrolek
+// (scrollWidth > clientWidth+1, poza projektowym ellipsis/scroll), (2) kontener
+// vs viewport w px urzadzenia (gBCR mnozy przez zoom — realne ujecie na ekranie),
+// (3) wrap etykiety przycisku (offsetHeight > 1,5x line-height, poza whitelist).
+// Porzadek deterministyczny (sort po id). Stan przywracany W PELNI: klasy
+// kontenerow, klasa #app, zoom, stan pomocniczy (_vdLast, _deltaReview i mapy).
+// Funkcja stronowa wstrzykiwana przez toString — samowystarczalna (bez domkniec).
+function e27SweepPage() {
+  var OWN_BOX = { 'edit-dlg-bg': 'edit-dlg', 'wp-import-overlay': 'wp-import-modal',
+    'about-modal-overlay': 'about-modal', 'val-modal-overlay': 'val-modal',
+    'ol-confirm-bg': 'ol-confirm', 'cheatsheet-overlay': null, 'changelog-popup': null };
+  var OVERLAYS_ALWAYS = { 'sidebar': 1, 'toolbar': 1 };
+  var OVERLAY_OPEN = { 'export-panel': 1, 'settings-panel': 1 };   // klasa .open
+  var OVERLAYS = ['sidebar', 'export-panel', 'settings-panel', 'toolbar', 'room-panel',
+    'wp-panel', 'draw-tools-panel', 'area-panel', 'validate-panel', 'delta-panel',
+    'minimap', 'wp-overview'];
+  var FLOATERS = ['mob-clear-btn', 'wp-mode-indicator', 'wp-show-btn'];
+  var WRAP_WHITELIST = {};  // uzasadnione projektowo — dopisywane z komentarzem Arc 35
+  var SHOW_CLS = function(id) {
+    if (id === 'ol-confirm-bg') return 'visible';
+    if (OWN_BOX[id] !== undefined) return 'open';
+    return 'open';  // .dlg-bg
+  };
+  var ids = Array.prototype.map.call(document.querySelectorAll('.dlg-bg'), function(e){ return e.id; })
+    .concat(Object.keys(OWN_BOX), OVERLAYS).sort();
+  // — pelny zapis stanu —
+  var savedCls = {};
+  for (var i = 0; i < ids.length; i++) {
+    var el0 = document.getElementById(ids[i]);
+    if (el0) savedCls[ids[i]] = el0.getAttribute('class') || '';
+  }
+  var appEl = document.getElementById('app');
+  var savedAppCls = appEl ? (appEl.getAttribute('class') || '') : '';
+  var viol = [];
+  function skipH(el, cs) {
+    return cs.textOverflow === 'ellipsis' || cs.overflowX === 'auto' || cs.overflowX === 'scroll'
+      || cs.overflowX === 'hidden';
+  }
+  function measure(box, id) {
+    if (!box || box.getClientRects().length === 0) return;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var r = box.getBoundingClientRect();
+    if (r.height > vh + 1 || r.bottom > vh + 1 || r.top < -1)
+      viol.push(id + ': pion ' + Math.round(r.top) + '..' + Math.round(r.bottom) + ' vs vh=' + vh);
+    if (r.width > vw + 1 || r.right > vw + 1 || r.left < -1)
+      viol.push(id + ': poziom ' + Math.round(r.left) + '..' + Math.round(r.right) + ' vs vw=' + vw);
+    var els = box.querySelectorAll('button, input, select, textarea, label, .dlg-sub, .dlg-title, p, span, td');
+    for (var j = 0; j < els.length; j++) {
+      var el = els[j];
+      if (el.getClientRects().length === 0) continue;
+      var cs = getComputedStyle(el);
+      if (el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1 && !skipH(el, cs)) {
+        viol.push(id + '/' + (el.id || el.className || el.tagName) + ': hoverflow '
+          + el.scrollWidth + '>' + el.clientWidth + ' „' + (el.textContent || '').trim().slice(0, 30) + '"');
+        continue;
+      }
+      if (el.tagName === 'BUTTON' && !WRAP_WHITELIST[el.id || el.textContent.trim()]) {
+        // liczba linii = liczba pionowo ROZLACZNYCH pasm prostokatow (ikona
+        // wyrownana do srodka ma inny top niz tekst, ale pasma sie zachodza —
+        // prawdziwy wrap daje pasma rozlaczne)
+        var rng = document.createRange();
+        rng.selectNodeContents(el);
+        var rr = rng.getClientRects(); var bands = [];
+        for (var q = 0; q < rr.length; q++) {
+          if (rr[q].height <= 0) continue;
+          var t = rr[q].top, b = rr[q].bottom, merged = false;
+          for (var w = 0; w < bands.length; w++) {
+            if (t < bands[w].b - 1 && b > bands[w].t + 1) {
+              bands[w].t = Math.min(bands[w].t, t); bands[w].b = Math.max(bands[w].b, b);
+              merged = true; break;
+            }
+          }
+          if (!merged) bands.push({ t: t, b: b });
+        }
+        if (bands.length > 1)
+          viol.push(id + '/' + (el.id || el.textContent.trim().slice(0, 24)) + ': wrap ' + bands.length + ' linie');
+      }
+    }
+  }
+  for (var k = 0; k < ids.length; k++) {
+    var id = ids[k];
+    var el = document.getElementById(id);
+    if (!el) { viol.push(id + ': BRAK W DOM'); continue; }
+    var isDlg = el.classList.contains('dlg-bg');
+    var isOwn = OWN_BOX[id] !== undefined;
+    if (isDlg || isOwn) {
+      // changelog-popup: prawdziwy otwieracz (pozycjonowanie JS z clampiem Arc 35)
+      if (id === 'changelog-popup' && typeof toggleChangelog === 'function') toggleChangelog();
+      else el.classList.add(SHOW_CLS(id));
+      var box = isDlg ? el.querySelector('.dlg-box')
+        : (OWN_BOX[id] ? document.getElementById(OWN_BOX[id]) : el);
+      measure(box, id);
+      if (id === 'changelog-popup' && typeof toggleChangelog === 'function') {
+        toggleChangelog(); el.style.left = ''; el.style.top = '';
+      } else el.classList.remove(SHOW_CLS(id));
+    } else {
+      // overlay: always-visible bez toggla; reszta klasa .open/.visible
+      if (id === 'draw-tools-panel' && appEl) appEl.classList.add('edit-mode');
+      if (id === 'validate-panel' && typeof openValidateDirections === 'function') openValidateDirections();
+      else if (id === 'delta-panel' && window.__e27delta && typeof openDeltaReview === 'function') openDeltaReview(window.__e27delta);
+      else if (!OVERLAYS_ALWAYS[id]) el.classList.add(OVERLAY_OPEN[id] ? 'open' : 'visible');
+      measure(el, id);
+      if (!OVERLAYS_ALWAYS[id]) el.classList.remove(OVERLAY_OPEN[id] ? 'open' : 'visible');
+      if (id === 'draw-tools-panel' && appEl) appEl.classList.remove('edit-mode');
+    }
+  }
+  // maly plynace elementy poza lista 61 — sweep kontrolek w ramach viewportu
+  for (var f = 0; f < FLOATERS.length; f++) {
+    var fel = document.getElementById(FLOATERS[f]);
+    if (fel && fel.getClientRects().length) measure(fel, FLOATERS[f]);
+  }
+  // — pelny restore —
+  for (var m = 0; m < ids.length; m++) {
+    var elR = document.getElementById(ids[m]);
+    if (elR) elR.setAttribute('class', savedCls[ids[m]]);
+  }
+  if (appEl) appEl.setAttribute('class', savedAppCls);
+  try { _vdLast = null; } catch (_) {}
+  try {
+    _deltaReview = null; _deltaOverrides = new Map();
+    _deltaAppliedSeqs = new Set(); _deltaSkippedSeqs = new Set();
+  } catch (_) {}
+  return JSON.stringify({ n: ids.length, viol: viol });
+}
+
+scenario('E27.geometry', async () => {
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  await loadBase('dat');
+  await eva('new Promise(function(res){ setTimeout(res, 60); })');
+  // realna zawartosc dla dialogow dynamicznych: kalka z fixture (jak E8/E22)
+  const txt = await (await fetch('./fixture_demo.arkdelta')).text();
+  ex('var r27 = validateDeltaText(' + JSON.stringify(txt) + ');'
+   + ' if (!r27.ok) throw new Error("walidacja fixture_demo (E27)");'
+   + ' window.__e27delta = r27.delta;'
+   + ' window.__e27Sweep = ' + e27SweepPage.toString() + ';');
+  let total = 0;
+  for (const s of [80, 100, 150]) {
+    ex('if (typeof applyUiScale === "function") applyUiScale(' + s + ');');
+    await eva('new Promise(function(res){ setTimeout(res, 180); })');  // resize po zoomie
+    const d = AEV('E27.sweep.' + s, ev('window.__e27Sweep()'), 'sweep geometrii @ ' + s + '%');
+    if (!d) continue;
+    const o = JSON.parse(d);
+    total = o.n;
+    A('E27.s' + s, o.viol.length === 0,
+      'zero naruszen geometrii @ ' + s + '% (' + o.viol.length + ')'
+      + (o.viol.length ? ' — ' + o.viol.slice(0, 6).join(' | ') : ''));
+  }
+  EQ('E27.count', total, 61, 'pokrycie: 61 kontenerow (42 dlg-bg + 7 wlasnych + 12 overlay; nowy kontener = decyzja w tym tescie)');
+  // restore: zoom do domyslnej, brak otwartych dialogow, stan pomocniczy czysty
+  ex('if (typeof applyUiScale === "function") applyUiScale(100);');
+  await eva('new Promise(function(res){ setTimeout(res, 180); })');
+  EQ('E27.restore.open', ev('document.querySelectorAll(".dlg-bg.open, #edit-dlg-bg.open, #wp-import-overlay.open,'
+    + ' #about-modal-overlay.open, #val-modal-overlay.open, #cheatsheet-overlay.open,'
+    + ' #changelog-popup.open, #ol-confirm-bg.visible").length').val, 0,
+    'po sweepie: zero otwartych modali (pelny restore)');
+  EQ('E27.restore.delta', ev('(typeof _deltaReview === "undefined" || _deltaReview === null) ? 0 : 1').val, 0,
+    'po sweepie: _deltaReview = null (stan pomocniczy przywrocony)');
 });
 
 async function runAll() {
