@@ -217,5 +217,29 @@ console.log('── T5: regresja — transport off ≡ kod z 254ac05 (mapa rzecz
   }
 }
 
+console.log('── A3.2 (DI-2): krawędzie transportowe respektują avoidLocked ──');
+{
+  // Lancuch 1—…—50 pieszo + statek 1→50 (20 s; w normal 20×0.5+30=40 < 49 — wygrywa).
+  // Pokoj 50 zablokowany. Pop-guard tnie tylko EKSPANSJE z locked — bez guarda
+  // w relaksie transportowym cel statkiem zostawal w prev/dist i sciezka byla
+  // „znaleziona" mimo avoidLocked.
+  const st = mkSynthetic();
+  st.roomById[50].locked = true;
+  const wpOn = { algorithm: 'dijkstra', dirMode: 'all', transportMode: 'normal', avoidLocked: true };
+  const apiOn = buildApi(NEW, st, wpOn, DEFS_SYN);
+  apiOn._rebuildTransportEdges();
+  ok(apiOn.findPath(1, 50) === null,
+    'A3.2 (DI-2): avoidLocked ON -> cel locked statkiem = null (pre-fix: sciezka przez hop mimo blokady)');
+  ok(apiOn.findPath(1, 49) !== null,
+    'A3.2 (DI-2): avoidLocked ON -> pieszo do odblokowanego sasiada nadal dziala (regresja)');
+  const st2 = mkSynthetic();
+  st2.roomById[50].locked = true;
+  const wpOff = { algorithm: 'dijkstra', dirMode: 'all', transportMode: 'normal', avoidLocked: false };
+  const apiOff = buildApi(NEW, st2, wpOff, DEFS_SYN);
+  apiOff._rebuildTransportEdges();
+  ok(J(apiOff.findPath(1, 50)) === J([1, 50]),
+    'A3.2 (DI-2): avoidLocked OFF -> statek do locked przepuszczony [1,50] (regresja)');
+}
+
 console.log(`\n═══ PODSUMOWANIE: ${pass} OK, ${fail} FAIL ═══`);
 process.exit(fail ? 1 : 0);

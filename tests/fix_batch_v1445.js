@@ -160,7 +160,7 @@ function sectionD() {
 
   // ═══ Sekcja E — pin wersji ═══
   console.log('— Sekcja E: pin wersji —');
-  ok(HTML.includes("const APP_VERSION = 'v1.48.3';"), 'E1 APP_VERSION = v1.48.3');
+  ok(HTML.includes("const APP_VERSION = 'v1.48.4';"), 'E1 APP_VERSION = v1.48.4');
 
   console.log(`\n═══ fix_batch_v1445.js: PASS ${pass} / FAIL ${fail} ═══`);
   process.exit(fail ? 1 : 0);

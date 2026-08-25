@@ -10516,8 +10516,12 @@ async function olResolveBaseUrl(signal) {
 // Ścieżka SHA-pinned (niezmienniczy URL /<sha>/) bez zmian — migawka spójna z definicji.
 async function olRefreshIndexOnFallback() {
   if (olBaseUrl !== MAPA_RAW_URL) return;
+  // audyt deep DI-5: AbortController + 30 s (wzorzec openOnlineConfirm) — bez timeoutu
+  // zawieszony re-fetch trzymal dialog w busy w nieskonczonosc
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 30000);
   try {
-    const resp = await fetch(olBaseUrl + 'index.json?_=' + Date.now(), { cache: 'no-cache' });
+    const resp = await fetch(olBaseUrl + 'index.json?_=' + Date.now(), { cache: 'no-cache', signal: ctrl.signal });
     if (!resp.ok) return;              // błąd re-fetchu → stare metadane (rozmiar tylko do paska %)
     const fresh = await resp.json();
     if (!fresh || typeof fresh.revision !== 'string') return;
@@ -10526,6 +10530,7 @@ async function olRefreshIndexOnFallback() {
       toast('ℹ Kopia zmieniła się w trakcie — pobieram najnowszą wersję');
     }
   } catch { /* sieć padła między dialogiem a pobraniem → olFetchFile zgłosi błąd */ }
+  finally { clearTimeout(timer); }
 }
 
 const olConfirmBg  = document.getElementById('ol-confirm-bg');
@@ -10693,6 +10698,10 @@ async function olLoadDat() {
     olConfirmPrg.textContent = 'Konwertowanie .dat…';
     const arkmap = datToArkmap(buf.buffer);
     const r = validate(arkmap);
+    // audyt deep DI-3: warningi importu .dat (duplikaty id, zgubione rekordy) —
+    // lustro merge z loadDat; bez tego sciezka online polykala ostrzezenia parsera
+    const importWarnings = arkmap._importWarnings || [];
+    if (importWarnings.length) r.warnings = (r.warnings || []).concat(importWarnings);
     const hasWarnings = (r.warnings || []).length > 0;
     const suppMissing = checkSuppressorsInMap(arkmap);   // Arc 29: podwójne linie przy loadzie
     if (!r.ok || hasWarnings || suppMissing.length > 0) {
@@ -11018,6 +11027,11 @@ function dijkstraPath(fromId, toId) {
       const tEdges = _transportEdges.get(cur);
       if (tEdges) for (const te of tEdges) {
         if (visited.has(te.to)) continue;
+        // audyt deep DI-2: bez guarda locked cel statkiem zostawal w prev/dist mimo
+        // pop-guarda (10990 tnie tylko ekspansje) -> sciezka "znaleziona" mimo avoidLocked
+        const _tn = state.roomById[te.to];
+        if (!_tn) continue;
+        if (wpState.avoidLocked && _tn.locked) continue;  // lustro guarda pieszego wyzej
         const newCost = cost + te.cost;
         if (newCost < (dist.get(te.to) ?? Infinity)) {
           dist.set(te.to, newCost);
@@ -14180,7 +14194,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.48.3';
+const APP_VERSION = 'v1.48.4';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -20139,7 +20153,9 @@ function validateDeltaText(text) {
   // rekurencyjne; bez guarda glebokie ops wywalaja RangeError poza walidator.
   if (Array.isArray(delta.ops)) {
     let tooDeep = false;
-    try { for (const op of delta.ops) _deltaScanDeep(op, () => {}, () => {}); }
+    // audyt deep DI-4: meta tez wchodzi do stableStringify w _deltaChecksums —
+    // glebokie meta wywaliloby RangeError poza walidatorem mimo guarda na ops
+    try { _deltaScanDeep(meta, () => {}, () => {}); for (const op of delta.ops) _deltaScanDeep(op, () => {}, () => {}); }
     catch (e) { tooDeep = true; }
     if (tooDeep) return { ok: false, errors: ['zbyt głęboko zagnieżdżona struktura.'] };
   }
@@ -20229,6 +20245,38 @@ function _deltaRoomCmp(live, snap) {
   const s = _deltaStripRoom(JSON.parse(JSON.stringify(snap)));
   delete l.id; delete s.id;
   return stableStringify(l) === stableStringify(s);
+}
+
+// audyt deep DI-9: porownanie konfliktu odporne na kaskady WLASNEJ kalki.
+// Cien ewoluuje per op (kaskada _simDeleteRoom usuwa wyjscia do skasowanych pokoi
+// wraz z polami skojarzonymi) — kalka z diffa niesie snapshoty stanu ZRODLOWEGO
+// (z tymi wyjsciami), wiec surowe porownanie z cieniem dawalo falszywe
+// „pokoj zmienil sie na mapie" (korpus: 729/763 falszywych konfliktow).
+// Normalizacja: kierunki/komendy wskazujace pokoje kasowane TA kalka (delSet)
+// znikaja z obu stron wraz z polami skojarzonymi — realne roznice upstream
+// (nazwa/env/pozycja/inne wyjscia) nadal sa wykrywane.
+function _deltaRoomCmpKalka(live, snap, delSet) {
+  const norm = (v) => {
+    const c = JSON.parse(JSON.stringify(v || {}));
+    const dirs = c.exits ? Object.keys(c.exits).filter(d => delSet.has(c.exits[d])) : [];
+    const cmds = c.special_exits ? Object.keys(c.special_exits).filter(k => delSet.has(c.special_exits[k])) : [];
+    for (const d of dirs) {
+      delete c.exits[d];
+      if (c.exit_weights) delete c.exit_weights[d];
+      if (c.exit_locks) c.exit_locks = c.exit_locks.filter(x => x !== d);
+      if (c.doors) delete c.doors[d];
+      if (c.custom_lines) delete c.custom_lines[d];
+    }
+    for (const k of cmds) {
+      delete c.special_exits[k];
+      if (c.special_exit_locks) c.special_exit_locks = c.special_exit_locks.filter(x => x !== k);
+      if (c.custom_lines) delete c.custom_lines[k];
+      if (c.doors) delete c.doors[k];
+      if (c.exit_weights) delete c.exit_weights[k];
+    }
+    return c;
+  };
+  return _deltaRoomCmp(norm(live), norm(snap));
 }
 
 // F2: czy EFEKT opu edycji jest juz obecny w live — porownuje wylacznie pola
@@ -20358,14 +20406,38 @@ function _deltaBuildShadow(sidDone) {
   };
   const _DELTA_OPP = { n: 's', s: 'n', e: 'w', w: 'e', ne: 'sw', sw: 'ne', nw: 'se', se: 'nw',
                        up: 'down', down: 'up', in: 'out', out: 'in' };
+  // audyt deep DI-9: kaskada cienia = lustro deleteRoom (doFn) — razem z polami
+  // skojarzonymi (doors/exit_weights/exit_locks/custom_lines + warianty special).
+  // Bez tego cien rozbiegal sie z rzeczywistym apply i ze snapshotami kalki
+  // sekwencyjnej (before = stan po PRAWDZIWEJ kaskadzie).
   const _simDeleteRoom = (id) => {
     const r = sh.roomById[id]; if (!r) return;
     const area = sh.areas.get(sh.roomArea[id]);
     if (area) area.rooms = (area.rooms || []).filter(x => x.id !== id);
     delete sh.roomById[id]; delete sh.roomArea[id];
     for (const o of Object.values(sh.roomById)) {
-      if (o.exits) for (const [d, t] of Object.entries(o.exits)) if (t === id) delete o.exits[d];
-      if (o.special_exits) for (const [c, t] of Object.entries(o.special_exits)) if (t === id) delete o.special_exits[c];
+      if (o.exits) {
+        const dirs = Object.keys(o.exits).filter(d => o.exits[d] === id);
+        for (const d of dirs) {
+          delete o.exits[d];
+          if (o.exit_weights) { delete o.exit_weights[d]; if (!Object.keys(o.exit_weights).length) delete o.exit_weights; }
+          if (o.exit_locks)   { o.exit_locks = o.exit_locks.filter(x => x !== d); if (!o.exit_locks.length) delete o.exit_locks; }
+          if (o.doors)        { delete o.doors[d];        if (!Object.keys(o.doors).length)        delete o.doors; }
+          if (o.custom_lines) { delete o.custom_lines[d]; if (!Object.keys(o.custom_lines).length) delete o.custom_lines; }
+        }
+        if (dirs.length && !Object.keys(o.exits).length) delete o.exits;
+      }
+      if (o.special_exits) {
+        const cmds = Object.keys(o.special_exits).filter(c => o.special_exits[c] === id);
+        for (const c of cmds) {
+          delete o.special_exits[c];
+          if (o.special_exit_locks) { o.special_exit_locks = o.special_exit_locks.filter(x => x !== c); if (!o.special_exit_locks.length) delete o.special_exit_locks; }
+          if (o.custom_lines) { delete o.custom_lines[c]; if (!Object.keys(o.custom_lines).length) delete o.custom_lines; }
+          if (o.doors)        { delete o.doors[c];        if (!Object.keys(o.doors).length)        delete o.doors; }
+          if (o.exit_weights) { delete o.exit_weights[c]; if (!Object.keys(o.exit_weights).length) delete o.exit_weights; }
+        }
+        if (cmds.length && !Object.keys(o.special_exits).length) delete o.special_exits;
+      }
     }
   };
   // Symulacja efektu opu na cieniu (wywolywana tylko dla klas ok/hard).
@@ -20586,6 +20658,16 @@ function classifyDelta(delta) {
   const shRoomAt = _shc.roomAt, _DELTA_OPP = _shc.opp, _sim = _shc.sim;
   const isSid = _shc.isSid;
   const resR = _shc.resR, resA = _shc.resA, resL = _shc.resL;
+  // audyt deep DI-9: pokoje kasowane TA kalka (tez przez DELETE_AREA) — ich
+  // kaskady w cieniu nie sa konfliktami (patrz _deltaRoomCmpKalka).
+  const _delSet = new Set();
+  for (const op of delta.ops) {
+    if (op.type === 'DELETE_ROOM') { const id = resR(op.target && op.target.roomId); if (id !== undefined) _delSet.add(id); }
+    else if (op.type === 'DELETE_AREA') {
+      const area = sh.areas.get(resA(op.target && op.target.areaId));
+      if (area) for (const r of (area.rooms || [])) _delSet.add(r.id);
+    }
+  }
   const chainBad = (op) => {
     let bad = null;
     _deltaScanDeep(op, () => {}, v => {
@@ -20670,7 +20752,10 @@ function classifyDelta(delta) {
         if (id === undefined) { items.push(_deltaClsItem(op, 'ok', 'obiekt kalki')); break; }
         const room = sh.roomById[id];
         if (!room) { items.push(_deltaClsItem(op, 'impossible', 'pokój nie istnieje (usunięty w tej wersji mapy?)')); break; }
-        const eq = _deltaRoomCmp(room, P.room);
+        // audyt deep DI-9: konflikt vs cien ewoluujacy + normalizacja kaskad
+        // wlasnej kalki (_deltaRoomCmpKalka) — bez falszywych konfliktow z diffa,
+        // kalka sekwencyjna (before = stan posredni) nadal klasyfikuje sie ok
+        const eq = _deltaRoomCmpKalka(room, P.room, _delSet);
         if (eq === false) items.push(_deltaClsItem(op, 'hard', 'pokój zmienił się na mapie od zapisu kalki — Zastosuj usunie go mimo to', roomJump(id)));
         else items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
         break;
@@ -20684,7 +20769,8 @@ function classifyDelta(delta) {
         // F2: done rowniez gdy ZMIENIANE pola sa zgodne z after, a rozjazd dotyczy
         // tylko pol niezmienianych przez ten op (np. pozniejszy EDIT_EXIT tej kalki).
         if (_deltaEffectApplied(room, P.before, P.after)) { items.push(_deltaClsItem(op, 'done', 'już na mapie (zmieniane pola zgodne)', roomJump(id))); break; }
-        if (_deltaRoomCmp(room, P.before) === false) items.push(_deltaClsItem(op, 'hard', 'pokój zmienił się na mapie od zapisu kalki — Zastosuj nadpisze go wersją z kalki', roomJump(id)));
+        // audyt deep DI-9: konflikt z normalizacja kaskad wlasnej kalki (jak DELETE_ROOM wyzej)
+        if (_deltaRoomCmpKalka(room, P.before, _delSet) === false) items.push(_deltaClsItem(op, 'hard', 'pokój zmienił się na mapie od zapisu kalki — Zastosuj nadpisze go wersją z kalki', roomJump(id)));
         else items.push(_deltaClsItem(op, 'ok', '', roomJump(id)));
         break;
       }
@@ -20953,6 +21039,7 @@ function applyDelta(delta, onlySeq, overrides, seedSids) {
   const appliedSeqs = [];  // seq-e realnie naniesione (panel: warstwa "naniesione z tej kalki")
   const skipped = [];
   let _deltaMovedArea = false;  // audyt ext F1.4: batch MOVE_ROOM_TO_AREA -> jeden buildAreaList po petli
+  let _deltaMovedCurrentArea = false;  // audyt deep DI-1: ruch dotyczy biezacego obszaru -> rebuild roomsZ + raster
 
   // audyt A22/D4 (decyzja): izolacja PER-OP zamiast rollbacku — blad w jednym opie
   // pomija ten op (skip z powodem -> panel raportuje applied/skipped), reszta delty
@@ -21074,6 +21161,7 @@ function applyDelta(delta, onlySeq, overrides, seedSids) {
           if (state.roomArea[room.id] !== toAreaId || !(toArea.rooms || []).includes(room)) { skip('efekt nieutrwalony'); break; }
           _deltaPush({ type: 'MOVE_ROOM_TO_AREA', roomId: room.id, fromAreaId, toAreaId, label: op.label });
           _deltaMovedArea = true;
+          if (fromAreaId === state.areaId || toAreaId === state.areaId) _deltaMovedCurrentArea = true;  // audyt deep DI-1
           applied++; appliedSeqs.push(rawOp.seq);
           break;
         }
@@ -21237,6 +21325,9 @@ function applyDelta(delta, onlySeq, overrides, seedSids) {
       skip('błąd wykonania: ' + err.message);
     }
   }
+  // audyt deep DI-1: pokoj wszedl/wyszedl z biezacego obszaru -> roomsZ i raster musza
+  // sie przebudowac (inaczej stale dane na canvasie do recznego odswiezenia)
+  if (_deltaMovedCurrentArea) { buildRoomsZ(); _rasterInvalidate(); }
   if (_deltaMovedArea) buildAreaList();  // audyt ext F1.4: jeden rebuild listy obszarow po batchu (nie per op)
   scheduleDraw();
   return { applied, appliedSeqs, skipped };

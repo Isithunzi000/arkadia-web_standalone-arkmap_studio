@@ -2,6 +2,18 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.48.4 — Audyt gleboki, fala 1: konflikty kalki + planer + import online + walidator (Arc 32)
+
+Szesc poprawek z glebokiego audytu kodu (deep inspection). Wszystkie objete pinami repro-first: tests/audit_ext.js A3.1/A3.3/A3.5, tests/transport.js A3.2, tests/delta.js A3.4 + A3.6a-e.
+
+- DI-9: falszywe konflikty kalki z diffa — kaskady usuniec w cieniu klasyfikacji zmienialy pokoje przed ich wlasnymi opami, wiec snapshoty ze zrodla nie pasowaly (korpus 763 opow: 729 falszywych „pokoj zmienil sie na mapie" -> 0). Fix: konflikt liczony przez _deltaRoomCmpKalka — normalizacje pol kaskadowych (wyjscia/special + doors/exit_weights/locks/custom_lines do pokoi kasowanych TA kalka) po obu stronach porownania; kaskada cienia (_simDeleteRoom) jest teraz pelnym lustrem deleteRoom. Kalki sekwencyjne (before = stan posredni) klasyfikuja sie bez zmian (A3.6f, E1), wykrywalnosc prawdziwych konfliktow upstream zachowana (A3.6b).
+- DI-1: applyDelta MOVE_ROOM_TO_AREA z/do biezacego obszaru rebuilduje roomsZ + raster w epilogu — brak starych danych na canvasie do recznego odswiezenia.
+- DI-2: dijkstraPath — krawedzie transportowe (statek/dylizans) nie relaksuja do zablokowanych pokoi przy avoidLocked (lustro guarda pieszego); pop-guard tnial tylko ekspansje, wiec cel statkiem zostawal w prev/dist.
+- DI-3: olLoadDat przekazuje warningi importu .dat (duplikaty id, zgubione rekordy) do dialogu walidacyjnego — lustro loadDat; sciezka online nie polyka ostrzezen parsera.
+- DI-4: guard glebokosci kalki obejmuje tez meta (meta wchodzi do stableStringify w _deltaChecksums) — kontrolowane ok:false zamiast RangeError poza walidatorem.
+- DI-5: olRefreshIndexOnFallback z AbortController + 30 s (wzorzec openOnlineConfirm) — zawieszony re-fetch nie trzymal dialogu w busy w nieskonczonosc.
+- Fixture: tests/fixtures/kalka_korpus_di9.arkdelta (763 opy, korpus rzeczywisty) pod piny A3.6a-c.
+
 ## v1.48.3 — Audyt zewnetrzny, fala 2: edytor + loader .dat + online + planer + touch + UI/zapis (Arc 31)
 
 Dwadziescia jeden poprawek z zewnetrznego audytu kodu (fala 2: edytor, parser .dat, warstwa online, planer, dotyk, zapis). Wszystkie objete pinami repro-first (tests/audit_ext.js A2.1-A2.21).

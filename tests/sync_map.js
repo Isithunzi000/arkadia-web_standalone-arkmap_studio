@@ -132,10 +132,12 @@ console.log('— timeouty (struktura) —');
   ok(WF.includes('CANONICAL-V4') && WF.includes('verifyChecksums'), 'workflow: self-check ekstrahuje verifier v4 (bloki markerowe)');
   const a = HTML.indexOf('// ─── ONLINE LOAD'), b = HTML.indexOf('// ─── WAYPOINT PLANNER');
   const OL = HTML.slice(a, b);
-  ok((OL.match(/new AbortController\(\)/g) || []).length === 2, 'UI: AbortController ×2 (index.json + pliki)');
+  // DI-5 (Arc 32, v1.48.4): +1 AbortController/+1 clearTimeout — re-fetch index.json
+  // na fallbacku (olRefreshIndexOnFallback) tez pod timeoutem 30 s.
+  ok((OL.match(/new AbortController\(\)/g) || []).length === 3, 'UI: AbortController ×3 (index.json + re-fetch fallback + pliki)');
   ok(OL.includes('ctrl.abort(), 30000'), 'UI: timeout 30 s na index.json');
   ok(OL.includes('ctrl.abort(), 180000'), 'UI: timeout 180 s na pobieranie plików');
-  ok((OL.match(/finally \{ clearTimeout\(timer\);/g) || []).length === 2, 'UI: clearTimeout w finally ×2 (bez wycieku timerów; olFetchFile dodatkowo releaseLock — Arc 9)');
+  ok((OL.match(/finally \{ clearTimeout\(timer\);/g) || []).length === 3, 'UI: clearTimeout w finally ×3 (bez wycieku timerów; olFetchFile dodatkowo releaseLock — Arc 9)');
   ok((OL.match(/e\.name === 'AbortError'/g) || []).length === 4, 'UI: AbortError → 3 czytelne komunikaty + rethrow w resolve SHA');
 }
 

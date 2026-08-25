@@ -448,13 +448,13 @@ console.log('── T9: piny ──');
     && dij.includes('if (wpState.avoidLocked && nbr.locked) continue;'),
     'pin P1: F2.15 — guard locked (ON=paritet Mudlet) PRZED breakiem + przy relaksacji; OFF=permissive');
   // piny wersji
-  ok(NEW.includes("const APP_VERSION = 'v1.48.3';"), 'pin: APP_VERSION v1.48.3');
+  ok(NEW.includes("const APP_VERSION = 'v1.48.4';"), 'pin: APP_VERSION v1.48.4');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok(deltaSrc.split('v1.48.3').length - 1 === 10, 'pin: delta.js 10x v1.48.3');
+  ok(deltaSrc.split('v1.48.4').length - 1 === 10, 'pin: delta.js 10x v1.48.4');
   const t2 = fs.readFileSync(path.join(ROOT, 'tests', 'tier2_state.js'), 'utf8');
-  ok(t2.includes("wersja: v1.48.3"), 'pin: tier2_state.js v1.48.3');
+  ok(t2.includes("wersja: v1.48.4"), 'pin: tier2_state.js v1.48.4');
   const t3 = fs.readFileSync(path.join(ROOT, 'tests', 'tier3_format.js'), 'utf8');
-  ok(t3.includes("pin: APP_VERSION v1.48.3"), 'pin: tier3_format.js v1.48.3');
+  ok(t3.includes("pin: APP_VERSION v1.48.4"), 'pin: tier3_format.js v1.48.4');
 }
 
 // ═══ T10: bramka — wlasne kalki zawsze z sid (K7 nie zabija wlasnych eksportow) ═══

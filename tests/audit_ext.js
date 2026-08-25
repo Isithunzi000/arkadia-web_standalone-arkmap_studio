@@ -91,13 +91,13 @@ function makeKalkaCtx(map) {
     for (const r of (area.rooms || [])) { state.roomById[r.id] = r; state.roomArea[r.id] = area.id; }
   }
   const toasts = [];
-  const counters = { jump: 0, areaList: 0, roomsZ: 0 };
+  const counters = { jump: 0, areaList: 0, roomsZ: 0, rasterInv: 0 };
   const fn = new Function(
     'state', '_dispatchUndo', 'updateUndoRedoUI', 'draw', 'scheduleDraw', 'toast', 'plPl', 'document',
     'download', 'escHtml', 'APP_VERSION',
     'deleteRoom', 'commitDeleteArea', 'commitAddExit', 'commitMoveRoom', 'commitDeleteExit',
     'buildRoomsZ', 'buildAreaList', 'buildColorCache', 'refreshLabelList', 'populateEditForm', 'selectArea',
-    'jumpToRoom', 'showDirtyConfirm',
+    'jumpToRoom', 'showDirtyConfirm', '_rasterInvalidate',
     KALKA_CODE
   );
   const api = fn(state, () => {}, () => {}, () => {}, () => {}, (m2) => toasts.push(m2), (n, one) => n + ' ' + one,
@@ -107,7 +107,8 @@ function makeKalkaCtx(map) {
     (sourceId, dir, targetId) => { const s = state.roomById[sourceId]; if (s) { s.exits = s.exits || {}; s.exits[dir] = targetId; } },  // commitAddExit: efekt jak w aplikacji
     () => {}, () => {},
     () => { counters.roomsZ++; }, () => { counters.areaList++; }, () => {}, () => {}, () => {}, () => {},
-    (id) => { counters.jump++; state.selected = id; }, () => {});
+    (id) => { counters.jump++; state.selected = id; }, () => {},
+    () => { counters.rasterInv++; });
   return { state, api, toasts, counters };
 }
 
@@ -1105,6 +1106,79 @@ console.log('— A2.21 (F2.21): drop .json przekazuje nazwe pliku —');
   ok(/parsed\?\.format === 'arkmap'\) await loadArkmap\(text, file\.name\);/.test(dropBlock),
     'A2.21 (F2.21): loadArkmap(text, file.name) w galezi .json (pre-fix: nazwa gubiona)');
 }
+
+console.log('— A3.1 (DI-1): MOVE_ROOM_TO_AREA z/do biezacego obszaru -> rebuild roomsZ+raster —');
+{
+  const map = { meta: {}, areas: [
+    { id: 1, name: 'A1', rooms: [
+      { id: 1, x: 0, y: 0, z: 0, name: 'R1', env: 1, area: 1 },
+      { id: 2, x: 1, y: 0, z: 0, name: 'R2', env: 1, area: 1 }] },
+    { id: 2, name: 'A2', rooms: [] },
+  ], colors: {} };
+  const mkKalka = (api, rid, to) => kalkaText(api,
+    [{ seq: 1, type: 'MOVE_ROOM_TO_AREA', target: { roomId: rid }, payload: { toAreaId: to } }]);
+  // Scenariusz 1: pokoj WCHODZI do biezacego obszaru (areaId=2) — epilog musi rebuildowac.
+  const c1 = makeKalkaCtx(map);
+  c1.state.areaId = 2;
+  const v1 = c1.api.validateDeltaText(mkKalka(c1.api, 1, 2));
+  ok(v1.ok, 'A3.1 (DI-1): kalka MOVE_ROOM_TO_AREA przechodzi walidacje');
+  const r1 = c1.api.applyDelta(v1.delta);
+  ok(r1.applied === 1 && c1.state.roomArea[1] === 2, 'A3.1 (DI-1): ruch naniesiony (applied=1)');
+  ok(c1.counters.roomsZ === 1 && c1.counters.rasterInv === 1,
+    'A3.1 (DI-1): ruch DO biezacego obszaru -> epilog rebuilduje roomsZ+raster (pre-fix: 0 wywolan — stale dane na canvasie)');
+  ok(c1.counters.areaList === 1, 'A3.1 (DI-1): buildAreaList raz po batchu (bez zmian, F1.4)');
+  // Scenariusz 2: ruch miedzy OBCYMI obszarami (areaId=99) — bez dodatkowego rebuildu.
+  const c2 = makeKalkaCtx(map);
+  c2.state.areaId = 99;
+  const v2 = c2.api.validateDeltaText(mkKalka(c2.api, 1, 2));
+  c2.api.applyDelta(v2.delta);
+  ok(c2.counters.roomsZ === 0 && c2.counters.rasterInv === 0 && c2.counters.areaList === 1,
+    'A3.1 (DI-1): ruch miedzy obcymi obszarami -> bez rebuildu roomsZ/raster (regresja wydajnosci)');
+  // Scenariusz 3: pokoj WYCHODZI z biezacego obszaru (areaId=1) — tez rebuild.
+  const c3 = makeKalkaCtx(map);
+  c3.state.areaId = 1;
+  const v3 = c3.api.validateDeltaText(mkKalka(c3.api, 1, 2));
+  c3.api.applyDelta(v3.delta);
+  ok(c3.counters.roomsZ === 1 && c3.counters.rasterInv === 1,
+    'A3.1 (DI-1): ruch Z biezacego obszaru -> epilog rebuilduje roomsZ+raster (pre-fix: 0 wywolan)');
+}
+
+console.log('— A3.3 (DI-3): olLoadDat przekazuje warningi importu .dat do dialogu —');
+{
+  const src = extract(HTML, 'async function olLoadDat() {');
+  const iMerge = src.indexOf('.concat(importWarnings)');
+  const iDlg = src.indexOf('showValDialog(');
+  ok(iMerge !== -1 && /_importWarnings/.test(src),
+    'A3.3 (DI-3): merge _importWarnings do r.warnings w sciezce online (pre-fix: warningi parsera polykane)');
+  ok(iMerge !== -1 && iDlg !== -1 && iMerge < iDlg,
+    'A3.3 (DI-3): merge PRZED showValDialog — warningi widoczne w dialogu (lustro loadDat; pre-fix: brak)');
+}
+
+console.log('— A3.5 (DI-5): olRefreshIndexOnFallback — AbortController + 30 s —');
+ASYNC_PINS.push((async () => {
+  const src = extract(HTML, 'async function olRefreshIndexOnFallback() {');
+  ok(/AbortController/.test(src) && /signal:\s*ctrl\.signal/.test(src) && /clearTimeout/.test(src),
+    'A3.5 (DI-5): re-fetch ma AbortController + signal + clearTimeout (pre-fix: fetch bez timeoutu — busy w nieskonczonosc)');
+  // Behawioralnie: zawieszony fetch + timer odpalajacy abort -> funkcja WRACA (catch polyka AbortError).
+  const MAPA_RAW = (HTML.match(/const MAPA_RAW_URL = '([^']+)'/) || [null, ''])[1];
+  let timerMs = null, cleared = false;
+  const setTimeoutMock = (fn2, ms) => { timerMs = ms; setImmediate(fn2); return 1; };
+  const clearTimeoutMock = () => { cleared = true; };
+  const hangingFetch = (url, opts) => new Promise((resolve, reject) => {
+    if (opts && opts.signal) opts.signal.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')));
+    // nigdy sie nie rozwiązuje — jedyny ratunek to abort z timera
+  });
+  const mk = new Function('fetchImpl', 'toastImpl', 'olIndex0', 'olBaseUrl0', 'MAPA_RAW_URL', 'setTimeoutImpl', 'clearTimeoutImpl',
+    'let olIndex = olIndex0, olBaseUrl = olBaseUrl0; const fetch = fetchImpl, toast = toastImpl, setTimeout = setTimeoutImpl, clearTimeout = clearTimeoutImpl;\n' +
+    src + '\nreturn (async () => { await olRefreshIndexOnFallback(); return true; })();');
+  const verdict = await Promise.race([
+    mk(hangingFetch, () => {}, { revision: 'aaaaaaa1111', version: '1.0' }, MAPA_RAW, MAPA_RAW, setTimeoutMock, clearTimeoutMock)
+      .then(() => 'returned', () => 'threw'),
+    new Promise(r => setTimeout(r, 500)).then(() => 'hung'),
+  ]);
+  ok(verdict === 'returned' && timerMs === 30000 && cleared,
+    'A3.5 (DI-5): zawieszony re-fetch -> abort po 30 s -> funkcja wraca, dialog odblokowany (pre-fix: hang)');
+})());
 
 Promise.all(ASYNC_PINS).then(() => {
   console.log('');

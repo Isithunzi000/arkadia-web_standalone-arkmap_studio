@@ -266,7 +266,7 @@ console.log('— T2: buildDelta — determinizm i kształt pliku —');
   c2.state.deltaLog = sampleDeltaLog(c2.state);
   ok(t1 === c2.api.buildDelta(), 'buildDelta: świeży kontekst, ten sam log → identyczne bajty (determinizm)');
   const d = JSON.parse(t1);
-  ok(d.meta.format === 'arkdelta' && d.meta.format_version === 2, 'meta: format + format_version 2 (v1.48.3)');
+  ok(d.meta.format === 'arkdelta' && d.meta.format_version === 2, 'meta: format + format_version 2 (v1.48.4)');
   ok(d.meta.ops_count === d.ops.length && d.ops.length === 10, 'meta.ops_count == liczba opów');
   ok(d.meta.base && d.meta.base.crc === c1.state.baseInfo.crc && d.meta.base.version === '9.9.9',
     'meta.base: crc + version z baseInfo');
@@ -456,11 +456,11 @@ ok(HTML.includes('loadArkdeltaBtn.disabled = !isEdit'), 'integracja: updateEditU
 ok(HTML.includes('id="btn-save-arkdelta" class="etb-check" disabled'), 'markup: btn-save-arkdelta pod walidacją (disabled)');
 ok(HTML.includes('id="dlg-arkdelta"') && HTML.includes('id="arkdelta-body"'), 'markup: dialog dlg-arkdelta (błędy walidacji)');
 ok(HTML.includes('state.baseInfo = _computeBaseInfo(null, state._pendingComputed);'),
-  'integracja: baseInfo w wrapperze applyMap z reużyciem computed z verify (v1.48.3)');
+  'integracja: baseInfo w wrapperze applyMap z reużyciem computed z verify (v1.48.4)');
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.48.3';"), 'wersja: v1.48.3');
+ok(HTML.includes("const APP_VERSION = 'v1.48.4';"), 'wersja: v1.48.4');
 
 // — W3 (v1.35.0): etykiety kalki zachowane przez 6 niskopoziomowych sciezek commit —
 {
@@ -830,7 +830,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
   ok(HTML.includes('const _DELTA_TYPE_PL = {') && HTML.includes("MOVE_ROOM: 'przesunięcie pokoju'")
     && HTML.includes("AUTO_FIX_SUPPRESSORS: 'automatyczna naprawa podwójnych linii'"),
     'W1 karta: typy opów po polsku (_DELTA_TYPE_PL)');
-  ok(HTML.includes("const APP_VERSION = 'v1.48.3';"), 'wersja v1.48.3');
+  ok(HTML.includes("const APP_VERSION = 'v1.48.4';"), 'wersja v1.48.4');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -866,7 +866,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.48.3';"), 'wersja v1.48.3 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.48.4';"), 'wersja v1.48.4 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji
@@ -970,7 +970,7 @@ console.log('— T11: audyt T1 — klasyfikator ≡ apply —');
   ok(HTML.includes("if (aid <= 0) { items.push(_deltaClsItem(op, 'impossible', 'obszar domyślny"), 'T1: klasyfikator guard DELETE_AREA <= 0');
   ok(HTML.includes('kierunek przeciwny u pokoju docelowego jest zajęty'), 'T1: klasyfikator ADD_EXIT guard przeciwnego kierunku');
   ok(HTML.includes('return false;  // audyt T1/W15'), 'T1: commitDeleteArea jawny zwrot false');
-  ok(HTML.includes("const APP_VERSION = 'v1.48.3';"), 'wersja v1.48.3');
+  ok(HTML.includes("const APP_VERSION = 'v1.48.4';"), 'wersja v1.48.4');
 }
 
 
@@ -1078,6 +1078,187 @@ console.log('— T13: seedSids — pusta mapa, luki, pusty seed, egzekucja > see
   const res = api.applyDelta(delta);
   ok(res.applied === 0 && res.skipped.length === 1 && res.skipped[0].reason.includes('d:7'),
     'S5: sid w target bez definicji i bez seed => skip [reason=' + (res.skipped[0] && res.skipped[0].reason) + ']');
+}
+
+console.log('— A3.4 (DI-4): glebokie meta kalki — kontrolowane ok:false, nie RangeError —');
+{
+  // Guard glebokosci byl tylko na ops, a meta tez wchodzi do stableStringify
+  // w _deltaChecksums — glebokie meta wywalaloby RangeError poza walidatorem
+  // (kontrakt: validateDeltaText nigdy nie rzuca).
+  const c = makeDeltaCtx();
+  const meta = { format: 'arkdelta', format_version: 2, ops_count: 0 };
+  let cur = meta; for (let i = 0; i < 200; i++) { cur.n = {}; cur = cur.n; }  // limit skanera: 60
+  const checksums = c.api._deltaChecksums(meta, []);
+  const text = JSON.stringify({ meta, ops: [], checksums });
+  let res = null, threw = null;
+  try { res = c.api.validateDeltaText(text); } catch (e) { threw = e; }
+  ok(threw === null && res && res.ok === false && /głęboko/.test((res.errors || []).join(' ')),
+    'A3.4 (DI-4): meta 200 gleboko (checksumy zgodne!) -> ok:false „zbyt gleboko", bez throw (pre-fix: meta szla prosto do stableStringify)');
+}
+
+console.log('— A3.6 (DI-9): konflikty kalki — normalizacja kaskad, korpus 763 opow na mapie rzeczywistej —');
+{
+  const FIX = path.join(ROOT, 'map_master3.dat');
+  if (!fs.existsSync(FIX)) {
+    console.error('BRAK FIXTURE: map_master3.dat — pobierz: bash tests/fetch-fixture.sh');
+    process.exit(2);
+  }
+  const KALKA = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'kalka_korpus_di9.arkdelta'), 'utf8'));
+  const DATBUF = fs.readFileSync(FIX);
+
+  // Pelna skladanka: warstwa formatu (.dat) + rdzen kalki + prawdziwe commity
+  // (kaskady _simDeleteRoom/deleteRoom — to one wyksztalcily 729 falszywych konfliktow).
+  const fullCode =
+    blockSlice('// ── constants.js ──', '// ── validate.js ──') + '\n' +
+    blockSlice('// ── validate.js ──', '// ── checksum.js ──') + '\n' +
+    blockSlice('// ── checksum.js ──', '// ── mudlet_dat.js ──') + '\n' +
+    blockSlice('// ── mudlet_dat.js ──', '// ── dat-to-arkmap.js ──') + '\n' +
+    blockSlice('// ── dat-to-arkmap.js ──', '// ── arkmap-to-dat.js ──') + '\n' +
+    extract(HTML, 'function stableStringify(val, indent, _lvl) {') + '\n' +
+    extract(HTML, 'function _canonicalizeMapForSave(map) {') + '\n' +
+    extract(HTML, 'function _canonicalCloneForSave() {') + '\n' +
+    extract(HTML, 'function _serializeMapForSave() {') + '\n' +
+    blockSlice("const ARKDELTA_FORMAT = 'arkdelta';", 'function _deltaGhostReset() {') + '\n' +
+    extract(HTML, 'const OPPOSITE = {') + '\n' +
+    extract(HTML, 'function pushUndo(entry) {') + '\n' +
+    extract(HTML, 'function commitMoveRoom(room, fromX, fromY, fromZ, toX, toY, toZ, label) {') + '\n' +
+    extract(HTML, 'function commitAddExit(sourceId, dir, targetId, bidirectional, customLabel) {') + '\n' +
+    extract(HTML, 'function commitDeleteExit(room, dir, label) {') + '\n' +
+    extract(HTML, 'function deleteRoom(roomId, label) {') + '\n' +
+    extract(HTML, 'function _replaceRoomData(room, snapshot) {') + '\n' +
+    extract(HTML, 'function _dispatchRedo(entry) {') + '\n' +
+    extract(HTML, 'function commitDeleteArea(areaId, label) {') + '\n' +
+    'function _rasterInvalidate() {}\n' +  // DI-1: epilog applyDelta moze go wolac; tu bez licznika
+    '\n;return { datToArkmap, stableStringify, _canonicalizeMapForSave, validateDeltaText, classifyDelta, applyDelta, _computeV4Checksums, _deltaChecksums };';
+  const fullFactory = new Function(
+    'state', 'toast', 'scheduleDraw', 'updateUndoRedoUI', '_syncEditSnapshot',
+    'buildAreaList', 'buildRoomsZ', 'draw', 'plPl', 'document', 'closeAreaPanel', fullCode);
+  const mkState = (map) => {
+    const st = { map, roomById: {}, roomArea: {}, areas: new Map(),
+      undoStack: [], redoStack: [], deltaLog: [], dirty: false, editMode: true,
+      selected: null, areaId: (map.areas[0] && map.areas[0].id) ?? -1, z: 0,
+      pendingStubs: new Set(), pendingStubRemovals: new Set() };
+    for (const area of map.areas || []) {
+      st.areas.set(area.id, area);
+      for (const r of (area.rooms || [])) { st.roomById[r.id] = r; st.roomArea[r.id] = area.id; }
+    }
+    return st;
+  };
+  const docStub = { getElementById: () => null };
+  const mkApi = (st) => fullFactory(st, () => {}, () => {}, () => {}, () => {}, () => {}, () => {}, () => {},
+    (n, one) => n + ' ' + one, docStub, () => {});
+  const baseMap = mkApi(mkState({ areas: [] }))
+    .datToArkmap(DATBUF.buffer.slice(DATBUF.byteOffset, DATBUF.byteOffset + DATBUF.byteLength));
+  // Kalka korpusowa zbudowana ze stanu wczytanego z .arkmap (forma kanoniczna zapisu).
+  // Surowy wynik datToArkmap rozni sie polami pokoi (v4 checksum to normalizuje,
+  // _deltaRoomCmp nie) — kanonikalizacja odtwarza baze kalki 1:1 (zweryfikowane
+  // pokoj-per-pokoj: 0 roznic na 26988).
+  mkApi(mkState({ areas: [] }))._canonicalizeMapForSave(baseMap);
+  const nOps = KALKA.ops.length;
+  ok(nOps === 763, 'A3.6 (DI-9): fixture kalki korpusowej = 763 opy (jest ' + nOps + ')');
+  const histOf = (cls) => {
+    const h = {};
+    for (const it of (cls.items || cls)) { const k = it.cls || '?'; h[k] = (h[k] || 0) + 1; }
+    return h;
+  };
+
+  // A3.6a: czysta baza -> zero konfliktow (pre-fix: 729 falszywych — konflikt liczony
+  // wobec EWOLUUJACEGO cienia; kaskady usuniec zmienialy pokoje przed ich opami).
+  {
+    const st = mkState(JSON.parse(JSON.stringify(baseMap)));
+    const h = histOf(mkApi(st).classifyDelta(KALKA));
+    ok((h.hard || 0) === 0 && (h.ok || 0) === nOps,
+      'A3.6a (DI-9): korpus 763 opow -> 0 konfliktow hard (pre-fix: 729 falszywych „pokoj zmienil sie na mapie")');
+  }
+
+  // A3.6b: jeden pokoj zmieniony „upstream" -> dokladnie 1 konflikt (wykrywalnosc zachowana).
+  {
+    const delAreaOp = KALKA.ops.find(o => o.type === 'DELETE_AREA');
+    const delAreaId = delAreaOp && delAreaOp.target.areaId;
+    const cnt = new Map();
+    for (const o of KALKA.ops) {
+      if ((o.type === 'DELETE_ROOM' || o.type === 'EDIT_ROOM') && typeof o.target.roomId === 'number')
+        cnt.set(o.target.roomId, (cnt.get(o.target.roomId) || 0) + 1);
+    }
+    const st = mkState(JSON.parse(JSON.stringify(baseMap)));
+    let pick = null;
+    for (const [rid, n] of [...cnt.entries()].sort((a, b) => a[0] - b[0])) {
+      if (n === 1 && st.roomById[rid] && st.roomArea[rid] !== delAreaId) { pick = rid; break; }
+    }
+    ok(pick !== null, 'A3.6b (DI-9): fixture ma pokoj z dokladnie 1 opem poza kasowanym obszarem (wybrano ' + pick + ')');
+    st.roomById[pick].name = 'ZMIENIONE UPSTREAM';
+    const h = histOf(mkApi(st).classifyDelta(KALKA));
+    ok((h.hard || 0) === 1 && (h.ok || 0) === nOps - 1,
+      'A3.6b (DI-9): 1 pokoj zmieniony upstream -> dokladnie 1 konflikt hard (jest ' + (h.hard || 0) + ')');
+  }
+
+  // A3.6c (regresja): pelny apply + checksum v4 wyniku (wartosc z korpusu, mapa po-zmianach).
+  {
+    const st = mkState(JSON.parse(JSON.stringify(baseMap)));
+    const api = mkApi(st);
+    let res = null, err = null;
+    try { res = api.applyDelta(KALKA); } catch (e) { err = e; }
+    ok(!err && res && res.applied === nOps && (res.skipped || []).length === 0,
+      'A3.6c (DI-9): pelny apply ' + nOps + '/' + nOps + ', skipped=0' + (err ? ' :: ' + err.message : ''));
+    const cs = api._computeV4Checksums(st.map);
+    ok(cs.file === '9477365f08eecc7c',
+      'A3.6c (DI-9): checksum v4 pliku po apply = 9477365f08eecc7c (jest ' + cs.file + ')');
+  }
+
+  // A3.6d: lancuch ADD_ROOM(sid) -> EDIT_ROOM(sid) — baseline nie zna pokoi kalki,
+  // fallback na ewoluujacy cien musi dac klasyfikacje ok (bez falszywego konfliktu).
+  {
+    const c = makeDeltaCtx();
+    const ops = [
+      { seq: 1, type: 'ADD_ROOM', target: { roomId: 'd:1', areaId: 1 },
+        payload: { room: { x: 9, y: 9, z: 0, name: 'Nowy', env: 1 } } },
+      { seq: 2, type: 'EDIT_ROOM', target: { roomId: 'd:1' },
+        payload: { before: { x: 9, y: 9, z: 0, name: 'Nowy', env: 1, area: 1 },
+                   after:  { x: 9, y: 9, z: 0, name: 'Nowy2', env: 1, area: 1 } } },
+    ];
+    const meta = { format: 'arkdelta', format_version: 2, ops_count: ops.length };
+    const delta = { meta, ops, checksums: c.api._deltaChecksums(meta, ops) };
+    const h = histOf(c.api.classifyDelta(delta));
+    ok((h.hard || 0) === 0 && (h.impossible || 0) === 0 && (h.ok || 0) === 2,
+      'A3.6d (DI-9): ADD_ROOM(sid)->EDIT_ROOM(sid) -> ok, bez falszywego konfliktu (fallback na cien)');
+  }
+
+  // A3.6e (statyczny): mechanizm DI-9 — konflikty przez _deltaRoomCmpKalka
+  // (normalizacja kaskad wlasnej kalki), kaskada cienia = lustro deleteRoom.
+  {
+    const srcCls = extract(HTML, 'function classifyDelta(delta) {');
+    ok(/_deltaRoomCmpKalka\(room, P\.room, _delSet\)/.test(srcCls) && /_deltaRoomCmpKalka\(room, P\.before, _delSet\)/.test(srcCls),
+      'A3.6e (DI-9): DELETE_ROOM i EDIT_ROOM licza konflikt przez _deltaRoomCmpKalka z _delSet');
+    ok(/DELETE_ROOM'\) \{ const id = resR/.test(srcCls) && /DELETE_AREA'\) \{/.test(srcCls) && srcCls.includes('_delSet.add'),
+      'A3.6e (DI-9): _delSet z DELETE_ROOM + pokoi z DELETE_AREA');
+    const srcSim = extract(HTML, 'function _deltaBuildShadow(sidDone) {');
+    for (const f of ['exit_weights', 'exit_locks', 'doors', 'custom_lines', 'special_exit_locks']) {
+      ok(srcSim.includes('o.' + f), 'A3.6e (DI-9): kaskada cienia czysci ' + f + ' (lustro deleteRoom)');
+    }
+    ok(!/withBaseline|_baseline/.test(HTML),
+      'A3.6e (DI-9): zero pozostalosci po wariancie baseline (regresja kalki sekwencyjnych, E1)');
+  }
+
+  // A3.6f: kalka SEKWENCYJNA — before = stan POSREDNI (po prawdziwej kaskadzie).
+  // Wariant baseline flagowal taka kalke hard (regresja E1.roundtrip);
+  // surowy cien z niekompletna kaskada tez (zostawial doors/exit_weights).
+  {
+    const c = makeDeltaCtx();
+    c.state.roomById[10].doors = { e: 2 };  // drzwi na wyjsciu e->11 (kasowane kaskadowo razem z wyjsciem)
+    const snap11 = JSON.parse(JSON.stringify(c.state.roomById[11]));
+    const ops = [
+      { seq: 1, type: 'DELETE_ROOM', target: { roomId: 11 }, payload: { room: snap11 } },
+      // before: pokoj 10 po PRAWDZIWEJ kaskadzie (bez exits e->11, bez doors e)
+      { seq: 2, type: 'EDIT_ROOM', target: { roomId: 10 },
+        payload: { before: { id: 10, x: 0, y: 0, z: 0, name: 'R10', env: 258 },
+                   after:  { id: 10, x: 0, y: 0, z: 0, name: 'R10x', env: 258 } } },
+    ];
+    const meta = { format: 'arkdelta', format_version: 2, ops_count: ops.length };
+    const delta = { meta, ops, checksums: c.api._deltaChecksums(meta, ops) };
+    const h = histOf(c.api.classifyDelta(delta));
+    ok((h.hard || 0) === 0 && (h.ok || 0) === 2,
+      'A3.6f (DI-9): kalka sekwencyjna (before = stan posredni po kaskadzie, z doors) -> ok, bez hard (regresja E1)');
+  }
 }
 
 console.log('');
