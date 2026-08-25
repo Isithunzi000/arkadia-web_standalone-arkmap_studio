@@ -26,7 +26,7 @@
     --sel:     #4a9eff22;
     --font:    'Courier New', monospace;
     --sidebar: 240px;
-    --ui-scale: 1;
+    --ui-scale: 1.05;  /* Arc 34 (v1.49.4): domyslna skala 105% — sweet spot czytelnosci (raport uzytkownika) */
   }
   html { zoom: var(--ui-scale); }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -304,7 +304,6 @@
   .vd-sec-hdr.acc { color:var(--ok); }
   .vd-sub { display:flex; align-items:center; gap:7px; flex-wrap:wrap; padding:6px 12px; border-bottom:1px solid var(--border); font-size:10px; }
   .vd-sub-lbl { color:var(--dim); }
-  .vd-sel { font-size:10px; padding:2px 5px; background:var(--bg); color:var(--fg); border:1px solid var(--border); border-radius:4px; }
   .vd-acc-toggle { display:flex; align-items:center; gap:4px; color:var(--dim); cursor:pointer; user-select:none; }
   .vd-sub-break { flex-basis:100%; height:0; }
   #delta-panel { position:fixed; left:16px; bottom:16px; width:560px; max-width:calc(100vw - 32px); max-height:62vh;
@@ -355,7 +354,6 @@
   #dp-apply:disabled { opacity:.4; cursor:default; color:var(--dim); border-color:var(--border); }
   #dp-rebase { color:var(--accent); border-color:#2a4a6a; }
   .vd-acc-toggle input { margin:0; cursor:pointer; }
-  #vd-migrate:disabled, #vd-clearacc:disabled { opacity:.4; cursor:default; }
   #vd-acc-n { color:var(--ok); font-weight:600; }
   .rp-key { color: #b8c8d8; min-width: 72px; flex-shrink: 0; }
   .rp-val { color: #e8eef8; word-break: break-all; }
@@ -2305,9 +2303,9 @@
           <span>rozmiar tekstu i paneli</span>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
-          <input type="range" id="ui-scale-slider" min="80" max="150" value="100" step="5"
+          <input type="range" id="ui-scale-slider" min="80" max="150" value="105" step="5"
             style="width:80px;accent-color:var(--accent)">
-          <span id="ui-scale-val" style="font-size: 11px;color:var(--dim);min-width:30px;text-align:right">100%</span>
+          <span id="ui-scale-val" style="font-size: 11px;color:var(--dim);min-width:30px;text-align:right">105%</span>
         </div>
       </div>
       <div class="sp-row">
@@ -2571,15 +2569,7 @@
         <span class="vd-close" id="vd-close" title="Zamknij">✕</span>
       </div>
       <div class="vd-sub" id="vd-sub">
-        <span class="vd-sub-lbl">Akceptacje w:</span>
-        <select class="vd-sel" id="vd-store">
-          <option value="browser">tej przeglądarce</option>
-          <option value="file">pliku .arkmap</option>
-        </select>
-        <button class="vd-btn" id="vd-migrate">⇨ Przenieś do .arkmap</button>
-        <span class="vd-sub-break"></span>
         <label class="vd-acc-toggle"><input type="checkbox" id="vd-showacc"> Pokaż zaakceptowane <span id="vd-acc-n"></span></label>
-        <button class="vd-btn" id="vd-clearacc">Wyczyść akceptacje</button>
       </div>
       <div class="vd-body" id="vd-body"></div>
       <div class="vd-ftr">
@@ -3145,7 +3135,7 @@
       <div class="dlg-icon">🕓</div>
       <div class="dlg-hdr-text">
         <div class="dlg-title">Kopie zapasowe .arkmap</div>
-        <div class="dlg-sub">Automatyczne — przed każdym nadpisem istniejącego pliku (maks. 5 na plik)</div>
+        <div class="dlg-sub">Automatyczne — przed każdym nadpisem istniejącego pliku <span style="white-space:nowrap">(maks. 5 na plik)</span></div>
       </div>
     </div>
     <div class="dlg-body">
@@ -6835,7 +6825,9 @@ async function loadArkmap(text, filename) {
 function applyMap(map) {
   // v1.4.59: każde wczytanie mapy (plik .arkmap / plik .dat / online) zeruje akceptacje PRZEGLĄDARKI
   // (globalne, trwałe w localStorage). To, co siedzi w meta wczytywanego pliku, zostaje NIETKNIĘTE.
+  // Arc 34 (v1.49.4): tryb 'browser' usuniety — oba klucze to legacy smiec, czyszczone przy okazji.
   try { localStorage.removeItem('arkmap_accepted_dir_issues'); } catch(e) {}  // audyt T4/S6
+  try { localStorage.removeItem('arkmap_accept_store'); } catch(e) {}  // audyt T4/S6
   try { _vdLast = null; } catch(_) {}  // unieważnij cache walidatora — nie pokazuj rozjazdów poprzedniej mapy
   // v1.4.60: zamknij okna pokazujące dane STAREJ mapy (osierocone po wczytaniu nowej).
   // Lista obszarów NIE jest tu — sama się odświeża przez buildAreaList() niżej.
@@ -13231,7 +13223,9 @@ document.addEventListener('click', (e) => {
       if (ts) ts.checked = saved.showSuppressors;
     }
     if (saved.lockDuration) state.lockDuration = saved.lockDuration;
-    if (saved.uiScale && saved.uiScale !== 100) {
+    // Arc 34 (v1.49.4): zapisana wartosc stosowana ZAWSZE (domyslna to 105 —
+    // warunek !== 100 zjadlby swiadomie ustawione 100 albo 105)
+    if (typeof saved.uiScale === 'number' && isFinite(saved.uiScale)) {
       const pct = Math.max(80, Math.min(150, saved.uiScale));
       document.documentElement.style.setProperty('--ui-scale', pct / 100);
       const sl = document.getElementById('ui-scale-slider');
@@ -13279,7 +13273,7 @@ function saveSettings() {
       showSuppressors: !!state.showSuppressors,
       showPixmaps:     !!state.showPixmaps,
       lockDuration:    state.lockDuration || 30,
-      uiScale:         parseInt(_uiScaleSlider.value) || 100,
+      uiScale:         parseInt(_uiScaleSlider.value) || 105,
     }));
   } catch(e) {}
 }
@@ -13376,14 +13370,13 @@ _uiScaleSlider.addEventListener('change', function() {
 
 // ── resetAllDefaults() — reset ALL settings, positions, localStorage ──────────
 function resetAllDefaults() {
-  if (!confirm('Przywrócić ustawienia domyślne?\n\nResetuje: pozycje i rozmiary okien, siatka, minimapa, puste custom lines, preferencje edytora, przełączniki planera (algorytm, kierunki, transporty, prędkość).\n\nMapa i dane NIE zostaną usunięte.')) return;
-  // v1.4.58: zapamiętaj, czy źródło akceptacji było 'plik' (do komunikatu po resecie — opcja C)
-  const _wasFileAcceptSrc = (typeof _acceptStore === 'function' && _acceptStore() === 'file');
-  // Clear ALL arkmap localStorage keys — ALE zachowaj zatwierdzenia walidatora (to dane, nie ustawienie)
+  if (!confirm('Przywrócić ustawienia domyślne?\n\nResetuje: pozycje i rozmiary okien, siatka, minimapa, puste custom lines, preferencje edytora, przełączniki planera (algorytm, kierunki, transporty, prędkość, omijanie zablokowanych).\n\nMapa i dane NIE zostaną usunięte.')) return;
+  // Clear ALL arkmap localStorage keys (Arc 34: wyjatek dla akceptacji walidatora
+  // usuniety — akceptacje zyja wylacznie w meta mapy, legacy klucz to zwykly smiec)
   const keysToRemove = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (k && (k.startsWith('arkmap') || k === 'draw-tools-panel') && k !== 'arkmap_accepted_dir_issues') keysToRemove.push(k);
+    if (k && (k.startsWith('arkmap') || k === 'draw-tools-panel')) keysToRemove.push(k);
   }
   keysToRemove.forEach(k => { try { localStorage.removeItem(k); } catch(e) {} });  // audyt T4/S6
   // Reset room panel
@@ -13409,8 +13402,8 @@ function resetAllDefaults() {
   const tML  = document.getElementById('toggle-mudlet-labels');    if (tML)  tML.checked  = true;
   const tHM  = document.getElementById('view-hidden-mode');        if (tHM)  tHM.value    = 'faded';
   if (typeof _syncPixmapDisabled === 'function') _syncPixmapDisabled();
-  // Reset skali interfejsu do 100%
-  if (typeof applyUiScale === 'function') applyUiScale(100);
+  // Reset skali interfejsu do domyslnej (Arc 34: 105%)
+  if (typeof applyUiScale === 'function') applyUiScale(105);
   // Reset sidebar width
   const sidebar = document.getElementById('sidebar');
   if (sidebar) sidebar.style.width = '';
@@ -13433,6 +13426,10 @@ function resetAllDefaults() {
   if (spIn) spIn.value = 3;
   document.querySelectorAll('.wp-sp').forEach(b =>
     b.classList.toggle('wp-sp-on', parseFloat(b.dataset.s) === 3));
+  // Arc 34 (v1.49.4): reset obejmuje tez omijanie zablokowanych pokoi (domyslnie ON)
+  wpState.avoidLocked = true;
+  const wpAlCb = document.getElementById('wp-avoidlocked');
+  if (wpAlCb) wpAlCb.checked = true;
   if (wpHasActiveRoute()) { wpRecalcPaths(); wpRebuildList(); wpUpdateSummary(); }
   // Room panel: unlock if locked
   const rpLock = document.getElementById('rp-lock');
@@ -13445,15 +13442,10 @@ function resetAllDefaults() {
     if (colBtn) { colBtn.textContent = '▲'; colBtn.title = 'Zwiń'; }
   }
   scheduleDraw();
-  // v1.4.58: jeśli panel walidatora jest otwarty — odśwież, by źródło pokazało „przeglądarka" i lista się przebudowała
+  // jesli panel walidatora jest otwarty — odswiez, by lista sie przebudowala
   const _vdPanelReset = document.getElementById('validate-panel');
   if (_vdPanelReset && _vdPanelReset.classList.contains('visible') && typeof _renderVdPanel === 'function') { try { _renderVdPanel(); } catch (_) {} }
-  // v1.4.58 (opcja C): źródło wróciło na przeglądarkę, ale w .arkmap zostały zatwierdzenia — to dane, nie zostały skasowane, tylko schowane
-  if (_wasFileAcceptSrc && state.map && state.map.meta && Array.isArray(state.map.meta.accepted_dir_issues) && state.map.meta.accepted_dir_issues.length) {
-    toast('⚠ Przywrócono domyślne. Źródło → przeglądarka; zatwierdzenia w .arkmap zostały w mapie — przełącz źródło na „plik", by je zobaczyć.');
-  } else {
-    toast('✓ Przywrócono ustawienia domyślne');
-  }
+  toast('✓ Przywrócono ustawienia domyślne');
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
@@ -14525,7 +14517,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.49.3';
+const APP_VERSION = 'v1.49.4';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -15096,6 +15088,14 @@ function _dispatchUndo(entry) {
       buildColorCache(state.map.colors);
       break;
     }
+    case 'ACCEPT_DIR_ISSUES': {  // Arc 34 (v1.49.4): undo = przywroc zbior sprzed akceptacji
+      if (!state.map) break;
+      _acceptSave(entry.before || []);
+      const vp = document.getElementById('validate-panel');
+      if (vp && vp.classList.contains('visible') && typeof _renderVdPanel === 'function') { try { _renderVdPanel(); } catch (_) {} }
+      if (typeof _refreshOpenRoomWarn === 'function') _refreshOpenRoomWarn();
+      break;
+    }
   }
 }
 
@@ -15391,6 +15391,14 @@ function _dispatchRedo(entry) {
         delete state.map.colors.custom_env_colors[entry.envId];
       }
       buildColorCache(state.map.colors);
+      break;
+    }
+    case 'ACCEPT_DIR_ISSUES': {  // Arc 34 (v1.49.4): redo = ponow zbior po akceptacji
+      if (!state.map) break;
+      _acceptSave(entry.after || []);
+      const vp = document.getElementById('validate-panel');
+      if (vp && vp.classList.contains('visible') && typeof _renderVdPanel === 'function') { try { _renderVdPanel(); } catch (_) {} }
+      if (typeof _refreshOpenRoomWarn === 'function') _refreshOpenRoomWarn();
       break;
     }
   }
@@ -15999,19 +16007,18 @@ let _vdShowAccepted = false;
 const _vdEsc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 // ── Akceptacje (intencjonalne rozjazdy uznane za OK) — v1.4.57 ────────────────
-// Źródło globalne: 'browser' (localStorage) lub 'file' (meta.accepted_dir_issues w .arkmap).
+// Arc 34 (v1.49.4): JEDYNE zrodlo = meta.accepted_dir_issues mapy (tryb 'browser'
+// w localStorage usuniety — byl globalny dla wszystkich map i omijal undo/redo).
+// Akceptacja/cofniecie to wpis undo (ACCEPT_DIR_ISSUES) — dirty bierze pushUndo.
 // Klucz pojedynczego rozjazdu: "typ:idPokoju:wartość" (wartość = mała litera, przycięta).
-function _acceptStore(){ return localStorage.getItem('arkmap_accept_store') || 'browser'; }
 function _acceptSet(){
-  if (_acceptStore()==='file'){ const a = state.map && state.map.meta && state.map.meta.accepted_dir_issues; return new Set(Array.isArray(a)?a:[]); }
-  try { return new Set(JSON.parse(localStorage.getItem('arkmap_accepted_dir_issues')||'[]')); } catch(_){ return new Set(); }
+  const a = state.map && state.map.meta && state.map.meta.accepted_dir_issues;
+  return new Set(Array.isArray(a) ? a : []);
 }
 function _acceptSave(arr){
-  if (_acceptStore()==='file'){
-    if (state.map){ state.map.meta = state.map.meta || {}; if (arr.length) state.map.meta.accepted_dir_issues = arr; else delete state.map.meta.accepted_dir_issues; state.dirty = true; state.editRev = (state.editRev || 0) + 1; }  // T6-F2: licznik edycji
-  } else {
-    if (arr.length) { try { localStorage.setItem('arkmap_accepted_dir_issues', JSON.stringify(arr)); } catch(e) {} } else { try { localStorage.removeItem('arkmap_accepted_dir_issues'); } catch(e) {} }  // audyt T4/S6
-  }
+  if (!state.map) return;
+  state.map.meta = state.map.meta || {};
+  if (arr.length) state.map.meta.accepted_dir_issues = arr; else delete state.map.meta.accepted_dir_issues;
 }
 function _issueKeys(type, it){
   return (type==='tf' ? it.bad : it.empty).map(v => type+':'+it.id+':'+String(v).toLowerCase().trim());
@@ -16032,50 +16039,33 @@ function _vdView(){
   return { open, accepted, accCount: accepted.tf.length+accepted.db.length };
 }
 
+// Arc 34 (v1.49.4): akceptacja/cofniecie przechodzi przez pushUndo (wpis
+// ACCEPT_DIR_ISSUES z before/after zbioru) — trafia do undo/redo/undoAll.
+// Idioma call-site: pushUndo + redoStack=[] + updateUndoRedoUI (jak ADD_ROOM).
 function _vdAccept(type, it){
-  const acc = _acceptSet(); _issueKeys(type,it).forEach(k => acc.add(k)); _acceptSave([...acc]);
-  toast(_acceptStore()==='file' ? '✓ Uznano za OK — zapisz .arkmap, by zachować' : '✓ Uznano za OK (zapisane w przeglądarce)');
+  const before = [..._acceptSet()];
+  const acc = _acceptSet(); _issueKeys(type,it).forEach(k => acc.add(k));
+  const after = [...acc];
+  _acceptSave(after);
+  pushUndo({ type:'ACCEPT_DIR_ISSUES', before, after, label:'Akceptacja rozjazdu kierunku (#'+it.id+')' });
+  state.redoStack = [];
+  updateUndoRedoUI();
+  toast('✓ Uznano za OK — zapisz .arkmap, by zachować');
   _renderVdPanel(); _refreshOpenRoomWarn();
 }
 function _vdUnaccept(type, it){
-  const acc = _acceptSet(); _issueKeys(type,it).forEach(k => acc.delete(k)); _acceptSave([...acc]);
+  const before = [..._acceptSet()];
+  const acc = _acceptSet(); _issueKeys(type,it).forEach(k => acc.delete(k));
+  const after = [...acc];
+  _acceptSave(after);
+  pushUndo({ type:'ACCEPT_DIR_ISSUES', before, after, label:'Cofnięcie akceptacji rozjazdu kierunku (#'+it.id+')' });
+  state.redoStack = [];
+  updateUndoRedoUI();
   toast('↶ Cofnięto akceptację'); _renderVdPanel(); _refreshOpenRoomWarn();
 }
-function _vdMigrate(){
-  let browserArr = []; try { browserArr = JSON.parse(localStorage.getItem('arkmap_accepted_dir_issues')||'[]'); } catch(_){ }
-  if (!browserArr.length){ toast('Brak akceptacji w przeglądarce do przeniesienia'); return; }
-  if (!state.map){ toast('✗ Wczytaj mapę przed przeniesieniem', true); return; }
-  state.map.meta = state.map.meta || {};
-  const merged = Array.from(new Set([...(state.map.meta.accepted_dir_issues||[]), ...browserArr]));
-  state.map.meta.accepted_dir_issues = merged;
-  state.dirty = true; state.editRev = (state.editRev || 0) + 1;  // T6-F2: licznik edycji (wyscig z async save)   // audyt A19: meta zmienione → plik do zapisu
-  try { localStorage.removeItem('arkmap_accepted_dir_issues'); } catch(e) {}  // audyt T4/S6
-  localStorage.setItem('arkmap_accept_store','file');
-  const sel = document.getElementById('vd-store'); if (sel) sel.value = 'file';
-  toast('✓ Przeniesiono '+browserArr.length+' akceptacji do .arkmap — zapisz plik, by zachować');
-  _renderVdPanel();
-}
-function _vdClearAccepts(){
-  let bc=0; try { bc = JSON.parse(localStorage.getItem('arkmap_accepted_dir_issues')||'[]').length; } catch(_){ }
-  if (!bc){ toast('Brak akceptacji przeglądarki do wyczyszczenia'); return; }
-  if (!confirm('Wyczyścić wszystkie akceptacje tej przeglądarki ('+bc+')?\n\nZatwierdzenia zapisane w pliku .arkmap NIE zostaną ruszone.')) return;
-  try { localStorage.removeItem('arkmap_accepted_dir_issues'); } catch(e) {}  // audyt T4/S6
-  _renderVdPanel();
-  scheduleDraw();
-  toast('✓ Wyczyszczono akceptacje przeglądarki ('+bc+')');
-}
 function _vdSyncAccUI(view){
-  const sel = document.getElementById('vd-store'); if (sel) sel.value = _acceptStore();
   const accN = document.getElementById('vd-acc-n'); if (accN) accN.textContent = view.accCount ? ('('+view.accCount+')') : '';
   const sa = document.getElementById('vd-showacc'); if (sa) sa.checked = _vdShowAccepted;
-  const mig = document.getElementById('vd-migrate');
-  if (mig){ let bc=0; try { bc = JSON.parse(localStorage.getItem('arkmap_accepted_dir_issues')||'[]').length; } catch(_){ }
-    mig.disabled = !(bc>0);
-    mig.title = bc>0 ? ('Przenieś '+bc+' akceptacji z przeglądarki do .arkmap') : 'Brak akceptacji w przeglądarce do przeniesienia'; }
-  const clr = document.getElementById('vd-clearacc');
-  if (clr){ const fileMode = _acceptStore()==='file';
-    clr.disabled = fileMode;
-    clr.title = fileMode ? 'Niedostępne w trybie „plik" — czyści tylko akceptacje przeglądarki' : 'Wyczyść wszystkie akceptacje tej przeglądarki'; }
 }
 function _refreshOpenRoomWarn(){
   const r = (state.selected!=null) ? state.roomById[state.selected] : null;
@@ -16246,10 +16236,7 @@ function vdDownloadHtml(){
   if($('vd-md'))   $('vd-md').onclick=vdDownloadMd;
   if($('vd-html')) $('vd-html').onclick=vdDownloadHtml;
   if($('vd-clear'))$('vd-clear').onclick=()=>{ panel.querySelectorAll('.vd-row.fixed').forEach(r=>r.remove()); };
-  const store=$('vd-store'); if(store){ store.value=_acceptStore(); store.onchange=()=>{ localStorage.setItem('arkmap_accept_store', store.value); _renderVdPanel(); }; }
-  if($('vd-migrate')) $('vd-migrate').onclick=_vdMigrate;
   const sa=$('vd-showacc'); if(sa){ sa.checked=_vdShowAccepted; sa.onchange=()=>{ _vdShowAccepted=sa.checked; _renderVdPanel(); }; }
-  if($('vd-clearacc')) $('vd-clearacc').onclick=_vdClearAccepts;
   const hdr=$('vd-hdr');
   if(hdr){ let dx=0,dy=0,drag=false;
     hdr.addEventListener('mousedown',e=>{ if(e.target.id==='vd-close')return; drag=true; const r=panel.getBoundingClientRect(); dx=e.clientX-r.left; dy=e.clientY-r.top; panel.style.bottom='auto'; e.preventDefault(); });
@@ -19476,10 +19463,17 @@ function _computeBaseInfo(map, precomputed) {
 
 // ── Eksport: pomocnicze ──────────────────────────────────────────────────────
 // Spec-clean klon pokoju: bez pola wewnętrznego area, bez pustych kontenerów.
+// Arc 34 (v1.49.4): kanonikalizacja kolejnosci pol zbiorczych — ta sama konwencja
+// co _diffCanonRoom (straznik serializacji, NIE zmiana silnika): loader .dat
+// zostawia kolejnosc z pliku, loader .arkmap sortuje; bez sortu bajty kalki
+// zalezaly od sciezki wczytania (wykryte na parach kalk uzytkownika).
 function _deltaStripRoom(room) {
   const c = JSON.parse(JSON.stringify(room));
   delete c.area;
   _stripRoomDefaults(c);
+  if (c.stubs) c.stubs.sort();
+  if (c.exit_locks) c.exit_locks.sort();
+  if (c.special_exit_locks) c.special_exit_locks.sort();
   return c;
 }
 
@@ -20234,8 +20228,24 @@ function _arkdeltaSuggestedName() {
   return baseFilename.replace(/\.dat$|\.json$|\.arkmap$|\.arkdelta$/, '') + '.arkdelta';
 }
 
+// Arc 34 (v1.49.4): typy wpisow deltaLog eksportowalne do kalki — LUSTRO case'ow
+// buildDelta (25 typow). Wpis spoza zbioru (np. ACCEPT_DIR_ISSUES — dane meta,
+// nie geometria) jest przez buildDelta pomijany (default: continue); straznik
+// nizej blokuje eksport kalki z samych takich wpisow (0 opow = pusty plik).
+// Pin anty-drift w tests/dir_validation.js porownuje ten zbior z case'ami buildDelta.
+const _DELTA_EXPORTABLE = new Set([
+  'ADD_ROOM', 'DELETE_ROOM', 'EDIT_ROOM', 'EDIT_EXIT', 'PAINT_BATCH',
+  'MOVE_ROOM', 'MOVE_ROOM_TO_AREA', 'ADD_EXIT', 'DELETE_EXIT', 'DELETE_SPECIAL_EXIT',
+  'ADD_AREA', 'DELETE_AREA', 'EDIT_AREA', 'ADD_CL', 'EDIT_CL',
+  'DELETE_CL', 'DELETE_SUPPRESSOR', 'ADD_SUPPRESSOR', 'AUTO_FIX_SUPPRESSORS',
+  'ADD_LABEL', 'EDIT_LABEL', 'DELETE_LABEL', 'MOVE_LABEL', 'RESIZE_LABEL',
+  'EDIT_ENV_COLOR',
+]);
+
 function saveDelta() {
   if (!state.deltaLog || state.deltaLog.length === 0) { toast('Brak zmian do zapisania', true); return; }
+  // Arc 34: log niepusty, ale zero eksportowalnych opow (np. same akceptacje walidatora)
+  if (!state.deltaLog.some(e => _DELTA_EXPORTABLE.has(e.type))) { toast('Brak zmian do zapisania', true); return; }
   const text = buildDelta();
   saveWithDialog(_arkdeltaSuggestedName(), 'application/json', () => text);  // toast w helperze
 }

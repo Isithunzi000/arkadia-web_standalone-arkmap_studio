@@ -2,6 +2,16 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.49.4 — Obserwacje uzytkownika: determinizm kalki, nawias w kopiach, akceptacje w undo, reset avoidLocked, skala 105% (Arc 34)
+
+Druga paczka z obserwacji uzytkownika (2026-08-25, analiza materialow testowych: pary map orig/edycja/undoAll, 4 warianty kalki, eksporty PNG/SVG, raporty). Piny repro-first: delta T2b, save_dialogs A4.5 (UX-5C), dir_validation obs3 (12 pinow + anty-drift), planner_ui P7 (obs 4), tier6_ux B23, scenariusze empiryczne E24/E25.
+
+- Kalka deterministyczna wzgledem sciezki wczytania: _deltaStripRoom sortuje stubs/exit_locks/special_exit_locks (kanon juz deklarowany przez _diffCanonRoom — straznik serializacji, silnik nietkniety). Pre-fix kalka tej samej edycji roznila sie bajtami zaleznie od tego, czy mapa wczytana z .dat (kolejnosc stubs z pliku) czy .arkmap (sort przy load) — wykryte na parach kalk uzytkownika (13 opow DELETE_ROOM).
+- Okno „Kopie zapasowe": nawias „(maks. 5 na plik)" w podtytule lamiemy wylacznie w calosci (nowrap span) — pre-fix przegladarka tla go w srodku.
+- Walidacja kierunkow: akceptacje „✓ OK" / „↶ cofnij" sa teraz wpisami undo (nowy typ ACCEPT_DIR_ISSUES, before/after zbioru) — dziala undo/redo/undoAll (pre-fix omijaly stos; undoAll nie cofalo akceptacji — widac bylo w meta pliku po undoAll). Selektor zrodla „w przegladarce / w pliku" USUNIETY: jedyne zrodlo to meta.accepted_dir_issues mapy (tryb przegladarki byl globalny dla wszystkich map i nie trafial do pliku). Przyciski „Przenies do .arkmap" / „Wyczysc akceptacje" wyciete; legacy klucze localStorage czyszczone przy wczytaniu mapy. Straznik: saveDelta odmawia eksportu kalki, gdy log ma 0 eksportowalnych opow (np. same akceptacje) — zbior _DELTA_EXPORTABLE lustruje case buildDelta, pin anty-drift pilnuje zgodnosci.
+- „Przywroc ustawienia domyslne" przywraca tez checkbox „Omijaj zablokowane pokoje" (avoidLocked = true) — pre-fix pomijany mimo deklaracji resetu przelacznikow planera; confirm dopisuje „omijanie zablokowanych".
+- Domyslna skala interfejsu 105% (sweet spot czytelnosci zgloszony przez uzytkownika; zoom skaluje proporcje, wiec lamianie tekstow identyczne jak przy 100%): :root --ui-scale 1.05, suwak startuje na 105, loadSettings stosuje zapisana wartosc zawsze (warunek !== 100 zjadalby swiadome 100), saveSettings fallback 105, reset wraca do 105.
+
 ## v1.49.3 — Obserwacje uzytkownika: lite linie wyjsc przy fit (Arc 33)
 
 Pierwsza poprawka z paczki obserwacji uzytkownika (2026-08-25, testy na mapie online 26 988 pokoi). Pin repro-first: tier6_ux B22 + scenariusz empiryczny E23.lod.lines (dedup przeliczany niezaleznie: 594 segmenty = (1192 - customSkip - oneWay)/2 + oneWay).

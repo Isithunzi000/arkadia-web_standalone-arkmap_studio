@@ -214,6 +214,13 @@ console.log('── T3: struktura HTML/CSS ──');
     'P7: reset domyślny obejmuje algo/dir/trans/speed');
   ok(rd.includes('wpRefreshDirUI()') && rd.includes('wpRefreshTransportUI()'), 'P7: reset odświeża UI przełączników');
   ok(rd.includes('przełączniki planera'), 'P7: confirm wspomina przełączniki planera');
+  // Arc 34 (v1.49.4, obs 4): reset przywraca też omijanie zablokowanych pokoi
+  ok(rd.includes('wpState.avoidLocked = true'),
+    'P7 (Arc 34, obs 4): reset domyślny obejmuje avoidLocked = true (pre-fix: pomijany)');
+  ok(rd.includes("getElementById('wp-avoidlocked')") && /\.checked = true/.test(rd),
+    'P7 (Arc 34, obs 4): reset zaznacza checkbox wp-avoidlocked');
+  ok(rd.includes('omijanie zablokowanych'),
+    'P7 (Arc 34, obs 4): confirm wspomina omijanie zablokowanych (fraza „przełączniki planera" zachowana wyżej)');
   // Liczba przycisków w HTML zgodna z atrapa T2
   ok((NEW.match(/data-algo="/g) || []).length === 2, 'HTML: 2 przyciski data-algo');
   ok((NEW.match(/wp-dir-btn[^"]*"\s+data-dir="/g) || []).length === 3, 'HTML: 3 przyciski filtra kierunków (wp-dir-btn)');

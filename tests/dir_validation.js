@@ -171,5 +171,56 @@ function tfBad(r) { const iss = api._roomDirIssues(r); return iss.tf ? iss.tf.ba
   ok(!iss.tf && !iss.db, 'brak user_data → brak znalezień');
 }
 
+// ── Arc 34 (v1.49.4, obs 3): akceptacje w undo/redo, selektor wycięty ────────
+console.log('— Arc 34 (obs 3): akceptacje = wpis undo, jedno źródło (meta) —');
+{
+  const fnSlice = (anchor) => {
+    const i = HTML.indexOf(anchor);
+    if (i < 0) return '';
+    const j = HTML.indexOf('\n}', i);
+    return j < 0 ? '' : HTML.slice(i, j + 2);
+  };
+  ok(!HTML.includes('vd-store') && !HTML.includes('vd-migrate') && !HTML.includes('vd-clearacc'),
+    'obs3: brak selektora źródła i przycisków migracji/czyszczenia w HTML i JS (pre-fix: obecne)');
+  ok(!HTML.includes('function _acceptStore') && !HTML.includes('_vdMigrate') && !HTML.includes('_vdClearAccepts'),
+    'obs3: funkcje trybu przegladarki wyciete (pre-fix: _acceptStore/_vdMigrate/_vdClearAccepts)');
+  ok(!HTML.includes('arkmap_accept_store') || HTML.match(/arkmap_accept_store/g).length === 1,
+    'obs3: klucz arkmap_accept_store tylko jako legacy wipe w applyMap');
+  const asave = fnSlice('function _acceptSave(arr){');
+  ok(asave.length > 0 && !asave.includes('localStorage') && asave.includes('meta.accepted_dir_issues'),
+    'obs3: _acceptSave meta-only, bez localStorage (pre-fix: gałąź browser)');
+  ok((HTML.match(/case 'ACCEPT_DIR_ISSUES'/g) || []).length === 2,
+    'obs3: case ACCEPT_DIR_ISSUES w obu dyspozytorach (undo + redo)');
+  const vacc = fnSlice('function _vdAccept(type, it){');
+  ok(vacc.includes("pushUndo({ type:'ACCEPT_DIR_ISSUES'") && vacc.includes('before') && vacc.includes('after')
+    && vacc.includes('state.redoStack = [];') && vacc.includes('updateUndoRedoUI()'),
+    'obs3: _vdAccept przez pushUndo (before/after, idioma call-site)');
+  const vunacc = fnSlice('function _vdUnaccept(type, it){');
+  ok(vunacc.includes("pushUndo({ type:'ACCEPT_DIR_ISSUES'"),
+    'obs3: _vdUnaccept przez pushUndo');
+  const reset = fnSlice('function resetAllDefaults() {');
+  ok(!reset.includes('_wasFileAcceptSrc') && !reset.includes("k !== 'arkmap_accepted_dir_issues'"),
+    'obs3: resetAllDefaults bez logiki źródła akceptacji i bez wyjątku klucza');
+  ok(HTML.includes("localStorage.removeItem('arkmap_accept_store')"),
+    'obs3: applyMap czyści legacy klucz arkmap_accept_store');
+  // — strażnik pustej kalki + lustro typow eksportowalnych —
+  ok(HTML.includes('const _DELTA_EXPORTABLE = new Set(['),
+    'obs3: _DELTA_EXPORTABLE zadeklarowany (lustro caseow buildDelta)');
+  const sd = fnSlice('function saveDelta() {');
+  ok(sd.includes('_DELTA_EXPORTABLE.has(e.type)'),
+    'obs3: saveDelta odmawia eksportu, gdy 0 eksportowalnych opow (pre-fix: kalka z samych akceptacji = pusty plik)');
+  // — pin anty-drift: zbior _DELTA_EXPORTABLE === case'e buildDelta —
+  const bd = HTML.includes('function buildDelta(log, base) {')
+    ? block('function buildDelta(log, base) {', '// Serializacja kalki z zadanych opow') : '';
+  const bdCases = new Set([...bd.matchAll(/case '([A-Z_]+)'/g)].map(m => m[1]));
+  const expM = HTML.match(/const _DELTA_EXPORTABLE = new Set\(\[([\s\S]*?)\]\);/);
+  const expSet = new Set(expM ? [...expM[1].matchAll(/'([A-Z_]+)'/g)].map(m => m[1]) : []);
+  const diffAB = [...bdCases].filter(t => !expSet.has(t));
+  const diffBA = [...expSet].filter(t => !bdCases.has(t));
+  ok(bdCases.size === 25 && expSet.size === 25 && diffAB.length === 0 && diffBA.length === 0,
+    'obs3 anty-drift: _DELTA_EXPORTABLE === case buildDelta (25 typow; rozjezdne: '
+    + (diffAB.concat(diffBA).join(',') || 'brak') + ')');
+}
+
 console.log(`\ndir_validation: ${pass} OK, ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

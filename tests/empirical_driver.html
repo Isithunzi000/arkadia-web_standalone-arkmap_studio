@@ -99,6 +99,14 @@ function loadBase(fmt) {
           + ' crc: state.baseInfo && state.baseInfo.crc, deltaLog: state.deltaLog.length })');
 }
 
+// Izolacja zoomu (Arc 34, v1.49.4): domyslna skala to 105%. Czesc pinow mierzy
+// MATEMATYKE layoutu/dragu w css px (dopasowanie okien przy 105% bada osobno E25).
+// API pomiarowe Chrome pod zoom sa niespojne (getBoundingClientRect mnozy,
+// getComputedStyle dzieli, style.* wychodza ulamkowe) i zaleza od wersji silnika,
+// wiec piny dokladnych pikseli jada na izolowanym 100% z przywroceniem 105%.
+function zoomIsolate100() { ex('if (typeof applyUiScale === "function") applyUiScale(100);'); }
+function zoomRestoreDefault() { ex('if (typeof applyUiScale === "function") applyUiScale(105);'); }
+
 // ── Rejestr scenariuszy ──────────────────────────────────────────────────────
 const SC = [];
 function scenario(id, fn) { SC.push({ id, fn }); }
@@ -2707,6 +2715,7 @@ scenario('E7.texts', async () => {
 
 scenario('E7.marks', async () => {
   // M5c: checkbox tylko przy klasach decyzyjnych; legenda z duzymi probkami.
+  zoomIsolate100();  // Arc 34: pin legend-size mierzy dokladne px
   await loadBase('dat');
   const txt = await (await fetch('./fixture_demo.arkdelta')).text();
   ex('const r = validateDeltaText(' + JSON.stringify(txt) + '); if (!r.ok) throw new Error("walidacja fixture_demo"); window.__e7mdelta = r.delta;');
@@ -2727,10 +2736,12 @@ scenario('E7.marks', async () => {
     'po apply: checkboxy tylko przy 3 nierozstrzygnietych konfliktach (28/29/33)');
   EQ('E7.marks.after-done', ev('[...document.querySelectorAll("#dp-body .dp-mark.done")].length').val, 29,
     'po apply: 29 markerow ✓ (28 sesyjnych + op31)');
+  zoomRestoreDefault();  // Arc 34
 });
 
 scenario('E7.contrast', async () => {
   // M5d: przyciski wiersza czytelne na podswietleniu, wynik autopozycji = pigulka.
+  zoomIsolate100();  // Arc 34: pin pill mierzy dokladny border-width
   await loadBase('dat');
   const txt = await (await fetch('./fixture_demo.arkdelta')).text();
   ex('const r = validateDeltaText(' + JSON.stringify(txt) + '); if (!r.ok) throw new Error("walidacja fixture_demo"); window.__e7cdelta = r.delta;');
@@ -2747,10 +2758,12 @@ scenario('E7.contrast', async () => {
     + ' const s = getComputedStyle(c); return { br: s.borderRadius, bw: s.borderTopWidth, bg: s.backgroundColor, fw: s.fontWeight }; })()').val;
   A('E7.contrast.pill', !!pill && pill.br === '8px' && pill.bw === '1px' && pill.bg !== 'rgba(0, 0, 0, 0)' && (pill.fw === '600' || pill.fw === 'bold'),
     'chip autopozycji jako pigulka: ramka+tlo+pogrubienie [=' + JSON.stringify(pill) + ']');
+  zoomRestoreDefault();  // Arc 34
 });
 
 scenario('E7.resize', async () => {
   // M5e: panel recenzji ze zmiennym rozmiarem — uchwyt, min 360x220, max 92vw x 80vh.
+  zoomIsolate100();  // Arc 34: piny mierza dokladna matme resize w css px
   await loadBase('dat');
   const txt = await (await fetch('./fixture_demo.arkdelta')).text();
   ex('const r = validateDeltaText(' + JSON.stringify(txt) + '); if (!r.ok) throw new Error("walidacja fixture_demo"); window.__e7rdelta = r.delta;');
@@ -2773,6 +2786,7 @@ scenario('E7.resize', async () => {
   const d3 = dims();
   EQ('E7.resize.max', d3, { w: Math.round(1500 * 0.92) + 'px', h: Math.round(950 * 0.8) + 'px', cw: Math.round(1500 * 0.92) },
     'clamp maksymalny 92vw x 80vh');
+  zoomRestoreDefault();  // Arc 34
 });
 
 // ═══ E10: Tier 4 — zaostrzony walidator kalki, reszta wg P2, wp-lock drag, undo CL, roundtrip .dat ═══
@@ -2835,6 +2849,7 @@ scenario('E10.remainder-p2', async () => {
 
 scenario('E10.wp-lock-drag', async () => {
   // S5: LOCK panelu planera blokuje WSZYSTKIE handlery drag (pierwszy brakowal guarda).
+  zoomIsolate100();  // Arc 34: pin mierzy dokladna matme dragu w css px
   await loadBase('dat');
   ex('(function(){ document.getElementById("wp-panel").classList.add("visible"); wpLocked = false; })()');
   const drag = (x0, y0, x1, y1) => ex('(function(){'
@@ -2856,6 +2871,7 @@ scenario('E10.wp-lock-drag', async () => {
   EQ('E10.wp-lock-drag.locked', { sLeft: p2.sLeft, sTop: p2.sTop }, { sLeft: p1.sLeft, sTop: p1.sTop },
     'LOCK: drag nie przesuwa (guard we wszystkich handlerach)');
   ex('(function(){ wpLocked = false; document.getElementById("wp-panel").classList.remove("visible"); })()');
+  zoomRestoreDefault();  // Arc 34
 });
 
 scenario('E10.undo-cl-container', async () => {
@@ -4150,6 +4166,127 @@ function appReady() {
   });
 }
 
+// ═══ Arc 34 (v1.49.4, obs 3): E24 — akceptacje walidacji kierunkow w undo/redo ═══
+// Sciezka: otwarcie panelu -> klik „✓ OK" -> wpis ACCEPT_DIR_ISSUES na stosie,
+// dirty, meta = after -> undo cofa -> redo przywraca -> undoAll czysci meta
+// (round-trip obejmuje akceptacje) -> saveDelta przy samych akceptacjach odmawia.
+scenario('E24.accept-undo', async () => {
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  await loadBase('dat');
+  await eva('new Promise(function(res){ setTimeout(res, 60); })');
+  A('E24.fn', ev("typeof _vdAccept === 'function' && typeof _vdUnaccept === 'function' && typeof undoAll === 'function'").val === true,
+    'funkcje akceptacji i undo dostepne');
+  A('E24.nostore', ev("!document.getElementById('vd-store') && !document.getElementById('vd-migrate') && !document.getElementById('vd-clearacc')").val === true,
+    'panel walidacji bez selektora zrodla i przyciskow migracji/czyszczenia (pre-fix: obecne)');
+  const pre = AEV('E24.click', ev("(function(){"
+    + " if (typeof _vdAccept !== 'function') return null;"
+    + " openValidateDirections();"
+    + " var btn = document.querySelector('#validate-panel .vd-row .vd-acc');"
+    + " if (!btn) return null;"
+    + " var n0 = state.undoStack.length;"
+    + " btn.click();"
+    + " var top = state.undoStack[state.undoStack.length - 1];"
+    + " return JSON.stringify({ n0: n0, n1: state.undoStack.length,"
+    + "   type: top && top.type, dirty: state.dirty === true,"
+    + "   meta: (state.map.meta.accepted_dir_issues || []).length,"
+    + "   before: top ? top.before.length : -1, after: top ? top.after.length : -1 });"
+    + "})()"), 'klik „✓ OK" w panelu walidacji (fixture ma 17 otwartych rozjazdow tf)');
+  if (pre) {
+    const p = JSON.parse(pre);
+    EQ('E24.push', p.n1, p.n0 + 1, 'akceptacja pushuje wpis na stos undo (pre-fix: omijala stos)');
+    EQ('E24.type', p.type, 'ACCEPT_DIR_ISSUES', 'typ wpisu = ACCEPT_DIR_ISSUES');
+    A('E24.dirty', p.dirty === true, 'akceptacja ustawia dirty (pushUndo)');
+    A('E24.beforeafter', p.before === 0 && p.after > 0 && p.meta === p.after,
+      'wpis niesie before/after; meta po kliku = after');
+  }
+  const u = AEV('E24.undoflow', ev("(function(){"
+    + " if (typeof undoAction !== 'function' || typeof redoAction !== 'function') return null;"
+    + " var r = {};"
+    + " undoAction();"
+    + " r.undone = state.map.meta.accepted_dir_issues === undefined;"
+    + " redoAction();"
+    + " r.redone = (state.map.meta.accepted_dir_issues || []).length;"
+    + " undoAll();"
+    + " r.undoAll = state.map.meta.accepted_dir_issues === undefined && state.undoStack.length === 0 && state.deltaLog.length === 0;"
+    + " redoAll();"
+    + " r.logTypes = state.deltaLog.map(function(e){ return e.type; }).join(',');"
+    + " saveDelta();"
+    + " r.toast = document.getElementById('toast').textContent;"
+    + " r.logLen = state.deltaLog.length;"
+    + " document.getElementById('validate-panel').classList.remove('visible');"
+    + " return JSON.stringify(r);"
+    + "})()"), 'undo -> redo -> undoAll -> redoAll -> saveDelta przy samych akceptacjach');
+  if (u) {
+    const q = JSON.parse(u);
+    EQ('E24.undo', q.undone, true, 'undo cofa akceptacje (meta znika)');
+    A('E24.redo', q.redone > 0, 'redo przywraca akceptacje (meta wraca)');
+    EQ('E24.undoAll', q.undoAll, true, 'undoAll czysci akceptacje z meta (round-trip obejmuje akceptacje)');
+    EQ('E24.logtypes', q.logTypes, 'ACCEPT_DIR_ISSUES', 'po redoAll log = wylacznie akceptacje');
+    A('E24.emptykalka', (q.toast || '').indexOf('Brak zmian') === 0 && q.logLen === 1,
+      'saveDelta odmawia przy 0 eksportowalnych opow (toast „Brak zmian do zapisania", log nietkniety)');
+  }
+});
+
+// ═══ Arc 34 (v1.49.4, obs 7 + obs 2): E25 — domyslne 105% + bramka geometrii ═══
+// Zoom skaluje proporcje (kontener i tekst razem), wiec przy 105% nie wolno
+// znalezc ZADNEGO poziomego overflow w dialogach. Enumeracja dynamiczna —
+// przyszle okna wchodza do bramki automatycznie.
+scenario('E25.uiscale', async () => {
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  await loadBase('dat');
+  await eva('new Promise(function(res){ setTimeout(res, 60); })');
+  const d = AEV('E25.default', ev("(function(){"
+    + " document.documentElement.style.removeProperty('--ui-scale');"
+    + " var root = getComputedStyle(document.documentElement).getPropertyValue('--ui-scale').trim();"
+    + " var sl = document.getElementById('ui-scale-slider');"
+    + " var def = sl ? sl.defaultValue : null;"
+    + " applyUiScale(105);"
+    + " return JSON.stringify({ root: root, def: def,"
+    + "   zoom: getComputedStyle(document.documentElement).zoom,"
+    + "   val: document.getElementById('ui-scale-val').textContent });"
+    + "})()"), 'domyslna skala z :root + suwak + applyUiScale(105)');
+  if (d) {
+    const o = JSON.parse(d);
+    EQ('E25.root', o.root, '1.05', '--ui-scale z :root = 1.05 (pre-fix: 1)');
+    EQ('E25.slider', o.def, '105', 'defaultValue suwaka = 105 (pre-fix: 100)');
+    EQ('E25.zoom', o.zoom, '1.05', 'computed zoom = 1.05 po applyUiScale(105)');
+    EQ('E25.label', o.val, '105%', 'etykieta suwaka 105%');
+  }
+  // obs 2: nawias podtytulu dlg-backups w jednym prostokacie (nowrap)
+  const sp = AEV('E25.bakspan', ev("(function(){"
+    + " var dlg = document.getElementById('dlg-backups'); if (!dlg) return null;"
+    + " dlg.classList.add('open');"
+    + " var span = document.querySelector('#dlg-backups .dlg-sub span');"
+    + " var n = span ? span.getClientRects().length : -1;"
+    + " dlg.classList.remove('open');"
+    + " return n;"
+    + "})()"), 'nowrap span nawiasu w dlg-backups');
+  EQ('E25.bakspan1', sp, 1, 'nawias „(maks. 5 na plik)" nie lamie sie w srodku (1 prostokat; pre-fix: brak spanu)');
+  // bramka geometrii: wszystkie dialogi przy 105%, poziomy overflow przyciskow i tekstow
+  const g = AEV('E25.geom', ev("(function(){"
+    + " var bad = [];"
+    + " var dlgs = document.querySelectorAll('.dlg-bg');"
+    + " for (var i = 0; i < dlgs.length; i++) {"
+    + "   var dlg = dlgs[i]; dlg.classList.add('open');"
+    + "   var els = dlg.querySelectorAll('button, .dlg-sub, .dlg-title, .dlg-body p');"
+    + "   for (var j = 0; j < els.length; j++) {"
+    + "     var el = els[j];"
+    + "     if (el.scrollWidth > el.clientWidth + 1) {"
+    + "       bad.push(dlg.id + '/' + (el.id || el.className || el.tagName) + ':' + el.scrollWidth + '>' + el.clientWidth);"
+    + "     }"
+    + "   }"
+    + "   dlg.classList.remove('open');"
+    + " }"
+    + " return JSON.stringify({ n: dlgs.length, bad: bad });"
+    + "})()"), 'sweep wszystkich dialogow (.dlg-bg) przy skali 105%');
+  if (g) {
+    const o = JSON.parse(g);
+    A('E25.geom.ok', o.bad.length === 0,
+      'brak poziomego overflow w ' + o.n + ' dialogach przy 105%'
+      + (o.bad.length ? ' — naruszenia: ' + o.bad.slice(0, 4).join(' | ') : ''));
+  }
+});
+
 async function runAll() {
   await appReady();
   try { W().addEventListener('error', e => REC('FAIL', 'js-error', String(e.message || e))); } catch (e) {}
@@ -4468,6 +4605,7 @@ scenario('E23.lod.lines', async () => {
 // konczy sie na krawedzi content box (margines 0).
 scenario('E23.lod-geom', async () => {
   ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  zoomIsolate100();  // Arc 34: pin .h mierzy dokladna wysokosc paska w css px
   await loadBase('dat');
   await eva('new Promise(function(res){ setTimeout(res, 60); })');
   const gRaw = AEV('E23.lod-geom.run', ev('JSON.stringify((function(){'
@@ -4505,6 +4643,7 @@ scenario('E23.lod-geom', async () => {
   } else {
     A('E23.lod-geom.exists', false, 'brak #msb-lod w DOM');
   }
+  zoomRestoreDefault();  // Arc 34
 });
 
 // ═══ E23.raster — Arc 31 F3 (v1.47.0): raster overview ═══

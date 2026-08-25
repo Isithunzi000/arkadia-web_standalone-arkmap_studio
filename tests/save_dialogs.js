@@ -224,7 +224,7 @@ console.log('— Sekcja B: piny strukturalne —');
 
 // ═══ Sekcja C — pin wersji ═══
 console.log('— Sekcja C: pin wersji —');
-ok(HTML.includes("const APP_VERSION = 'v1.49.3';"), 'C1 APP_VERSION = v1.49.3');
+ok(HTML.includes("const APP_VERSION = 'v1.49.4';"), 'C1 APP_VERSION = v1.49.4');
 
 // ═══ A4.5 (UX-5): potwierdzenie pierwszego nadpisu + autobackup IndexedDB ═══
 console.log('— A4.5 (UX-5): confirm nadpisu + backup IndexedDB —');
@@ -251,6 +251,9 @@ const ASYNC_PINS_SD = [];
     'A4.5 (UX-5B): [Pobierz] -> sugerowana nazwa <nazwa>.kopia-<ts>.arkmap');
   ok(sbd.includes('Brak kopii zapasowych'),
     'A4.5 (UX-5B): pusty stan dialogu kopii');
+  // Arc 34 (v1.49.4, obs 2): nawias podtytulu lamiemy wylacznie w calosci (nowrap span)
+  ok(HTML.includes('<div class="dlg-sub">Automatyczne — przed każdym nadpisem istniejącego pliku <span style="white-space:nowrap">(maks. 5 na plik)</span></div>'),
+    'A4.5 (UX-5C, Arc 34): podtytul dlg-backups — nawias w nowrap span (pre-fix: lamany w srodku)');
 }
 {
   // — behawioralny A: pierwszy zapis pyta, drugi cicho; backup przed write —

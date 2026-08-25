@@ -44,7 +44,8 @@ const nSched = (HTML.match(/\bscheduleDraw\(\);/g) || []).length;
 // (przywrocenie paska statusu/slidera po renderach shimowych miniaturek).
 // F2.15/F2.16 (Arc 31, v1.48.3): +2 call-site'y — re-plan po zmianie checkboxa
 // „Omijaj zablokowane pokoje" oraz przerysowanie po anulowaniu narzedzia pinchem.
-ok(nSched === 124, 'B1: dokladnie 124 call-site\'ow scheduleDraw(); (jest ' + nSched + ')');
+// Arc 34 (v1.49.4): 124 -> 123 — usuniecie _vdClearAccepts (obs-3: akceptacje w undo) usunelo 1 call-site.
+ok(nSched === 123, 'B1: dokladnie 123 call-site\'ow scheduleDraw(); (jest ' + nSched + ')');
 const bareAll = (HTML.match(/\bdraw\(\);/g) || []).length;
 const sdBare = (sd.match(/\bdraw\(\);/g) || []).length;
 // F5: +2 gole draw(); w _deltaRenderComparison — render miniatur MUSI byc

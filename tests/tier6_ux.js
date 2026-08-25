@@ -300,7 +300,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.49.3';"), 'V1: pin APP_VERSION v1.49.3');
+ok(HTML.includes("const APP_VERSION = 'v1.49.4';"), 'V1: pin APP_VERSION v1.49.4');
 
 // ═══ A3.10 (DI-7): touchstart — reset flag na starcie KAZDEGO gestu ═══
 console.log('— A3.10 (DI-7): touchstart — reset na starcie kazdego gestu —');
@@ -342,6 +342,22 @@ console.log('— A3.10 (DI-7): touchstart — reset na starcie kazdego gestu —
   g2.fire(ev([t(5, 0), t(6, 10)], [t(6, 10)]));
   ok(g2.snap().n === 2 && g2.snap().multi === true,
     'A3.10 (DI-7): dokladanie palca w trakcie gestu — bez resetu rejestru (multi-flag zachowana)');
+}
+
+// ── B23 (Arc 34, v1.49.4, obs 7): domyslna skala interfejsu 105% ─────────────
+console.log('— B23 (Arc 34, obs 7): domyslna skala UI 105% —');
+{
+  ok(HTML.includes('--ui-scale: 1.05;'),
+    'B23a: :root --ui-scale = 1.05 (pre-fix: 1)');
+  ok(/id="ui-scale-slider"[^>]*value="105"/.test(HTML) && HTML.includes('>105%</span>'),
+    'B23b: suwak startuje na 105 i etykieta 105% (pre-fix: 100)');
+  ok(!HTML.includes('saved.uiScale !== 100')
+    && HTML.includes("typeof saved.uiScale === 'number' && isFinite(saved.uiScale)"),
+    'B23c: loadSettings stosuje zapisana wartosc ZAWSZE (pre-fix: warunek !== 100 zjadalby swiadome 100)');
+  ok(HTML.includes('parseInt(_uiScaleSlider.value) || 105'),
+    'B23d: saveSettings fallback 105 (pre-fix: 100)');
+  ok(HTML.includes('applyUiScale(105)'),
+    'B23e: resetAllDefaults wraca do 105, nie 100');
 }
 
 console.log('');

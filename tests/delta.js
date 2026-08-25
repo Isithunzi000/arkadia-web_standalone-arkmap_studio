@@ -266,7 +266,7 @@ console.log('— T2: buildDelta — determinizm i kształt pliku —');
   c2.state.deltaLog = sampleDeltaLog(c2.state);
   ok(t1 === c2.api.buildDelta(), 'buildDelta: świeży kontekst, ten sam log → identyczne bajty (determinizm)');
   const d = JSON.parse(t1);
-  ok(d.meta.format === 'arkdelta' && d.meta.format_version === 2, 'meta: format + format_version 2 (v1.49.3)');
+  ok(d.meta.format === 'arkdelta' && d.meta.format_version === 2, 'meta: format + format_version 2 (v1.49.4)');
   ok(d.meta.ops_count === d.ops.length && d.ops.length === 10, 'meta.ops_count == liczba opów');
   ok(d.meta.base && d.meta.base.crc === c1.state.baseInfo.crc && d.meta.base.version === '9.9.9',
     'meta.base: crc + version z baseInfo');
@@ -289,6 +289,28 @@ console.log('— T2: buildDelta — determinizm i kształt pliku —');
   const roomA = d.ops[1].payload.room;
   ok(roomA.area === undefined && roomA.exits === undefined && roomA.weight === undefined && roomA.user_data === undefined,
     'payload pokoju spec-clean (bez area / pustych kontenerów / defaultów)');
+}
+
+console.log('— T2b: _deltaStripRoom — kanonikalizacja pól zbiorczych (Arc 34) —');
+{
+  // Repro z paczki użytkownika: kalka tej samej edycji różniła się bajtami zależnie
+  // od ścieżki wczytania mapy (.dat zostawia kolejność stubs z pliku, .arkmap sortuje).
+  const mkLog = (stubs) => [{ type: 'DELETE_ROOM', roomId: 42, areaId: 1,
+    snapshot: { id: 42, x: 1, y: 2, z: 0, name: '', env: 258, stubs } }];
+  const cA = makeDeltaCtx();
+  cA.state.baseInfo = cA.api._computeBaseInfo();
+  cA.state.deltaLog = mkLog(['w', 'nw', 'sw']);   // porządek z loadera .dat
+  const cB = makeDeltaCtx();
+  cB.state.baseInfo = cB.api._computeBaseInfo();
+  cB.state.deltaLog = mkLog(['nw', 'sw', 'w']);   // porządek z loadera .arkmap
+  ok(cA.api.buildDelta() === cB.api.buildDelta(),
+    'T2b: kolejność stubs w snapshocie NIE wpływa na bajty kalki (pre-fix: przeciek kolejności z loadera)');
+  const cC = makeDeltaCtx();
+  const stripped = cC.api._deltaStripRoom({ id: 1, x: 0, y: 0, z: 0,
+    stubs: ['w', 'n'], exit_locks: ['s', 'n'], special_exit_locks: ['down', 'up'] });
+  ok(stripped.stubs.join() === 'n,w' && stripped.exit_locks.join() === 'n,s'
+    && stripped.special_exit_locks.join() === 'down,up',
+    'T2b: _deltaStripRoom sortuje stubs/exit_locks/special_exit_locks (kanon _diffCanonRoom)');
 }
 
 console.log('— T3: validateDeltaText — round-trip eksportu —');
@@ -456,11 +478,11 @@ ok(HTML.includes('loadArkdeltaBtn.disabled = !isEdit'), 'integracja: updateEditU
 ok(HTML.includes('id="btn-save-arkdelta" class="etb-check" disabled'), 'markup: btn-save-arkdelta pod walidacją (disabled)');
 ok(HTML.includes('id="dlg-arkdelta"') && HTML.includes('id="arkdelta-body"'), 'markup: dialog dlg-arkdelta (błędy walidacji)');
 ok(HTML.includes('state.baseInfo = _computeBaseInfo(null, state._pendingComputed);'),
-  'integracja: baseInfo w wrapperze applyMap z reużyciem computed z verify (v1.49.3)');
+  'integracja: baseInfo w wrapperze applyMap z reużyciem computed z verify (v1.49.4)');
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');
-ok(HTML.includes("const APP_VERSION = 'v1.49.3';"), 'wersja: v1.49.3');
+ok(HTML.includes("const APP_VERSION = 'v1.49.4';"), 'wersja: v1.49.4');
 
 // — W3 (v1.35.0): etykiety kalki zachowane przez 6 niskopoziomowych sciezek commit —
 {
@@ -830,7 +852,7 @@ console.log('— T9: M3 — duchy, spirala, overridey —');
   ok(HTML.includes('const _DELTA_TYPE_PL = {') && HTML.includes("MOVE_ROOM: 'przesunięcie pokoju'")
     && HTML.includes("AUTO_FIX_SUPPRESSORS: 'automatyczna naprawa podwójnych linii'"),
     'W1 karta: typy opów po polsku (_DELTA_TYPE_PL)');
-  ok(HTML.includes("const APP_VERSION = 'v1.49.3';"), 'wersja v1.49.3');
+  ok(HTML.includes("const APP_VERSION = 'v1.49.4';"), 'wersja v1.49.4');
   ok(/r <= 25/.test(HTML), 'spirala: R_MAX = 25');
 }
 
@@ -866,7 +888,7 @@ console.log('— T10: M4 — version-mismatch, applyMap re-klasyfikacja, manual 
     && HTML.indexOf('_deltaGhostReset();  // ARKDELTA M3') < HTML.indexOf('// ARKDELTA M4: panel recenzji'),
     'applyMap: re-klasyfikacja otwartego panelu po resecie M3');
   ok(HTML.includes('href="docs/arkmap_manual.html"'), 'about: link do dokumentacji użytkownika');
-  ok(HTML.includes("const APP_VERSION = 'v1.49.3';"), 'wersja v1.49.3 w HTML');
+  ok(HTML.includes("const APP_VERSION = 'v1.49.4';"), 'wersja v1.49.4 w HTML');
 }
 {
   // Manual: sekcja .arkdelta + spójność numeracji
@@ -970,7 +992,7 @@ console.log('— T11: audyt T1 — klasyfikator ≡ apply —');
   ok(HTML.includes("if (aid <= 0) { items.push(_deltaClsItem(op, 'impossible', 'obszar domyślny"), 'T1: klasyfikator guard DELETE_AREA <= 0');
   ok(HTML.includes('kierunek przeciwny u pokoju docelowego jest zajęty'), 'T1: klasyfikator ADD_EXIT guard przeciwnego kierunku');
   ok(HTML.includes('return false;  // audyt T1/W15'), 'T1: commitDeleteArea jawny zwrot false');
-  ok(HTML.includes("const APP_VERSION = 'v1.49.3';"), 'wersja v1.49.3');
+  ok(HTML.includes("const APP_VERSION = 'v1.49.4';"), 'wersja v1.49.4');
 }
 
 
