@@ -443,6 +443,56 @@ console.log('— D6: realne wartosci w wierszach diff (Arc 35, v1.49.5) —');
     'classifyDelta x2: diffRows deterministyczne');
 }
 
+console.log('— D6b: etykiety sid w wierszach PAINT_BATCH (Arc 36, v1.49.6) —');
+{
+  // P1: rozwiazywalny sid — ADD_ROOM ok na wolnym polu (cien symuluje id),
+  // potem PAINT_BATCH na 'd:1'. Etykieta wiersza = '#<num>', nigdzie surowe 'd:'.
+  // (pre-fix: param wiersza to literalne '#d:1' — surowy sid).
+  const A1 = mapBase();
+  const c1 = makeCtx(A1);
+  const ops1 = [
+    { seq: 1, type: 'ADD_ROOM', target: { roomId: 'd:1', areaId: 1 },
+      payload: { room: { id: 'd:1', x: 5, y: 5, z: 0, name: 'Nowy', env: 262 } } },
+    { seq: 2, type: 'PAINT_BATCH', target: {},
+      payload: { changes: [ { roomId: 'd:1', beforeEnv: 262, beforeSymbol: '', afterEnv: 258, afterSymbol: '#' } ] } },
+  ];
+  const clsP1 = c1.api.classifyDelta({ ops: ops1 });
+  const rowsP1 = seq => ((clsP1.find(i => i.seq === seq) || {}).diffRows || []);
+  ok(clsP1.find(i => i.seq === 1).cls === 'ok', 'P1: ADD_ROOM na wolnym polu -> ok');
+  const chRowP1 = rowsP1(2).find(r => String(r.b).includes('env'));
+  ok(chRowP1 && /^#\d+$/.test(chRowP1.p),
+    'P1: etykieta wiersza PAINT_BATCH = #<num> (rozwiazany sid) || ' + rowsP1(2).map(r => r.p).join('|'));
+  ok(!rowsP1(2).some(r => String(r.p).includes('d:') || String(r.str).includes('d:')),
+    'P1: zero surowych sid-ow „d:N" w wierszach PAINT_BATCH || ' + JSON.stringify(rowsP1(2)));
+
+  // P2: nierozwiazywalny sid — ADD_ROOM do nieistniejacego obszaru -> impossible;
+  // PAINT_BATCH na 'd:7' drukuje '#d:7', NIGDY literalne 'undefined'.
+  // (pre-fix: str wiersza zaczynal sie od „undefined: ...").
+  const A2 = mapBase();
+  const c2 = makeCtx(A2);
+  const ops2 = [
+    { seq: 1, type: 'ADD_ROOM', target: { roomId: 'd:7', areaId: 999 },
+      payload: { room: { id: 'd:7', x: 0, y: 0, z: 0 } } },
+    { seq: 2, type: 'PAINT_BATCH', target: {},
+      payload: { changes: [ { roomId: 'd:7', beforeEnv: 1, beforeSymbol: '', afterEnv: 2, afterSymbol: '' } ] } },
+  ];
+  const clsP2 = c2.api.classifyDelta({ ops: ops2 });
+  const rowsP2 = seq => ((clsP2.find(i => i.seq === seq) || {}).diffRows || []);
+  ok(clsP2.find(i => i.seq === 1).cls === 'impossible', 'P2: ADD_ROOM do nieistniejacego obszaru -> impossible');
+  const blobP2 = JSON.stringify(rowsP2(2));
+  ok(blobP2.indexOf('undefined') === -1, 'P2: zero literalow „undefined" w wierszach || ' + blobP2);
+  const chRowP2 = rowsP2(2).find(r => String(r.b).includes('env'));
+  ok(chRowP2 && chRowP2.p === '#d:7', 'P2: etykieta nierozwiazywalnego sid = „#d:7" || ' + blobP2);
+  ok(chRowP2 && chRowP2.str.indexOf('#d:7:') === 0, 'P2: str zaczyna sie od „#d:7:" || ' + (chRowP2 && chRowP2.str));
+
+  // P3: determinizm — dwukrotna klasyfikacja obu scenariuszy daje identyczne wiersze.
+  const clsP1b = c1.api.classifyDelta({ ops: JSON.parse(JSON.stringify(ops1)) });
+  const clsP2b = c2.api.classifyDelta({ ops: JSON.parse(JSON.stringify(ops2)) });
+  ok(JSON.stringify(clsP1b.map(i => i.diffRows || null)) === JSON.stringify(clsP1.map(i => i.diffRows || null))
+    && JSON.stringify(clsP2b.map(i => i.diffRows || null)) === JSON.stringify(clsP2.map(i => i.diffRows || null)),
+    'P3: classifyDelta x2 — diffRows deterministyczne (oba scenariusze sid)');
+}
+
 console.log('');
 console.log('═══ diff_kalka: ' + pass + ' OK, ' + fail + ' FAIL ═══');
 process.exit(fail ? 1 : 0);

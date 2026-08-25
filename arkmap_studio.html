@@ -14526,7 +14526,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.49.5';
+const APP_VERSION = 'v1.49.6';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -20721,7 +20721,9 @@ function _deltaOpExtraDiffRows(op, resolve) {
   const P = op.payload || {};
   const rows = [];
   const row = (p, bv, av, str) => rows.push({ p, b: bv, a: av, str });
-  const res = v => { const r = resolve ? resolve(v) : v; return (typeof r === 'number') ? ('#' + r) : String(r); };
+  // Arc 36 (v1.49.6): nierozwiazywalny sid (np. op na pokoju, ktorego ADD_ROOM
+  // nie doszedl do skutku) drukuje sie jako '#d:N', nigdy literalne 'undefined'.
+  const res = v => { const r = resolve ? resolve(v) : v; return (typeof r === 'number') ? ('#' + r) : ((r === undefined || r === null) ? ('#' + String(v)) : String(r)); };
   const fmt = v => (v !== null && typeof v === 'object') ? JSON.stringify(v) : String(v ?? '—');
   const pos3 = o => '(' + (o.x ?? 0) + ',' + (o.y ?? 0) + ',' + (o.z ?? 0) + ')';
   const pos2 = (x, y) => '(' + (x ?? 0) + ',' + (y ?? 0) + ')';
@@ -20803,7 +20805,9 @@ function _deltaOpExtraDiffRows(op, resolve) {
         const c = ch[i];
         const bDesc = 'env ' + (c.beforeEnv ?? '—') + ' / „' + (c.beforeSymbol ?? '') + '"';
         const aDesc = 'env ' + (c.afterEnv ?? '—') + ' / „' + (c.afterSymbol ?? '') + '"';
-        row('#' + c.roomId, bDesc, aDesc, res(c.roomId) + ': ' + bDesc + ' → ' + aDesc);
+        // Arc 36 (v1.49.6): etykieta wiersza przez res() — rozwiazywalny sid daje '#<num>',
+        // nierozwiazywalny '#d:N'; pre-fix: surowe '#d:N' / '#undefined'.
+        row(res(c.roomId), bDesc, aDesc, res(c.roomId) + ': ' + bDesc + ' → ' + aDesc);
       }
       if (ch.length > CAP) row('…', '—', '+' + (ch.length - CAP), '… i ' + (ch.length - CAP) + ' wiecej');
       break;

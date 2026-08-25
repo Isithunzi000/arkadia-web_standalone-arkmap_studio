@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.49.6 — Kalka: czytelne etykiety sid w wierszach PAINT_BATCH (Arc 36)
+
+Kosmetyka z audytu zewnetrznego Arc 35 (1 realny LOW): wiersz diff opu PAINT_BATCH na pokoju dodawanym TA kalka pokazywal surowy identyfikator kalki „d:N" zamiast rozwiazanego numeru pokoju. Piny repro-first: diff_kalka D6b (P1/P2/P3).
+
+- Wiersz PAINT_BATCH na rozwiazywalnym sid: etykieta parametru przez resolver — „#<num>" zamiast „#d:N" (zgodnie z reszta karty operacji).
+- Wiersz PAINT_BATCH na nierozwiazywalnym sid (op na pokoju, ktorego ADD_ROOM nie doszedl do skutku): „#d:N" zamiast literalnego „undefined".
+- Czysta warstwa prezentacji: payload opow, klasyfikacja i checksumy nietkniete; determinizm klasyfikacji potwierdzony pinem P3 (x2 identyczne wiersze).
+
 ## v1.49.5 — Eksport: 100% pokrycia pod zoomem, kalka z prawdziwymi wartosciami, font mono 13px, audyt geometrii (Arc 35)
 
 Paczka z decyzji wlasciciela: wszystko co user widzi ma byc mozliwe do zrzucenia (poza chrome aplikacji). Piny repro-first: diff_kalka D6 (19 pinow), tier6_ux B23/B24, scenariusze empiryczne E26 (kompozyt eksportu) i E27 (audyt geometrii 61 kontenerow x 3 skale).
