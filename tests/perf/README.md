@@ -31,9 +31,18 @@ Node v20.20.1, chrome-headless-shell 152):
   [`docs/porownanie_wydajnosci_2026-08-26.html`](../../docs/porownanie_wydajnosci_2026-08-26.html)
   (porównawczy z 2026-08-23). Baza „przed" dla fali Arc 37 (m.in. regresja
   parse .dat z hartowania F2.9/F2.10, v1.48.3).
+- **2026-08-27** (aplikacja v1.49.7 + fala E, silnik sum v4, repo `d1d62b5`):
+  [`results/2026-08-27/`](results/2026-08-27/) — raporty:
+  [`docs/raport_wydajnosci_2026-08-27.html`](../../docs/raport_wydajnosci_2026-08-27.html)
+  (niezależny) oraz
+  [`docs/porownanie_wydajnosci_2026-08-27.html`](../../docs/porownanie_wydajnosci_2026-08-27.html)
+  (porównawczy z 2026-08-26, czyli „po Arc 37"). Pierwszy przebieg z fazą 2b
+  (`results_kalka.json` — stress kalki .arkdelta). Limit drabinki bez zmian:
+  K16 działa, K32 poza budżetem (generator: heap 6 GB; przeglądarka: timeout).
 
 Każdy katalog przebiegu zawiera `results_node.json`, `results_browser.json`
-(starsze: `.jsonl`), `MASZYNA.md` (opis maszyny) i `META.json` (wersja aplikacji,
+(starsze: `.jsonl`), od Arc 37 także `results_kalka.json` (faza 2b),
+`MASZYNA.md` (opis maszyny) i `META.json` (wersja aplikacji,
 silnik sum, tło pomiaru — czytane przez generator raportu).
 
 ## Co mierzą fazy

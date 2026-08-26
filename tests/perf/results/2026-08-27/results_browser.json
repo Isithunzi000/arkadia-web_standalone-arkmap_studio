@@ -1,0 +1,911 @@
+[
+ {
+  "set": "real_27k",
+  "fmt": "dat",
+  "rooms": 26988,
+  "verdict": "OK",
+  "file": "../../map_master3.dat",
+  "runs": 5,
+  "phases": {
+   "fetch": {
+    "n": 5,
+    "min": 36.1,
+    "med": 39.2,
+    "p95": 73.3,
+    "max": 73.3
+   },
+   "parse": {
+    "n": 5,
+    "min": 374.7,
+    "med": 396.2,
+    "p95": 513.3,
+    "max": 513.3
+   },
+   "validate": {
+    "n": 5,
+    "min": 106.9,
+    "med": 153.4,
+    "p95": 159.2,
+    "max": 159.2
+   },
+   "crc": {
+    "n": 5,
+    "min": 0,
+    "med": 0,
+    "p95": 0,
+    "max": 0
+   },
+   "apply": {
+    "n": 5,
+    "min": 856.7,
+    "med": 989.3,
+    "p95": 1049.4,
+    "max": 1049.4
+   },
+   "first_draw": {
+    "n": 5,
+    "min": 9.3,
+    "med": 11.3,
+    "p95": 47.1,
+    "max": 47.1
+   },
+   "total": {
+    "n": 5,
+    "min": 1435.2,
+    "med": 1541.5,
+    "p95": 1788.8,
+    "max": 1788.8
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 0.1,
+   "med": 4.1,
+   "p95": 22.3,
+   "max": 53
+  },
+  "load_counters": {
+   "draws": 1,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 0.09999999403953552,
+    "cull": 0.699999988079071,
+    "exits": 1.5,
+    "stubs": 0,
+    "pending": 0.20000001788139343,
+    "custom_lines": 0,
+    "labels": 1.5,
+    "rooms": 4.199999988079071,
+    "area_labels": 0.4000000059604645,
+    "labels_top": 0.09999999403953552,
+    "suppressors": 0,
+    "ghosts": 0.20000001788139343,
+    "post": 0.19999998807907104
+   }
+  },
+  "camera_counters": {
+   "draws": 40,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 11.700000077486038,
+    "cull": 12.299999982118607,
+    "exits": 50,
+    "stubs": 0.4000000059604645,
+    "pending": 0,
+    "custom_lines": 3.599999964237213,
+    "labels": 37.60000002384186,
+    "rooms": 120.99999988079071,
+    "area_labels": 6.299999982118607,
+    "labels_top": 0.19999998807907104,
+    "suppressors": 0,
+    "ghosts": 0,
+    "post": 7.500000089406967
+   }
+  },
+  "export_dat": null,
+  "heap_mb_med": 105,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.64 Safari/537.36"
+ },
+ {
+  "set": "real_27k",
+  "fmt": "arkmap",
+  "rooms": 26988,
+  "verdict": "OK",
+  "file": "../../tests/perf/out/base.arkmap",
+  "runs": 5,
+  "phases": {
+   "fetch": {
+    "n": 5,
+    "min": 112.8,
+    "med": 145.8,
+    "p95": 162.4,
+    "max": 162.4
+   },
+   "parse": {
+    "n": 5,
+    "min": 60.7,
+    "med": 70,
+    "p95": 82.5,
+    "max": 82.5
+   },
+   "validate": {
+    "n": 5,
+    "min": 164.1,
+    "med": 167.8,
+    "p95": 206.8,
+    "max": 206.8
+   },
+   "crc": {
+    "n": 5,
+    "min": 347.6,
+    "med": 418.7,
+    "p95": 628.2,
+    "max": 628.2
+   },
+   "apply": {
+    "n": 5,
+    "min": 735.6,
+    "med": 919.8,
+    "p95": 1122,
+    "max": 1122
+   },
+   "first_draw": {
+    "n": 5,
+    "min": 9.1,
+    "med": 19.2,
+    "p95": 37,
+    "max": 37
+   },
+   "total": {
+    "n": 5,
+    "min": 1442.4,
+    "med": 1544.8,
+    "p95": 2084.5,
+    "max": 2084.5
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 0.1,
+   "med": 6.2,
+   "p95": 37.9,
+   "max": 47.5
+  },
+  "load_counters": {
+   "draws": 1,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 0.19999998807907104,
+    "cull": 0.5,
+    "exits": 1.5,
+    "stubs": 0,
+    "pending": 0.20000001788139343,
+    "custom_lines": 0,
+    "labels": 1.7999999821186066,
+    "rooms": 4,
+    "area_labels": 0.30000001192092896,
+    "labels_top": 0.09999999403953552,
+    "suppressors": 0,
+    "ghosts": 0.30000001192092896,
+    "post": 0.09999999403953552
+   }
+  },
+  "camera_counters": {
+   "draws": 40,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 17.99999988079071,
+    "cull": 14.5,
+    "exits": 55.20000001788139,
+    "stubs": 0.5000000298023224,
+    "pending": 0.09999999403953552,
+    "custom_lines": 1.300000011920929,
+    "labels": 35.89999994635582,
+    "rooms": 161.50000005960464,
+    "area_labels": 3.0000000298023224,
+    "labels_top": 0,
+    "suppressors": 0,
+    "ghosts": 2.300000011920929,
+    "post": 4.300000101327896
+   }
+  },
+  "export_dat": {
+   "ms": 2295.8,
+   "mb": 7.5
+  },
+  "heap_mb_med": 178,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.64 Safari/537.36"
+ },
+ {
+  "set": "stress_2x",
+  "fmt": "dat",
+  "rooms": 53976,
+  "verdict": "OK",
+  "file": "../../tests/perf/out/stress_2k.dat",
+  "runs": 5,
+  "phases": {
+   "fetch": {
+    "n": 5,
+    "min": 59.4,
+    "med": 105,
+    "p95": 152.5,
+    "max": 152.5
+   },
+   "parse": {
+    "n": 5,
+    "min": 885,
+    "med": 976.2,
+    "p95": 1409.3,
+    "max": 1409.3
+   },
+   "validate": {
+    "n": 5,
+    "min": 216.6,
+    "med": 249.4,
+    "p95": 343,
+    "max": 343
+   },
+   "crc": {
+    "n": 5,
+    "min": 0,
+    "med": 0,
+    "p95": 0,
+    "max": 0
+   },
+   "apply": {
+    "n": 5,
+    "min": 1990.1,
+    "med": 2077.7,
+    "p95": 2840.4,
+    "max": 2840.4
+   },
+   "first_draw": {
+    "n": 5,
+    "min": 12.7,
+    "med": 24.1,
+    "p95": 27.3,
+    "max": 27.3
+   },
+   "total": {
+    "n": 5,
+    "min": 3249.6,
+    "med": 3757.5,
+    "p95": 4033.7,
+    "max": 4033.7
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 0.1,
+   "med": 4.8,
+   "p95": 20.8,
+   "max": 28.4
+  },
+  "load_counters": {
+   "draws": 1,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 0.19999998807907104,
+    "cull": 0.5999999940395355,
+    "exits": 1.600000023841858,
+    "stubs": 0,
+    "pending": 0.5,
+    "custom_lines": 0,
+    "labels": 1.7999999821186066,
+    "rooms": 7.0999999940395355,
+    "area_labels": 0.30000001192092896,
+    "labels_top": 0.09999999403953552,
+    "suppressors": 0,
+    "ghosts": 0.30000001192092896,
+    "post": 0.19999998807907104
+   }
+  },
+  "camera_counters": {
+   "draws": 40,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 7.100000023841858,
+    "cull": 7.200000137090683,
+    "exits": 51.29999992251396,
+    "stubs": 0.699999988079071,
+    "pending": 0,
+    "custom_lines": 3.5,
+    "labels": 26.19999995827675,
+    "rooms": 110.90000003576279,
+    "area_labels": 7.9000000059604645,
+    "labels_top": 0.19999998807907104,
+    "suppressors": 0,
+    "ghosts": 0.09999999403953552,
+    "post": 1.7999999523162842
+   }
+  },
+  "export_dat": null,
+  "heap_mb_med": 201,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.64 Safari/537.36"
+ },
+ {
+  "set": "stress_2x",
+  "fmt": "arkmap",
+  "rooms": 53976,
+  "verdict": "OK",
+  "file": "../../tests/perf/out/stress_2k.arkmap",
+  "runs": 5,
+  "phases": {
+   "fetch": {
+    "n": 5,
+    "min": 231.8,
+    "med": 272.8,
+    "p95": 479.3,
+    "max": 479.3
+   },
+   "parse": {
+    "n": 5,
+    "min": 126.4,
+    "med": 182.4,
+    "p95": 347.3,
+    "max": 347.3
+   },
+   "validate": {
+    "n": 5,
+    "min": 276.7,
+    "med": 348.2,
+    "p95": 537.8,
+    "max": 537.8
+   },
+   "crc": {
+    "n": 5,
+    "min": 563.9,
+    "med": 649.7,
+    "p95": 1010.2,
+    "max": 1010.2
+   },
+   "apply": {
+    "n": 5,
+    "min": 1637.6,
+    "med": 1651.8,
+    "p95": 2020.8,
+    "max": 2020.8
+   },
+   "first_draw": {
+    "n": 5,
+    "min": 9.3,
+    "med": 12,
+    "p95": 18.6,
+    "max": 18.6
+   },
+   "total": {
+    "n": 5,
+    "min": 2659.2,
+    "med": 3059.6,
+    "p95": 3868.4,
+    "max": 3868.4
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 0,
+   "med": 4.5,
+   "p95": 22.3,
+   "max": 36.3
+  },
+  "load_counters": {
+   "draws": 1,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 0.09999999403953552,
+    "cull": 0.7000000178813934,
+    "exits": 1.5,
+    "stubs": 0,
+    "pending": 0.29999998211860657,
+    "custom_lines": 0,
+    "labels": 1.5999999940395355,
+    "rooms": 4.100000023841858,
+    "area_labels": 0.29999998211860657,
+    "labels_top": 0.09999999403953552,
+    "suppressors": 0,
+    "ghosts": 0.4000000059604645,
+    "post": 0.09999999403953552
+   }
+  },
+  "camera_counters": {
+   "draws": 40,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 9.5,
+    "cull": 4.200000047683716,
+    "exits": 63.89999994635582,
+    "stubs": 0.29999998211860657,
+    "pending": 0.09999999403953552,
+    "custom_lines": 3.5000000596046448,
+    "labels": 30.19999995827675,
+    "rooms": 122.69999992847443,
+    "area_labels": 10,
+    "labels_top": 0.20000001788139343,
+    "suppressors": 0,
+    "ghosts": 0,
+    "post": 6.099999964237213
+   }
+  },
+  "export_dat": {
+   "ms": 4149.5,
+   "mb": 14.7
+  },
+  "heap_mb_med": 213,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.64 Safari/537.36"
+ },
+ {
+  "set": "stress_4x",
+  "fmt": "dat",
+  "rooms": 107952,
+  "verdict": "JANK",
+  "file": "../../tests/perf/out/stress_4k.dat",
+  "runs": 5,
+  "phases": {
+   "fetch": {
+    "n": 5,
+    "min": 96.7,
+    "med": 117,
+    "p95": 275.3,
+    "max": 275.3
+   },
+   "parse": {
+    "n": 5,
+    "min": 1334.2,
+    "med": 1524.2,
+    "p95": 1641.9,
+    "max": 1641.9
+   },
+   "validate": {
+    "n": 5,
+    "min": 286.6,
+    "med": 353.6,
+    "p95": 384.1,
+    "max": 384.1
+   },
+   "crc": {
+    "n": 5,
+    "min": 0,
+    "med": 0,
+    "p95": 0,
+    "max": 0
+   },
+   "apply": {
+    "n": 5,
+    "min": 3408.6,
+    "med": 3517.9,
+    "p95": 4505.5,
+    "max": 4505.5
+   },
+   "first_draw": {
+    "n": 5,
+    "min": 12.4,
+    "med": 23.2,
+    "p95": 26.1,
+    "max": 26.1
+   },
+   "total": {
+    "n": 5,
+    "min": 5389.1,
+    "med": 5468.8,
+    "p95": 6245.2,
+    "max": 6245.2
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 0.1,
+   "med": 3.8,
+   "p95": 51.7,
+   "max": 62.4
+  },
+  "load_counters": {
+   "draws": 1,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 0.09999999403953552,
+    "cull": 0.7000000178813934,
+    "exits": 4.899999976158142,
+    "stubs": 0.10000002384185791,
+    "pending": 0.19999998807907104,
+    "custom_lines": 0,
+    "labels": 4.5,
+    "rooms": 11.599999994039536,
+    "area_labels": 0.30000001192092896,
+    "labels_top": 0,
+    "suppressors": 0,
+    "ghosts": 0.5,
+    "post": 0.09999999403953552
+   }
+  },
+  "camera_counters": {
+   "draws": 40,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 10.100000083446503,
+    "cull": 11.299999952316284,
+    "exits": 76.69999998807907,
+    "stubs": 4.299999982118607,
+    "pending": 3.7000000178813934,
+    "custom_lines": 5.499999970197678,
+    "labels": 39.300000071525574,
+    "rooms": 189.59999990463257,
+    "area_labels": 10.000000029802322,
+    "labels_top": 0.20000001788139343,
+    "suppressors": 0,
+    "ghosts": 0.30000001192092896,
+    "post": 1.7999999821186066
+   }
+  },
+  "export_dat": null,
+  "heap_mb_med": 389,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.64 Safari/537.36"
+ },
+ {
+  "set": "stress_4x",
+  "fmt": "arkmap",
+  "rooms": 107952,
+  "verdict": "OK",
+  "file": "../../tests/perf/out/stress_4k.arkmap",
+  "runs": 5,
+  "phases": {
+   "fetch": {
+    "n": 5,
+    "min": 521,
+    "med": 533.3,
+    "p95": 690.5,
+    "max": 690.5
+   },
+   "parse": {
+    "n": 5,
+    "min": 276.8,
+    "med": 346.2,
+    "p95": 492,
+    "max": 492
+   },
+   "validate": {
+    "n": 5,
+    "min": 414.2,
+    "med": 464.6,
+    "p95": 576.4,
+    "max": 576.4
+   },
+   "crc": {
+    "n": 5,
+    "min": 1157.2,
+    "med": 1167,
+    "p95": 1473.8,
+    "max": 1473.8
+   },
+   "apply": {
+    "n": 5,
+    "min": 3094.4,
+    "med": 3251.9,
+    "p95": 3844.8,
+    "max": 3844.8
+   },
+   "first_draw": {
+    "n": 5,
+    "min": 12.1,
+    "med": 15.6,
+    "p95": 23.6,
+    "max": 23.6
+   },
+   "total": {
+    "n": 5,
+    "min": 5175.1,
+    "med": 5578.3,
+    "p95": 5883.4,
+    "max": 5883.4
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 0.1,
+   "med": 4,
+   "p95": 29.1,
+   "max": 37.8
+  },
+  "load_counters": {
+   "draws": 1,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 0.19999998807907104,
+    "cull": 0.699999988079071,
+    "exits": 3.2000000178813934,
+    "stubs": 0,
+    "pending": 0.4000000059604645,
+    "custom_lines": 0,
+    "labels": 2.699999988079071,
+    "rooms": 3.9000000059604645,
+    "area_labels": 0.29999998211860657,
+    "labels_top": 0.10000002384185791,
+    "suppressors": 0,
+    "ghosts": 0.5,
+    "post": 0
+   }
+  },
+  "camera_counters": {
+   "draws": 40,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 14.099999994039536,
+    "cull": 5.200000017881393,
+    "exits": 66.29999986290932,
+    "stubs": 0.9000000357627869,
+    "pending": 0.10000002384185791,
+    "custom_lines": 6.800000011920929,
+    "labels": 18.799999982118607,
+    "rooms": 117.00000002980232,
+    "area_labels": 3.7000000178813934,
+    "labels_top": 0.30000001192092896,
+    "suppressors": 0,
+    "ghosts": 0.10000002384185791,
+    "post": 7.499999970197678
+   }
+  },
+  "export_dat": {
+   "ms": 7659.3,
+   "mb": 29
+  },
+  "heap_mb_med": 698,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.64 Safari/537.36"
+ },
+ {
+  "set": "stress_8x",
+  "fmt": "arkmap",
+  "rooms": 215904,
+  "verdict": "OK",
+  "file": "../../tests/perf/out/stress_8k.arkmap",
+  "runs": 5,
+  "phases": {
+   "fetch": {
+    "n": 5,
+    "min": 760.7,
+    "med": 1345.4,
+    "p95": 1653.6,
+    "max": 1653.6
+   },
+   "parse": {
+    "n": 5,
+    "min": 585.8,
+    "med": 736.2,
+    "p95": 849.4,
+    "max": 849.4
+   },
+   "validate": {
+    "n": 5,
+    "min": 649.2,
+    "med": 691.9,
+    "p95": 830.3,
+    "max": 830.3
+   },
+   "crc": {
+    "n": 5,
+    "min": 2716.6,
+    "med": 3511.6,
+    "p95": 3665.6,
+    "max": 3665.6
+   },
+   "apply": {
+    "n": 5,
+    "min": 6369.8,
+    "med": 6569.2,
+    "p95": 7091.1,
+    "max": 7091.1
+   },
+   "first_draw": {
+    "n": 5,
+    "min": 13.1,
+    "med": 26.3,
+    "p95": 51.7,
+    "max": 51.7
+   },
+   "total": {
+    "n": 5,
+    "min": 10584.5,
+    "med": 11349.9,
+    "p95": 12397.6,
+    "max": 12397.6
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 0.1,
+   "med": 3.9,
+   "p95": 21.1,
+   "max": 35.1
+  },
+  "load_counters": {
+   "draws": 1,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 0.19999998807907104,
+    "cull": 0.6000000238418579,
+    "exits": 3.5,
+    "stubs": 0,
+    "pending": 0.19999998807907104,
+    "custom_lines": 0,
+    "labels": 10.199999988079071,
+    "rooms": 9.5,
+    "area_labels": 0.20000001788139343,
+    "labels_top": 0.09999999403953552,
+    "suppressors": 0.09999999403953552,
+    "ghosts": 1.4000000059604645,
+    "post": 0.19999998807907104
+   }
+  },
+  "camera_counters": {
+   "draws": 40,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 10.899999976158142,
+    "cull": 6.599999964237213,
+    "exits": 63.00000014901161,
+    "stubs": 0.5,
+    "pending": 0.6000000238418579,
+    "custom_lines": 2.9999999701976776,
+    "labels": 25.899999976158142,
+    "rooms": 127.49999997019768,
+    "area_labels": 4,
+    "labels_top": 0.5000000298023224,
+    "suppressors": 0,
+    "ghosts": 0.09999999403953552,
+    "post": 4.199999988079071
+   }
+  },
+  "export_dat": {
+   "ms": 14347,
+   "mb": 57.8
+  },
+  "heap_mb_med": 851,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.64 Safari/537.36"
+ },
+ {
+  "set": "stress_16x",
+  "fmt": "arkmap",
+  "rooms": 431808,
+  "verdict": "OK",
+  "file": "../../tests/perf/out/stress_16k.arkmap",
+  "runs": 5,
+  "phases": {
+   "fetch": {
+    "n": 5,
+    "min": 1874,
+    "med": 2274.7,
+    "p95": 2640.1,
+    "max": 2640.1
+   },
+   "parse": {
+    "n": 5,
+    "min": 1111.9,
+    "med": 1360.9,
+    "p95": 1867.8,
+    "max": 1867.8
+   },
+   "validate": {
+    "n": 5,
+    "min": 899.1,
+    "med": 1178.6,
+    "p95": 1458.1,
+    "max": 1458.1
+   },
+   "crc": {
+    "n": 5,
+    "min": 4396.4,
+    "med": 5594.9,
+    "p95": 6655.8,
+    "max": 6655.8
+   },
+   "apply": {
+    "n": 5,
+    "min": 12448.5,
+    "med": 13986.2,
+    "p95": 16336.7,
+    "max": 16336.7
+   },
+   "first_draw": {
+    "n": 5,
+    "min": 12.5,
+    "med": 21,
+    "p95": 30.2,
+    "max": 30.2
+   },
+   "total": {
+    "n": 5,
+    "min": 18936.8,
+    "med": 23224.1,
+    "p95": 24765.7,
+    "max": 24765.7
+   }
+  },
+  "camera": {
+   "n": 40,
+   "min": 0.1,
+   "med": 5.7,
+   "p95": 18.8,
+   "max": 28.7
+  },
+  "load_counters": {
+   "draws": 1,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 0.20000001788139343,
+    "cull": 0.5999999940395355,
+    "exits": 1.5,
+    "stubs": 0,
+    "pending": 0.19999998807907104,
+    "custom_lines": 0,
+    "labels": 9.400000005960464,
+    "rooms": 8.199999988079071,
+    "area_labels": 0.4000000059604645,
+    "labels_top": 0,
+    "suppressors": 0,
+    "ghosts": 0.4000000059604645,
+    "post": 0.09999999403953552
+   }
+  },
+  "camera_counters": {
+   "draws": 40,
+   "vis": 518,
+   "plane": 518,
+   "pixmapDecodes": 0,
+   "layers": {
+    "prelude": 9.900000005960464,
+    "cull": 15.700000137090683,
+    "exits": 68.79999992251396,
+    "stubs": 0.4000000059604645,
+    "pending": 0,
+    "custom_lines": 3.7999999821186066,
+    "labels": 31.999999940395355,
+    "rooms": 109.50000002980232,
+    "area_labels": 2.7999999821186066,
+    "labels_top": 0.19999998807907104,
+    "suppressors": 0,
+    "ghosts": 0.20000001788139343,
+    "post": 13.199999988079071
+   }
+  },
+  "export_dat": {
+   "ms": 28438.4,
+   "mb": 115.2
+  },
+  "heap_mb_med": 1483,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.7977.64 Safari/537.36"
+ },
+ {
+  "set": "stress_32x",
+  "fmt": "arkmap",
+  "rooms": 863616,
+  "verdict": "CRASH(timeout)"
+ }
+]

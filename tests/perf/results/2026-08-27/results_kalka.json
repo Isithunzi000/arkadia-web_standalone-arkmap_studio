@@ -1,0 +1,55 @@
+{
+ "tool": "bench_kalka",
+ "app_version": "v1.49.7",
+ "fixture": "map_master3.dat",
+ "map": {
+  "rooms": 26988,
+  "areas": 60
+ },
+ "edits": {
+  "move": 2000,
+  "rename": 2000,
+  "paint": 2000,
+  "del": 500,
+  "add": 500,
+  "delExit": 500,
+  "addCL": 300,
+  "label": 100
+ },
+ "result": {
+  "entries": 6787,
+  "overlap": 0.9815,
+  "delta_bytes": 4583451
+ },
+ "runs": {
+  "base": {
+   "n": 5,
+   "min": 468.4,
+   "med": 478.5,
+   "p95": 500.3,
+   "max": 500.3
+  },
+  "diff": {
+   "n": 5,
+   "min": 1587.4,
+   "med": 1998,
+   "p95": 2452.7,
+   "max": 2452.7
+  },
+  "build": {
+   "n": 5,
+   "min": 533.1,
+   "med": 545.9,
+   "p95": 668.7,
+   "max": 668.7
+  },
+  "total": {
+   "n": 5,
+   "min": 2607.3,
+   "med": 3006.2,
+   "p95": 3576.6,
+   "max": 3576.6
+  }
+ },
+ "heap_delta_mb": 64.2
+}
