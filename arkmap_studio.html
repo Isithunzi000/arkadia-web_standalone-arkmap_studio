@@ -13277,9 +13277,9 @@ function plPl(n, one, few, many) {
 }
 
 function escHtml(s) {
-  // Arc 37 (PRACA 5): wstepnie wycinamy kontrolne C0 poza \t \n \r — nie niosa
-  // informacji, a psuja layout/parsowanie. Kolejnosc: filtr PRZED escapowaniem &<>".
-  return String(s).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  // Arc 37 (PRACA 5 + fala E): wstepnie wycinamy kontrolne C0 (poza \t \n \r) oraz
+  // DEL \x7f — nie niosa informacji, a psuja layout/parsowanie. Kolejnosc: filtr PRZED escapowaniem &<>".
+  return String(s).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // Neutralizuje metaznaki regexa — bezpieczne budowanie RegExp z dowolnego stringa użytkownika
@@ -16192,8 +16192,10 @@ function _acceptSave(arr){
   state.map.meta = state.map.meta || {};
   if (arr.length) state.map.meta.accepted_dir_issues = arr; else delete state.map.meta.accepted_dir_issues;
 }
-function _issueKeys(type, it){
-  return it.bad.map(v => type+':'+it.id+':'+String(v).toLowerCase().trim());
+// Arc 37 fala E (R2): parametru type juz nie ma — po PRACE 12 zostala wylacznie
+// domena 'tf', wiec klucz budujemy z literalem (format tf:id:value bez zmian).
+function _issueKeys(it){
+  return it.bad.map(v => 'tf:'+it.id+':'+String(v).toLowerCase().trim());
 }
 function _isAccepted(type, id, value){ return _acceptSet().has(type+':'+id+':'+String(value).toLowerCase().trim()); }
 
@@ -16203,7 +16205,7 @@ function _vdView(){
   const acc = _acceptSet();
   const open = {tf:[]}, accepted = {tf:[]};
   all.tf.forEach(it => {
-    const keys = _issueKeys('tf', it);
+    const keys = _issueKeys(it);
     const isAcc = keys.length>0 && keys.every(k => acc.has(k));
     (isAcc ? accepted : open).tf.push(it);
   });
@@ -16213,9 +16215,9 @@ function _vdView(){
 // Arc 34 (v1.49.4): akceptacja/cofniecie przechodzi przez pushUndo (wpis
 // ACCEPT_DIR_ISSUES z before/after zbioru) — trafia do undo/redo/undoAll.
 // Idioma call-site: pushUndo + redoStack=[] + updateUndoRedoUI (jak ADD_ROOM).
-function _vdAccept(type, it){
+function _vdAccept(it){
   const before = [..._acceptSet()];
-  const acc = _acceptSet(); _issueKeys(type,it).forEach(k => acc.add(k));
+  const acc = _acceptSet(); _issueKeys(it).forEach(k => acc.add(k));
   const after = [...acc];
   _acceptSave(after);
   pushUndo({ type:'ACCEPT_DIR_ISSUES', before, after, label:'Akceptacja rozjazdu kierunku (#'+it.id+')' });
@@ -16224,9 +16226,9 @@ function _vdAccept(type, it){
   toast('✓ Uznano za OK — zapisz .arkmap, by zachować');
   _renderVdPanel(); _refreshOpenRoomWarn();
 }
-function _vdUnaccept(type, it){
+function _vdUnaccept(it){
   const before = [..._acceptSet()];
-  const acc = _acceptSet(); _issueKeys(type,it).forEach(k => acc.delete(k));
+  const acc = _acceptSet(); _issueKeys(it).forEach(k => acc.delete(k));
   const after = [...acc];
   _acceptSave(after);
   pushUndo({ type:'ACCEPT_DIR_ISSUES', before, after, label:'Cofnięcie akceptacji rozjazdu kierunku (#'+it.id+')' });
@@ -16291,7 +16293,7 @@ function _vdRow(type, it, num, accepted){
     _vdJump(it.id);
   });
   const ab = row.querySelector(accepted ? '.vd-unacc' : '.vd-acc');
-  if (ab) ab.addEventListener('click', e=>{ e.stopPropagation(); accepted ? _vdUnaccept(type, it) : _vdAccept(type, it); });
+  if (ab) ab.addEventListener('click', e=>{ e.stopPropagation(); accepted ? _vdUnaccept(it) : _vdAccept(it); });
   return row;
 }
 

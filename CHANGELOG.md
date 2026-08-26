@@ -33,6 +33,13 @@ Fala D arca 37 (lab wydajnosci, bez zmian w aplikacji):
 - Aktualizacja pinow save_dialogs A4/A5 pod PRACE 13: multi-edge bez CL na drugiej krawedzi -> flaga (renderer per-kierunek); wychwycone pelna kampania.
 - Kampania finalna arca: 38 harnessow Node + kampania empiryczna (E0-E27) + E15 (realny zegar) — wszystko zielone.
 
+Fala E arca 37 (dopiecie po audycie zewnetrznym — 3 rekomendacje opcjonalne R1-R3):
+
+- escHtml wycina tez DEL (\x7f) obok kontrolnych C0 — rozszerzenie filtra z PRACY 5; pin w xss_sinks repro-first (FAIL -> PASS). Bajt 0x7f nie wystepuje w zadnym fixture (skan binarny repo), wiec zaden snapshot sie nie rusza.
+- _issueKeys bez martwego parametru type (po PRACE 12 zostala wylacznie domena 'tf'): sygnatura _issueKeys(it), klucz z literalem — format tf:id:value bez zmian (kompatybilnosc meta.accepted_dir_issues pinowana w dir_validation); uproszczone tez sygnatury _vdAccept/_vdUnaccept i wiring w _vdRow.
+- bench_kalka.js: asercja ksztaltu wyniku diffMaps (Array.isArray entries) przed buildDelta — czytelny komunikat zamiast poznego krachu/straznika determinizmu; smoke + repro negatywne (diffMaps -> null) zielone.
+- Kampania: 38 harnessow Node + empiryczna (E0-E27) + E15 — wszystko zielone. Faza 2b perf labu z asercja zielona; pelny stress poza sandboxem (laptop wlasciciela).
+
 ## v1.49.6 — Kalka: czytelne etykiety sid w wierszach PAINT_BATCH (Arc 36)
 
 Kosmetyka z audytu zewnetrznego Arc 35 (1 realny LOW): wiersz diff opu PAINT_BATCH na pokoju dodawanym TA kalka pokazywal surowy identyfikator kalki „d:N" zamiast rozwiazanego numeru pokoju. Piny repro-first: diff_kalka D6b (P1/P2/P3).

@@ -172,6 +172,9 @@ for (let run = 0; run < WARM + N; run++) {
   const t1 = performance.now();
   const r = ctx.api.diffMaps(srcMap, dstMap);
   const t2 = performance.now();
+  // Arc 37 fala E (R3): asercja ksztaltu wyniku PRZED buildDelta — poza oknami tDiff/tBuild;
+  // bez niej blad API ujawilby sie dopiero krachem/straznikiem determinizmu z mylacym komunikatem.
+  if (!r || !Array.isArray(r.entries)) fail('diffMaps zwrocilo niepoprawny wynik (brak entries) — przebieg ' + run);
   const text = ctx.api.buildDelta(r.entries, base);
   const t3 = performance.now();
   if (run >= WARM) { tBase.push(t1 - t0); tDiff.push(t2 - t1); tBuild.push(t3 - t2); tTotal.push(t3 - t0); }

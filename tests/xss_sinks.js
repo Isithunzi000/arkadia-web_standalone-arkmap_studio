@@ -134,12 +134,13 @@ function runToast(msg) {
 }
 
 
-// ── Arc 37 (PRACA 5): escHtml filtruje znaki kontrolne C0 poza \t \n \r ──
+// ── Arc 37 (PRACA 5 + fala E): escHtml filtruje kontrolne C0 poza \t \n \r oraz DEL \x7f ──
 // Kontrolne (np. \x00, \x1f) w polach mapy nie niosa informacji, a psuja
 // layout/parsowanie DOM — escHtml je wycina. \t \n \r zostaja (legitne w opisach).
 {
   const escHtml = new Function(extract('escHtml') + '; return escHtml;')();
   ok(escHtml('a\x00b\x1fc') === 'abc', 'escHtml: wycina kontrolne \x00 \x1f');
+  ok(escHtml('a\x7fb') === 'ab', 'escHtml: wycina DEL \x7f');
   ok(escHtml('a\tb\nc\rd') === 'a\tb\nc\rd', 'escHtml: zachowuje \t \n \r');
   ok(escHtml(PAYLOAD) === PAYLOAD_ESC, 'escHtml: escapowanie &<> bez zmian');
 }

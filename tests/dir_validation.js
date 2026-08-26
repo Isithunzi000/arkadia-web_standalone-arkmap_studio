@@ -198,13 +198,24 @@ console.log('— Arc 34 (obs 3): akceptacje = wpis undo, jedno źródło (meta) 
     'obs3: _acceptSave meta-only, bez localStorage (pre-fix: gałąź browser)');
   ok((HTML.match(/case 'ACCEPT_DIR_ISSUES'/g) || []).length === 2,
     'obs3: case ACCEPT_DIR_ISSUES w obu dyspozytorach (undo + redo)');
-  const vacc = fnSlice('function _vdAccept(type, it){');
+  const vacc = fnSlice('function _vdAccept(it){');
   ok(vacc.includes("pushUndo({ type:'ACCEPT_DIR_ISSUES'") && vacc.includes('before') && vacc.includes('after')
     && vacc.includes('state.redoStack = [];') && vacc.includes('updateUndoRedoUI()'),
     'obs3: _vdAccept przez pushUndo (before/after, idioma call-site)');
-  const vunacc = fnSlice('function _vdUnaccept(type, it){');
+  const vunacc = fnSlice('function _vdUnaccept(it){');
   ok(vunacc.includes("pushUndo({ type:'ACCEPT_DIR_ISSUES'"),
     'obs3: _vdUnaccept przez pushUndo');
+  // — Arc 37 fala E (R2): _issueKeys bez martwego parametru type (zawsze 'tf') —
+  const ikeys = fnSlice('function _issueKeys(it){');
+  const keysFmt = ikeys.length > 0 && JSON.stringify(
+    new Function(ikeys + '; return _issueKeys;')()({ id: 5, bad: ['N ', 's'] })
+  ) === JSON.stringify(['tf:5:n', 'tf:5:s']);
+  ok(keysFmt,
+    'falaE: _issueKeys(it) — format kluczy tf:id:value bez zmian (kompatybilnosc meta.accepted_dir_issues)');
+  ok(!HTML.includes("_issueKeys('tf'") && !HTML.includes('_issueKeys(type'),
+    'falaE: brak starych wywolan _issueKeys z parametrem type (pre-fix: 3 call site-y)');
+  ok((HTML.match(/_issueKeys\(it\)/g) || []).length === 4,
+    'falaE: _issueKeys(it) — definicja + 3 call site-y (count == 4)');
   const reset = fnSlice('function resetAllDefaults() {');
   ok(!reset.includes('_wasFileAcceptSrc') && !reset.includes("k !== 'arkmap_accepted_dir_issues'"),
     'obs3: resetAllDefaults bez logiki źródła akceptacji i bez wyjątku klucza');
