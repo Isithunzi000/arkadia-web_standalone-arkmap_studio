@@ -1,0 +1,6 @@
+{
+ "app_version": "v1.49.6",
+ "checksum_alg": "v4",
+ "background": "Maszyna bez innego obciążenia w trakcie pomiaru.",
+ "gen_oom": "K=32: przerwanie generatora po zapisaniu .arkmap, przed eksportem .dat."
+}

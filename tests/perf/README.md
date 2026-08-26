@@ -24,6 +24,13 @@ Node v20.20.1, chrome-headless-shell 152):
   [`docs/porownanie_wydajnosci_2026-08-23.html`](../../docs/porownanie_wydajnosci_2026-08-23.html)
   (porównawczy z 2026-08-22). Pierwszy przebieg w pełni zautomatyzowany
   (Arc 30b: META.json, MASZYNA.md i raporty wygenerował sam `run.sh`).
+- **2026-08-26** (aplikacja v1.49.6, silnik sum v4):
+  [`results/2026-08-26/`](results/2026-08-26/) — raporty:
+  [`docs/raport_wydajnosci_2026-08-26.html`](../../docs/raport_wydajnosci_2026-08-26.html)
+  (niezależny) oraz
+  [`docs/porownanie_wydajnosci_2026-08-26.html`](../../docs/porownanie_wydajnosci_2026-08-26.html)
+  (porównawczy z 2026-08-23). Baza „przed" dla fali Arc 37 (m.in. regresja
+  parse .dat z hartowania F2.9/F2.10, v1.48.3).
 
 Każdy katalog przebiegu zawiera `results_node.json`, `results_browser.json`
 (starsze: `.jsonl`), `MASZYNA.md` (opis maszyny) i `META.json` (wersja aplikacji,
