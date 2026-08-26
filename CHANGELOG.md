@@ -2,14 +2,20 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
-## v1.49.7 — Import tras: twardy limit waypointow; parse .dat bez narzutu F2.9/F2.10 (Arc 37)
+## v1.49.7 — Import tras: twardy limit waypointow; parse .dat bez narzutu F2.9/F2.10; silnik sum v4 ~2x szybciej; tanszy applyMap (Arc 37)
 
 Fala A arca 37: jedyny realny finding z audytow (F-PLANNER-2) + zniesienie regresji parse .dat z benchmarku 2026-08-26. Piny repro-first: share_link T6 (limit), tier3_format T7 (straznik optymalizacji); zachowanie warningow F2.9/F2.10 pinowane verbatim w audit_ext (A2.9/A2.10) — zielone bez zmian.
 
 - F-PLANNER-2: wpDecodeRoute odrzuca kody z ponad 200 waypointami (WP_MAX=200, check przed petla parseInt) — import pokazuje „Za duzo waypointow (max 200)" zamiast zamrazac zakladke w wpRecalcPaths (synchroniczny findPath per para; pre-fix: trasa ~8 tys. WP miescila sie w limicie dlugosci 64k).
 - Detekcja duplikatow id (obszary/pokoje): `!== undefined` zamiast Object.prototype.hasOwnProperty — klucze to int32 z readInt32, prototype-chain nie wchodzi w gre; zachowanie identyczne, taniej w hot loop.
 - Orphany (rekordy spoza list obszarow): licznik po fladze _roomId ustawianej w petli konwersji zamiast Set referenced + Object.keys().filter — jeden przebieg mniej; tekst i kolejnosc warningu bez zmian.
-- Kontekst wydajnosci: hartowanie F2.9/F2.10 (v1.48.3) kosztowalo +59% parse stress_16x (benchmark 2026-08-26, baza: tests/perf/results/2026-08-26/); fala B arca kontynuuje optymalizacje silnikow (crc v4, applyMap).
+- Kontekst wydajnosci: hartowanie F2.9/F2.10 (v1.48.3) kosztowalo +59% parse stress_16x (benchmark 2026-08-26, baza: tests/perf/results/2026-08-26/).
+
+Fala B arca 37 (silniki, po pomiarach PRACY 8): optymalizacje bajtowo identyczne — wyniki sum i agregatow bez zmian o ani jeden bit.
+
+- Silnik sum v4 (XXH3-64): rdzen na parach u32 [hi,lo] (Number/Math.imul) zamiast BigInt w goracej sciezce; BigInt tylko na wyjsciu xxh3_64 (kontrakt API zachowany). Bajtowa identycznosc: xxh3_golden.js (56 pinow, wektory v4 z oracle Python) + NOWY fuzz rownowaznosci tests/checksums/xxh3_fuzz_equiv.js (2484 deterministiczne bufory LCG vs zamrozona referencja BigInt tests/checksums/xxh3.js + samotest detekcji). Pomiar Node (12k pokoi): ~80 -> ~37 ms (~2.2x).
+- Kanonikalizacja v4: wspoldzielony bufor _CanonBuf (reset/release w finally) zamiast realokacji per pokoj/obszar/plik; _computeV4Checksums hashuje prosto z bufora (_xxh3pair) — checksums_v4.js 69/0 (golden fixture vs oracle).
+- applyMap/_recomputeAstarParams: bez alokacji allExits + 2x Object.assign per pokoj (pomiar PRACY 8: najdrozsza sekcja applyMap na realnej mapie, 16-32 ms -> 8-12 ms w sandboxie chromium); priorytet SE>exits przy kolizji kluczy zachowany — pin kontraktowy + straznik statyczny w dir_filter T5.
 
 ## v1.49.6 — Kalka: czytelne etykiety sid w wierszach PAINT_BATCH (Arc 36)
 

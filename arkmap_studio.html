@@ -4807,9 +4807,13 @@ function _stripRoomDefaults(room) {
   return room;
 }
 
+
 // ====XXH3-64-BEGIN====
-// XXH3-64 (seed 0), czysty JS (BigInt), port referencji xxHash v0.8.3.
-// Weryfikowany wektorami: tests/checksums/xxh3_golden.js + vectors_v3.json.
+// XXH3-64 (seed 0), czysty JS. Rdzen na parach u32 [hi,lo] (Number/Math.imul) — zero BigInt
+// w goracej sciezce; BigInt tylko na wyjsciu xxh3_64 (kontrakt API zachowany).
+// Bajtowo identyczny z portem referencji xxHash v0.8.3 — piny: tests/checksums/xxh3_golden.js
+// (vectors_v4.json, oracle Python) + fuzz rownowaznosci z referencja BigInt:
+// tests/checksums/xxh3_fuzz_equiv.js (referencja: tests/checksums/xxh3.js).
 const XXH3_SECRET = Uint8Array.from([
   0xb8, 0xfe, 0x6c, 0x39, 0x23, 0xa4, 0x4b, 0xbe, 0x7c, 0x01, 0x81, 0x2c, 0xf7, 0x21, 0xad, 0x1c,
   0xde, 0xd4, 0x6d, 0xe9, 0x83, 0x90, 0x97, 0xdb, 0x72, 0x40, 0xa4, 0xa4, 0xb7, 0xb3, 0x67, 0x1f,
@@ -4825,136 +4829,222 @@ const XXH3_SECRET = Uint8Array.from([
   0x45, 0xcb, 0x3a, 0x8f, 0x95, 0x16, 0x04, 0x28, 0xaf, 0xd7, 0xfb, 0xca, 0xbb, 0x4b, 0x40, 0x7e,
 ]);
 
-const _M64 = (1n << 64n) - 1n;
-const _P64_1 = 0x9E3779B185EBCA87n, _P64_2 = 0xC2B2AE3D27D4EB4Fn;
-const _P64_3 = 0x165667B19E3779F9n, _P64_4 = 0x85EBCA77C2B2AE63n;
-const _P64_5 = 0x27D4EB2F165667C5n;
-const _P32_1 = 0x9E3779B1n, _P32_2 = 0x85EBCA77n, _P32_3 = 0xC2B2AE3Dn;
-const _MX1 = 0x165667919E3779F9n, _MX2 = 0x9FB21C651E98DF25n;
+// u64 jako para [hi, lo] (u32, u32). Stale 64-bit rozlozone na slowa:
+const _P1H = 0x9E3779B1, _P1L = 0x85EBCA87;                 // _P64_1
+const _P2H = 0xC2B2AE3D, _P2L = 0x27D4EB4F;                 // _P64_2
+const _P3H = 0x165667B1, _P3L = 0x9E3779F9;                 // _P64_3
+const _P4H = 0x85EBCA77, _P4L = 0xC2B2AE63;                 // _P64_4
+const _P5H = 0x27D4EB2F, _P5L = 0x165667C5;                 // _P64_5
+const _P32_1 = 0x9E3779B1, _P32_2 = 0x85EBCA77, _P32_3 = 0xC2B2AE3D;
+const _MX1H = 0x16566791, _MX1L = 0x9E3779F9;               // _MX1
+const _MX2H = 0x9FB21C65, _MX2L = 0x1E98DF25;               // _MX2
 
 function _r32(b, o) {
   return (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
 }
-function _r64(b, o) {
-  return (BigInt(_r32(b, o + 4)) << 32n) | BigInt(_r32(b, o));
+const _swap32 = w => ((w >>> 24) | ((w >>> 8) & 0xFF00) | ((w << 8) & 0xFF0000) | (w << 24)) >>> 0;
+
+// Rejestry robocze na poziomie modulu — zero alokacji w goracej petli.
+// Kontrakt: funkcje zwracaja rejestr, wynik wazny do nastepnego wywolania dowolnej z nich.
+const _LL = [0, 0], _LH = [0, 0], _HL = [0, 0], _HH = [0, 0];
+const _MF = [0, 0];                                          // wynik _mul128fold / _mix16B
+const _T64A = [0, 0];                                        // wynik _mul64into
+const _ACC = [0, 0], _ACC2 = [0, 0];                         // akumulatory sciezek dlugosci
+const _ACC8 = [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]; // _hashLong
+
+// 32x32 -> 64 dokladnie (limby 16-bit, wszystkie posrednie < 2^53)
+function _umul32into(t, a, b) {
+  const aL = a & 0xFFFF, aH = a >>> 16, bL = b & 0xFFFF, bH = b >>> 16;
+  const w0 = aL * bL;
+  const tt = aH * bL + (w0 >>> 16);                          // < 2^32 + 2^16
+  const w1 = aL * bH + (tt & 0xFFFF);                        // < 2^32 + 2^16
+  t[1] = ((w1 << 16) | (w0 & 0xFFFF)) >>> 0;
+  t[0] = (aH * bH + Math.floor(tt / 65536) + Math.floor(w1 / 65536)) >>> 0;
 }
-function _swap64(x) {
-  x &= _M64;
-  return (((x & 0xFFn) << 56n) | ((x & 0xFF00n) << 40n) |
-          ((x & 0xFF0000n) << 24n) | ((x & 0xFF000000n) << 8n) |
-          ((x >> 8n) & 0xFF000000n) | ((x >> 24n) & 0xFF0000n) |
-          ((x >> 40n) & 0xFF00n) | ((x >> 56n) & 0xFFn));
+// 64x64 -> 128 -> fold: (hi64 ^ lo64) iloczynu; wynik w _MF
+function _mul128fold(aH, aL, bH, bL) {
+  _umul32into(_LL, aL, bL);
+  _umul32into(_LH, aL, bH);
+  _umul32into(_HL, aH, bL);
+  _umul32into(_HH, aH, bH);
+  const s1 = _LL[0] + _LH[1] + _HL[1];                       // < 3*2^32
+  const p1 = s1 >>> 0;
+  const c1 = Math.floor(s1 / 4294967296);
+  const s2 = _LH[0] + _HL[0] + _HH[1] + c1;
+  const p2 = s2 >>> 0;
+  const c2 = Math.floor(s2 / 4294967296);
+  const p3 = (_HH[0] + c2) >>> 0;
+  _MF[0] = (p3 ^ p1) >>> 0;
+  _MF[1] = (p2 ^ _LL[1]) >>> 0;
+  return _MF;
 }
-function _rotl64(x, r) {
-  x &= _M64;
-  return ((x << BigInt(r)) | (x >> BigInt(64 - r))) & _M64;
+// acc += [pH, pL] (in place)
+function _add64into(acc, pH, pL) {
+  const s = acc[1] + pL;
+  acc[1] = s >>> 0;
+  acc[0] = (acc[0] + pH + (s >= 4294967296 ? 1 : 0)) >>> 0;
 }
-function _mul128fold64(a, b) {
-  const p = (a & _M64) * (b & _M64);
-  return ((p & _M64) ^ (p >> 64n)) & _M64;
+// t = (h,l) * (mH,mL) mod 2^64 (rejestr docelowy, zero alokacji)
+function _mul64into(t, h, l, mH, mL) {
+  _umul32into(_LL, l, mL);
+  const mid = (Math.imul(h, mL) + Math.imul(l, mH)) >>> 0;
+  t[0] = (_LL[0] + mid) >>> 0; t[1] = _LL[1];
 }
-function _avalanche(h) {
-  h = (h ^ (h >> 37n)) & _M64;
-  h = (h * _MX1) & _M64;
-  h = (h ^ (h >> 32n)) & _M64;
-  return h;
+function _avalancheIp(p) {
+  let h = p[0], l = p[1];
+  l ^= h >>> 5;                                              // h ^= h >> 37
+  _mul64into(_T64A, h, l, _MX1H, _MX1L); h = _T64A[0]; l = _T64A[1];
+  l ^= h;                                                    // h ^= h >> 32
+  p[0] = h >>> 0; p[1] = l >>> 0;
 }
-function _avalanche64(h) {
-  h = (h ^ (h >> 33n)) & _M64;
-  h = (h * _P64_2) & _M64;
-  h = (h ^ (h >> 29n)) & _M64;
-  h = (h * _P64_3) & _M64;
-  h = (h ^ (h >> 32n)) & _M64;
-  return h;
+function _avalanche64Ip(p) {
+  let h = p[0], l = p[1];
+  l ^= h >>> 1;                                              // h ^= h >> 33
+  _mul64into(_T64A, h, l, _P2H, _P2L); h = _T64A[0]; l = _T64A[1];
+  const s0 = h >>> 29, s1 = ((l >>> 29) | (h << 3)) >>> 0;   // h ^= h >> 29
+  h = (h ^ s0) >>> 0; l = (l ^ s1) >>> 0;
+  _mul64into(_T64A, h, l, _P3H, _P3L); h = _T64A[0]; l = _T64A[1];
+  l ^= h;                                                    // h ^= h >> 32
+  p[0] = h >>> 0; p[1] = l >>> 0;
 }
-function _rrmxmx(h, len) {
-  h &= _M64;
-  h = (h ^ _rotl64(h, 49) ^ _rotl64(h, 24)) & _M64;
-  h = (h * _MX2) & _M64;
-  h = (h ^ ((h >> 35n) + BigInt(len))) & _M64;
-  h = (h * _MX2) & _M64;
-  h = (h ^ (h >> 28n)) & _M64;
-  return h;
+function _rrmxmxIp(p, len) {
+  let h = p[0], l = p[1];
+  // h ^= rotl(h,49) ^ rotl(h,24)
+  const r1h = ((l << 17) | (h >>> 15)) >>> 0, r1l = ((h << 17) | (l >>> 15)) >>> 0;
+  const r2h = ((h << 24) | (l >>> 8)) >>> 0,  r2l = ((l << 24) | (h >>> 8)) >>> 0;
+  h = (h ^ r1h ^ r2h) >>> 0; l = (l ^ r1l ^ r2l) >>> 0;
+  _mul64into(_T64A, h, l, _MX2H, _MX2L); h = _T64A[0]; l = _T64A[1];
+  // h ^= (h >> 35) + len
+  let sl = (h >>> 3) + len;                                  // h >> 35 = [0, h>>>3]
+  const carry = sl >= 4294967296 ? 1 : 0;
+  h = (h ^ carry) >>> 0; l = (l ^ (sl >>> 0)) >>> 0;
+  _mul64into(_T64A, h, l, _MX2H, _MX2L); h = _T64A[0]; l = _T64A[1];
+  const t0 = h >>> 28, t1 = ((l >>> 28) | (h << 4)) >>> 0;   // h ^= h >> 28
+  p[0] = (h ^ t0) >>> 0; p[1] = (l ^ t1) >>> 0;
 }
-function _mix16B(input, ioff, soff) {
-  const lo = _r64(input, ioff) ^ _r64(XXH3_SECRET, soff);
-  const hi = _r64(input, ioff + 8) ^ _r64(XXH3_SECRET, soff + 8);
-  return _mul128fold64(lo, hi);
+function _mix16B(input, ioff, soff) {                        // wynik w _MF
+  const aH = _r32(input, ioff + 4) ^ _r32(XXH3_SECRET, soff + 4);
+  const aL = _r32(input, ioff) ^ _r32(XXH3_SECRET, soff);
+  const bH = _r32(input, ioff + 12) ^ _r32(XXH3_SECRET, soff + 12);
+  const bL = _r32(input, ioff + 8) ^ _r32(XXH3_SECRET, soff + 8);
+  return _mul128fold(aH, aL, bH, bL);
 }
+
+// bitflipy i pusty skrot liczone z sekretu raz, przy ladowaniu (stale modulu)
+const _BF1H = (_r32(XXH3_SECRET, 28) ^ _r32(XXH3_SECRET, 36)) >>> 0, _BF1L = (_r32(XXH3_SECRET, 24) ^ _r32(XXH3_SECRET, 32)) >>> 0;
+const _BF2H = (_r32(XXH3_SECRET, 44) ^ _r32(XXH3_SECRET, 52)) >>> 0, _BF2L = (_r32(XXH3_SECRET, 40) ^ _r32(XXH3_SECRET, 48)) >>> 0;
+const _BF3H = (_r32(XXH3_SECRET, 12) ^ _r32(XXH3_SECRET, 20)) >>> 0, _BF3L = (_r32(XXH3_SECRET, 8) ^ _r32(XXH3_SECRET, 16)) >>> 0;
+const _BF4L = (_r32(XXH3_SECRET, 0) ^ _r32(XXH3_SECRET, 4)) >>> 0;
+const _EMPTY64 = (() => {
+  const p = [(_r32(XXH3_SECRET, 60) ^ _r32(XXH3_SECRET, 68)) >>> 0, (_r32(XXH3_SECRET, 56) ^ _r32(XXH3_SECRET, 64)) >>> 0];
+  _avalanche64Ip(p);
+  return p;
+})();
 
 function _len0to16(input, len) {
   if (len > 8) {
-    const bitflip1 = _r64(XXH3_SECRET, 24) ^ _r64(XXH3_SECRET, 32);
-    const bitflip2 = _r64(XXH3_SECRET, 40) ^ _r64(XXH3_SECRET, 48);
-    const lo = _r64(input, 0) ^ bitflip1;
-    const hi = _r64(input, len - 8) ^ bitflip2;
-    const acc = (BigInt(len) + _swap64(lo) + hi + _mul128fold64(lo, hi)) & _M64;
-    return _avalanche(acc);
+    const loH = (_r32(input, 4) ^ _BF1H) >>> 0, loL = (_r32(input, 0) ^ _BF1L) >>> 0;
+    const hiH = (_r32(input, len - 4) ^ _BF2H) >>> 0, hiL = (_r32(input, len - 8) ^ _BF2L) >>> 0;
+    const mf = _mul128fold(loH, loL, hiH, hiL);
+    // acc = len + swap64(lo) + hi + mf
+    _ACC[0] = 0; _ACC[1] = len;
+    _add64into(_ACC, _swap32(loL), _swap32(loH));
+    _add64into(_ACC, hiH, hiL);
+    _add64into(_ACC, mf[0], mf[1]);
+    _avalancheIp(_ACC);
+    return _ACC;
   }
   if (len >= 4) {
-    const input1 = _r32(input, 0), input2 = _r32(input, len - 4);
-    const bitflip = (_r64(XXH3_SECRET, 8) ^ _r64(XXH3_SECRET, 16)) & _M64;
-    const input64 = (BigInt(input2) + (BigInt(input1) << 32n)) & _M64;
-    return _rrmxmx(input64 ^ bitflip, len);
+    _ACC[0] = (_r32(input, 0) ^ _BF3H) >>> 0;               // input64: hi = input1, lo = input2
+    _ACC[1] = (_r32(input, len - 4) ^ _BF3L) >>> 0;
+    _rrmxmxIp(_ACC, len);
+    return _ACC;
   }
   if (len) {
     const c1 = input[0], c2 = input[len >> 1], c3 = input[len - 1];
     const combined = ((c1 << 16) | (c2 << 24) | c3 | (len << 8)) >>> 0;
-    const bitflip = BigInt((_r32(XXH3_SECRET, 0) ^ _r32(XXH3_SECRET, 4)) >>> 0);
-    return _avalanche64(BigInt(combined) ^ bitflip);
+    _ACC[0] = 0; _ACC[1] = (combined ^ _BF4L) >>> 0;
+    _avalanche64Ip(_ACC);
+    return _ACC;
   }
-  return _avalanche64(_r64(XXH3_SECRET, 56) ^ _r64(XXH3_SECRET, 64));
+  _ACC[0] = _EMPTY64[0]; _ACC[1] = _EMPTY64[1];
+  return _ACC;
 }
 
 function _len17to128(input, len) {
-  let acc = (BigInt(len) * _P64_1) & _M64;
+  _mul64into(_ACC, 0, len, _P1H, _P1L);                    // acc = len * _P64_1
+  let m;
   if (len > 32) {
     if (len > 64) {
       if (len > 96) {
-        acc = (acc + _mix16B(input, 48, 96) + _mix16B(input, len - 64, 112)) & _M64;
+        m = _mix16B(input, 48, 96);   _add64into(_ACC, m[0], m[1]);
+        m = _mix16B(input, len - 64, 112); _add64into(_ACC, m[0], m[1]);
       }
-      acc = (acc + _mix16B(input, 32, 64) + _mix16B(input, len - 48, 80)) & _M64;
+      m = _mix16B(input, 32, 64);     _add64into(_ACC, m[0], m[1]);
+      m = _mix16B(input, len - 48, 80); _add64into(_ACC, m[0], m[1]);
     }
-    acc = (acc + _mix16B(input, 16, 32) + _mix16B(input, len - 32, 48)) & _M64;
+    m = _mix16B(input, 16, 32);       _add64into(_ACC, m[0], m[1]);
+    m = _mix16B(input, len - 32, 48); _add64into(_ACC, m[0], m[1]);
   }
-  acc = (acc + _mix16B(input, 0, 0) + _mix16B(input, len - 16, 16)) & _M64;
-  return _avalanche(acc);
+  m = _mix16B(input, 0, 0);           _add64into(_ACC, m[0], m[1]);
+  m = _mix16B(input, len - 16, 16);   _add64into(_ACC, m[0], m[1]);
+  _avalancheIp(_ACC);
+  return _ACC;
 }
 
 function _len129to240(input, len) {
   const nbRounds = Math.floor(len / 16);
-  let acc = (BigInt(len) * _P64_1) & _M64;
+  _mul64into(_ACC, 0, len, _P1H, _P1L);
+  let m;
   for (let i = 0; i < 8; i++) {
-    acc = (acc + _mix16B(input, 16 * i, 16 * i)) & _M64;
+    m = _mix16B(input, 16 * i, 16 * i); _add64into(_ACC, m[0], m[1]);
   }
-  let accEnd = _mix16B(input, len - 16, 136 - 17);
-  acc = _avalanche(acc);
+  m = _mix16B(input, len - 16, 136 - 17);
+  _ACC2[0] = m[0]; _ACC2[1] = m[1];
+  _avalancheIp(_ACC);
   for (let i = 8; i < nbRounds; i++) {
-    accEnd = (accEnd + _mix16B(input, 16 * i, 16 * (i - 8) + 3)) & _M64;
+    m = _mix16B(input, 16 * i, 16 * (i - 8) + 3); _add64into(_ACC2, m[0], m[1]);
   }
-  return _avalanche((acc + accEnd) & _M64);
+  _add64into(_ACC, _ACC2[0], _ACC2[1]);
+  _avalancheIp(_ACC);
+  return _ACC;
 }
 
 function _accumulate512(acc, input, ioff, soff) {
   for (let lane = 0; lane < 8; lane++) {
-    const dataVal = _r64(input, ioff + lane * 8);
-    const dataKey = dataVal ^ _r64(XXH3_SECRET, soff + lane * 8);
-    acc[lane ^ 1] = (acc[lane ^ 1] + dataVal) & _M64;
-    acc[lane] = (acc[lane] + ((dataKey & 0xFFFFFFFFn) * (dataKey >> 32n))) & _M64;
+    const o = ioff + lane * 8, s = soff + lane * 8;
+    const dvH = _r32(input, o + 4), dvL = _r32(input, o);
+    const kH = dvH ^ _r32(XXH3_SECRET, s + 4), kL = dvL ^ _r32(XXH3_SECRET, s);
+    const a1 = acc[lane ^ 1];
+    _add64into(a1, dvH, dvL);
+    _umul32into(_LL, kL, kH);                                // lo32(k) * hi32(k) -> 64
+    const a0 = acc[lane];
+    _add64into(a0, _LL[0], _LL[1]);
   }
 }
 function _scramble(acc, soff) {
   for (let lane = 0; lane < 8; lane++) {
-    let a = acc[lane];
-    a = (a ^ (a >> 47n)) & _M64;
-    a = (a ^ _r64(XXH3_SECRET, soff + lane * 8)) & _M64;
-    acc[lane] = (a * _P32_1) & _M64;
+    const p = acc[lane];
+    let h = p[0], l = p[1];
+    l ^= h >>> 15;                                           // a ^= a >> 47
+    h = (h ^ _r32(XXH3_SECRET, soff + lane * 8 + 4)) >>> 0;
+    l = (l ^ _r32(XXH3_SECRET, soff + lane * 8)) >>> 0;
+    _mul64into(_T64A, h, l, 0, _P32_1);                    // a *= _P32_1 (32-bit)
+    p[0] = _T64A[0]; p[1] = _T64A[1];
   }
 }
 function _hashLong(input, len) {
-  const acc = [_P32_3, _P64_1, _P64_2, _P64_3, _P64_4, _P32_2, _P64_5, _P32_1];
-  const nbStripesPerBlock = (192 - 64) / 8;           // 16
-  const blockLen = 64 * nbStripesPerBlock;            // 1024
+  const acc = _ACC8;
+  acc[0][0] = 0;    acc[0][1] = _P32_3;
+  acc[1][0] = _P1H; acc[1][1] = _P1L;
+  acc[2][0] = _P2H; acc[2][1] = _P2L;
+  acc[3][0] = _P3H; acc[3][1] = _P3L;
+  acc[4][0] = _P4H; acc[4][1] = _P4L;
+  acc[5][0] = 0;    acc[5][1] = _P32_2;
+  acc[6][0] = _P5H; acc[6][1] = _P5L;
+  acc[7][0] = 0;    acc[7][1] = _P32_1;
+  const nbStripesPerBlock = 16;                              // (192 - 64) / 8
+  const blockLen = 1024;                                     // 64 * nbStripesPerBlock
   const nbBlocks = Math.floor((len - 1) / blockLen);
   for (let n = 0; n < nbBlocks; n++) {
     const base = n * blockLen;
@@ -4968,27 +5058,44 @@ function _hashLong(input, len) {
   for (let s = 0; s < nbStripes; s++) {
     _accumulate512(acc, input, base + s * 64, s * 8);
   }
-  _accumulate512(acc, input, len - 64, 192 - 64 - 7); // LASTACC_START = 7
-  let result = (BigInt(len) * _P64_1) & _M64;
+  _accumulate512(acc, input, len - 64, 192 - 64 - 7);        // LASTACC_START = 7
+  _mul64into(_ACC, 0, len, _P1H, _P1L);
   for (let i = 0; i < 4; i++) {
-    const mix = _mul128fold64(acc[2 * i] ^ _r64(XXH3_SECRET, 11 + 16 * i),
-                              acc[2 * i + 1] ^ _r64(XXH3_SECRET, 11 + 16 * i + 8));
-    result = (result + mix) & _M64;
+    const s = 11 + 16 * i;
+    const aH = acc[2 * i][0] ^ _r32(XXH3_SECRET, s + 4), aL = acc[2 * i][1] ^ _r32(XXH3_SECRET, s);
+    const bH = acc[2 * i + 1][0] ^ _r32(XXH3_SECRET, s + 12), bL = acc[2 * i + 1][1] ^ _r32(XXH3_SECRET, s + 8);
+    const m = _mul128fold(aH, aL, bH, bL);
+    _add64into(_ACC, m[0], m[1]);
   }
-  return _avalanche(result);
+  _avalancheIp(_ACC);
+  return _ACC;
 }
 
-// xxh3_64(bytes: Uint8Array) -> BigInt (unsigned 64-bit), seed 0
-function xxh3_64(bytes) {
-  const len = bytes.length;
+// _xxh3pair(bytes, len?) -> rejestr [hi, lo] (u32, u32); wynik wazny do nastepnego wywolania.
+// len < bytes.length: hash tylko prefixu (goraca sciezka czyta wprost ze wspolnego bufora, bez subarray).
+function _xxh3pair(bytes, len) {
+  if (len === undefined) len = bytes.length;
   if (len <= 16) return _len0to16(bytes, len);
   if (len <= 128) return _len17to128(bytes, len);
   if (len <= 240) return _len129to240(bytes, len);
   return _hashLong(bytes, len);
 }
-
+// tablica 2-znakowych bajtow hex — _pairHex64 bez padStart (pomiar: ~10x szybciej)
+const _HEXB = new Array(256);
+for (let i = 0; i < 256; i++) _HEXB[i] = (i < 16 ? '0' : '') + i.toString(16);
+function _hex32(w) {
+  return _HEXB[w >>> 24] + _HEXB[(w >>> 16) & 255] + _HEXB[(w >>> 8) & 255] + _HEXB[w & 255];
+}
+function _pairHex64(p) {
+  return _hex32(p[0]) + _hex32(p[1]);
+}
+// xxh3_64(bytes: Uint8Array) -> BigInt (unsigned 64-bit), seed 0 — kontrakt bez zmian
+function xxh3_64(bytes) {
+  const p = _xxh3pair(bytes);
+  return (BigInt(p[0]) << 32n) | BigInt(p[1]);
+}
 function xxh3_64hex(bytes) {
-  return xxh3_64(bytes).toString(16).padStart(16, '0');
+  return _pairHex64(_xxh3pair(bytes));
 }
 // ====XXH3-64-END====
 
@@ -5003,7 +5110,7 @@ const _canonDv = new DataView(_canonAB);
 const _canonTe = new TextEncoder();
 
 class _CanonBuf {
-  constructor() { this.b = new Uint8Array(4096); this.n = 0; this._busy = false; }
+  constructor() { this.b = new Uint8Array(4096); this.n = 0; this._busy = false; this.dv = new DataView(this.b.buffer); }
   // Straznik zagniezdzenia: reset w trakcie trwania innego kodowania nadpisalby bufor.
   // Wejsciowe enkodery (pokoj/obszar/plik) robia reset() + release() w finally.
   reset() {
@@ -5018,32 +5125,44 @@ class _CanonBuf {
       const nb = new Uint8Array(c);
       nb.set(this.b.subarray(0, this.n));
       this.b = nb;
+      this.dv = new DataView(nb.buffer);
     }
   }
-  u8(v) { this._cap(1); this.b[this.n++] = v & 0xFF; }
+  u8(v) { if (this.n + 1 > this.b.length) this._cap(1); this.b[this.n++] = v & 0xFF; }
   u32(v) {
-    this._cap(4); const b = this.b, n = this.n;
-    b[n] = v & 0xFF; b[n + 1] = (v >>> 8) & 0xFF; b[n + 2] = (v >>> 16) & 0xFF; b[n + 3] = (v >>> 24) & 0xFF;
-    this.n = n + 4;
+    if (this.n + 4 > this.b.length) this._cap(4);
+    this.dv.setUint32(this.n, v >>> 0, true);
+    this.n += 4;
   }
   i32(v) { this.u32(v | 0); }
   f64(v) {
-    this._cap(8);
-    if (typeof v !== 'number' || Number.isNaN(v)) { this.b.set(_CANON_NAN_BYTES, this.n); this.n += 8; return; } // undefined/nie-liczba → kanoniczny NaN (payload deterministyczny niezależnie od provenancji obiektu)
+    if (typeof v !== 'number' || Number.isNaN(v)) { this._cap(8); this.b.set(_CANON_NAN_BYTES, this.n); this.n += 8; return; } // undefined/nie-liczba → kanoniczny NaN (payload deterministyczny niezależnie od provenancji obiektu)
     if (v === 0) v = 0;                                            // -0 → +0
-    _canonDv.setFloat64(0, v, true);
-    this.b.set(_canonF8, this.n); this.n += 8;
+    if (this.n + 8 > this.b.length) this._cap(8);
+    this.dv.setFloat64(this.n, v, true); this.n += 8;
   }
   str(s) {
-    this._cap(4 + s.length * 3);
-    const w = _canonTe.encodeInto(s, this.b.subarray(this.n + 4)).written;
-    const n = this.n;
-    this.b[n] = w & 0xFF; this.b[n + 1] = (w >>> 8) & 0xFF; this.b[n + 2] = (w >>> 16) & 0xFF; this.b[n + 3] = (w >>> 24) & 0xFF;
-    this.n = n + 4 + w;
+    if (this.n + 4 + s.length * 3 > this.b.length) this._cap(4 + s.length * 3);
+    const b = this.b, o = this.n + 4;
+    let i = 0;
+    for (; i < s.length; i++) {                                    // ASCII: bajty === kodowanie UTF-8
+      const c = s.charCodeAt(i);
+      if (c > 0x7F) break;
+      b[o + i] = c;
+    }
+    if (i === s.length) {
+      this.dv.setUint32(this.n, s.length, true);
+      this.n = o + s.length;
+      return;
+    }
+    const w = _canonTe.encodeInto(s, b.subarray(o)).written;
+    this.dv.setUint32(this.n, w, true);
+    this.n = o + w;
   }
-  u64raw(h) {                                                      // surowy hash XXH3-64 (BigInt) jako 8 B LE — do rollupów
-    this._cap(8);
-    for (let i = 0; i < 8; i++) this.b[this.n + i] = Number((h >> BigInt(8 * i)) & 0xFFn);
+  u64raw(p) {                                                      // surowy hash XXH3-64 (para [hi,lo]) jako 8 B LE — do rollupów
+    if (this.n + 8 > this.b.length) this._cap(8);
+    this.dv.setUint32(this.n, p[1], true);
+    this.dv.setUint32(this.n + 4, p[0], true);
     this.n += 8;
   }
   bytes() { return this.b.subarray(0, this.n); }
@@ -5060,9 +5179,11 @@ function _utf8SortArr(arr) {
 }
 // Klucze mapy kierunkowej: znane wg _V4_DIR_ORDER, potem nieznane UTF-8 bajtowo
 function _canonDirKeys(m) {
-  const out = _V4_DIR_ORDER.filter(d => m[d] !== undefined);
-  const unk = Object.keys(m).filter(k => !_V4_DIR_SET.has(k));
-  return unk.length ? out.concat(_utf8SortArr(unk)) : out;
+  const out = [];
+  for (const d of _V4_DIR_ORDER) if (m[d] !== undefined) out.push(d);
+  let unk = null;
+  for (const k in m) if (!_V4_DIR_SET.has(k)) (unk || (unk = [])).push(k);
+  return unk ? out.concat(_utf8SortArr(unk)) : out;
 }
 // Lista kierunków (array): jak wyżej
 function _canonDirList(arr) {
@@ -5092,11 +5213,16 @@ function _encodeLabelCanonical(B, lb) {
 // _encodeRoomCanonical(room) — kanoniczne bajty pokoju (prefix 'r4'). Bez klonowania.
 function _encodeRoomCanonical(room) {
   const B = _canonBuf; B.reset();
-  try { return _encodeRoomBody(B, room); } finally { B.release(); }
+  try { _encodeRoomBody(B, room); return B.bytes(); } finally { B.release(); }
 }
 function _encodeRoomBody(B, room) {
-  B.u8(0x72); B.u8(0x34);                                          // 'r4'
-  B.i32(room.id); B.i32(room.x); B.i32(room.y); B.i32(room.z); B.i32(room.env);
+  if (B.n + 22 > B.b.length) B._cap(22);                         // 'r4' + id/x/y/z/env — jedna paczka
+  { const b = B.b, dv = B.dv; let n = B.n;
+    b[n] = 0x72; b[n + 1] = 0x34;                                    // 'r4'
+    dv.setUint32(n + 2, room.id, true); dv.setUint32(n + 6, room.x, true);
+    dv.setUint32(n + 10, room.y, true); dv.setUint32(n + 14, room.z, true);
+    dv.setUint32(n + 18, room.env, true);
+    B.n = n + 22; }
   if (room.weight !== undefined && room.weight !== 1) B.i32(room.weight);
   if (room.locked) B.u8(1);
   if (room.hidden) B.u8(1);
@@ -5105,10 +5231,12 @@ function _encodeRoomBody(B, room) {
   if (room.notes)  B.str(room.notes);
 
   const exits = room.exits;
-  if (exits && Object.keys(exits).length) {
+  if (exits) {
     const ks = _canonDirKeys(exits);
-    B.u32(ks.length);
-    for (const k of ks) { B.str(k); B.i32(exits[k]); }
+    if (ks.length) {
+      B.u32(ks.length);
+      for (const k of ks) { B.str(k); B.i32(exits[k]); }
+    }
   }
   const locks = room.exit_locks;
   if (locks && locks.length) {
@@ -5117,10 +5245,12 @@ function _encodeRoomBody(B, room) {
     for (const k of ks) B.str(k);
   }
   const doors = room.doors;
-  if (doors && Object.keys(doors).length) {
+  if (doors) {
     const ks = _canonDirKeys(doors);
-    B.u32(ks.length);
-    for (const k of ks) { B.str(k); B.str(doors[k]); }
+    if (ks.length) {
+      B.u32(ks.length);
+      for (const k of ks) { B.str(k); B.str(doors[k]); }
+    }
   }
   const stubs = room.stubs;
   if (stubs && stubs.length) {
@@ -5179,13 +5309,12 @@ function _encodeRoomBody(B, room) {
   }
   const rh = room.hash;                                            // v4: hash pokoju z upstream (np. "45:28:0:Wyzima")
   if (typeof rh === 'string' && rh) B.str(rh);
-  return B.bytes();
 }
 
 // _encodeAreaCanonical(area, roomRawList) — 'a4'; roomRawList: BigInt[] w kolejności id pokoju rosnąco
 function _encodeAreaCanonical(area, roomRawList) {
   const B = _canonBuf; B.reset();
-  try { return _encodeAreaBody(B, area, roomRawList); } finally { B.release(); }
+  try { _encodeAreaBody(B, area, roomRawList); return B.bytes(); } finally { B.release(); }
 }
 function _encodeAreaBody(B, area, roomRawList) {
   B.u8(0x61); B.u8(0x34);                                          // 'a4'
@@ -5209,7 +5338,6 @@ function _encodeAreaBody(B, area, roomRawList) {
   }
   B.u32(roomRawList.length);
   for (const h of roomRawList) B.u64raw(h);
-  return B.bytes();
 }
 
 function _encodeColorsCanonical(B, colors) {
@@ -5229,18 +5357,28 @@ function _encodeColorsCanonical(B, colors) {
 
 // _encodeFileCanonical(colors, areaRaw) — 'f4'; areaRaw: pary [id, BigInt] posortowane po id rosnąco.
 // v4: bez globalnego rollupu pokoi — byl redundantny wzgledem rollupow obszarow (pokoj -> obszar -> plik).
+function _encodeFileBody(B, colors, areaRaw) {
+  B.u8(0x66); B.u8(0x34);                                        // 'f4'
+  _encodeColorsCanonical(B, colors);
+  B.u32(areaRaw.length);
+  for (const [, h] of areaRaw) B.u64raw(h);
+}
 function _encodeFileCanonical(colors, areaRaw) {
   const B = _canonBuf; B.reset();
-  try {
-    B.u8(0x66); B.u8(0x34);                                        // 'f4'
-    _encodeColorsCanonical(B, colors);
-    B.u32(areaRaw.length);
-    for (const [, h] of areaRaw) B.u64raw(h);
-    return B.bytes();
-  } finally { B.release(); }
+  try { _encodeFileBody(B, colors, areaRaw); return B.bytes(); } finally { B.release(); }
 }
 
 function _hex64(h) { return h.toString(16).padStart(16, '0'); }
+
+// _hashRoomCanon(room) — encode do wspolnego bufora + hash bez subarray; zwraca rejestr _xxh3pair.
+function _hashRoomCanon(room) {
+  const B = _canonBuf; B.reset();
+  try { _encodeRoomBody(B, room); return _xxh3pair(B.b, B.n); } finally { B.release(); }
+}
+function _hashFileCanon(colors, areaRaw) {
+  const B = _canonBuf; B.reset();
+  try { _encodeFileBody(B, colors, areaRaw); return _xxh3pair(B.b, B.n); } finally { B.release(); }
+}
 
 // _computeV4Checksums(arkmap) — jeden wspólny przebieg liczenia sum alg v4.
 // Read-only (bez klonowania, bez mutacji mapy). Zwraca dokładnie kształt meta.checksums.
@@ -5255,18 +5393,20 @@ function _computeV4Checksums(arkmap) {
     const sortedRooms = [...(area.rooms || [])].sort((a, b) => a.id - b.id);
     const roomRawList = [];
     for (const room of sortedRooms) {
-      const raw = xxh3_64(_encodeRoomCanonical(room));
-      rooms[String(room.id)] = _hex64(raw);
-      roomRawList.push(raw);
+      const raw = _hashRoomCanon(room);
+      rooms[String(room.id)] = _pairHex64(raw);
+      roomRawList.push([raw[0], raw[1]]);                            // kopia — rejestr wspoldzielony
     }
-    const aRaw = xxh3_64(_encodeAreaCanonical(area, roomRawList));
-    areas[String(area.id)] = _hex64(aRaw);
+    const B = _canonBuf; B.reset();
+    let aRaw;
+    try { _encodeAreaBody(B, area, roomRawList); const p = _xxh3pair(B.b, B.n); aRaw = [p[0], p[1]]; } finally { B.release(); }
+    areas[String(area.id)] = _pairHex64(aRaw);
     areaRaw.push([area.id, aRaw]);
   }
 
   return {
     alg: 'v4',
-    file: _hex64(xxh3_64(_encodeFileCanonical(arkmap.colors, areaRaw))),
+    file: _pairHex64(_hashFileCanon(arkmap.colors, areaRaw)),
     areas, rooms,
   };
 }
@@ -11345,18 +11485,26 @@ function dijkstraPath(fromId, toId) {
 
 function _recomputeAstarParams() {
   let _maxDist = 1, _minW = Infinity;
-  for (const room of Object.values(state.roomById)) {
-    const allExits = {};  // audyt T4/W8: jawny merge — priorytet SE>exits przy kolizji kluczy (efekt identyczny jak Object.assign)
-    Object.assign(allExits, room.exits || {});
-    Object.assign(allExits, room.special_exits || {});
-    for (const [dir, nid] of Object.entries(allExits)) {
-      const nbr = state.roomById[nid];
-      if (!nbr) continue;
-      const dx = nbr.x - room.x, dy = nbr.y - room.y, dz = (nbr.z ?? 0) - (room.z ?? 0);
-      const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-      if (dist > _maxDist) _maxDist = dist;
-      const w = _edgeWeight(room, dir, nbr);
-      if (w < _minW) _minW = w;
+  // Arc 37: bez alokacji allExits + 2x Object.assign per pokoj (benchmark PRACA 8: najdrozsza
+  // sekcja applyMap). Semantyka identyczna (audyt T4/W8): przy kolizji kluczy wygrywa SE —
+  // SE iterowane najpierw, exits z kluczem obecnym w SE pomijane (hasOwnProperty tylko
+  // dla pokoi z special_exits — na realnej mapie to maly podzbior).
+  const _scan = (room, dir, nid) => {
+    const nbr = state.roomById[nid];
+    if (!nbr) return;
+    const dx = nbr.x - room.x, dy = nbr.y - room.y, dz = (nbr.z ?? 0) - (room.z ?? 0);
+    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    if (dist > _maxDist) _maxDist = dist;
+    const w = _edgeWeight(room, dir, nbr);
+    if (w < _minW) _minW = w;
+  };
+  for (const id in state.roomById) {
+    const room = state.roomById[id];
+    const ex = room.exits, se = room.special_exits;
+    if (se) for (const dir in se) _scan(room, dir, se[dir]);
+    if (ex) for (const dir in ex) {
+      if (se && Object.prototype.hasOwnProperty.call(se, dir)) continue;  // kolizja kluczy: wygrywa SE
+      _scan(room, dir, ex[dir]);
     }
   }
   if (!isFinite(_minW)) _minW = 1;

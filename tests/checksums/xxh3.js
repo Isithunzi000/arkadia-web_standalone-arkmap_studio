@@ -1,7 +1,8 @@
 // xxh3.js — czysty JS (BigInt) port XXH3-64, seed 0, wg referencji v0.8.3.
-// Zrodlo dev — w aplikacji kod wpinany verbatim miedzy markerami w
-// arkmap_studio.html; harness tests/checksums/xxh3_golden.js ekstrahuje
-// blok z HTML i weryfikuje przeciw tests/checksums/vectors_v4.json.
+// ZAMROZONA REFERENCJA (od Arc 37): produkcyjny blok ====XXH3-64==== w
+// arkmap_studio.html ma rdzen na parach u32 (szybszy, bajtowo identyczny).
+// Ta kopie BigInt weryfikuje: xxh3_golden.js (wektory) oraz
+// xxh3_fuzz_equiv.js (fuzz rownowaznosci app vs ta referencja).
 'use strict';
 
 const XXH3_SECRET = Uint8Array.from([

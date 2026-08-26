@@ -212,5 +212,33 @@ console.log('── T4: mapa rzeczywista — trasa 17983→18030 (rozpadlina) �
   ok(J(api.dijkstraPath(17983, 18030)) === J(apiOld.dijkstraPath(17983, 18030)), 'nowy(all) ≡ stary na trasie rzeczywistej');
 }
 
+// ── T5 (Arc 37): _recomputeAstarParams — kontrakt agregatu po optymalizacji ──
+console.log('── T5 (Arc 37): _recomputeAstarParams — priorytet SE>exits i agregaty ──');
+{
+  // Kolizja kluczy: pokoj 1 ma exits.n -> 2 (dist 3) i special_exits.n -> 4 (dist 10).
+  // SE wygrywa: maxEdgeDist musi wynosic 10 (krawedz 1->2 nie wchodzi do agregatu).
+  // minEdgeW: exit_weights.n=5 na pokoju 1, ale krawedz 2->1 (waga domyslna 1) daje min 1.
+  const state = mkState();
+  state.roomById = {
+    1: { id: 1, x: 0, y: 0, z: 0, exits: { n: 2, e: 3 }, special_exits: { n: 4 }, exit_weights: { n: 5 } },
+    2: { id: 2, x: 3, y: 0, z: 0, exits: { s: 1 } },
+    3: { id: 3, x: 0, y: 4, z: 0, exits: { w: 1 } },
+    4: { id: 4, x: 0, y: 0, z: 10, exits: {} },
+  };
+  const api = buildApi(NEW)(state, mkWp('all'));
+  api._recomputeAstarParams();
+  const p = state.astarParams;
+  ok(p && p.maxEdgeDist === 10, 'kolizja n: wygrywa SE (maxEdgeDist=10, nie 3)');
+  ok(p && p.minEdgeW === 1, 'minEdgeW=1 (krawedz z waga domyslna; exit_weights.n=5 nie wygrywa min)');
+  // Straznik statyczny: bez alokacji allExits per pokoj W _recomputeAstarParams
+  // (merge allExits w dijkstra/astar per expandowany wezel zostaje — tam pelni sort deterministyczny)
+  const fnStart = NEW.indexOf('function _recomputeAstarParams() {');
+  const fnEnd = NEW.indexOf('\nfunction ', fnStart + 10);
+  const fnBody = NEW.slice(fnStart, fnEnd);
+  ok(!fnBody.includes('Object.assign(allExits'), 'straznik: _recomputeAstarParams bez Object.assign(allExits)');
+  ok(NEW.includes('if (se && Object.prototype.hasOwnProperty.call(se, dir)) continue;'),
+    'straznik: priorytet SE>exits zachowany w wariancie bezalokacyjnym');
+}
+
 console.log(`\n═══ PODSUMOWANIE: ${pass} OK, ${fail} FAIL ═══`);
 process.exit(fail ? 1 : 0);
