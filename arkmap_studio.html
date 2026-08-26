@@ -6184,7 +6184,9 @@ function readMudletDat(arrayBuffer) {
   for (let i = 0; i < areaCount; i++) {
     const areaId = r.readInt32();
     // audyt ext F2.9: duplikat id obszaru → warning (last-wins bez zmian), NIE throw
-    if (Object.prototype.hasOwnProperty.call(areas, areaId))
+    // Arc 37: `!== undefined` zamiast hasOwnProperty — klucze to int32 z readInt32(),
+    // prototype-chain nie wchodzi w grę (zachowanie identyczne, taniej w hot loop).
+    if (areas[areaId] !== undefined)
       importWarnings.push(`zduplikowany id obszaru #${areaId} — zachowano ostatni rekord`);
     areas[areaId] = readMudletArea(r, version);
   }
@@ -6220,7 +6222,8 @@ function readMudletDat(arrayBuffer) {
   while (r.remaining() > 0) {
     const roomId = r.readInt32();
     // audyt ext F2.9: duplikat id pokoju → warning (last-wins bez zmian), NIE throw
-    if (Object.prototype.hasOwnProperty.call(rooms, roomId))
+    // Arc 37: `!== undefined` jak wyżej — klucze int32, prototype-chain nie wchodzi w grę.
+    if (rooms[roomId] !== undefined)
       importWarnings.push(`zduplikowany id pokoju #${roomId} — zachowano ostatni rekord`);
     rooms[roomId] = readMudletRoom(r, version);
   }
@@ -6474,9 +6477,8 @@ function datToArkmap(arrayBuffer) {
   for (const [hash, id] of Object.entries(raw.mpRoomDbHashToRoomId || {})) hashLookup[id] = hash;
 
   // audyt ext F2.10: ciche gubienie pokoi → warningi importu (wspolny kanal z F2.9)
+  // Arc 37: zbiór `referenced` usunięty — orphan liczony po fladze _roomId (patrz niżej).
   const importWarnings = [...(raw.importWarnings || [])];
-  const referenced = new Set();
-  for (const rawArea of Object.values(raw.areas)) for (const rid of rawArea.rooms) referenced.add(rid);
 
   const areas = [];
   for (const [areaId, rawArea] of Object.entries(raw.areas)) {
@@ -6504,8 +6506,13 @@ function datToArkmap(arrayBuffer) {
   }
   areas.sort((a, b) => a.id - b.id);
 
-  // audyt ext F2.10: rekordy pokoi niewymienione w zadnym obszarze (orphans)
-  const _orphans = Object.keys(raw.rooms).filter(rid => !referenced.has(+rid)).length;
+  // audyt ext F2.10: rekordy pokoi niewymienione w zadnym obszarze (orphans).
+  // Arc 37: pętla konwersji wyżej ustawia r._roomId na KAŻDYM rekordzie użytym w obszarze,
+  // więc orphan = rekord bez flagi — jeden przebieg zamiast Set + filter (regresja parse
+  // +59% przy 16x z benchmarku 2026-08-26). Zapis raw._roomId w builderze eksportu (~6642)
+  // dotyczy innego obiektu (inny cykl życia) — brak kolizji semantycznej.
+  let _orphans = 0;
+  for (const rid in raw.rooms) if (raw.rooms[rid]._roomId === undefined) _orphans++;
   if (_orphans) importWarnings.push(`${_orphans} rekordow pokoi spoza list obszarow — pominięte (orphan)`);
 
   const env_colors = {};
@@ -12312,8 +12319,12 @@ document.getElementById('wp-route-copy-btn').addEventListener('click', () => {
 // ── Import trasy — modal ────────────────────────────────────────────────────
 
 function wpDecodeRoute(code) {
-  // Zwraca { valid: [roomId,...], invalidCount, total, algorithm, dirMode, transportMode } lub null
+  // Zwraca { valid: [roomId,...], invalidCount, total, algorithm, dirMode, transportMode },
+  // null (kod uszkodzony) albo { error: 'too-many', max, total } (przekroczony limit waypointów).
   // Format ARKMAP2:<algo><dir><trans>:base64 — ścisła walidacja, bez kompatybilności wstecznej
+  // Arc 37 (F-PLANNER-2): WP_MAX musi być WEWNĄTRZ ciała — harness share_link.js tnie
+  // ekstrakcję od tej funkcji do wpImportOpen, stała poza ciałem byłaby niewidoczna w pinach.
+  const WP_MAX = 200;  // twardy limit waypointów w imporcie (realne trasy: dziesiątki)
   const raw = (code || '').trim();
   if (!raw.startsWith('ARKMAP2:')) return null;
   // audyt A22/C1: twardy limit dlugosci kodu — fail-closed. 64k znakow base64 to
@@ -12332,6 +12343,10 @@ function wpDecodeRoute(code) {
   try { decoded = atob(b64); } catch { return null; }
   // Każdy token musi być dodatnią liczbą całkowitą — inaczej kod jest uszkodzony
   const tokens = decoded.split(',');
+  // Arc 37 (F-PLANNER-2): twardy limit liczby waypointów — check przed pętlą parseInt.
+  // Bez limitu trasa ~8 tys. WP mieści się w limicie długości 64k i zamraża zakładkę
+  // w wpRecalcPaths() (synchroniczny findPath per para waypointów).
+  if (tokens.length > WP_MAX) return { error: 'too-many', max: WP_MAX, total: tokens.length };
   if (!tokens.length) return null;
   const parts = [];
   for (const t of tokens) {
@@ -12401,6 +12416,9 @@ document.getElementById('wp-import-confirm').addEventListener('click', () => {
   if (!code.startsWith('ARKMAP2:')) { toast('✗ Niepoprawny format — oczekiwano kodu ARKMAP2:...'); return; }
 
   const res = wpDecodeRoute(code);
+  // Arc 37 (F-PLANNER-2): limit waypointów ma własny komunikat — wartość z wyniku (res.max),
+  // żeby limit i komunikat nigdy się nie rozjechały.
+  if (res && res.error === 'too-many') { toast('✗ Za dużo waypointów (max ' + res.max + ')'); return; }
   if (!res) { toast('✗ Kod trasy jest uszkodzony lub niepoprawny'); return; }
   if (!res.valid.length) { toast('✗ Żaden waypoint nie pasuje do wczytanej mapy'); return; }
 
@@ -14526,7 +14544,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.49.6';
+const APP_VERSION = 'v1.49.7';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)

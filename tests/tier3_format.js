@@ -241,9 +241,9 @@ console.log('── T6 (W18 v2): exitEditMode — undo/redo czyszczone, deltaLog
 // ═══ T7: strazniki strukturalne + piny wersji ═══
 console.log('── T7: strazniki strukturalne Tier 3 + piny wersji ──');
 {
-  ok(NEW.includes("const APP_VERSION = 'v1.49.6';"), 'pin: APP_VERSION v1.49.6');
+  ok(NEW.includes("const APP_VERSION = 'v1.49.7';"), 'pin: APP_VERSION v1.49.7');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok((deltaSrc.match(/v1\.49\.6/g) || []).length === 10, 'pin: delta.js 10x v1.49.6 (4 linie x includes+label + 2 adnotacje)');
+  ok((deltaSrc.match(/v1\.49\.7/g) || []).length === 10, 'pin: delta.js 10x v1.49.7 (4 linie x includes+label + 2 adnotacje)');
   ok(NEW.includes("alg: 'v4',"), 'straznik: addChecksums alg v4');
   ok(NEW.includes('// ====XXH3-64-BEGIN====') && NEW.includes('// ====CANONICAL-V4-BEGIN====') &&
      !NEW.includes('// ====CANONICAL-V3-BEGIN====') && !NEW.includes('function _crcArea(area, roomCrcs)'),
@@ -273,6 +273,22 @@ console.log('── T6 (D-C1): buildRoom custom line bez color → [255,0,0] (sp
   const qc2 = out2.customLinesColor.n;
   ok(qc2.r === 1 && qc2.g === 2 && qc2.b === 3, 'buildRoom: jawny color CL zachowany');
   ok(NEW.includes('toQColor(cl.color || [255, 0, 0])'), 'straznik: writer CL ma default czerwony');
+}
+
+// ═══ T7 (Arc 37): strażnik optymalizacji F2.9/F2.10 (regresja parse, benchmark 2026-08-26) ═══
+console.log('── T7 (Arc 37): straznik optymalizacji detekcji duplikatow/orphanow ──');
+{
+  // Zachowanie pinuja wprost piny F2.9/F2.10 w audit_ext.js (teksty warningow verbatim);
+  // tu pilnujemy, zeby kosztowna implementacja nie wrocila (regres optymalizacji).
+  ok(!NEW.includes('Object.prototype.hasOwnProperty.call(areas, areaId)'),
+    'duplikaty obszarow: bez hasOwnProperty w hot loop (jest !== undefined)');
+  ok(!NEW.includes('Object.prototype.hasOwnProperty.call(rooms, roomId)'),
+    'duplikaty pokoi: bez hasOwnProperty w hot loop (jest !== undefined)');
+  ok(!NEW.includes('const referenced = new Set();') &&
+     !NEW.includes('Object.keys(raw.rooms).filter(rid => !referenced.has(+rid))'),
+    'orphany: bez Set referenced + filter (jest licznik po fladze _roomId)');
+  ok(NEW.includes('if (raw.rooms[rid]._roomId === undefined) _orphans++;'),
+    'orphany: licznik po fladze _roomId obecny');
 }
 
 console.log(`═══ tier3_format: ${pass} OK, ${fail} FAIL ═══`);

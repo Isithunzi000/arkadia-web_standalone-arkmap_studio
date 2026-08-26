@@ -141,5 +141,30 @@ console.log('── T5: okablowanie importu ──');
   ok(!NEW.includes("'ARKMAP:' + algoCode"), 'stary enkoder ARKMAP: usunięty');
 }
 
+// ── T6: Arc 37 (F-PLANNER-2) — twardy limit waypointów WP_MAX=200 ───────────
+console.log('── T6: limit waypointów (F-PLANNER-2, Arc 37) ──');
+{
+  // Mapa syntetyczna: pokoje 1..201 istnieją
+  const bigState = { roomById: {} };
+  for (let i = 1; i <= 201; i++) bigState.roomById[i] = { id: i };
+  const mkBigWp = n => ({
+    algorithm: 'dijkstra', dirMode: 'all', transportMode: 'off',
+    waypoints: Array.from({ length: n }, (_, i) => ({ roomId: i + 1 })),
+  });
+  // P1: dokładnie 200 waypointów → zaakceptowane (strzeże, że limit nie za ciasny)
+  const api200 = buildApi(NEW)(bigState, mkBigWp(200));
+  const r200 = api200.wpDecodeRoute(api200.wpEncodeRoute());
+  ok(r200 !== null && !r200.error && r200.total === 200 && r200.valid.length === 200,
+    '200 waypointów → zaakceptowane (limit nie za ciasny)');
+  // P2: 201 waypointów → odrzucone z error 'too-many' (dyskryminuje pre/post-fix)
+  const api201 = buildApi(NEW)(bigState, mkBigWp(201));
+  const r201 = api201.wpDecodeRoute(api201.wpEncodeRoute());
+  ok(r201 !== null && r201.error === 'too-many' && r201.max === 200 && r201.total === 201,
+    '201 waypointów → odrzucone: error too-many, max=200 (pre-fix: zaakceptowane)');
+  // P3: komunikat handlera budowany z wyniku (nie zaszyty na sztywno)
+  ok(NEW.includes("toast('✗ Za dużo waypointów (max ' + res.max + ')')"),
+    'handler: komunikat limitu z res.max (limit i tekst nigdy się nie rozjadą)');
+}
+
 console.log(`\n═══ share_link.js: ${pass} OK, ${fail} FAIL ═══`);
 process.exit(fail ? 1 : 0);

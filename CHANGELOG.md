@@ -2,6 +2,15 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.49.7 — Import tras: twardy limit waypointow; parse .dat bez narzutu F2.9/F2.10 (Arc 37)
+
+Fala A arca 37: jedyny realny finding z audytow (F-PLANNER-2) + zniesienie regresji parse .dat z benchmarku 2026-08-26. Piny repro-first: share_link T6 (limit), tier3_format T7 (straznik optymalizacji); zachowanie warningow F2.9/F2.10 pinowane verbatim w audit_ext (A2.9/A2.10) — zielone bez zmian.
+
+- F-PLANNER-2: wpDecodeRoute odrzuca kody z ponad 200 waypointami (WP_MAX=200, check przed petla parseInt) — import pokazuje „Za duzo waypointow (max 200)" zamiast zamrazac zakladke w wpRecalcPaths (synchroniczny findPath per para; pre-fix: trasa ~8 tys. WP miescila sie w limicie dlugosci 64k).
+- Detekcja duplikatow id (obszary/pokoje): `!== undefined` zamiast Object.prototype.hasOwnProperty — klucze to int32 z readInt32, prototype-chain nie wchodzi w gre; zachowanie identyczne, taniej w hot loop.
+- Orphany (rekordy spoza list obszarow): licznik po fladze _roomId ustawianej w petli konwersji zamiast Set referenced + Object.keys().filter — jeden przebieg mniej; tekst i kolejnosc warningu bez zmian.
+- Kontekst wydajnosci: hartowanie F2.9/F2.10 (v1.48.3) kosztowalo +59% parse stress_16x (benchmark 2026-08-26, baza: tests/perf/results/2026-08-26/); fala B arca kontynuuje optymalizacje silnikow (crc v4, applyMap).
+
 ## v1.49.6 — Kalka: czytelne etykiety sid w wierszach PAINT_BATCH (Arc 36)
 
 Kosmetyka z audytu zewnetrznego Arc 35 (1 realny LOW): wiersz diff opu PAINT_BATCH na pokoju dodawanym TA kalka pokazywal surowy identyfikator kalki „d:N" zamiast rozwiazanego numeru pokoju. Piny repro-first: diff_kalka D6b (P1/P2/P3).

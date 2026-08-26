@@ -443,7 +443,7 @@ console.log('— D6: realne wartosci w wierszach diff (Arc 35, v1.49.5) —');
     'classifyDelta x2: diffRows deterministyczne');
 }
 
-console.log('— D6b: etykiety sid w wierszach PAINT_BATCH (Arc 36, v1.49.6) —');
+console.log('— D6b: etykiety sid w wierszach PAINT_BATCH (Arc 36, v1.49.7) —');
 {
   // P1: rozwiazywalny sid — ADD_ROOM ok na wolnym polu (cien symuluje id),
   // potem PAINT_BATCH na 'd:1'. Etykieta wiersza = '#<num>', nigdzie surowe 'd:'.
