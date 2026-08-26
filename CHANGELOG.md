@@ -27,6 +27,12 @@ Fala C arca 37 (hartowanie + kosmetyka, piny repro-first):
 - Lab wydajnosci (run.sh): komunikat o braku przegladarki wskazuje tests/perf/README.md zamiast nieistniejacego INSTRUKCJA.md. Pin w ci_workflow (wskazany plik musi istniec w repo).
 - Piny bez zmian kodu: toast() escapuje payload przed opakowaniem nawiasow w nowrap-spany (xss_sinks, PRACA 2 — kontrakt byl spelniony, dopiete strazniki); niezmiennik resetu _lodMode = 'full' w draw() PRZED wczesnymi returnami (tier6_ux B27, PRACA 4 — reset jest nosny dla updateStatus, kod celowo nietkniety).
 
+Fala D arca 37 (lab wydajnosci, bez zmian w aplikacji):
+
+- bench_kalka.js (tests/perf): stress kalki .arkdelta — pelny pipeline generatora z diffu map (_computeBaseInfo -> diffMaps -> buildDelta) na realnym fixture z ~7 tys. deterministycznych edycji (LCG): 26988 pokoi, 6787 opow, kalka ~4.6 MB. Wpiety jako faza 2b w run.sh (SKIP_KALKA=1 pomija), wynik w results_kalka.json — punkt pomocniczy, poza zarejestrowanymi kryteriami stress.
+- Aktualizacja pinow save_dialogs A4/A5 pod PRACE 13: multi-edge bez CL na drugiej krawedzi -> flaga (renderer per-kierunek); wychwycone pelna kampania.
+- Kampania finalna arca: 38 harnessow Node + kampania empiryczna (E0-E27) + E15 (realny zegar) — wszystko zielone.
+
 ## v1.49.6 — Kalka: czytelne etykiety sid w wierszach PAINT_BATCH (Arc 36)
 
 Kosmetyka z audytu zewnetrznego Arc 35 (1 realny LOW): wiersz diff opu PAINT_BATCH na pokoju dodawanym TA kalka pokazywal surowy identyfikator kalki „d:N" zamiast rozwiazanego numeru pokoju. Piny repro-first: diff_kalka D6b (P1/P2/P3).

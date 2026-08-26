@@ -42,6 +42,8 @@ silnik sum, tło pomiaru — czytane przez generator raportu).
    tak jak w apce (binarka: `datToArkmap`+walidacja; JSON: `JSON.parse`+walidacja+
    weryfikacja CRC — `.dat` nie ma CRC, stąd celowa asymetria). Odpowiedź na pytanie
    „ile traci .arkmap vs .dat".
+   *Faza 2b (od Arc 37):* stress kalki — `_computeBaseInfo`/`diffMaps`/`buildDelta`
+   na realnej mapie z ~7 tys. edycji; pomiar pomocniczy (bez kryteriów stop).
 2. **Faza 3 (Chromium, realny zegar przez CDP)** — pełne wczytanie w apce z fazami
    (fetch/parse/walidacja/CRC/applyMap/pierwszy render), trasa kamery
    (5 pozycji × 8 zoomów, p95 klatki), heap, eksport `.dat`.
@@ -56,6 +58,11 @@ silnik sum, tło pomiaru — czytane przez generator raportu).
 - `gen_stress.mjs` — generator drabinki syntetyków (ekstrakcja verbatim funkcji
   z `arkmap_studio.html`; walidacja `validate()` fail-closed po generacji)
 - `bench_parse.js` — mikro-benchmark parse w Node (statystyki min/med/p95/max, `--expose-gc`)
+- `bench_kalka.js` — stress kalki `.arkdelta` (Arc 37, PRACA 11): pełny pipeline
+  generatora z diffu (`_computeBaseInfo` → `diffMaps` → `buildDelta`) na realnym
+  fixture + ~7 tys. deterministycznych edycji (LCG). Faza 2b w `run.sh`
+  (`SKIP_KALKA=1` pomija), wynik w `results_kalka.json` — punkt pomiaru
+  pomocniczy, poza zarejestrowanymi kryteriami stress
 - `perf_driver.html` — driver przeglądarkowy (ładuje prawdziwą apke w iframe,
   mierzy fazy na realnym zegarze — bez virtual-time)
 - `cdp_run.py` — launcher Chrome DevTools Protocol (czeka na koniec pomiaru,

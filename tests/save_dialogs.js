@@ -86,15 +86,22 @@ const basePair = () => ({
   const p = basePair(); p[2].custom_lines = { w: { points: [[0.1, 0.1]] } };
   ok(run(mkState(p)).length === 0, 'A3 niepusta CL na opp po stronie B → cisza');
 }
-// 4. multi-edge: inne wyjscie A→B bez CL → cisza
+// 4. multi-edge: inne wyjscie A→B bez CL → flaga (Arc 37, PRACA 13: nasz renderer
+//    rysuje linie per (pokoj, kierunek), bez dedupu par Delwinga — linia B→A (opp)
+//    i tak powstaje, wiec suppressor jest potrzebny; pre-Arc-37: cisza)
 {
   const p = basePair(); p[1].exits = { e: 2, ne: 2 };
-  ok(run(mkState(p)).length === 0, 'A4 multi-edge A→B bez CL → cisza');
+  const m = run(mkState(p));
+  ok(m.length === 1 && m[0].dir === 'e' && m[0].roomB === 2,
+    'A4 multi-edge A→B bez CL → 1 flaga (PRACA 13: renderer per-kierunek)');
 }
-// 5. multi-edge: inne wyjscie B→A bez CL → cisza
+// 5. multi-edge: inne wyjscie B→A bez CL → flaga (jak A4 — dodatkowa krawedz
+//    B→A bez CL nie zdejmuje potrzeby suppressora na opp)
 {
   const p = basePair(); p[2].exits = { w: 1, sw: 1 };
-  ok(run(mkState(p)).length === 0, 'A5 multi-edge B→A bez CL → cisza');
+  const m = run(mkState(p));
+  ok(m.length === 1 && m[0].dir === 'e' && m[0].roomB === 2,
+    'A5 multi-edge B→A bez CL → 1 flaga (PRACA 13)');
 }
 // 6. multi-edge, wszystkie pozostale krawedzie maja CL → flaga
 {

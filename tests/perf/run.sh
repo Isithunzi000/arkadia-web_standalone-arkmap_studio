@@ -112,6 +112,15 @@ else
   echo "=== faza 2: SKIP (SKIP_NODE=1) ==="
 fi
 
+# Arc 37 (PRACA 11): stress kalki — pomocniczy punkt pomiaru POZA zarejestrowanymi
+# kryteriami (CRASH/LOAD/JANK/MEM); nie blokuje przebiegu. SKIP_KALKA=1 pomija.
+if [ "${SKIP_KALKA:-0}" != 1 ] && [ "${SKIP_NODE:-0}" != 1 ]; then
+echo "=== faza 2b: stress kalki (diffMaps + buildDelta na realnej mapie) ==="
+node --expose-gc --max-old-space-size="$HEAP" tests/perf/bench_kalka.js "$OUT" "$RUNS" || echo "UWAGA: bench_kalka niepowodzenie (nie blokuje przebiegu)"
+else
+  echo "=== faza 2b: SKIP (SKIP_KALKA=1 lub SKIP_NODE=1) ==="
+fi
+
 if [ "${SKIP_BROWSER:-0}" != 1 ]; then
 echo "=== faza 3: przegladarka (load + render + kamera + eksport .dat) ==="
 python3 -c 'import websockets' 2>/dev/null || { echo "BRAK python3-websockets — sudo apt install python3-websockets — pomijam faze 3"; echo "Wyniki czesciowe: $OUT/results_node.json"; exit 0; }
