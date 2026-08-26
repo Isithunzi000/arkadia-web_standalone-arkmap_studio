@@ -54,6 +54,10 @@ echo "== mega-test: desktop =="
 echo "binarka: $BIN"
 echo "profil: $PROFILE (offline) | budzet: ${BUDGET}s | wyniki: $RESULTS"
 
+# UWAGA: PID ustawiamy przez globalna APP_PID, NIE przez $(launch ...) —
+# podstawienie polecenia uruchamia funkcje w podpowloce i wait w rodzicu
+# nie zna takiego potomka ("nie jest potomkiem tej powloki", rc=127).
+APP_PID=""
 launch() {   # $1 = tryb: offscreen|xvfb
   if [ "$1" = "xvfb" ]; then
     timeout --signal=KILL "$BUDGET" xvfb-run -a "$BIN" --profile "$PROFILE" --offline \
@@ -62,7 +66,7 @@ launch() {   # $1 = tryb: offscreen|xvfb
     timeout --signal=KILL "$BUDGET" "$BIN" -platform offscreen --profile "$PROFILE" --offline \
       > "$RESULTS/desktop_stdout.log" 2>&1 &
   fi
-  echo $!
+  APP_PID=$!
 }
 
 sample_ram() {   # $1 = pid rodzica; peak VmHWM procesu i dzieci "mudlet"
@@ -78,20 +82,25 @@ sample_ram() {   # $1 = pid rodzica; peak VmHWM procesu i dzieci "mudlet"
   echo "{\"vmhwm_peak_mb\":$(( peak / 1024 ))}" > "$RESULTS/ram_desktop.txt"
 }
 
-PID=$(launch offscreen)
-sample_ram "$PID" & SAMPLER=$!
-wait "$PID"; RC=$?
+launch offscreen
+sample_ram "$APP_PID" & SAMPLER=$!
+wait "$APP_PID"; RC=$?
 
-# Fallback: offscreen nie wstal (typowy log Qt o platform plugin) — retry przez xvfb.
+# Fallback: offscreen nie wstal (typowy log Qt o platform plugin; AppImage
+# Mudleta 4.22 NIE zawiera wtyczki offscreen — tylko xcb) — retry przez xvfb.
 if [ ! -f "$RESULTS/desktop.done" ] && [ ! -f "$RESULTS/desktop.error" ] \
-   && grep -qiE 'platform plugin|could not load|offscreen' "$RESULTS/desktop_stdout.log" 2>/dev/null \
-   && command -v xvfb-run >/dev/null; then
-  echo "offscreen nie wstal — fallback: xvfb-run -a"
-  kill "$SAMPLER" 2>/dev/null; wait "$SAMPLER" 2>/dev/null; SAMPLER=""
-  rm -f "$RESULTS/results_desktop.jsonl" "$RESULTS/desktop_stdout.log" "$RESULTS/ram_desktop.txt"
-  PID=$(launch xvfb)
-  sample_ram "$PID" & SAMPLER=$!
-  wait "$PID"; RC=$?
+   && grep -qiE 'platform plugin|could not load|offscreen' "$RESULTS/desktop_stdout.log" 2>/dev/null; then
+  if command -v xvfb-run >/dev/null; then
+    echo "offscreen nie wstal (AppImage ma tylko wtyczke xcb) — fallback: xvfb-run -a"
+    kill "$SAMPLER" 2>/dev/null; wait "$SAMPLER" 2>/dev/null; SAMPLER=""
+    rm -f "$RESULTS/results_desktop.jsonl" "$RESULTS/desktop_stdout.log" "$RESULTS/ram_desktop.txt"
+    launch xvfb
+    sample_ram "$APP_PID" & SAMPLER=$!
+    wait "$APP_PID"; RC=$?
+  else
+    echo "UWAGA: AppImage nie ma wtyczki offscreen, a xvfb-run nie jest zainstalowany."
+    echo "       Do fazy desktop potrzebne: sudo apt install -y xvfb"
+  fi
 fi
 
 kill "$SAMPLER" 2>/dev/null; wait "$SAMPLER" 2>/dev/null; SAMPLER=""
