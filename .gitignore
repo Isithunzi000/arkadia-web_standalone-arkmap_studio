@@ -1,3 +1,4 @@
 # Dane testowe pobierane z upstream (tests/fetch-fixture.sh) — nie commitować
 map_master3.dat
 tests/perf/out/
+tests/megatest/web/node_modules/

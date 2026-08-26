@@ -1,0 +1,9 @@
+{
+  "name": "megatest-web",
+  "private": true,
+  "type": "module",
+  "description": "Filar mudlet-web mega-testu: parse .dat produkcyjnym silnikiem mudlet-web (mudlet-map-binary-reader).",
+  "dependencies": {
+    "mudlet-map-binary-reader": "2.0.0"
+  }
+}
