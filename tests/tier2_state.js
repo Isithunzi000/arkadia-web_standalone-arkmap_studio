@@ -198,6 +198,74 @@ console.log('── T4: strażniki strukturalne (zrodlo) ──');
   ok(NEW.includes("const APP_VERSION = 'v1.49.7';"), 'wersja: v1.49.7');
 }
 
+// ── T5 (Arc 37, F-EDIT-4): commitRoomEdit — toast o zmianie płaszczyzny Z ────
+console.log('── T5 (Arc 37): commitRoomEdit — sygnalizacja zmiany Z (toast scalony) ──');
+{
+  const codeEditor = extract(NEW, 'function commitRoomEdit() {');
+  function mkEditorCtx(roomZ, formVals, extraRooms) {
+    const state = {
+      roomById: {}, roomArea: {}, areas: new Map(),
+      selected: 1, z: 0, editMode: true, editDirty: true,
+      editSnapshot: null, undoStack: [], redoStack: [], dirty: false,
+      pendingExitTarget: {}, pendingDoors: {}, pendingExitWeight: {}, pendingExitLock: {},
+      pendingStubs: new Set(), pendingStubRemovals: new Set(),
+      pendingSpecialExits: null, pendingSpecialExitLocks: null, pendingSpecialDoors: null,
+      pendingSERenames: null, pendingEnv: null,
+      _daneTabActivated: false, _skryptyTabActivated: false, _skryptyDirty: null, _skryptyOrig: null,
+    };
+    const room = mkRoom(1, 1, { z: roomZ });
+    state.roomById[1] = room; state.roomArea[1] = 1;
+    state.areas.set(1, { id: 1, name: 'A1', rooms: [room] });
+    for (const r of (extraRooms || [])) {
+      state.roomById[r.id] = r; state.roomArea[r.id] = 1; state.areas.get(1).rooms.push(r);
+    }
+    const toasts = [];
+    const inputs = { 'rp-x': { value: String(formVals.x) }, 'rp-y': { value: String(formVals.y) },
+                     'rp-z': { value: String(formVals.z) } };
+    const stubDoc = {
+      getElementById: (id) => inputs[id] || null,
+      querySelector: () => null, querySelectorAll: () => ({ forEach() {} }),
+    };
+    const fn = new Function(
+      'state', 'toast', 'document', 'switchRpTab', '_rasterInvalidate', '_roomCollisionAt',
+      'buildRoomsZ', 'pushUndo', 'updateUndoRedoUI', 'scheduleDraw', 'populateEditForm',
+      'OPPOSITE', 'escHtml', 'plPl', 'closeDialog', 'openDialog', 'commitAddExit', '_setMapKey',
+      codeEditor + '\n;return { commitRoomEdit };'
+    );
+    const api = fn(
+      state, (msg, isErr) => toasts.push({ msg, isErr }), stubDoc,
+      () => {}, () => {},
+      (x, y, z, selfId) => Object.values(state.roomById).find(r => r.id !== selfId && r.x === x && r.y === y && r.z === z) || null,
+      () => {}, () => { state.undoStack.push({}); }, () => {}, () => {}, () => {},
+      { n: 's', s: 'n', e: 'w', w: 'e' }, (s) => String(s), (n, a, b, c) => a,
+      () => {}, () => {}, () => {}, (o, k, v) => { o[k] = v; }
+    );
+    return { state, toasts, api };
+  }
+  // S1: zmiana Z → toast o płaszczyźnie
+  {
+    const { toasts, api } = mkEditorCtx(0, { x: 0, y: 0, z: 5 });
+    api.commitRoomEdit();
+    const zt = toasts.filter(t => t.msg.includes('płaszczyznę Z=5'));
+    ok(zt.length === 1 && zt[0].msg.includes('Pokój #1'), 'zmiana Z 0->5: toast „Pokój #1 przeniesiony na płaszczyznę Z=5"');
+  }
+  // S2: bez zmiany Z → brak toastu o płaszczyźnie
+  {
+    const { toasts, api } = mkEditorCtx(0, { x: 3, y: 0, z: 0 });
+    api.commitRoomEdit();
+    ok(!toasts.some(t => t.msg.includes('płaszczyznę Z=')), 'bez zmiany Z: brak toastu o płaszczyźnie');
+  }
+  // S3: zmiana Z + kolizja → JEDEN toast scalony (obie części)
+  {
+    const occ = mkRoom(9, 1, { x: 0, y: 0, z: 5 });
+    const { toasts, api } = mkEditorCtx(0, { x: 0, y: 0, z: 5 }, [occ]);
+    api.commitRoomEdit();
+    const zt = toasts.filter(t => t.msg.includes('płaszczyznę Z=5'));
+    ok(zt.length === 1 && zt[0].msg.includes('zajęte przez pokój #9') && zt[0].msg.includes(' · '),
+      'zmiana Z + kolizja: jeden scalony toast (obie części, separator „ · ")');
+  }
+}
+
 console.log('');
 if (fail === 0) { console.log('═══ tier2_state: ' + pass + ' OK, 0 FAIL ═══'); }
 else { console.log('═══ tier2_state: ' + pass + ' OK, ' + fail + ' FAIL ═══'); process.exit(1); }

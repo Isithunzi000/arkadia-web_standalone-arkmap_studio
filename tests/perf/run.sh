@@ -121,7 +121,7 @@ if [ -z "$CHROME" ]; then
     if command -v "$c" >/dev/null 2>&1; then CHROME="$c"; break; fi
   done
 fi
-[ -n "$CHROME" ] || { echo "BRAK przegladarki — patrz INSTRUKCJA.md (chrome-headless-shell); pomijam faze 3"; echo "Wyniki czesciowe: $OUT/results_node.json"; exit 0; }
+[ -n "$CHROME" ] || { echo "BRAK przegladarki — patrz tests/perf/README.md (chrome-headless-shell); pomijam faze 3"; echo "Wyniki czesciowe: $OUT/results_node.json"; exit 0; }
 echo "przegladarka: $CHROME"
 export CHROMIUM_BIN="$CHROME"
 

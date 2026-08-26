@@ -382,6 +382,33 @@ console.log('— B24 (Arc 35): stack fontu mono + baza 13px —');
   ok(n === 7, 'B24e: stack literalnie we wszystkich 7 miejscach renderera canvas (jest: ' + n + ')');
 }
 
+// ── B27 (Arc 37, F-RENDER-2): niezmiennik resetu _lodMode w draw() ──────────
+// Reset `_lodMode = 'full'` jest NOSNY: badge chowa updateStatus() na bazie _lodMode,
+// wiec reset musi stac PRZED wczesnymi returnami draw() (pusta mapa = _lodMode 'full').
+// Przesuniecie resetu za returny wprowadziloby defekt (stary badge na pustej mapie).
+{
+  const d0 = HTML.indexOf('function draw() {');
+  const d1 = HTML.indexOf('\nfunction ', d0 + 10);
+  const drawSrc = HTML.slice(d0, d1);
+  const iReset = drawSrc.indexOf("_lodMode = 'full';");
+  const iReturn = drawSrc.indexOf('return;');
+  ok(iReset > 0 && iReturn > 0 && iReset < iReturn,
+    'B27: reset _lodMode w draw() PRZED pierwszym return (niezmiennik F-RENDER-2)');
+  ok(drawSrc.includes('reset przy wczesnych returnach'),
+    'B27b: komentarz dokumentujacy nosnosc resetu obecny');
+}
+
+// ── B27c/d (Arc 37, PRACA 14): tooltip badge LOD — krotki, zlamany wierszami ──
+// Natywny title (~340 znakow) ucinal sie na Linux Chrome; zatwierdzona wersja
+// ma ~150 znakow i jawne zlamania &#10; (nowe wiersze w native tooltip).
+{
+  const m = HTML.match(/<span id="msb-lod"[^>]*\stitle="([^"]*)"/);
+  ok(!!m, 'B27c: badge #msb-lod ma atrybut title');
+  const t = m ? m[1] : '';
+  ok(t.includes('&#10;'), 'B27c: title LOD zlamany wierszami (&#10;)');
+  ok(t.length > 0 && t.length < 200, 'B27d: title LOD krotki (< 200 znakow, jest ' + t.length + ')');
+}
+
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);
 process.exit(fail ? 1 : 0);

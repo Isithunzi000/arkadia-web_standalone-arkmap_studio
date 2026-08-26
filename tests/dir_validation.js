@@ -157,18 +157,25 @@ function tfBad(r) { const iss = api._roomDirIssues(r); return iss.tf ? iss.tf.ba
   ok(tfBad(r).length === 1, 'wiszący cel: guard, martwe, bez wyjątku');
 }
 {
-  // dir_bind bez zmian: pusta komenda flagowana, niepusta nie
+  // Arc 37 (PRACA 12): pusta komenda dir_bind („dir=") to w Mudlecie INTENCJONALNA
+  // blokada kierunku (kanoniczne uzycie w skryptach Lua), nie blad — bez flagi.
   const r = mkRoom(0, 0, 0, 1, { user_data: { dir_bind: 'n=&e=otworz brame' } });
   const iss = api._roomDirIssues(r);
-  ok(iss.db && iss.db.empty.length === 1 && iss.db.empty[0] === 'n', 'dir_bind: pusta komenda przy „n" flagowana');
-  const r2 = mkRoom(0, 0, 0, 1, { user_data: { dir_bind: 'n=otworz wrota' } });
-  ok(api._roomDirIssues(r2).db === null, 'dir_bind: niepusta komenda → czysto');
+  ok(!iss.db && !iss.tf, 'dir_bind: pusta komenda „n=" NIE flagowana (blokada kierunku w Mudlecie)');
+  const r2 = mkRoom(0, 0, 0, 1, { user_data: { dir_bind: 'n=otworz wrota', team_follow_link: 'x*zzz' } });
+  const iss2 = api._roomDirIssues(r2);
+  ok(!iss2.db && iss2.tf && iss2.tf.bad.length === 1 && iss2.tf.bad[0] === 'zzz',
+    'dir_bind: niepusta komenda czysta; rozjazd team_follow bez zmian');
+  const i = HTML.indexOf('function _roomDirIssues(r){');
+  const j = HTML.indexOf('\nfunction ', i + 10);
+  ok(i >= 0 && j > i && !HTML.slice(i, j).includes('dir_bind'),
+    'straznik: _roomDirIssues bez galezi dir_bind (PRACA 12)');
 }
 {
   // pokój bez user_data → bez znalezień
   const r = mkRoom(0, 0, 0, 1, {});
   const iss = api._roomDirIssues(r);
-  ok(!iss.tf && !iss.db, 'brak user_data → brak znalezień');
+  ok(!iss.tf && !iss.db, 'brak user_data → brak znalezień (tf null, db juz nie istnieje)');
 }
 
 // ── Arc 34 (v1.49.4, obs 3): akceptacje w undo/redo, selektor wycięty ────────

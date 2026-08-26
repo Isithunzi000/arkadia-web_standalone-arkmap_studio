@@ -102,5 +102,47 @@ ok((srcRefs.match(/escHtml\(r\.dir\)/g) || []).length >= 1, 'straznik: dlg-refs-
   ok(/startClDrawingExisting\(dir\)/.test(srcCL), 'A31-F1.12: wiring programowy startClDrawingExisting(dir)');
 }
 
+// ── Arc 37 (PRACA 2): toast() — piny regresji escapowania + feature nowrap ──
+// Stan zweryfikowany na starcie arca: toast() JUZ escapuje &<> i dopiero potem
+// dokleja nowrap-spany — piny pilnuja, zeby ten kontrakt nie zniknal i zeby
+// feature nie zostal zlamany (np. przez naiwna podmiane innerHTML->textContent).
+console.log('— Arc 37: toast() escapowanie + nowrap —');
+function runToast(msg) {
+  const code = extract('toast') + `
+    const toastEl = { _h: '', set innerHTML(v) { this._h = v; }, get innerHTML() { return this._h; },
+                      className: '', style: {} };
+    let toastTimer = null;
+    toast(${JSON.stringify(msg)});
+    return toastEl.innerHTML;
+  `;
+  return new Function(code)();
+}
+{
+  const htmlToast = runToast(PAYLOAD);
+  ok(!htmlToast.includes(PAYLOAD), 'toast: brak surowego <img> (escapowanie aktywne)');
+  // Uwaga: nowrap-regex owija tez nawiasy WEWNATRZ escapowanego tekstu — pelny PAYLOAD_ESC
+  // nie musi byc ciaglym substringiem; asercja na escapowany poczatek payloadu.
+  ok(htmlToast.includes('&lt;img src=x'), 'toast: payload escapowany (&lt;img...)');
+  const htmlNw = runToast('Załadowano [5] waypointów');
+  ok(htmlNw.includes('<span style="white-space:nowrap">[5]</span>'),
+    'toast: feature nowrap-spanow nienaruszony ([...] owijane)');
+  const srcToast = extract('toast');
+  ok(!srcToast.includes('toastEl.innerHTML = msg;'), 'straznik: toast bez golego przypisania innerHTML = msg');
+  const assignIdx = srcToast.indexOf('toastEl.innerHTML = msg');
+  const escIdx = srcToast.indexOf(".replace(/&/g, '&amp;')");
+  ok(assignIdx >= 0 && escIdx > assignIdx, 'straznik: przypisanie innerHTML z lancuchem escapowania');
+}
+
+
+// ── Arc 37 (PRACA 5): escHtml filtruje znaki kontrolne C0 poza \t \n \r ──
+// Kontrolne (np. \x00, \x1f) w polach mapy nie niosa informacji, a psuja
+// layout/parsowanie DOM — escHtml je wycina. \t \n \r zostaja (legitne w opisach).
+{
+  const escHtml = new Function(extract('escHtml') + '; return escHtml;')();
+  ok(escHtml('a\x00b\x1fc') === 'abc', 'escHtml: wycina kontrolne \x00 \x1f');
+  ok(escHtml('a\tb\nc\rd') === 'a\tb\nc\rd', 'escHtml: zachowuje \t \n \r');
+  ok(escHtml(PAYLOAD) === PAYLOAD_ESC, 'escHtml: escapowanie &<> bez zmian');
+}
+
 console.log('\nxss_sinks.js: ' + pass + ' PASS, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

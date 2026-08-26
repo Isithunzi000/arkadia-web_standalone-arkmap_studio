@@ -111,6 +111,22 @@ const pair = () => [
   ok(JSON.stringify(viaMap) === JSON.stringify(viaCore), 'A9 paritet checkSuppressorsInMap ≡ _findMissingSuppressors');
 }
 
+// A10 (Arc 37, PRACA 13): multi-edge — CL na „e", druga krawedz A→B („ne") bez CL.
+// Dawny skip otherDefaultEdge opieral sie na dedupie PAR pokoi z Delwinga; nasz
+// renderer (drawExits) rysuje linie per (pokoj, kierunek) — linia B→A (opp) i tak
+// powstaje, wiec suppressor jest POTRZEBNY i flaga musi sie pojawic.
+{
+  const p = pair(); p[0].exits.ne = 2;
+  const m = apiA.checkSuppressorsInMap(mkMap(p));
+  ok(m.length === 1 && m[0].roomA === 1 && m[0].dir === 'e',
+    'A10 multi-edge (CL na e + krawedz ne bez CL) → flaga (renderer per-kierunek)');
+}
+{
+  const body = extract(HTML, 'function _findMissingSuppressors(roomById, roomArea) {');
+  ok(!body.includes('let otherDefaultEdge'), 'straznik: bez skipu multi-edge (deklaracja otherDefaultEdge usunieta; PRACA 13)');
+  ok(body.includes('cross-area'), 'straznik: skip cross-area nadal obecny (swiadoma decyzja wlasciciela)');
+}
+
 // ─── Sekcja B: piny strukturalne loadu ──────────────────────────────────────
 console.log('— Sekcja B: piny strukturalne —');
 {

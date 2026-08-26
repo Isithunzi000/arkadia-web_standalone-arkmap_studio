@@ -2081,7 +2081,7 @@
         <span id="msb-area">—</span>
         <span style="flex-shrink:0">Z=<span id="msb-z">0</span></span>
         <span style="flex-shrink:0"><span id="msb-rooms">0</span> pokoi</span>
-        <span id="msb-lod" style="display:none;flex-shrink:0" title="Duże oddalenie — uproszczony render (LOD). „LOD" = pokoje + uproszczone linie wyjść (bez strzałek, stubów i custom lines — przy tym zoomie to subpikselowy szum). „LOD·R" = ekstremalne oddalenie: pokoje jako podkład rastrowy (piksel na komórkę). Przybliż, aby zobaczyć szczegóły.">LOD</span>
+        <span id="msb-lod" style="display:none;flex-shrink:0" title="Duże oddalenie — render uproszczony.&#10;LOD: pokoje + uproszczone linie wyjść.&#10;LOD·R: mapa jako bitmapa (piksel na komórkę).&#10;Przybliż, by zobaczyć szczegóły.">LOD</span>
       </div>
       <!-- ✎ EDIT MODE TOGGLE (mockup) -->
       <div id="msb-undoredo"><button class="ur-btn" id="ur-undo-all" title="Cofnij wszystko">↩↩</button><button class="ur-btn" id="ur-undo" title="Cofnij (Ctrl+Z)">↩</button><button class="ur-btn" id="ur-redo" disabled title="Ponów (Ctrl+Y)">↪</button><button class="ur-btn" id="ur-redo-all" disabled title="Ponów wszystko">↪↪</button></div>      <div id="msb-lock-timer" title="Masz aktywnego locka na mapę">🔒 lock aktywny</div>      <div id="msb-change-count" onclick="toggleChangelog(event)" title="Kliknij aby zobaczyć historię zmian"><div class="cc-dot"></div><span id="cc-num">12 zmian</span></div>
@@ -13277,7 +13277,9 @@ function plPl(n, one, few, many) {
 }
 
 function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  // Arc 37 (PRACA 5): wstepnie wycinamy kontrolne C0 poza \t \n \r — nie niosa
+  // informacji, a psuja layout/parsowanie. Kolejnosc: filtr PRZED escapowaniem &<>".
+  return String(s).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // Neutralizuje metaznaki regexa — bezpieczne budowanie RegExp z dowolnego stringa użytkownika
@@ -16140,9 +16142,12 @@ function _dirGeoMatch(r, canon){
   return false;
 }
 
-// Błędy kierunkowe pojedynczego pokoju (read-only). {tf:{...}|null, db:{...}|null}
+// Błędy kierunkowe pojedynczego pokoju (read-only). {tf:{...}|null}
+// Arc 37 (PRACA 12): galaz dir_bind („pusta komenda") usunieta — w skryptach
+// Mudleta „dir=" to INTENCJONALNA blokada kierunku (kanoniczne uzycie w skryptach
+// Lua Arkadii), nie blad mapy. Flaga byla falszywie pozytywna.
 function _roomDirIssues(r){
-  const out = { tf:null, db:null };
+  const out = { tf:null };
   if (!r || !r.user_data) return out;
   const ud = r.user_data;
   const exits = _roomExitsList(r);
@@ -16153,28 +16158,20 @@ function _roomDirIssues(r){
       if(to && !validCanon.has(_dirCanon(to)) && !_dirGeoMatch(r,_dirCanon(to)) && !bad.includes(to)) bad.push(to); });
     if(bad.length) out.tf = { tf:ud.team_follow_link, bad, exits };
   }
-  if (ud.dir_bind){
-    const empty=[];
-    ud.dir_bind.split('&').forEach(p=>{ const i=p.indexOf('='); const dir=(i<0?p:p.slice(0,i)).trim(); const cmd=(i<0?'':p.slice(i+1)).trim();
-      if(dir && !cmd && !empty.includes(dir)) empty.push(dir); });
-    if(empty.length) out.db = { db:ud.dir_bind, empty };
-  }
   return out;
 }
 
 // Pełna walidacja całej mapy (READ-ONLY, deterministyczna).
 function validateDirections(){
-  const tf=[], db=[];
+  const tf=[];
   for (const id of Object.keys(state.roomById)){
     const r = state.roomById[id]; if(!r) continue;
     const iss = _roomDirIssues(r);
     const area = (state.areas.get(state.roomArea[r.id])||{}).name || '(brak)';
-    if (iss.tf) tf.push({ id:r.id, area, ...iss.tf, alsoDb: !!iss.db });
-    if (iss.db) db.push({ id:r.id, area, ...iss.db, alsoTf: !!iss.tf });
+    if (iss.tf) tf.push({ id:r.id, area, ...iss.tf });
   }
-  const cmp=(a,b)=> a.area.localeCompare(b.area) || a.id-b.id;
-  tf.sort(cmp); db.sort(cmp);
-  return { tf, db };
+  tf.sort((a,b)=> a.area.localeCompare(b.area) || a.id-b.id);
+  return { tf };
 }
 
 let _vdLast = null;
@@ -16196,7 +16193,7 @@ function _acceptSave(arr){
   if (arr.length) state.map.meta.accepted_dir_issues = arr; else delete state.map.meta.accepted_dir_issues;
 }
 function _issueKeys(type, it){
-  return (type==='tf' ? it.bad : it.empty).map(v => type+':'+it.id+':'+String(v).toLowerCase().trim());
+  return it.bad.map(v => type+':'+it.id+':'+String(v).toLowerCase().trim());
 }
 function _isAccepted(type, id, value){ return _acceptSet().has(type+':'+id+':'+String(value).toLowerCase().trim()); }
 
@@ -16204,14 +16201,13 @@ function _isAccepted(type, id, value){ return _acceptSet().has(type+':'+id+':'+S
 function _vdView(){
   const all = _vdLast || validateDirections();
   const acc = _acceptSet();
-  const open = {tf:[], db:[]}, accepted = {tf:[], db:[]};
-  const split = (arr, type) => arr.forEach(it => {
-    const keys = _issueKeys(type, it);
+  const open = {tf:[]}, accepted = {tf:[]};
+  all.tf.forEach(it => {
+    const keys = _issueKeys('tf', it);
     const isAcc = keys.length>0 && keys.every(k => acc.has(k));
-    (isAcc ? accepted : open)[type].push(it);
+    (isAcc ? accepted : open).tf.push(it);
   });
-  split(all.tf,'tf'); split(all.db,'db');
-  return { open, accepted, accCount: accepted.tf.length+accepted.db.length };
+  return { open, accepted, accCount: accepted.tf.length };
 }
 
 // Arc 34 (v1.49.4): akceptacja/cofniecie przechodzi przez pushUndo (wpis
@@ -16258,10 +16254,10 @@ function _renderVdPanel(){
   const body = document.getElementById('vd-body');
   const cnt  = document.getElementById('vd-count');
   body.innerHTML = '';
-  const open = view.open, openTotal = open.tf.length + open.db.length;
+  const open = view.open, openTotal = open.tf.length;
   if (openTotal===0 && view.accCount===0){
     cnt.textContent=''; cnt.classList.remove('done');
-    body.innerHTML='<div class="vd-empty">✓ Wszystkie kierunki poprawne — brak rozjazdów team_follow i pustych bindów.</div>';
+    body.innerHTML='<div class="vd-empty">✓ Wszystkie kierunki poprawne — brak rozjazdów team_follow.</div>';
     _vdSyncAccUI(view); return;
   }
   cnt.textContent = openTotal
@@ -16271,12 +16267,10 @@ function _renderVdPanel(){
   const hdr = (t, cls) => { const h=document.createElement('div'); h.className='vd-sec-hdr'+(cls?(' '+cls):''); h.textContent=t; body.appendChild(h); };
   let n=0;
   if (open.tf.length){ hdr('Rozjazdy team_follow ('+open.tf.length+')'); open.tf.forEach(it=> body.appendChild(_vdRow('tf', it, ++n, false))); }
-  if (open.db.length){ hdr('Puste bindy kierunków ('+open.db.length+')'); open.db.forEach(it=> body.appendChild(_vdRow('db', it, ++n, false))); }
   if (openTotal===0){ const e=document.createElement('div'); e.className='vd-empty'; e.textContent='✓ Brak otwartych rozjazdów — wszystko zaakceptowane.'; body.appendChild(e); }
   if (_vdShowAccepted && view.accCount){
     hdr('Zaakceptowane ('+view.accCount+')', 'acc');
     view.accepted.tf.forEach(it=> body.appendChild(_vdRow('tf', it, 0, true)));
-    view.accepted.db.forEach(it=> body.appendChild(_vdRow('db', it, 0, true)));
   }
   _vdSyncAccUI(view);
 }
@@ -16285,14 +16279,8 @@ function _vdRow(type, it, num, accepted){
   const row=document.createElement('div'); row.className='vd-row'+(accepted?' accepted':''); row.dataset.rid=it.id; row.dataset.type=type;
   let html = (num ? '<span class="vd-num">'+num+'.</span>' : '') +
              '<span class="vd-rid">#'+it.id+'</span><span class="vd-area">'+_vdEsc(it.area)+'</span>';
-  if (type==='tf'){
-    html+='<span class="vd-tf">'+_vdEsc(it.tf)+'</span>';
-    html+='<span>'+it.bad.map(b=>'<span class="vd-bad">'+_vdEsc(b)+'</span>').join(', ')+' <span class="vd-arr">→</span> '+it.exits.map(e=>'<span class="vd-ex">'+_vdEsc(e)+'</span>').join(', ')+'</span>';
-    if (it.alsoDb) html+='<span class="vd-badge">+ pusty bind</span>';
-  } else {
-    html+='<span class="vd-tf">'+_vdEsc(it.db)+'</span><span><span class="vd-bad">'+it.empty.map(_vdEsc).join(', ')+'</span> <span class="vd-arr">=</span> <span class="vd-ex">(pusta komenda)</span></span>';
-    if (it.alsoTf) html+='<span class="vd-badge">+ team_follow</span>';
-  }
+  html+='<span class="vd-tf">'+_vdEsc(it.tf)+'</span>';
+  html+='<span>'+it.bad.map(b=>'<span class="vd-bad">'+_vdEsc(b)+'</span>').join(', ')+' <span class="vd-arr">→</span> '+it.exits.map(e=>'<span class="vd-ex">'+_vdEsc(e)+'</span>').join(', ')+'</span>';
   html += accepted
     ? '<button class="vd-unacc" title="Cofnij akceptację — wróci na listę">↶ cofnij</button>'
     : '<button class="vd-acc" title="Uznaj za poprawny — intencjonalny przypadek, zniknie z raportu i eksportu">✓ OK</button>';
@@ -16300,7 +16288,7 @@ function _vdRow(type, it, num, accepted){
   row.addEventListener('click', ()=>{
     document.querySelectorAll('#validate-panel .vd-row.selected').forEach(x=>x.classList.remove('selected'));
     row.classList.add('selected');
-    _vdJump(it.id, type);
+    _vdJump(it.id);
   });
   const ab = row.querySelector(accepted ? '.vd-unacc' : '.vd-acc');
   if (ab) ab.addEventListener('click', e=>{ e.stopPropagation(); accepted ? _vdUnaccept(type, it) : _vdAccept(type, it); });
@@ -16308,12 +16296,12 @@ function _vdRow(type, it, num, accepted){
 }
 
 // Klik w wiersz → skok do pokoju + zakładka Skrypty + podświetlenie sekcji
-function _vdJump(id, type){
+function _vdJump(id){
   if (typeof jumpToRoom==='function') jumpToRoom(id);
   setTimeout(()=>{
     const tabBtn = document.querySelector('#rp-tabs .rp-tab[data-tab="Skrypty"]');
     if (tabBtn && typeof switchRpTab==='function') switchRpTab(tabBtn);
-    const sec = document.getElementById(type==='db' ? 'rp-sec-dirbind' : 'rp-sec-teamfollow');
+    const sec = document.getElementById('rp-sec-teamfollow');
     if (sec){ sec.scrollIntoView({block:'nearest'}); sec.classList.remove('rp-sec-flash'); void sec.offsetWidth; sec.classList.add('rp-sec-flash'); }
   }, 70);
 }
@@ -16326,7 +16314,6 @@ function _revalidateDirsPanel(){
   const view = _vdView();
   const fresh = new Set();
   view.open.tf.forEach(it=> fresh.add('tf:'+it.id));
-  view.open.db.forEach(it=> fresh.add('db:'+it.id));
   let remaining=0; const seen=new Set();
   panel.querySelectorAll('.vd-row').forEach(row=>{
     if (row.classList.contains('accepted')) return;
@@ -16348,7 +16335,6 @@ function _updateSkryptyWarn(r){
   let has = false;
   if (r){ const iss=_roomDirIssues(r); const acc=_acceptSet();
     if (iss.tf) has = has || iss.tf.bad.some(b=> !acc.has('tf:'+r.id+':'+String(b).toLowerCase().trim()));
-    if (iss.db) has = has || iss.db.empty.some(d=> !acc.has('db:'+r.id+':'+String(d).toLowerCase().trim()));
   }
   if (has){ if(!warn){ warn=document.createElement('span'); warn.className='tab-warn'; warn.textContent='⚠'; warn.title='Błąd kierunku w tym pokoju'; tabBtn.appendChild(warn); } }
   else if (warn) warn.remove();
@@ -16360,26 +16346,19 @@ function _markSkryptyBadRows(r){
     const v=(row.querySelector('.sk-v')?.value||'').trim();
     row.classList.toggle('bad-dir', !!(v && !validCanon.has(_dirCanon(v))) && !_isAccepted('tf', r.id, v));
   });
-  document.querySelectorAll('#rp-dirbind-list .sk-row').forEach(row=>{
-    const k=(row.querySelector('.sk-k')?.value||'').trim(), v=(row.querySelector('.sk-v')?.value||'').trim();
-    row.classList.toggle('bad-dir', !!(k && !v) && !_isAccepted('db', r.id, k));
-  });
 }
 
 // ── Eksport raportu ──────────────────────────────────────────────────────────
 function _vdReportText(){
   const res = _vdView().open;
-  const L=[]; const total=res.tf.length+res.db.length;
+  const L=[]; const total=res.tf.length;
   L.push('Niespojne kierunki — mapa map_master3');
-  L.push('(kierunek po * nie jest wyjsciem / bind bez komendy; skroty i polskie nazwy OK)');
+  L.push('(kierunek po * nie jest wyjsciem; skroty i polskie nazwy OK)');
   L.push(''); L.push(total+' pokoi do poprawy'); L.push('');
   let n=0;
   if (res.tf.length){ L.push('=== Rozjazdy team_follow ('+res.tf.length+') ===');
-    res.tf.forEach(it=>{ L.push((++n)+'. #'+it.id+'  '+it.area+(it.alsoDb?'   (+ pusty bind)':''));
+    res.tf.forEach(it=>{ L.push((++n)+'. #'+it.id+'  '+it.area);
       L.push('   team_follow:  '+it.tf); L.push('   zle:          '+it.bad.join(', ')+'  ->  '+it.exits.join(', ')); L.push(''); }); }
-  if (res.db.length){ L.push('=== Puste bindy kierunkow ('+res.db.length+') ===');
-    res.db.forEach(it=>{ L.push((++n)+'. #'+it.id+'  '+it.area+(it.alsoTf?'   (+ team_follow)':''));
-      L.push('   dir_bind:      '+it.db); L.push('   pusta komenda: '+it.empty.join(', ')); L.push(''); }); }
   return L.join('\n');
 }
 function vdCopyReport(){ navigator.clipboard.writeText(_vdReportText()).then(()=>toast('✓ Skopiowano raport')).catch(()=>toast('⚠ Nie udało się skopiować')); }
@@ -17286,12 +17265,17 @@ function commitRoomEdit() {
     const ny = Math.round(parseInt(yIn.value) || 0);
     const nz = Math.round(parseInt(zIn.value) || 0);
     if (nx !== room.x || ny !== room.y || nz !== room.z) {
+      const zMoved = nz !== room.z;  // Arc 37 (F-EDIT-4): zmiana Z = pokoj "znika" z widoku (z-guard)
       room.x = nx; room.y = ny; room.z = nz;
       buildRoomsZ();
       // audyt A22/C2: edycja wspolrzednych z formularza nie blokuje kolizji (jawna
       // decyzja uzytkownika), ale informuje — spojnie z commitMoveRoomToArea.
+      // Arc 37: JEDEN toast scalony (pojedynczy toastEl — dwa toasty nadpisalyby sie).
       const occ = _roomCollisionAt(nx, ny, nz, roomId);
-      if (occ) toast(`⚠ Pole (${nx}, ${ny}, ${nz}) jest też zajęte przez pokój #${occ.id}`);
+      const _parts = [];
+      if (occ) _parts.push(`⚠ Pole (${nx}, ${ny}, ${nz}) jest też zajęte przez pokój #${occ.id}`);
+      if (zMoved) _parts.push(`Pokój #${roomId} przeniesiony na płaszczyznę Z=${nz}`);
+      if (_parts.length) toast(_parts.join(' · '));
     }
   }
 
@@ -18982,18 +18966,13 @@ function _findMissingSuppressors(roomById, roomArea) {
       // Suppressor potrzebny TYLKO gdy B ma wyjście powrotne do A w kierunku opp
       // (bo tylko wtedy Mudlet rysuje domyślną linię z B, którą trzeba stłumić)
       if (B.exits?.[opp] !== A.id) continue;       // B nie ma reciprocal exit — skip
-      // Multi-edge / dedup — parytet z rendererem Delwinga (exitsRendered po PARZE pokoi).
-      // Domyślna linia połączenia A↔B rysuje się dokładnie raz. Suppressor na opp czyści
-      // dubel TYLKO gdy parę łączą wyłącznie {dir, opp}. Jeśli istnieje INNE wyjście A↔B
-      // bez custom_line, domyślna linia i tak się narysuje (dedup) → suppressor nie wystarcza.
-      // Warunek deterministyczny, niezależny od kolejności iteracji pokoi w rendererze.
-      let otherDefaultEdge = false;
-      for (const [d2, t2] of Object.entries(A.exits || {}))
-        if (d2 !== dir && t2 === B.id && !(A.custom_lines && d2 in A.custom_lines)) { otherDefaultEdge = true; break; }
-      if (!otherDefaultEdge)
-        for (const [d2, t2] of Object.entries(B.exits || {}))
-          if (d2 !== opp && t2 === A.id && !(B.custom_lines && d2 in B.custom_lines)) { otherDefaultEdge = true; break; }
-      if (otherDefaultEdge) continue;              // multi-edge: suppressor nie domyka dubla — nie flaguj
+      // Arc 37 (PRACA 13): dawny skip multi-edge (otherDefaultEdge) usuniety — opieral
+      // sie na dedupie PAR pokoi z renderera Delwinga (exitsRendered). Nasz renderer
+      // (drawExits) rysuje linie domyslne per (pokoj, kierunek) i kazdy kierunek tlumi
+      // wlasna custom_line — przy multi-edge A↔B linia B→A (opp) i tak powstaje,
+      // wiec suppressor jest nadal POTRZEBNY. Skip cross-area powyzej ZOSTAJE:
+      // swiadoma decyzja — wyjscia cross-area renderuja sie jako strzalki/etykiety,
+      // nie jako domyslne linie, wiec podwojnej linii tam nie ma.
       const bcl = B.custom_lines?.[opp];
       if (!bcl) {                                  // brak jakiejkolwiek CL w kierunku opp → suppressor potrzebny
         missing.push({ roomA: A.id, dir, roomB: B.id, oppDir: opp, sourceCL: cl });

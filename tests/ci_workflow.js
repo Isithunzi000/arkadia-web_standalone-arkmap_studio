@@ -60,5 +60,17 @@ console.log('— podpięcie —');
   ok(/pip install websockets==[0-9.]+/.test(YML), 'CI instaluje python3-websockets spinane wersja (E15 real clock przez CDP)');
 }
 
+// ── Arc 37 (PRACA 6): run.sh wskazuje istniejaca dokumentacje ───────────────
+// INSTRUKCJA.md zostalo wchloniete przez tests/perf/README.md — komunikat
+// o braku przegladarki musi wskazywac plik, ktory realnie istnieje w repo.
+console.log('— run.sh wskazowka docs —');
+{
+  const RUNSH = fs.readFileSync(path.join(ROOT, 'tests', 'perf', 'run.sh'), 'utf8');
+  const m = RUNSH.match(/BRAK przegladarki — patrz (\S+)/);
+  ok(!!m, 'run.sh: komunikat BRAK przegladarki wskazuje plik dokumentacji');
+  ok(m && m[1] === 'tests/perf/README.md', 'run.sh: wskazowka = tests/perf/README.md (INSTRUKCJA.md juz nie istnieje)');
+  ok(m && fs.existsSync(path.join(ROOT, m[1])), 'run.sh: wskazany plik dokumentacji istnieje w repo');
+}
+
 console.log(`\nci_workflow: ${pass} OK, ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

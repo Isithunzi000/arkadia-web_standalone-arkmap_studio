@@ -2,7 +2,7 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
-## v1.49.7 — Import tras: twardy limit waypointow; parse .dat bez narzutu F2.9/F2.10; silnik sum v4 ~2x szybciej; tanszy applyMap (Arc 37)
+## v1.49.7 — Import tras: twardy limit waypointow; parse .dat bez narzutu F2.9/F2.10; silnik sum v4 ~2x szybciej; tanszy applyMap; walidacja kierunkow bez falszywych alarmow (Arc 37)
 
 Fala A arca 37: jedyny realny finding z audytow (F-PLANNER-2) + zniesienie regresji parse .dat z benchmarku 2026-08-26. Piny repro-first: share_link T6 (limit), tier3_format T7 (straznik optymalizacji); zachowanie warningow F2.9/F2.10 pinowane verbatim w audit_ext (A2.9/A2.10) — zielone bez zmian.
 
@@ -16,6 +16,16 @@ Fala B arca 37 (silniki, po pomiarach PRACY 8): optymalizacje bajtowo identyczne
 - Silnik sum v4 (XXH3-64): rdzen na parach u32 [hi,lo] (Number/Math.imul) zamiast BigInt w goracej sciezce; BigInt tylko na wyjsciu xxh3_64 (kontrakt API zachowany). Bajtowa identycznosc: xxh3_golden.js (56 pinow, wektory v4 z oracle Python) + NOWY fuzz rownowaznosci tests/checksums/xxh3_fuzz_equiv.js (2484 deterministiczne bufory LCG vs zamrozona referencja BigInt tests/checksums/xxh3.js + samotest detekcji). Pomiar Node (12k pokoi): ~80 -> ~37 ms (~2.2x).
 - Kanonikalizacja v4: wspoldzielony bufor _CanonBuf (reset/release w finally) zamiast realokacji per pokoj/obszar/plik; _computeV4Checksums hashuje prosto z bufora (_xxh3pair) — checksums_v4.js 69/0 (golden fixture vs oracle).
 - applyMap/_recomputeAstarParams: bez alokacji allExits + 2x Object.assign per pokoj (pomiar PRACY 8: najdrozsza sekcja applyMap na realnej mapie, 16-32 ms -> 8-12 ms w sandboxie chromium); priorytet SE>exits przy kolizji kluczy zachowany — pin kontraktowy + straznik statyczny w dir_filter T5.
+
+Fala C arca 37 (hartowanie + kosmetyka, piny repro-first):
+
+- Walidacja kierunkow: usunieta galaz „pusty bind" (dir_bind „dir=") — w skryptach Mudleta to INTENCJONALNA blokada kierunku (kanoniczne uzycie w Lua), nie blad mapy; flaga byla falszywie pozytywna. Spojny cleanup sciezki db: validateDirections, _vdView, _renderVdPanel, _vdRow, _vdJump, _vdReportText, ostrzezenia zakladki Skrypty; mechanika cache _vdLast i akceptacje w undo nietkniete. Piny: dir_validation (pokoj z „n=" bez flagi, rozjazd team_follow bez zmian, straznik statyczny galezi).
+- Supresory podwojnych linii: usuniety skip multi-edge (otherDefaultEdge) oparty na nieaktualnym dedupie PAR pokoi z renderera Delwinga — nasz drawExits rysuje linie domyslne per (pokoj, kierunek) i kazdy kierunek tlumi wlasna custom_line, wiec przy multi-edge A↔B linia B→A i tak powstaje i suppressor jest potrzebny. Skip cross-area zostaje (swiadoma decyzja: wyjscia cross-area to strzalki/etykiety, nie linie). Pin A10 w suppressors_load; lista znalezien na realnej mapie bez zmian (0).
+- escHtml: filtr znakow kontrolnych C0 (poza tab/NL/CR) przed escapowaniem &<>" — smieciowe bajty z pol mapy nie psuja layoutu ani parsowania. Piny w xss_sinks (wycina kontrolne, zachowuje tab/NL/CR, escapowanie XSS bez zmian).
+- Edycja pokoju: zmiana plaszczyzny Z pokazywana w toascie — scalona z ewentualnym tostem kolizji w jeden komunikat (separator „ · ") zamiast dwoch nachodzacych. Pin T5 w tier2_state (3 scenariusze: sama zmiana Z / bez zmiany Z / Z + kolizja).
+- Tooltip badge LOD: ~340 -> ~166 znakow z jawnymi zlamaniami wierszy (&#10;) — natywny title ucinal sie na Linux Chrome. Piny B27c/d w tier6_ux.
+- Lab wydajnosci (run.sh): komunikat o braku przegladarki wskazuje tests/perf/README.md zamiast nieistniejacego INSTRUKCJA.md. Pin w ci_workflow (wskazany plik musi istniec w repo).
+- Piny bez zmian kodu: toast() escapuje payload przed opakowaniem nawiasow w nowrap-spany (xss_sinks, PRACA 2 — kontrakt byl spelniony, dopiete strazniki); niezmiennik resetu _lodMode = 'full' w draw() PRZED wczesnymi returnami (tier6_ux B27, PRACA 4 — reset jest nosny dla updateStatus, kod celowo nietkniety).
 
 ## v1.49.6 — Kalka: czytelne etykiety sid w wierszach PAINT_BATCH (Arc 36)
 
