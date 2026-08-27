@@ -69,3 +69,21 @@ tests/megatest/
   desktop/web konczy sie na ostatnim K, dla ktorego `.dat` istnieje.
 - Wyniki `tests/perf/out/` sa regenerowalne (gitignored); faza A nadpisuje tam
   `results_node.json` i kopiuje go do wynikow mega-testu.
+
+## Troubleshooting (lezecje z sesji 2026-08-27)
+
+- **Segfault desktopu tuz po starcie (rc=139, checkpoints koncza sie na `sysload_handler`)** —
+  to NIE test. Mudlet przy starcie profilu laduje najnowsza zapisana mape z
+  `~/.config/mudlet/profiles/<profil>/map/*.dat` (kod: `mudlet.cpp` -> `Host::loadMap()` ->
+  `TMap::restore("")`). Jesli poprzedni run skonczyl sie na stress_16x, profil
+  auto-laduje 431 808 pokoi przy kazdym starcie i pada zanim workload ruszy.
+  Naprawa: `rm -f ~/.config/mudlet/profiles/megatest/map/*.dat`.
+  Profilaktyka: workload konczy na `loadMap` najmniejszej mapy przed `closeMudlet()`,
+  wiec profil zostaje lekki (commit 46acd1e).
+- **`ram_desktop.txt` = 1 MB (fausz)** — stary sampler szukal procesu `pgrep -x mudlet`,
+  a AppImage nazywa sie inaczej (AppRun / .mount_Mudlet_*). Poprawione: pgrep -ix
+  mudlet + AppRun + .mount_Mudlet. Wynik RAM z sesji 2026-08-27 jest niepomierzalny
+  i swiadomie niecommitniety — raport pokazuje tam "-".
+- **AppImage nie ma `-platform offscreen`** (tylko xcb) — runner sam spada na
+  `xvfb-run`; na realnym display: `MEGATEST_DISPLAY=1`.
+- **`Warning: Unknown option 'offline'`** — Mudlet 4.22 nie zna `--offline`; harmless.

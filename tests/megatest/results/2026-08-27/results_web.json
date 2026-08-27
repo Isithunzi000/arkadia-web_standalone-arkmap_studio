@@ -1,0 +1,109 @@
+{
+ "meta": {
+  "tool": "bench_mudletweb.mjs",
+  "engine": "mudlet-map-binary-reader",
+  "engine_version": "2.0.0",
+  "n_runs": 5,
+  "warmup": 3,
+  "node": "v20.20.1",
+  "date": "2026-08-27T08:24:07.793Z",
+  "machine": "AMD Athlon Silver 3050U with Radeon Graphics / 29 GB RAM"
+ },
+ "files": {
+  "real_27k": {
+   "rooms": 26988,
+   "size_mb": 7.5,
+   "parse_ms": {
+    "n": 5,
+    "min": 342.1,
+    "med": 351.2,
+    "p95": 362.2,
+    "max": 362.2
+   },
+   "stream_ms": {
+    "n": 5,
+    "min": 253.3,
+    "med": 259.8,
+    "p95": 271.4,
+    "max": 271.4
+   },
+   "heap_delta_mb": 67
+  },
+  "stress_2x": {
+   "rooms": 53976,
+   "size_mb": 14.7,
+   "parse_ms": {
+    "n": 5,
+    "min": 790.7,
+    "med": 811.3,
+    "p95": 934.6,
+    "max": 934.6
+   },
+   "stream_ms": {
+    "n": 5,
+    "min": 480.4,
+    "med": 484.4,
+    "p95": 512.1,
+    "max": 512.1
+   },
+   "heap_delta_mb": 144
+  },
+  "stress_4x": {
+   "rooms": 107952,
+   "size_mb": 29,
+   "parse_ms": {
+    "n": 5,
+    "min": 1619.3,
+    "med": 1636,
+    "p95": 1673.2,
+    "max": 1673.2
+   },
+   "stream_ms": {
+    "n": 5,
+    "min": 972.8,
+    "med": 980.6,
+    "p95": 991.5,
+    "max": 991.5
+   },
+   "heap_delta_mb": 288
+  },
+  "stress_8x": {
+   "rooms": 215904,
+   "size_mb": 57.8,
+   "parse_ms": {
+    "n": 5,
+    "min": 3352.8,
+    "med": 3377.7,
+    "p95": 3382.6,
+    "max": 3382.6
+   },
+   "stream_ms": {
+    "n": 5,
+    "min": 1930,
+    "med": 1956.2,
+    "p95": 1973.1,
+    "max": 1973.1
+   },
+   "heap_delta_mb": 564
+  },
+  "stress_16x": {
+   "rooms": 431808,
+   "size_mb": 115.2,
+   "parse_ms": {
+    "n": 5,
+    "min": 7160.7,
+    "med": 7215.4,
+    "p95": 8654,
+    "max": 8654
+   },
+   "stream_ms": {
+    "n": 5,
+    "min": 4008.4,
+    "med": 4054.4,
+    "p95": 4084.2,
+    "max": 4084.2
+   },
+   "heap_delta_mb": 1121
+  }
+ }
+}

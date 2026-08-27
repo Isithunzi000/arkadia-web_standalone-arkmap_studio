@@ -73,11 +73,11 @@ launch() {   # $1 = tryb: offscreen|xvfb|display
   APP_PID=$!
 }
 
-sample_ram() {   # $1 = pid rodzica; peak VmHWM procesu i dzieci "mudlet"
+sample_ram() {   # $1 = pid rodzica; peak VmHWM procesu i dzieci (AppImage: AppRun/.mount_Mudlet, nie "mudlet")
   local parent=$1 peak=0 cur pid
   sleep 3
   while kill -0 "$parent" 2>/dev/null; do
-    for pid in $parent $(pgrep -x mudlet 2>/dev/null); do
+    for pid in $parent $(pgrep -ix mudlet 2>/dev/null) $(pgrep -x AppRun 2>/dev/null) $(pgrep -f '\.mount_Mudlet' 2>/dev/null); do
       cur=$(awk '/VmHWM/{print $2}' "/proc/$pid/status" 2>/dev/null)
       [ -n "${cur:-}" ] && [ "$cur" -gt "$peak" ] && peak=$cur
     done

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pl"><head><meta charset="utf-8">
+<title>Mega-test silnikow map — 2026-08-27</title>
+<style>
+body{font:15px/1.5 system-ui,sans-serif;background:#111;color:#ddd;max-width:1100px;margin:2em auto;padding:0 1em}
+h1{font-size:1.6em} h2{margin-top:2em;border-bottom:1px solid #333;padding-bottom:.2em}
+table{border-collapse:collapse;width:100%;margin:1em 0}
+th,td{border:1px solid #333;padding:.35em .6em;text-align:right}
+th:first-child,td:first-child{text-align:left}
+th{background:#1c1c1c}
+.ok{color:#5c5}.bad{color:#e55}
+small{color:#888}
+.note{background:#1a1a2a;border-left:3px solid #66f;padding:.6em 1em;margin:.8em 0}
+pre{background:#181818;padding:1em;overflow:auto;white-space:pre-wrap}
+</style></head><body>
+<h1>Mega-test: ArkMap Studio vs mudlet-web vs Mudlet desktop</h1>
+<p>Katalog wynikow: <code>tests/megatest/results/2026-08-27</code> · ArkMap v1.49.7 · Mudlet mudlet 4.22.0   · reader 2.0.0 · Node v20.20.1 · runs 5 · seed 20260827</p>
+
+<h2>W1 — wczytanie mapy (ms, mediana)</h2>
+<table><tr><th>mapa</th><th>pokoi</th><th>desktop .dat (loadMap)</th><th>werd.</th><th>web .dat (parse)</th><th>werd.</th><th>arkmap .dat (total)</th><th>arkmap .arkmap (total)</th><th>werd.</th></tr>
+<tr><td>real_27k</td><td>26 988</td><td>1728,5 <small>(wall 1751)</small></td><td><b class="ok">OK</b></td><td>351,2</td><td><b class="ok">OK</b></td><td>429,5</td><td>285,7</td><td><b class="ok">OK</b></td></tr>
+<tr><td>stress_2x</td><td>53 976</td><td>3537,7 <small>(wall 3553)</small></td><td><b class="ok">OK</b></td><td>811,3</td><td><b class="ok">OK</b></td><td>823,1</td><td>706,3</td><td><b class="ok">OK</b></td></tr>
+<tr><td>stress_4x</td><td>107 952</td><td>7190,6 <small>(wall 7229)</small></td><td><b class="ok">OK</b></td><td>1636</td><td><b class="ok">OK</b></td><td>1714,6</td><td>1361,6</td><td><b class="ok">OK</b></td></tr>
+<tr><td>stress_8x</td><td>215 904</td><td>14 769,7 <small>(wall 14 813)</small></td><td><b class="ok">OK</b></td><td>3377,7</td><td><b class="ok">OK</b></td><td>3062,7</td><td>2840,2</td><td><b class="ok">OK</b></td></tr>
+<tr><td>stress_16x</td><td>431 808</td><td>31 208,3 <small>(wall 32 265)</small></td><td><b class="bad">LOAD</b></td><td>7215,4</td><td><b class="ok">OK</b></td><td>7406,9</td><td>5796,6</td><td><b class="ok">OK</b></td></tr>
+</table>
+<div class="note">Uwaga metodologiczna: desktop loadMap = restore + audit + init widoku 2D (pelna cena uzytkownika, czas CPU; w nawiasie wall). Web i arkmap (Node) = czysty parse (+validate/checksumy w "total" arkmap). To swiadoma niesymetria — porownujemy to, za co placi uzytkownik kazdego produktu.</div>
+
+<h2>W2/W3 — pathfinding i przeszukanie (desktop, ms, mediana)</h2>
+<table><tr><th>mapa</th><th>getPath (100 par)</th><th>znalezione</th><th>searchRoom</th><th>getRooms</th><th>werd.</th></tr>
+<tr><td>real_27k</td><td>4007,8</td><td>42/100</td><td>7,3</td><td>18,9</td><td><b class="ok">OK</b></td></tr>
+<tr><td>stress_2x</td><td>6126,7</td><td>28/100</td><td>14,7</td><td>44,6</td><td><b class="ok">OK</b></td></tr>
+<tr><td>stress_4x</td><td>9449,1</td><td>18/100</td><td>29,9</td><td>109,5</td><td><b class="ok">OK</b></td></tr>
+<tr><td>stress_8x</td><td>15 994,7</td><td>8/100</td><td>60,3</td><td>252,3</td><td><b class="ok">OK</b></td></tr>
+<tr><td>stress_16x</td><td>26 690,9</td><td>5/100</td><td>123,7</td><td>736,8</td><td><b class="ok">OK</b></td></tr>
+</table>
+
+<h2>W4 — pamiec</h2>
+<p>Desktop (caly proces, peak VmHWM): <b>—</b> (limit MEM: 2048 MB)</p>
+<table><tr><th>mapa</th><th>web heap delta</th><th>arkmap heap delta</th></tr>
+<tr><td>real_27k</td><td>67 MB</td><td>50 MB (dat) / 20 MB (arkmap)</td></tr>
+<tr><td>stress_2x</td><td>144 MB</td><td>16 MB (dat) / 47 MB (arkmap)</td></tr>
+<tr><td>stress_4x</td><td>288 MB</td><td>172 MB (dat) / 82 MB (arkmap)</td></tr>
+<tr><td>stress_8x</td><td>564 MB</td><td>353 MB (dat) / 165 MB (arkmap)</td></tr>
+<tr><td>stress_16x</td><td>1121 MB</td><td>686 MB (dat) / 336 MB (arkmap)</td></tr>
+</table>
+
+<h2>Pitch .arkmap (liczby do propozycji dla Mudleta)</h2>
+<ul>
+  <li>Wczytanie <b>431 808 pokoi</b> (stress_16x): Mudlet desktop (.dat, loadMap) <b>31 208,3 ms CPU</b> (wall 32 265 ms), mudlet-web (.dat, parse) <b>7215,4 ms</b>, ArkMap .dat <b>7406,9 ms</b>, ArkMap <b>.arkmap 5796,6 ms</b>.</li>
+  <li>.arkmap vs .dat (desktop): <b>5.4×</b> roznicy na korzysc .arkmap (mediana, ta sama maszyna, ta sama sesja).</li>
+  <li>Pathfinding desktop: 26 690,9 ms / 100 par; pelny skan nazw (searchRoom): 123,7 ms.</li>
+  <li>RAM: desktop peak VmHWM ? (caly proces), web heap +1121 MB, arkmap heap +336 MB.</li>
+</ul>
+
+<h2>Uwagi (honest)</h2>
+<ul>
+<li>Desktop: getPath pierwszy raz po loadzie buduje graf (TAstar) — koszt realny, wliczony.</li>
+<li>Pathfinding desktop (TAstar, C++) i ewentualny odpowiednik web (pathfinding.ts, TS) to rozne implementacje — W2 mierzony tylko na desktopie.</li>
+<li>K=32: plik .dat nie istnieje (OOM generatora przy eksporcie — znany limit), drabinka desktop/web konczy sie na K=16 lub ostatnim istniejacym K.</li>
+<li>Wszystkie silniki mierzone w jednej sesji, na tej samej maszynie, na identycznych plikach; pary pokoi i frazy deterministyczne (seed 20260827).</li>
+</ul>
+
+<h2>Maszyna</h2>
+<pre># Maszyna pomiarowa (mega-test 2026-08-27)
+
+- CPU: AMD Athlon Silver 3050U with Radeon Graphics (2C/2T)
+- RAM: 29995 MB (heap Node w teście: 6144 MB)
+- OS: Ubuntu 24.04.4 LTS (jądro 7.0.0-30-generic)
+- Node: v20.20.1
+- Mudlet desktop: mudlet 4.22.0  
+- Aplikacja: v1.49.7
+- Repo: 46acd1e
+- Uwaga: maszyna bez innego obciążenia w trakcie pomiaru; wszystkie silniki w jednej sesji.
+</pre>
+</body></html>
