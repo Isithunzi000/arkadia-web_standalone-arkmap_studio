@@ -20,11 +20,16 @@ try { maszyna = fs.readFileSync(path.join(RESULTS, 'MASZYNA.md'), 'utf8'); } cat
 
 // Desktop: agregacja JSONL -> mediana per plik.
 const deskRows = [];
-try {
-  for (const line of fs.readFileSync(path.join(RESULTS, 'results_desktop.jsonl'), 'utf8').split('\n')) {
-    if (line.trim()) deskRows.push(JSON.parse(line));
-  }
-} catch {}
+const deskArr = readJson('results_desktop.json');   // finalny plik (czysta tablica)
+if (Array.isArray(deskArr)) {
+  deskRows.push(...deskArr);
+} else {
+  try {   // fallback: postep na zywo (jsonl, gdy run przerwany w trakcie)
+    for (const line of fs.readFileSync(path.join(RESULTS, 'results_desktop.jsonl'), 'utf8').split('\n')) {
+      if (line.trim()) deskRows.push(JSON.parse(line));
+    }
+  } catch {}
+}
 function med(xs) {
   if (!xs.length) return null;
   const s = [...xs].sort((a, b) => a - b);

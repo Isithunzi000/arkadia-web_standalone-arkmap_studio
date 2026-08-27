@@ -51,12 +51,16 @@ local function countKeys(t)
   return n
 end
 
+local allRows = {}   -- kopie wszystkich wierszy; na koniec lądują w results_desktop.json
+
 local function writeRow(f, item, run, ok, rooms, loadCpuMs, loadWallMs, pathMs, pathFound, searchMs, searchHits, iterMs)
-  f:write(string.format(
-    '{"file":"%s","run":%d,"ok":%s,"rooms":%d,"load_ms":%.1f,"load_wall_ms":%.1f,"path_ms":%.1f,"path_found":%d,"search_ms":%.1f,"search_hits":%d,"iter_ms":%.1f}\n',
+  local line = string.format(
+    '{"file":"%s","run":%d,"ok":%s,"rooms":%d,"load_ms":%.1f,"load_wall_ms":%.1f,"path_ms":%.1f,"path_found":%d,"search_ms":%.1f,"search_hits":%d,"iter_ms":%.1f}',
     item.name, run, ok and "true" or "false", rooms,
-    loadCpuMs, loadWallMs, pathMs, pathFound, searchMs, searchHits, iterMs))
+    loadCpuMs, loadWallMs, pathMs, pathFound, searchMs, searchHits, iterMs)
+  f:write(line .. "\n")
   f:flush()
+  table.insert(allRows, line)
 end
 
 local function benchRun(f, item, run)
@@ -108,13 +112,17 @@ local function runAll()
     for run = 1, man.runs do
       local okRun, runErr = xpcall(function() benchRun(f, item, run) end, debug.traceback)
       if not okRun then
-        f:write(string.format('{"file":"%s","run":%d,"error":%s}\n',
-          item.name, run, string.format("%q", tostring(runErr))))
+        local line = string.format('{"file":"%s","run":%d,"error":%s}',
+          item.name, run, string.format("%q", tostring(runErr)))
+        f:write(line .. "\n")
         f:flush()
+        table.insert(allRows, line)
       end
     end
   end
   f:close()
+  local jf = io.open(OUT_DIR .. "/results_desktop.json", "w")
+  if jf then jf:write("[\n" .. table.concat(allRows, ",\n") .. "\n]\n") jf:close() end
   local done = io.open(OUT_DIR .. "/desktop.done", "w")
   if done then done:write("ok\n") done:close() end
   closeMudlet()

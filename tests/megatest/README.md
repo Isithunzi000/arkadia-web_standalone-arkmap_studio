@@ -49,7 +49,7 @@ tests/megatest/
   desktop/run_desktop.sh # offscreen run, timeout, RAM z /proc, klasyfikacja OK/CRASH
   web/bench_mudletweb.mjs# parse .dat silnikiem mudlet-web
   results/<data>/        # manifest.{lua,json}, results_web.json, results_arkmap_node.json,
-                         # results_desktop.jsonl, ram_desktop.txt, META.json, MASZYNA.md
+                         # results_desktop.json (finalny, czysty JSON — do wklejenia/commitu) + results_desktop.jsonl (postep na zywo), ram_desktop.txt, META.json, MASZYNA.md
 ```
 
 ## Kryteria limitu (zarejestrowane przed pomiarem)
