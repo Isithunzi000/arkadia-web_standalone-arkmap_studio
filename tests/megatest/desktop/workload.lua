@@ -119,7 +119,15 @@ end
 -- tempTimer daje petli Qt dojsc do siebie po starcie, zanim wejdziemy
 -- w ciezkie loady.
 local function onSysLoad(_, fresh)
-  if fresh == "1" then
+  -- sysLoadEvent: w TEvent drugi argument ma typ ARGUMENT_TYPE_BOOLEAN, wiec
+  -- callEventHandler robi lua_pushboolean — w Lua przychodzi BOOLEAN
+  -- (true = swiezy load, mudlet.cpp:5188; false = resetProfile, Host.cpp),
+  -- a NIE string "1"/"0". Akceptujemy obie formy dla odpornosci na starsze
+  -- wersje Mudleta.
+  if fresh == true or fresh == "1" then
+    -- Marker diagnostyczny: event doszedl (widac tez, jakiego typu byl argument).
+    local mf = io.open(OUT_DIR .. "/sysload_fired.txt", "w")
+    if mf then mf:write(type(fresh) .. ":" .. tostring(fresh) .. "\n") mf:close() end
     tempTimer(2, runAll)
   end
 end
