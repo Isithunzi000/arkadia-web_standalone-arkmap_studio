@@ -6,6 +6,7 @@
 #   runs — przebiegow na punkt pomiaru (domyslnie 5)
 # Srodowisko:
 #   MUDLET_BIN=/sciezka/Mudlet-4.22.0.AppImage  — binarka desktopu (faza desktop)
+#   MEGATEST_DISPLAY=1 — faza desktop na prawdziwej sesji graficznej (pomija offscreen i xvfb)
 #   HEAP=MB — sufit heapu Node (domyslnie auto: min(6144, 50% RAM))
 #   SKIP_INPUTS=1 / SKIP_WEB=1 / SKIP_ARKMAP=1 / SKIP_DESKTOP=1 — pomin faze
 #   Opcje CLI (nadpisuja env): --only/--skip/--desktop-only/--dry-run — zobacz --help

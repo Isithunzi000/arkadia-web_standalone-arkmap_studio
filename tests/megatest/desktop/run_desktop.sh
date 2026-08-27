@@ -58,8 +58,12 @@ echo "profil: $PROFILE (offline) | budzet: ${BUDGET}s | wyniki: $RESULTS"
 # podstawienie polecenia uruchamia funkcje w podpowloce i wait w rodzicu
 # nie zna takiego potomka ("nie jest potomkiem tej powloki", rc=127).
 APP_PID=""
-launch() {   # $1 = tryb: offscreen|xvfb
-  if [ "$1" = "xvfb" ]; then
+launch() {   # $1 = tryb: offscreen|xvfb|display
+  if [ "$1" = "display" ]; then
+    # Prawdziwa sesja graficzna (MEGATEST_DISPLAY=1) — bez -platform i bez xvfb.
+    timeout --signal=KILL "$BUDGET" "$BIN" --profile "$PROFILE" --offline --mirror \
+      > "$RESULTS/desktop_stdout.log" 2>&1 &
+  elif [ "$1" = "xvfb" ]; then
     timeout --signal=KILL "$BUDGET" xvfb-run -a "$BIN" --profile "$PROFILE" --offline --mirror \
       > "$RESULTS/desktop_stdout.log" 2>&1 &
   else
@@ -82,6 +86,13 @@ sample_ram() {   # $1 = pid rodzica; peak VmHWM procesu i dzieci "mudlet"
   echo "{\"vmhwm_peak_mb\":$(( peak / 1024 ))}" > "$RESULTS/ram_desktop.txt"
 }
 
+if [ "${MEGATEST_DISPLAY:-0}" = 1 ]; then
+  [ -n "${DISPLAY:-}" ] || { echo "BLAD: MEGATEST_DISPLAY=1, ale DISPLAY jest pusty — odpal z terminala w sesji graficznej"; exit 2; }
+  echo "tryb display: okno Mudleta pojawi sie na tej sesji (DISPLAY=$DISPLAY) — NIE zamykaj go recznie, workload sam je zamknie"
+  launch display
+  sample_ram "$APP_PID" & SAMPLER=$!
+  wait "$APP_PID"; RC=$?
+else
 launch offscreen
 sample_ram "$APP_PID" & SAMPLER=$!
 wait "$APP_PID"; RC=$?
@@ -100,7 +111,9 @@ if [ ! -f "$RESULTS/desktop.done" ] && [ ! -f "$RESULTS/desktop.error" ] \
   else
     echo "UWAGA: AppImage nie ma wtyczki offscreen, a xvfb-run nie jest zainstalowany."
     echo "       Do fazy desktop potrzebne: sudo apt install -y xvfb"
+    echo "       albo MEGATEST_DISPLAY=1 na prawdziwej sesji graficznej"
   fi
+fi
 fi
 
 sleep 2  # sampler potrzebuje chwili, zeby dopisac ram_desktop.txt po smierci procesu
