@@ -141,6 +141,12 @@ local function runAll()
   local done = io.open(OUT_DIR .. "/desktop.done", "w")
   if done then done:write("ok\n") done:close() end
   checkpoint("done_marker")
+  -- Profil zapamietuje ostatnio otwarta mape i wciaga ja przy nastepnym
+  -- starcie profilu, ZANIM odpali workload. Po biegu konczacym sie na
+  -- stress_16x kazdy kolejny start ladowalby 431808 pokoi — dlatego na
+  -- koniec zostawiamy najmniejsza mape z drabinki.
+  checkpoint("final_small_map")
+  loadMap(man.ladder[1].dat)
   closeMudlet()
 end
 
