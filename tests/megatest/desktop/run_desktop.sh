@@ -60,10 +60,10 @@ echo "profil: $PROFILE (offline) | budzet: ${BUDGET}s | wyniki: $RESULTS"
 APP_PID=""
 launch() {   # $1 = tryb: offscreen|xvfb
   if [ "$1" = "xvfb" ]; then
-    timeout --signal=KILL "$BUDGET" xvfb-run -a "$BIN" --profile "$PROFILE" --offline \
+    timeout --signal=KILL "$BUDGET" xvfb-run -a "$BIN" --profile "$PROFILE" --offline --mirror \
       > "$RESULTS/desktop_stdout.log" 2>&1 &
   else
-    timeout --signal=KILL "$BUDGET" "$BIN" -platform offscreen --profile "$PROFILE" --offline \
+    timeout --signal=KILL "$BUDGET" "$BIN" -platform offscreen --profile "$PROFILE" --offline --mirror \
       > "$RESULTS/desktop_stdout.log" 2>&1 &
   fi
   APP_PID=$!

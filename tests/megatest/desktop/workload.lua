@@ -33,6 +33,12 @@ if not MAN_PATH or not OUT_DIR then
   return
 end
 
+-- Marker zaladowania: dofile w profilu strzelil, env jest (zanim cokolwiek
+-- innego mogloby sie wywalic — rozdziela "skrypt nie zaladowany" od
+-- "skrypt zaladowany, ale event nie przyszedl").
+local lf = io.open(OUT_DIR .. "/workload_loaded.txt", "w")
+if lf then lf:write("loaded\n") lf:close() end
+
 local okMan, man = pcall(dofile, MAN_PATH)
 if not okMan or type(man) ~= "table" or type(man.ladder) ~= "table" then
   die("manifest nieczytalny: " .. tostring(man))
