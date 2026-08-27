@@ -180,11 +180,20 @@ const foundCells = agreeCells((src, kind) => {
 }, '/' + pairsPerMap);
 const hitsCells = agreeCells((src, kind) => {
   if (!src) return null;
-  return kind === 'desk' ? (src.hits.length ? src.hits[0] : null) : src.search_hits;
+  if (kind === 'desk') return src.hits.length ? src.hits[0] : null;
+  // Mudlet searchRoom: dokladne dopasowanie nazwy (substring liczy wiecej — notka pod tabela)
+  return src.search_exact ?? src.search_hits ?? null;
 });
+const hitsSubCells = n => {
+  const w = wkWeb(n), a = wkArk(n);
+  if (!w && !a) return '<td>—</td>';
+  const f = s => s ? (s.search_rooms ?? s.search_hits) : '—';
+  return `<td><small>${f(w)} / ${f(a)}</small></td>`;
+};
 
 const w2rows = trioRows(n => dStat(n, 'path'), n => wkWeb(n)?.path_ms, n => wkArk(n)?.path_ms, foundCells);
-const w3rows = trioRows(n => dStat(n, 'search'), n => wkWeb(n)?.search_ms, n => wkArk(n)?.search_ms, hitsCells);
+const w3rows = trioRows(n => dStat(n, 'search'), n => wkWeb(n)?.search_ms, n => wkArk(n)?.search_ms,
+  n => hitsCells(n) + hitsSubCells(n));
 const w3brows = trioRows(n => dStat(n, 'iter'), n => wkWeb(n)?.iter_ms, n => wkArk(n)?.iter_ms);
 
 // Budowa grafu/indeksu w Node (raz, poza probkami; desktop wlicza w 1. getPath).
@@ -309,10 +318,10 @@ ${gbRows}
 
 <h2 id="w3">W3 — przeszukanie nazw, 3 frazy z manifestu (ms)</h2>
 <div class="note">Desktop: natywny searchRoom (C++). Web/arkmap: wspolna implementacja Node — pelny skan nazw, case-insensitive substring.</div>
-<table><tr><th>mapa</th><th>pokoi</th><th>desktop (searchRoom)</th><th>web (Node)</th><th>arkmap (Node)</th><th>desk/web</th><th>desk/arkmap</th><th>web/arkmap</th><th>trafienia d/w/a</th></tr>
+<table><tr><th>mapa</th><th>pokoi</th><th>desktop (searchRoom)</th><th>web (Node)</th><th>arkmap (Node)</th><th>desk/web</th><th>desk/arkmap</th><th>web/arkmap</th><th>trafienia d/w/a (dokladne)</th><th>substring w/a</th></tr>
 ${w3rows}
 </table>
-<div class="verdict">Wniosek: pelny skan nazw pokoi — koszt rosnie liniowo z liczba pokoi (×~2 przy ×2 pokoi), trafienia rosna ×2 bo fraza trafia w kazdy klon. Rozjazd trafien miedzy silnikami flagowany na czerwono.</div>
+<div class="verdict">Wniosek: pelny skan nazw pokoi — koszt rosnie liniowo z liczba pokoi (×~2 przy ×2 pokoi), trafienia rosna ×2 bo fraza trafia w kazdy klon. Kolumna "trafienia" porownuje dokladne dopasowania nazw (najblizsze semantyce searchRoom w Mudlecie — uwaga: searchRoom przy pojedynczym trafieniu zwraca numer, nie tabele, wiec harness desktopu liczy countKeys tylko z tabel); "substring" to wszystkie pokoje zawierajace fraze. Rozjazd flagowany na czerwono.</div>
 
 <h2 id="w3b">W3b — iteracja po wszystkich pokojach, budowa id→nazwa (ms)</h2>
 <div class="note">Desktop: natywny getRooms (C++→Lua). Web/arkmap: wspolna implementacja Node (budowa obiektu id→nazwa + countKeys).</div>

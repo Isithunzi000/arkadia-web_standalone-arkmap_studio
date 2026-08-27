@@ -101,7 +101,7 @@ for (const item of manifest.ladder) {
   if (r.rooms !== item.rooms) fail(`${item.name}: manifest.rooms=${item.rooms} vs parser=${r.rooms}`);
   results.files[item.name] = r;
   console.log(`  parse med=${r.parse_ms.med} ms (p95 ${r.parse_ms.p95}) | stream med=${r.stream_ms.med} ms | heap +${r.heap_delta_mb} MB | rooms ${r.rooms}`);
-  console.log(`  W2 path med=${r.workloads.path_ms.med} ms (found ${r.workloads.path_found}/${item.pairs.length}) | W3 search med=${r.workloads.search_ms.med} ms (hits ${r.workloads.search_hits}) | W3b iter med=${r.workloads.iter_ms.med} ms`);
+  console.log(`  W2 path med=${r.workloads.path_ms.med} ms (found ${r.workloads.path_found}/${item.pairs.length}) | W3 search med=${r.workloads.search_ms.med} ms (exact ${r.workloads.search_exact}, pokoje ${r.workloads.search_rooms}) | W3b iter med=${r.workloads.iter_ms.med} ms`);
 }
 
 fs.writeFileSync(OUT, JSON.stringify(results, null, 1) + '\n');

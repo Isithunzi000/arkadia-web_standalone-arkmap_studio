@@ -127,16 +127,19 @@ const os = require('os');
 const results = { meta: { tool: 'bench_parse.js', n_runs: N, warmup: WARM, node: process.version, date: new Date().toISOString(), machine: os.cpus()[0].model.trim() + ' / ' + Math.round(os.totalmem() / 1073741824) + ' GB RAM' }, sets: {} };
 for (const s of sets) {
   console.log(`— ${s.name} —`);
+  const manItem = MANIFEST ? MANIFEST.ladder.find(l => l.name === s.name) : null;
+  if (MANIFEST && !manItem) fail(`manifest nie ma pozycji drabinki: ${s.name}`);
   const r = {
     rooms: roomsOf(s.arkmap),
     size_mb: { dat: +(fs.statSync(s.dat).size / 1048576).toFixed(1), arkmap: +(fs.statSync(s.arkmap).size / 1048576).toFixed(1) },
     dat: benchDat(s.dat),
-    arkmap: benchArkmap(s.arkmap),
+    arkmap: benchArkmap(s.arkmap, manItem),
   };
   r.ratio_total = +(r.arkmap.total.med / r.dat.total.med).toFixed(2);
   results.sets[s.name] = r;
   console.log(`  .dat    total med=${r.dat.total.med} ms (parse ${r.dat.parse.med} + val ${r.dat.validate.med})`);
   console.log(`  .arkmap total med=${r.arkmap.total.med} ms (json ${r.arkmap.json.med} + val ${r.arkmap.validate.med} + crc ${r.arkmap.crc.med})  ratio=${r.ratio_total}x  crc_ok=${r.arkmap.checksums_ok}`);
+  if (r.arkmap.workloads) console.log(`  W2 path med=${r.arkmap.workloads.path_ms.med} ms (found ${r.arkmap.workloads.path_found}/${manItem.pairs.length}) | W3 search med=${r.arkmap.workloads.search_ms.med} ms (exact ${r.arkmap.workloads.search_exact}, pokoje ${r.arkmap.workloads.search_rooms}) | W3b iter med=${r.arkmap.workloads.iter_ms.med} ms`);
 }
 
 fs.writeFileSync(path.join(OUT_DIR, 'results_node.json'), JSON.stringify(results, null, 2));

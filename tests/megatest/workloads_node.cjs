@@ -4,16 +4,22 @@
 // Desktop ma natywne wywolania (getPath/searchRoom/getRooms, C++) — w raporcie
 // to zaznaczone. Semantyka nasladowana z workload.lua:
 //   W2  getPath(from,to)   — A* po grafie wyjsc, koszt wejscia = weight pokoju
-//                            (domyslnie 1), heurystyka euklidesowa 3D
-//   W3  searchRoom(term)   — pelny skan nazw, case-insensitive substring
+//                            (domyslnie 1), heurystyka euklidesowa 3D;
+//                            zamkniete pokoje (isLocked) i zamkniete wyjscia
+//                            (exit_locks / special_exit_locks) pomijane —
+//                            jak TAstar w Mudlecie
+//   W3  searchRoom(term)   — pelny skan nazw, case-insensitive substring;
+//                            raportuje 3 metryki: pokoje (substring),
+//                            unikalne nazwy, dokladne dopasowania — bo Mudlet
+//                            searchRoom zwraca tabele, a przy pojedynczym
+//                            trafieniu numer (nasz harness liczy countKeys)
 //   W3b getRooms()         — budowa tabeli id->nazwa + countKeys
-// Uproszczenia (honest): exit locks pomijane (desktop tez ich tu nie wymusza
-// w sposob mierzalny dla found — raport flaguje rozjazd found), special exits
-// wliczone jako zwykle krawedzie.
+// Special exits wliczone jako zwykle krawedzie (TAstar ich uzywa).
 'use strict';
 
-const DIRS = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest',
-  'west', 'northwest', 'up', 'down', 'in', 'out'];
+// Kolejnosc kierunkow w .dat / readerze (exitLocks sa 1-based wg tej listy).
+const DIR_ORDER = ['north', 'northeast', 'northwest', 'east', 'west', 'south',
+  'southeast', 'southwest', 'up', 'down', 'in', 'out'];
 
 // idx: { ids: number[], byId: Map<id, {name,x,y,z,weight,locked,exits:number[]}> }
 
@@ -21,9 +27,11 @@ function indexFromReaderMap(map) {   // mudlet-map-binary-reader: map.rooms = Re
   const ids = [], byId = new Map();
   for (const [idStr, r] of Object.entries(map.rooms)) {
     const id = +idStr;
+    const lockSet = new Set((r.exitLocks || []).map(x => DIR_ORDER[x - 1]));
     const exits = [];
-    for (const d of DIRS) { const t = r[d]; if (t > 0) exits.push(t); }
-    for (const t of Object.values(r.mSpecialExits || {})) if (t > 0) exits.push(t);
+    for (const d of DIR_ORDER) { const t = r[d]; if (t > 0 && !lockSet.has(d)) exits.push(t); }
+    const specLocks = new Set(r.mSpecialExitLocks || []);
+    for (const [cmd, t] of Object.entries(r.mSpecialExits || {})) if (t > 0 && !specLocks.has(cmd)) exits.push(t);
     ids.push(id);
     byId.set(id, { name: r.name || '', x: r.x || 0, y: r.y || 0, z: r.z || 0,
       weight: r.weight > 0 ? r.weight : 1, locked: !!r.isLocked, exits });
@@ -31,13 +39,15 @@ function indexFromReaderMap(map) {   // mudlet-map-binary-reader: map.rooms = Re
   return { ids, byId };
 }
 
-function indexFromArkmap(map) {      // .arkmap: areas[].rooms[] = {id,name,x,y,z,weight,exits:{dir:id},special_exits:{cmd:id}}
+function indexFromArkmap(map) {      // .arkmap: areas[].rooms[]; exits po KROTKICH nazwach, exit_locks = krotkie nazwy
   const ids = [], byId = new Map();
   for (const a of map.areas) {
     for (const r of a.rooms) {
+      const lockSet = new Set(r.exit_locks || []);
       const exits = [];
-      for (const t of Object.values(r.exits || {})) if (t > 0) exits.push(t);
-      for (const t of Object.values(r.special_exits || {})) if (t > 0) exits.push(t);
+      for (const [dir, t] of Object.entries(r.exits || {})) if (t > 0 && !lockSet.has(dir)) exits.push(t);
+      const specLocks = new Set(r.special_exit_locks || []);
+      for (const [cmd, t] of Object.entries(r.special_exits || {})) if (t > 0 && !specLocks.has(cmd)) exits.push(t);
       ids.push(r.id);
       byId.set(r.id, { name: r.name || '', x: r.x || 0, y: r.y || 0, z: r.z || 0,
         weight: r.weight > 0 ? r.weight : 1, locked: false, exits });
@@ -120,12 +130,17 @@ function runPath(idx, pairs) {       // W2: jedna probka = czas wszystkich par
 
 function runSearch(idx, terms) {     // W3: jedna probka = czas wszystkich fraz
   const t0 = performance.now();
-  let hits = 0;
+  let rooms = 0, exact = 0;
+  const names = new Set();
   for (const q of terms) {
     const needle = String(q).toLowerCase();
-    for (const id of idx.ids) if (idx.byId.get(id).name.toLowerCase().includes(needle)) hits++;
+    for (const id of idx.ids) {
+      const low = idx.byId.get(id).name.toLowerCase();
+      if (low.includes(needle)) { rooms++; names.add(low); }
+      if (low === needle) exact++;
+    }
   }
-  return { ms: performance.now() - t0, hits };
+  return { ms: performance.now() - t0, rooms, names: names.size, exact };
 }
 
 function runIter(idx) {              // W3b: budowa id->nazwa + countKeys (jak getRooms)
@@ -144,10 +159,9 @@ function stats(xs) {
 }
 
 // Pelny pakiet W2/W3/W3b: n probek kazdego, GC miedzy probkami (global.gc).
-// Zwraca {graph_build_ms, path_ms, path_found, search_ms, search_hits, iter_ms}.
 function runWorkloads(idx, pairs, terms, n, gc) {
   const path = [], search = [], iter = [];
-  let found = -1, hits = -1, rooms = 0;
+  let found = -1, sRooms = -1, sNames = -1, sExact = -1, rooms = 0;
   for (let i = 0; i < n; i++) {
     if (gc) gc();
     const p = runPath(idx, pairs);
@@ -156,13 +170,16 @@ function runWorkloads(idx, pairs, terms, n, gc) {
     else if (p.found !== found) throw new Error(`path_found niedeterministyczne: ${p.found} vs ${found}`);
     const s = runSearch(idx, terms);
     search.push(s.ms);
-    if (hits < 0) hits = s.hits;
-    else if (s.hits !== hits) throw new Error(`search_hits niedeterministyczne: ${s.hits} vs ${hits}`);
+    if (sRooms < 0) { sRooms = s.rooms; sNames = s.names; sExact = s.exact; }
+    else if (s.rooms !== sRooms || s.names !== sNames || s.exact !== sExact)
+      throw new Error(`search niedeterministyczne: ${s.rooms}/${s.names}/${s.exact} vs ${sRooms}/${sNames}/${sExact}`);
     const it = runIter(idx);
     iter.push(it.ms); rooms = it.rooms;
   }
-  return { path_ms: stats(path), path_found: found, search_ms: stats(search),
-    search_hits: hits, iter_ms: stats(iter), rooms_iter: rooms };
+  return { path_ms: stats(path), path_found: found,
+    search_ms: stats(search), search_hits: sRooms,   // search_hits = pokoje (back-compat)
+    search_rooms: sRooms, search_names: sNames, search_exact: sExact,
+    iter_ms: stats(iter), rooms_iter: rooms };
 }
 
 module.exports = { indexFromReaderMap, indexFromArkmap, runWorkloads, stats };
