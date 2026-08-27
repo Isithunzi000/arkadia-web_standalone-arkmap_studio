@@ -182,4 +182,4 @@ function runWorkloads(idx, pairs, terms, n, gc) {
     iter_ms: stats(iter), rooms_iter: rooms };
 }
 
-module.exports = { indexFromReaderMap, indexFromArkmap, runWorkloads, stats };
+module.exports = { indexFromReaderMap, indexFromArkmap, runWorkloads, stats, astar };
