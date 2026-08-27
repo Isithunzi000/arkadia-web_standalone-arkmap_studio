@@ -89,6 +89,9 @@ fi
 
 finalize() {
   rc=$?
+  if [ "$rc" != 0 ]; then
+    echo "!! przebieg przerwany (rc=$rc) — finalize: raport/META z tego, co jest; fazy po bledzie NIE biegly"
+  fi
   APPV=$(sed -n "s/.*APP_VERSION = '\([^']*\)'.*/\1/p" arkmap_studio.html | head -1)
   MUDLET_V='?'
   if [ -n "${MUDLET_BIN:-}" ] && [ -x "${MUDLET_BIN:-}" ]; then

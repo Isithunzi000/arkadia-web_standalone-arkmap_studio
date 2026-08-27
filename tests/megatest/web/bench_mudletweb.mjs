@@ -13,12 +13,19 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readMapFromBuffer, streamRooms } from 'mudlet-map-binary-reader';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { indexFromReaderMap, runWorkloads } = require('../workloads_node.cjs');
 
 // Wersja silnika: wprost z node_modules (exports pakietu nie eksportuje package.json).
 const PKG_VERSION = JSON.parse(fs.readFileSync(
   new URL('./node_modules/mudlet-map-binary-reader/package.json', import.meta.url), 'utf8')).version;
 
 function fail(msg) { console.error('✗ ' + msg); process.exit(1); }
+
+// self-check: workloads_node.cjs musi byc kompletne (regresja po edycjach)
+if (typeof indexFromReaderMap !== 'function' || typeof runWorkloads !== 'function')
+  fail('workloads_node.cjs: brak eksportow indexFromReaderMap/runWorkloads');
 
 const MAN = process.argv[2];
 const OUT = process.argv[3];

@@ -51,6 +51,8 @@ const WARM = 3;
 if (typeof global.gc !== 'function') fail('uruchom z --expose-gc (GC miedzy przebiegami)');
 const MANIFEST = process.argv[4] ? JSON.parse(fs.readFileSync(process.argv[4], 'utf8')) : null;
 const { indexFromArkmap, runWorkloads } = require('../megatest/workloads_node.cjs');
+if (typeof indexFromArkmap !== 'function' || typeof runWorkloads !== 'function')
+  fail('workloads_node.cjs: brak eksportow indexFromArkmap/runWorkloads');
 
 function benchDat(file) {
   const raw = fs.readFileSync(file);
