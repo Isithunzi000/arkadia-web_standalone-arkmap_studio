@@ -170,7 +170,7 @@ if [ "${SKIP_ARKMAP:-0}" != 1 ]; then
   echo "=== faza A: arkmap (parse Node — istniejacy harness perf labu) ==="
   # bench_parse.js zapisuje results_node.json do katalogu z mapami
   # (tests/perf/out — gitignored, regenerowalny); kopiujemy do wynikow mega-testu.
-  node --expose-gc --max-old-space-size="$HEAP" tests/perf/bench_parse.js tests/perf/out "$RUNS" || exit 1
+  node --expose-gc --max-old-space-size="$HEAP" tests/perf/bench_parse.js tests/perf/out "$RUNS" "$RESULTS/manifest.json" || exit 1
   cp tests/perf/out/results_node.json "$RESULTS/results_arkmap_node.json"
 else
   echo "=== faza A: SKIP ==="

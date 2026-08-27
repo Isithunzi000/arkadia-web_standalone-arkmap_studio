@@ -4,8 +4,11 @@
 //   .dat    : datToArkmap(buf) + validate(map)                 [loadDat]
 //   .arkmap : JSON.parse(text) + validate(map) + verifyChecksums(map)  [loadArkmap]
 //
-// Uzycie:  node --expose-gc tests/perf/bench_parse.js <out_dir> [N]
+// Uzycie:  node --expose-gc tests/perf/bench_parse.js <out_dir> [N] [manifest.json]
 // Wyjscie: <out_dir>/results_node.json
+// Opcjonalny manifest (mega-test): doklada W2/W3/W3b (pathfinding/search/
+// iteracja — ta sama implementacja Node co bench mudlet-web, workloads_node.cjs)
+// liczone na danych z .arkmap. Bez manifestu zachowanie jak dotychczas.
 // Metodologia: warm-up 3 (odrzucane), N przebiegow (domyslnie 20), GC miedzy
 // przebiegami (--expose-gc), raport: mediana/p95/min/max + heap delta.
 const fs = require('fs');
@@ -46,6 +49,8 @@ const OUT_DIR = process.argv[2] || path.join(__dirname, 'out');
 const N = parseInt(process.argv[3] || '20', 10);
 const WARM = 3;
 if (typeof global.gc !== 'function') fail('uruchom z --expose-gc (GC miedzy przebiegami)');
+const MANIFEST = process.argv[4] ? JSON.parse(fs.readFileSync(process.argv[4], 'utf8')) : null;
+const { indexFromArkmap, runWorkloads } = require('../megatest/workloads_node.cjs');
 
 function benchDat(file) {
   const raw = fs.readFileSync(file);
@@ -69,10 +74,10 @@ function benchDat(file) {
   return { parse: stats(t.parse), validate: stats(t.validate), total: stats(t.total), heap_delta_mb: +(t.heap / 1048576).toFixed(0) };
 }
 
-function benchArkmap(file) {
+function benchArkmap(file, manItem) {
   const text = fs.readFileSync(file, 'utf8');
   const t = { json: [], validate: [], crc: [], total: [] };
-  let crcOk = null;
+  let crcOk = null, lastMap = null;
   for (let i = 0; i < WARM + N; i++) {
     global.gc();
     const h0 = process.memoryUsage().heapUsed;
@@ -88,10 +93,18 @@ function benchArkmap(file) {
     if (i === WARM) crcOk = c.ok;   // asercja: pliki generatora maja zgodne sumy
     if (i >= WARM) {
       t.json.push(t1 - t0); t.validate.push(t2 - t1); t.crc.push(t3 - t2); t.total.push(t3 - t0);
-      t.heap = heap;
+      t.heap = heap; lastMap = map;
     }
   }
-  return { json: stats(t.json), validate: stats(t.validate), crc: stats(t.crc), total: stats(t.total), heap_delta_mb: +(t.heap / 1048576).toFixed(0), checksums_ok: crcOk };
+  const out = { json: stats(t.json), validate: stats(t.validate), crc: stats(t.crc), total: stats(t.total), heap_delta_mb: +(t.heap / 1048576).toFixed(0), checksums_ok: crcOk };
+  if (manItem && MANIFEST) {
+    const g0 = performance.now();
+    const idx = indexFromArkmap(lastMap);
+    const graphBuild = performance.now() - g0;
+    const wk = runWorkloads(idx, manItem.pairs, MANIFEST.search_terms, N, global.gc);
+    out.workloads = { graph_build_ms: +graphBuild.toFixed(1), ...wk };
+  }
+  return out;
 }
 
 function roomsOf(file) {
