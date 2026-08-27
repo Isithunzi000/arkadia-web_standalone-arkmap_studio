@@ -4,7 +4,7 @@
     "n_runs": 5,
     "warmup": 3,
     "node": "v20.20.1",
-    "date": "2026-08-27T08:27:27.097Z",
+    "date": "2026-08-27T21:59:27.069Z",
     "machine": "AMD Athlon Silver 3050U with Radeon Graphics / 29 GB RAM"
   },
   "sets": {
@@ -17,60 +17,90 @@
       "dat": {
         "parse": {
           "n": 5,
-          "min": 323.5,
-          "med": 338.3,
-          "p95": 377.2,
-          "max": 377.2
+          "min": 318,
+          "med": 347,
+          "p95": 395.7,
+          "max": 395.7
         },
         "validate": {
           "n": 5,
-          "min": 59.5,
-          "med": 63.3,
-          "p95": 103.8,
-          "max": 103.8
+          "min": 57.3,
+          "med": 62.5,
+          "p95": 81.2,
+          "max": 81.2
         },
         "total": {
           "n": 5,
-          "min": 386.8,
-          "med": 429.5,
-          "p95": 442.1,
-          "max": 442.1
+          "min": 375.4,
+          "med": 428.1,
+          "p95": 458.3,
+          "max": 458.3
         },
-        "heap_delta_mb": 50
+        "heap_delta_mb": 43
       },
       "arkmap": {
         "json": {
           "n": 5,
-          "min": 76.1,
-          "med": 76.7,
-          "p95": 82.2,
-          "max": 82.2
+          "min": 76.3,
+          "med": 87.2,
+          "p95": 88.1,
+          "max": 88.1
         },
         "validate": {
           "n": 5,
-          "min": 52.4,
-          "med": 52.7,
-          "p95": 55.9,
-          "max": 55.9
+          "min": 53.2,
+          "med": 63.8,
+          "p95": 83.7,
+          "max": 83.7
         },
         "crc": {
           "n": 5,
-          "min": 150.4,
-          "med": 154.9,
-          "p95": 174,
-          "max": 174
+          "min": 162.1,
+          "med": 196.9,
+          "p95": 238.4,
+          "max": 238.4
         },
         "total": {
           "n": 5,
-          "min": 279.8,
-          "med": 285.7,
-          "p95": 302.8,
-          "max": 302.8
+          "min": 291.6,
+          "med": 354,
+          "p95": 384.2,
+          "max": 384.2
         },
-        "heap_delta_mb": 20,
-        "checksums_ok": true
+        "heap_delta_mb": 21,
+        "checksums_ok": true,
+        "workloads": {
+          "graph_build_ms": 66.5,
+          "path_ms": {
+            "n": 5,
+            "min": 762.1,
+            "med": 784.2,
+            "p95": 825.1,
+            "max": 825.1
+          },
+          "path_found": 42,
+          "search_ms": {
+            "n": 5,
+            "min": 6.1,
+            "med": 6.6,
+            "p95": 15.3,
+            "max": 15.3
+          },
+          "search_hits": 3,
+          "search_rooms": 3,
+          "search_names": 3,
+          "search_exact": 3,
+          "iter_ms": {
+            "n": 5,
+            "min": 5.1,
+            "med": 5.2,
+            "p95": 7.6,
+            "max": 7.6
+          },
+          "rooms_iter": 26988
+        }
       },
-      "ratio_total": 0.67
+      "ratio_total": 0.83
     },
     "stress_2x": {
       "rooms": 53976,
@@ -81,60 +111,90 @@
       "dat": {
         "parse": {
           "n": 5,
-          "min": 633.8,
-          "med": 658.2,
-          "p95": 733.2,
-          "max": 733.2
+          "min": 641.9,
+          "med": 666.4,
+          "p95": 736.6,
+          "max": 736.6
         },
         "validate": {
           "n": 5,
-          "min": 100.8,
-          "med": 107.6,
-          "p95": 218.4,
-          "max": 218.4
+          "min": 109,
+          "med": 109.9,
+          "p95": 118.4,
+          "max": 118.4
         },
         "total": {
           "n": 5,
-          "min": 747.9,
-          "med": 823.1,
-          "p95": 852.2,
-          "max": 852.2
+          "min": 751.8,
+          "med": 778.1,
+          "p95": 855,
+          "max": 855
         },
-        "heap_delta_mb": 16
+        "heap_delta_mb": 94
       },
       "arkmap": {
         "json": {
           "n": 5,
-          "min": 177,
-          "med": 200.9,
-          "p95": 516.1,
-          "max": 516.1
+          "min": 178.7,
+          "med": 180.1,
+          "p95": 269.5,
+          "max": 269.5
         },
         "validate": {
           "n": 5,
-          "min": 94.4,
-          "med": 111.2,
-          "p95": 250.8,
-          "max": 250.8
+          "min": 99.6,
+          "med": 102.9,
+          "p95": 280.3,
+          "max": 280.3
         },
         "crc": {
           "n": 5,
-          "min": 367.3,
-          "med": 394.2,
-          "p95": 529.2,
-          "max": 529.2
+          "min": 359.1,
+          "med": 366.7,
+          "p95": 638,
+          "max": 638
         },
         "total": {
           "n": 5,
-          "min": 648.7,
-          "med": 706.3,
-          "p95": 1206.3,
-          "max": 1206.3
+          "min": 638.7,
+          "med": 715.7,
+          "p95": 942.5,
+          "max": 942.5
         },
         "heap_delta_mb": 47,
-        "checksums_ok": true
+        "checksums_ok": true,
+        "workloads": {
+          "graph_build_ms": 96.4,
+          "path_ms": {
+            "n": 5,
+            "min": 1107.7,
+            "med": 1128.6,
+            "p95": 1167,
+            "max": 1167
+          },
+          "path_found": 28,
+          "search_ms": {
+            "n": 5,
+            "min": 14.4,
+            "med": 14.5,
+            "p95": 57.4,
+            "max": 57.4
+          },
+          "search_hits": 6,
+          "search_rooms": 6,
+          "search_names": 3,
+          "search_exact": 6,
+          "iter_ms": {
+            "n": 5,
+            "min": 33.5,
+            "med": 34.3,
+            "p95": 67.2,
+            "max": 67.2
+          },
+          "rooms_iter": 53976
+        }
       },
-      "ratio_total": 0.86
+      "ratio_total": 0.92
     },
     "stress_4x": {
       "rooms": 107952,
@@ -145,60 +205,90 @@
       "dat": {
         "parse": {
           "n": 5,
-          "min": 1399.1,
-          "med": 1490.7,
-          "p95": 1704.7,
-          "max": 1704.7
+          "min": 1422.8,
+          "med": 1464.4,
+          "p95": 1519.2,
+          "max": 1519.2
         },
         "validate": {
           "n": 5,
-          "min": 214.4,
-          "med": 224,
-          "p95": 281.7,
-          "max": 281.7
+          "min": 201.3,
+          "med": 225.5,
+          "p95": 276.8,
+          "max": 276.8
         },
         "total": {
           "n": 5,
-          "min": 1613.5,
-          "med": 1714.6,
-          "p95": 1946.4,
-          "max": 1946.4
+          "min": 1635.4,
+          "med": 1698,
+          "p95": 1796,
+          "max": 1796
         },
-        "heap_delta_mb": 172
+        "heap_delta_mb": 190
       },
       "arkmap": {
         "json": {
           "n": 5,
-          "min": 357.1,
-          "med": 367.8,
-          "p95": 371.2,
-          "max": 371.2
+          "min": 360.3,
+          "med": 363.4,
+          "p95": 367.1,
+          "max": 367.1
         },
         "validate": {
           "n": 5,
-          "min": 199.6,
-          "med": 208.7,
-          "p95": 220.6,
-          "max": 220.6
+          "min": 200.4,
+          "med": 204.3,
+          "p95": 213.4,
+          "max": 213.4
         },
         "crc": {
           "n": 5,
-          "min": 788.8,
-          "med": 790.3,
-          "p95": 810.2,
-          "max": 810.2
+          "min": 781.8,
+          "med": 788.5,
+          "p95": 794.5,
+          "max": 794.5
         },
         "total": {
           "n": 5,
-          "min": 1357.7,
-          "med": 1361.6,
-          "p95": 1390.1,
-          "max": 1390.1
+          "min": 1349.9,
+          "med": 1357.9,
+          "p95": 1367.3,
+          "max": 1367.3
         },
         "heap_delta_mb": 82,
-        "checksums_ok": true
+        "checksums_ok": true,
+        "workloads": {
+          "graph_build_ms": 156.1,
+          "path_ms": {
+            "n": 5,
+            "min": 1529.9,
+            "med": 1534.8,
+            "p95": 2154.7,
+            "max": 2154.7
+          },
+          "path_found": 20,
+          "search_ms": {
+            "n": 5,
+            "min": 38.4,
+            "med": 38.7,
+            "p95": 48.1,
+            "max": 48.1
+          },
+          "search_hits": 12,
+          "search_rooms": 12,
+          "search_names": 3,
+          "search_exact": 12,
+          "iter_ms": {
+            "n": 5,
+            "min": 87.6,
+            "med": 89,
+            "p95": 104.5,
+            "max": 104.5
+          },
+          "rooms_iter": 107952
+        }
       },
-      "ratio_total": 0.79
+      "ratio_total": 0.8
     },
     "stress_8x": {
       "rooms": 215904,
@@ -209,60 +299,90 @@
       "dat": {
         "parse": {
           "n": 5,
-          "min": 2646.4,
-          "med": 2662.3,
-          "p95": 2769.7,
-          "max": 2769.7
+          "min": 2636.3,
+          "med": 2708.4,
+          "p95": 3551.6,
+          "max": 3551.6
         },
         "validate": {
           "n": 5,
-          "min": 395.4,
-          "med": 400.4,
-          "p95": 410.7,
-          "max": 410.7
+          "min": 400.3,
+          "med": 412.9,
+          "p95": 440.9,
+          "max": 440.9
         },
         "total": {
           "n": 5,
-          "min": 3046.7,
-          "med": 3062.7,
-          "p95": 3180.4,
-          "max": 3180.4
+          "min": 3036.6,
+          "med": 3121.4,
+          "p95": 3965.6,
+          "max": 3965.6
         },
         "heap_delta_mb": 353
       },
       "arkmap": {
         "json": {
           "n": 5,
-          "min": 729.1,
-          "med": 739.1,
-          "p95": 759.7,
-          "max": 759.7
+          "min": 726.5,
+          "med": 734.7,
+          "p95": 749.4,
+          "max": 749.4
         },
         "validate": {
           "n": 5,
-          "min": 414.2,
-          "med": 427.8,
-          "p95": 463.7,
-          "max": 463.7
+          "min": 440.8,
+          "med": 453,
+          "p95": 544.8,
+          "max": 544.8
         },
         "crc": {
           "n": 5,
-          "min": 1654.1,
-          "med": 1666.4,
-          "p95": 1669.1,
-          "max": 1669.1
+          "min": 1641.5,
+          "med": 1662,
+          "p95": 1685.4,
+          "max": 1685.4
         },
         "total": {
           "n": 5,
-          "min": 2818.4,
-          "med": 2840.2,
-          "p95": 2861.9,
-          "max": 2861.9
+          "min": 2828.4,
+          "med": 2853.7,
+          "p95": 2920.7,
+          "max": 2920.7
         },
         "heap_delta_mb": 165,
-        "checksums_ok": true
+        "checksums_ok": true,
+        "workloads": {
+          "graph_build_ms": 302.3,
+          "path_ms": {
+            "n": 5,
+            "min": 1903.2,
+            "med": 1922.9,
+            "p95": 2529.8,
+            "max": 2529.8
+          },
+          "path_found": 8,
+          "search_ms": {
+            "n": 5,
+            "min": 110.1,
+            "med": 113.1,
+            "p95": 113.4,
+            "max": 113.4
+          },
+          "search_hits": 24,
+          "search_rooms": 24,
+          "search_names": 3,
+          "search_exact": 24,
+          "iter_ms": {
+            "n": 5,
+            "min": 208.5,
+            "med": 212.1,
+            "p95": 212.9,
+            "max": 212.9
+          },
+          "rooms_iter": 215904
+        }
       },
-      "ratio_total": 0.93
+      "ratio_total": 0.91
     },
     "stress_16x": {
       "rooms": 431808,
@@ -273,60 +393,90 @@
       "dat": {
         "parse": {
           "n": 5,
-          "min": 6506.4,
-          "med": 6527.9,
-          "p95": 6746.8,
-          "max": 6746.8
+          "min": 6235.6,
+          "med": 6573,
+          "p95": 6610.8,
+          "max": 6610.8
         },
         "validate": {
           "n": 5,
-          "min": 860.6,
-          "med": 896.1,
-          "p95": 1055.8,
-          "max": 1055.8
+          "min": 901.6,
+          "med": 948.9,
+          "p95": 1233.8,
+          "max": 1233.8
         },
         "total": {
           "n": 5,
-          "min": 7390.4,
-          "med": 7406.9,
-          "p95": 7802.6,
-          "max": 7802.6
+          "min": 7202.3,
+          "med": 7521.9,
+          "p95": 7844.6,
+          "max": 7844.6
         },
-        "heap_delta_mb": 686
+        "heap_delta_mb": 705
       },
       "arkmap": {
         "json": {
           "n": 5,
-          "min": 1530.1,
-          "med": 1534.9,
-          "p95": 1579.6,
-          "max": 1579.6
+          "min": 1533.5,
+          "med": 1548.9,
+          "p95": 1603.8,
+          "max": 1603.8
         },
         "validate": {
           "n": 5,
-          "min": 810,
-          "med": 817.9,
-          "p95": 842.1,
-          "max": 842.1
+          "min": 801.7,
+          "med": 813.2,
+          "p95": 837.6,
+          "max": 837.6
         },
         "crc": {
           "n": 5,
-          "min": 3396,
-          "med": 3420.8,
-          "p95": 4350.8,
-          "max": 4350.8
+          "min": 3419,
+          "med": 3433.3,
+          "p95": 3454.6,
+          "max": 3454.6
         },
         "total": {
           "n": 5,
-          "min": 5764.3,
-          "med": 5796.6,
-          "p95": 6693.3,
-          "max": 6693.3
+          "min": 5762.7,
+          "med": 5805.4,
+          "p95": 5876.4,
+          "max": 5876.4
         },
         "heap_delta_mb": 336,
-        "checksums_ok": true
+        "checksums_ok": true,
+        "workloads": {
+          "graph_build_ms": 556.6,
+          "path_ms": {
+            "n": 5,
+            "min": 2227.7,
+            "med": 2255.5,
+            "p95": 2923.8,
+            "max": 2923.8
+          },
+          "path_found": 5,
+          "search_ms": {
+            "n": 5,
+            "min": 288.5,
+            "med": 294.5,
+            "p95": 325.3,
+            "max": 325.3
+          },
+          "search_hits": 48,
+          "search_rooms": 48,
+          "search_names": 3,
+          "search_exact": 48,
+          "iter_ms": {
+            "n": 5,
+            "min": 472.5,
+            "med": 474.8,
+            "p95": 487.6,
+            "max": 487.6
+          },
+          "rooms_iter": 431808
+        }
       },
-      "ratio_total": 0.78
+      "ratio_total": 0.77
     }
   }
 }

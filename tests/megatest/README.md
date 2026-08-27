@@ -82,8 +82,8 @@ tests/megatest/
   wiec profil zostaje lekki (commit 46acd1e).
 - **`ram_desktop.txt` = 1 MB (fausz)** — stary sampler szukal procesu `pgrep -x mudlet`,
   a AppImage nazywa sie inaczej (AppRun / .mount_Mudlet_*). Poprawione: pgrep -ix
-  mudlet + AppRun + .mount_Mudlet. Wynik RAM z sesji 2026-08-27 jest niepomierzalny
-  i swiadomie niecommitniety — raport pokazuje tam "-".
+  mudlet + AppRun + .mount_Mudlet. Aktualny przebieg ma juz pomiar (peak VmHWM
+  calego procesu, patrz raport).
 - **AppImage nie ma `-platform offscreen`** (tylko xcb) — runner sam spada na
   `xvfb-run`; na realnym display: `MEGATEST_DISPLAY=1`.
 - **`Warning: Unknown option 'offline'`** — Mudlet 4.22 nie zna `--offline`; harmless.

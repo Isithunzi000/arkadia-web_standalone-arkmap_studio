@@ -6,7 +6,7 @@
   "n_runs": 5,
   "warmup": 3,
   "node": "v20.20.1",
-  "date": "2026-08-27T08:24:07.793Z",
+  "date": "2026-08-27T21:55:06.160Z",
   "machine": "AMD Athlon Silver 3050U with Radeon Graphics / 29 GB RAM"
  },
  "files": {
@@ -15,95 +15,245 @@
    "size_mb": 7.5,
    "parse_ms": {
     "n": 5,
-    "min": 342.1,
-    "med": 351.2,
-    "p95": 362.2,
-    "max": 362.2
+    "min": 341.8,
+    "med": 347.2,
+    "p95": 393.7,
+    "max": 393.7
    },
    "stream_ms": {
     "n": 5,
-    "min": 253.3,
-    "med": 259.8,
-    "p95": 271.4,
-    "max": 271.4
+    "min": 253.6,
+    "med": 257.7,
+    "p95": 267.2,
+    "max": 267.2
    },
-   "heap_delta_mb": 67
+   "heap_delta_mb": 67,
+   "workloads": {
+    "graph_build_ms": 64,
+    "path_ms": {
+     "n": 5,
+     "min": 782.1,
+     "med": 805.3,
+     "p95": 1159.6,
+     "max": 1159.6
+    },
+    "path_found": 42,
+    "search_ms": {
+     "n": 5,
+     "min": 11,
+     "med": 13.5,
+     "p95": 27.3,
+     "max": 27.3
+    },
+    "search_hits": 3,
+    "search_rooms": 3,
+    "search_names": 3,
+    "search_exact": 3,
+    "iter_ms": {
+     "n": 5,
+     "min": 3.8,
+     "med": 3.9,
+     "p95": 9.8,
+     "max": 9.8
+    },
+    "rooms_iter": 26988
+   }
   },
   "stress_2x": {
    "rooms": 53976,
    "size_mb": 14.7,
    "parse_ms": {
     "n": 5,
-    "min": 790.7,
-    "med": 811.3,
-    "p95": 934.6,
-    "max": 934.6
+    "min": 771.7,
+    "med": 785.7,
+    "p95": 793.6,
+    "max": 793.6
    },
    "stream_ms": {
     "n": 5,
-    "min": 480.4,
-    "med": 484.4,
-    "p95": 512.1,
-    "max": 512.1
+    "min": 490.3,
+    "med": 494.6,
+    "p95": 537,
+    "max": 537
    },
-   "heap_delta_mb": 144
+   "heap_delta_mb": 145,
+   "workloads": {
+    "graph_build_ms": 184.9,
+    "path_ms": {
+     "n": 5,
+     "min": 1081.7,
+     "med": 1088.4,
+     "p95": 1567.8,
+     "max": 1567.8
+    },
+    "path_found": 28,
+    "search_ms": {
+     "n": 5,
+     "min": 32.4,
+     "med": 33.2,
+     "p95": 53.4,
+     "max": 53.4
+    },
+    "search_hits": 6,
+    "search_rooms": 6,
+    "search_names": 3,
+    "search_exact": 6,
+    "iter_ms": {
+     "n": 5,
+     "min": 36.2,
+     "med": 37.8,
+     "p95": 45.9,
+     "max": 45.9
+    },
+    "rooms_iter": 53976
+   }
   },
   "stress_4x": {
    "rooms": 107952,
    "size_mb": 29,
    "parse_ms": {
     "n": 5,
-    "min": 1619.3,
-    "med": 1636,
-    "p95": 1673.2,
-    "max": 1673.2
+    "min": 1610.5,
+    "med": 1756.5,
+    "p95": 2234.4,
+    "max": 2234.4
    },
    "stream_ms": {
     "n": 5,
-    "min": 972.8,
-    "med": 980.6,
-    "p95": 991.5,
-    "max": 991.5
+    "min": 964.5,
+    "med": 976.3,
+    "p95": 990.9,
+    "max": 990.9
    },
-   "heap_delta_mb": 288
+   "heap_delta_mb": 289,
+   "workloads": {
+    "graph_build_ms": 311.7,
+    "path_ms": {
+     "n": 5,
+     "min": 1560.7,
+     "med": 1627.5,
+     "p95": 1888.7,
+     "max": 1888.7
+    },
+    "path_found": 18,
+    "search_ms": {
+     "n": 5,
+     "min": 74.8,
+     "med": 76,
+     "p95": 90,
+     "max": 90
+    },
+    "search_hits": 12,
+    "search_rooms": 12,
+    "search_names": 3,
+    "search_exact": 12,
+    "iter_ms": {
+     "n": 5,
+     "min": 98.1,
+     "med": 100,
+     "p95": 106.1,
+     "max": 106.1
+    },
+    "rooms_iter": 107952
+   }
   },
   "stress_8x": {
    "rooms": 215904,
    "size_mb": 57.8,
    "parse_ms": {
     "n": 5,
-    "min": 3352.8,
-    "med": 3377.7,
-    "p95": 3382.6,
-    "max": 3382.6
+    "min": 3392.2,
+    "med": 3433.2,
+    "p95": 3830.2,
+    "max": 3830.2
    },
    "stream_ms": {
     "n": 5,
-    "min": 1930,
-    "med": 1956.2,
-    "p95": 1973.1,
-    "max": 1973.1
+    "min": 1925.4,
+    "med": 1946.2,
+    "p95": 2092.5,
+    "max": 2092.5
    },
-   "heap_delta_mb": 564
+   "heap_delta_mb": 564,
+   "workloads": {
+    "graph_build_ms": 623.8,
+    "path_ms": {
+     "n": 5,
+     "min": 1972.6,
+     "med": 2007.5,
+     "p95": 2016.8,
+     "max": 2016.8
+    },
+    "path_found": 8,
+    "search_ms": {
+     "n": 5,
+     "min": 186.9,
+     "med": 187.1,
+     "p95": 189.3,
+     "max": 189.3
+    },
+    "search_hits": 24,
+    "search_rooms": 24,
+    "search_names": 3,
+    "search_exact": 24,
+    "iter_ms": {
+     "n": 5,
+     "min": 238.7,
+     "med": 240.5,
+     "p95": 242.8,
+     "max": 242.8
+    },
+    "rooms_iter": 215904
+   }
   },
   "stress_16x": {
    "rooms": 431808,
    "size_mb": 115.2,
    "parse_ms": {
     "n": 5,
-    "min": 7160.7,
-    "med": 7215.4,
-    "p95": 8654,
-    "max": 8654
+    "min": 7213.5,
+    "med": 7273.9,
+    "p95": 7952.4,
+    "max": 7952.4
    },
    "stream_ms": {
     "n": 5,
-    "min": 4008.4,
-    "med": 4054.4,
-    "p95": 4084.2,
-    "max": 4084.2
+    "min": 4022.4,
+    "med": 4055.9,
+    "p95": 4414.2,
+    "max": 4414.2
    },
-   "heap_delta_mb": 1121
+   "heap_delta_mb": 1121,
+   "workloads": {
+    "graph_build_ms": 1436.4,
+    "path_ms": {
+     "n": 5,
+     "min": 2385.1,
+     "med": 2391.5,
+     "p95": 2418.6,
+     "max": 2418.6
+    },
+    "path_found": 5,
+    "search_ms": {
+     "n": 5,
+     "min": 434.2,
+     "med": 436.6,
+     "p95": 454.1,
+     "max": 454.1
+    },
+    "search_hits": 48,
+    "search_rooms": 48,
+    "search_names": 3,
+    "search_exact": 48,
+    "iter_ms": {
+     "n": 5,
+     "min": 537.5,
+     "med": 556.2,
+     "p95": 723.3,
+     "max": 723.3
+    },
+    "rooms_iter": 431808
+   }
   }
  }
 }
