@@ -8,6 +8,7 @@
 #   MUDLET_BIN=/sciezka/Mudlet-4.22.0.AppImage  — binarka desktopu (faza desktop)
 #   HEAP=MB — sufit heapu Node (domyslnie auto: min(6144, 50% RAM))
 #   SKIP_INPUTS=1 / SKIP_WEB=1 / SKIP_ARKMAP=1 / SKIP_DESKTOP=1 — pomin faze
+#   Opcje CLI (nadpisuja env): --only/--skip/--desktop-only/--dry-run — zobacz --help
 #   SKIP_REPORT=1 — bez raportu HTML
 # Kryteria limitu (zarejestrowane przed pomiarem — NIE RUSZAC po fakcie):
 #   CRASH — pad/timeout procesu | LOAD — mediana wczytania > 30 s
@@ -16,7 +17,43 @@
 # (wniosek z anomalii termicznej perf labu 2026-08-27).
 set -u
 cd "$(dirname "$0")/../.."
-RUNS="${1:-5}"
+# --- argumenty linii polecen ---
+# Uzycie: bash tests/megatest/run_megatest.sh [runs] [--only FAZY] [--skip FAZY] [--dry-run]
+#   FAZY — lista po przecinku (bez spacji): inputs,manifest,web,arkmap,desktop,report
+#   --only desktop — tylko faza desktop (reszta SKIP; report i tak domyka bieg)
+#   --desktop-only — skrot do --only desktop
+#   --dry-run — wypisuje plan faz i konczy (nic nie kasuje, nic nie mierzy)
+# Flagi nadpisuja zmienne SKIP_INPUTS/SKIP_MANIFEST/SKIP_WEB/SKIP_ARKMAP/SKIP_DESKTOP/SKIP_REPORT.
+RUNS=""
+ONLY=""
+SKIPCLI=""
+DRY=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --only=*)        ONLY="${1#*=}" ;;
+    --only)          shift; ONLY="${1:?--only wymaga listy faz}" ;;
+    --desktop-only)  ONLY="desktop" ;;
+    --skip=*)        SKIPCLI="${1#*=}" ;;
+    --skip)          shift; SKIPCLI="${1:?--skip wymaga listy faz}" ;;
+    --dry-run)       DRY=1 ;;
+    -h|--help)       sed -n '2,16p' "$0"; sed -n '/# --- argumenty linii polecen ---/,/^# Flagi/p' "$0"; exit 0 ;;
+    [0-9]*)          RUNS="$1" ;;
+    *)               echo "nieznany argument: $1 (zobacz --help)"; exit 2 ;;
+  esac
+  shift
+done
+RUNS="${RUNS:-5}"
+
+has_ph() { case ",$1," in *",$2,"*) return 0;; *) return 1;; esac; }
+if [ -n "$ONLY" ]; then
+  for ph in inputs manifest web arkmap desktop; do
+    has_ph "$ONLY" "$ph" || eval "SKIP_$(echo "$ph" | tr '[:lower:]' '[:upper:]')=1"
+  done
+fi
+for ph in ${SKIPCLI//,/ }; do
+  has_ph "inputs,manifest,web,arkmap,desktop,report" "$ph" || { echo "nieznana faza: $ph"; exit 2; }
+  eval "SKIP_$(echo "$ph" | tr '[:lower:]' '[:upper:]')=1"
+done
 DATE=$(date +%F)
 RESULTS=tests/megatest/results/$DATE
 RAM_MB=$(free -m | awk 'NR==2{print $2}')   # NR==2 = odpornosc na locale
@@ -26,12 +63,28 @@ HEAP="${HEAP:-$AUTO_HEAP}"
 
 echo "== MEGA-TEST: ArkMap vs mudlet-web vs Mudlet desktop =="
 echo "wyniki: $RESULTS | runs: $RUNS | heap Node: $HEAP MB"
+ph() { [ "${!1:-0}" = 1 ] && echo "SKIP" || echo "RUN"; }
+echo "plan faz: inputs=$(ph SKIP_INPUTS) manifest=$(ph SKIP_MANIFEST) web=$(ph SKIP_WEB) arkmap=$(ph SKIP_ARKMAP) desktop=$(ph SKIP_DESKTOP) report=$(ph SKIP_REPORT)"
+[ "$DRY" = 1 ] && exit 0
 command -v node >/dev/null || { echo "BRAK node"; exit 2; }
 mkdir -p "$RESULTS"
 
-# Idempotentnosc: artefakty tej sesji czyszczone przed startem faz.
-rm -f "$RESULTS"/results_*.json "$RESULTS"/results_*.jsonl "$RESULTS"/manifest.* \
+# Idempotentnosc: czyscimy WYLACZNIE artefakty faz, ktore pojda w tej sesji —
+# pominiete fazy zachowuja wyniki z poprzednich biegow (np. --only desktop).
+[ "${SKIP_MANIFEST:-0}" != 1 ] && rm -f "$RESULTS"/manifest.lua "$RESULTS"/manifest.json
+[ "${SKIP_WEB:-0}" != 1 ] && rm -f "$RESULTS"/results_web.json
+[ "${SKIP_ARKMAP:-0}" != 1 ] && rm -f "$RESULTS"/results_arkmap_node.json
+[ "${SKIP_DESKTOP:-0}" != 1 ] && rm -f "$RESULTS"/results_desktop.json "$RESULTS"/results_desktop.jsonl \
       "$RESULTS"/desktop.done "$RESULTS"/desktop.error "$RESULTS"/ram_desktop.txt
+if [ "${SKIP_MANIFEST:-0}" = 1 ] && { [ "${SKIP_WEB:-0}" != 1 ] || [ "${SKIP_DESKTOP:-0}" != 1 ]; }; then
+  [ -f "$RESULTS/manifest.lua" ] && [ -f "$RESULTS/manifest.json" ] || {
+    echo "BLAD: manifest pominiety, ale brak $RESULTS/manifest.lua — najpierw pelny bieg"; exit 1; }
+  MRUNS=$(node -e "try{process.stdout.write(String(JSON.parse(require('fs').readFileSync('$RESULTS/manifest.json','utf8')).runs))}catch(e){process.stdout.write('?')}" 2>/dev/null)
+  echo "manifest: uzywam istniejacego (runs=$MRUNS, seed 20260827)"
+  if [ "$MRUNS" != "?" ] && [ "$MRUNS" != "$RUNS" ]; then
+    echo "UWAGA: argument runs=$RUNS zignorowany — pomiar pojedzie wg manifestu (runs=$MRUNS)"
+  fi
+fi
 
 finalize() {
   rc=$?
@@ -96,8 +149,12 @@ else
   echo "=== inputs: SKIP ==="
 fi
 
-echo "=== manifest ==="
-node tests/megatest/gen_manifest.mjs "$RESULTS" "$RUNS" || exit 1
+if [ "${SKIP_MANIFEST:-0}" != 1 ]; then
+  echo "=== manifest ==="
+  node tests/megatest/gen_manifest.mjs "$RESULTS" "$RUNS" || exit 1
+else
+  echo "=== manifest: SKIP (istniejacy z poprzedniego biegu) ==="
+fi
 
 if [ "${SKIP_WEB:-0}" != 1 ]; then
   echo "=== faza W: mudlet-web (mudlet-map-binary-reader) ==="

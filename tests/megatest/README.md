@@ -30,6 +30,7 @@ samej maszynie**. Cel: twarde dane (czas, RAM, limity) pod propozycje formatu
 
 ```bash
 MUDLET_BIN=/sciezka/Mudlet-4.22.0.AppImage bash tests/megatest/run_megatest.sh 5
+Fazy mozna wybierac z linii polecen: `--only desktop` (albo `--desktop-only`) odpala tylko desktop na istniejacym manifescie i zachowuje wyniki web/arkmap z poprzedniego biegu; `--skip web,arkmap`; `--dry-run` wypisuje plan bez odpalania. `--help` pokazuje wszystko.
 ```
 
 - `5` = przebiegow na punkt pomiaru (mediana). Domyslnie 5.
