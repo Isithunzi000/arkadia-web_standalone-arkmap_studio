@@ -50,7 +50,7 @@ function indexFromArkmap(map) {      // .arkmap: areas[].rooms[]; exits po KROTK
       for (const [cmd, t] of Object.entries(r.special_exits || {})) if (t > 0 && !specLocks.has(cmd)) exits.push(t);
       ids.push(r.id);
       byId.set(r.id, { name: r.name || '', x: r.x || 0, y: r.y || 0, z: r.z || 0,
-        weight: r.weight > 0 ? r.weight : 1, locked: false, exits });
+        weight: r.weight > 0 ? r.weight : 1, locked: !!r.locked, exits });
     }
   }
   return { ids, byId };
