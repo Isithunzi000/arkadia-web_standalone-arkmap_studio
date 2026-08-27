@@ -39,6 +39,13 @@ end
 local lf = io.open(OUT_DIR .. "/workload_loaded.txt", "w")
 if lf then lf:write("loaded\n") lf:close() end
 
+-- Checkpointi diagnostyczne: ostatni zywy wpis lokalizuje ewentualny crash
+-- (segfault jest poza zasiegiem xpcall — to ich jedyna sluzba).
+local function checkpoint(name)
+  local cf = io.open(OUT_DIR .. "/checkpoints.txt", "a")
+  if cf then cf:write(string.format("%.1f %s\n", os.clock(), name)) cf:close() end
+end
+
 local okMan, man = pcall(dofile, MAN_PATH)
 if not okMan or type(man) ~= "table" or type(man.ladder) ~= "table" then
   die("manifest nieczytalny: " .. tostring(man))
@@ -65,11 +72,13 @@ end
 
 local function benchRun(f, item, run)
   -- W1: wczytanie mapy (.dat, binarny format Mudleta).
+  checkpoint("loadMap_begin " .. item.name .. " r" .. run)
   local w0 = getEpoch()
   local c0 = os.clock()
   local ok = loadMap(item.dat)
   local c1 = os.clock()
   local w1 = getEpoch()
+  checkpoint("loadMap_end " .. item.name .. " r" .. run)
   if not ok then
     writeRow(f, item, run, false, 0, (c1 - c0) * 1000, (w1 - w0) * 1000, 0, 0, 0, 0, 0)
     return
@@ -82,6 +91,7 @@ local function benchRun(f, item, run)
     if getPath(p[1], p[2]) then found = found + 1 end
   end
   local p1 = os.clock()
+  checkpoint("path_end " .. item.name .. " r" .. run)
 
   -- W3: przeszukanie (searchRoom = pelny skan nazw, case-insensitive).
   local s0 = os.clock()
@@ -91,12 +101,14 @@ local function benchRun(f, item, run)
     if type(r) == "table" then hits = hits + countKeys(r) end
   end
   local s1 = os.clock()
+  checkpoint("search_end " .. item.name .. " r" .. run)
 
   -- W3b: pelna iteracja po pokojach (getRooms buduje tablice id->nazwa).
   local i0 = os.clock()
   local all = getRooms()
   local rooms = countKeys(all)
   local i1 = os.clock()
+  checkpoint("iter_end " .. item.name .. " r" .. run)
 
   writeRow(f, item, run, true, rooms,
     (c1 - c0) * 1000, (w1 - w0) * 1000,
@@ -106,8 +118,10 @@ local function benchRun(f, item, run)
 end
 
 local function runAll()
+  checkpoint("runAll_start")
   local f, err = io.open(OUT_DIR .. "/results_desktop.jsonl", "w")
   if not f then die("nie moge pisac do " .. OUT_DIR .. ": " .. tostring(err)) return end
+  checkpoint("jsonl_open")
   for _, item in ipairs(man.ladder) do
     for run = 1, man.runs do
       local okRun, runErr = xpcall(function() benchRun(f, item, run) end, debug.traceback)
@@ -121,10 +135,12 @@ local function runAll()
     end
   end
   f:close()
+  checkpoint("rows_written")
   local jf = io.open(OUT_DIR .. "/results_desktop.json", "w")
   if jf then jf:write("[\n" .. table.concat(allRows, ",\n") .. "\n]\n") jf:close() end
   local done = io.open(OUT_DIR .. "/desktop.done", "w")
   if done then done:write("ok\n") done:close() end
+  checkpoint("done_marker")
   closeMudlet()
 end
 
@@ -142,6 +158,7 @@ local function onSysLoad(_, fresh)
     -- Marker diagnostyczny: event doszedl (widac tez, jakiego typu byl argument).
     local mf = io.open(OUT_DIR .. "/sysload_fired.txt", "w")
     if mf then mf:write(type(fresh) .. ":" .. tostring(fresh) .. "\n") mf:close() end
+    checkpoint("sysload_handler")
     tempTimer(2, runAll)
   end
 end

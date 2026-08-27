@@ -45,7 +45,7 @@ trap cleanup EXIT
 
 # --- idempotentnosc: czyszczenie artefaktow fazy ---
 rm -f "$RESULTS/results_desktop.jsonl" "$RESULTS/results_desktop.json" "$RESULTS/desktop.done" "$RESULTS/desktop.error" \
-      "$RESULTS/desktop_stdout.log" "$RESULTS/ram_desktop.txt" "$RESULTS/workload_loaded.txt" "$RESULTS/sysload_fired.txt"
+      "$RESULTS/desktop_stdout.log" "$RESULTS/ram_desktop.txt" "$RESULTS/workload_loaded.txt" "$RESULTS/sysload_fired.txt" "$RESULTS/checkpoints.txt"
 
 export MEGATEST_MAN="$MAN"
 export MEGATEST_OUT="$RESULTS"
@@ -93,7 +93,7 @@ if [ ! -f "$RESULTS/desktop.done" ] && [ ! -f "$RESULTS/desktop.error" ] \
   if command -v xvfb-run >/dev/null; then
     echo "offscreen nie wstal (AppImage ma tylko wtyczke xcb) — fallback: xvfb-run -a"
     kill "$SAMPLER" 2>/dev/null; wait "$SAMPLER" 2>/dev/null; SAMPLER=""
-    rm -f "$RESULTS/results_desktop.jsonl" "$RESULTS/results_desktop.json" "$RESULTS/desktop_stdout.log" "$RESULTS/ram_desktop.txt"
+    rm -f "$RESULTS/results_desktop.jsonl" "$RESULTS/results_desktop.json" "$RESULTS/desktop_stdout.log" "$RESULTS/ram_desktop.txt" "$RESULTS/checkpoints.txt"
     launch xvfb
     sample_ram "$APP_PID" & SAMPLER=$!
     wait "$APP_PID"; RC=$?
@@ -103,6 +103,7 @@ if [ ! -f "$RESULTS/desktop.done" ] && [ ! -f "$RESULTS/desktop.error" ] \
   fi
 fi
 
+sleep 2  # sampler potrzebuje chwili, zeby dopisac ram_desktop.txt po smierci procesu
 kill "$SAMPLER" 2>/dev/null; wait "$SAMPLER" 2>/dev/null; SAMPLER=""
 
 # --- klasyfikacja ---
@@ -117,6 +118,6 @@ fi
 if [ -f "$RESULTS/desktop.error" ]; then
   echo "✗ desktop ERROR: $(cat "$RESULTS/desktop.error")"; exit 1
 fi
-echo "✗ desktop CRASH: brak desktop.done (rc=$RC) — log: $RESULTS/desktop_stdout.log"
+echo "✗ desktop CRASH: brak desktop.done (rc=$RC) — log: $RESULTS/desktop_stdout.log | checkpointy: $RESULTS/checkpoints.txt"
 tail -5 "$RESULTS/desktop_stdout.log" 2>/dev/null
 exit 1
