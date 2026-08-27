@@ -27,7 +27,9 @@ local function die(msg)
 end
 
 if not MAN_PATH or not OUT_DIR then
-  die("brak MEGATEST_MAN / MEGATEST_OUT — odpalać wylacznie przez run_desktop.sh")
+  -- Brak env = skrypt zaladowal sie w GUI (np. przy zapisie w edytorze),
+  -- NIE w tescie. Nie zamykamy wtedy Mudleta — tylko informacja na konsoli.
+  echo("\n[megatest] workload.lua zaladowany poza testem (brak MEGATEST_MAN/MEGATEST_OUT) — pomiar odpalaj wylacznie przez run_desktop.sh\n")
   return
 end
 
