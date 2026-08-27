@@ -24,6 +24,8 @@ cd "$(dirname "$0")/../.."
 #   --only desktop — tylko faza desktop (reszta SKIP; report i tak domyka bieg)
 #   --desktop-only — skrot do --only desktop
 #   --dry-run — wypisuje plan faz i konczy (nic nie kasuje, nic nie mierzy)
+#   MEGATEST_DATE=YYYY-MM-DD — wymusza katalog wynikow (domyslnie dzisiejsza data;
+#     przydatne przy dokladaniu faz do biegu sprzed polnocy)
 # Flagi nadpisuja zmienne SKIP_INPUTS/SKIP_MANIFEST/SKIP_WEB/SKIP_ARKMAP/SKIP_DESKTOP/SKIP_REPORT.
 RUNS=""
 ONLY=""
@@ -55,7 +57,7 @@ for ph in ${SKIPCLI//,/ }; do
   has_ph "inputs,manifest,web,arkmap,desktop,report" "$ph" || { echo "nieznana faza: $ph"; exit 2; }
   eval "SKIP_$(echo "$ph" | tr '[:lower:]' '[:upper:]')=1"
 done
-DATE=$(date +%F)
+DATE="${MEGATEST_DATE:-$(date +%F)}"   # MEGATEST_DATE=YYYY-MM-DD — dokladanie do istniejacego katalogu (np. bieg przez polnoc)
 RESULTS=tests/megatest/results/$DATE
 RAM_MB=$(free -m | awk 'NR==2{print $2}')   # NR==2 = odpornosc na locale
 AUTO_HEAP=$(( RAM_MB / 2 )); [ "$AUTO_HEAP" -gt 6144 ] && AUTO_HEAP=6144
