@@ -3,9 +3,11 @@
 //
 // Zlota asercja: STARY wpDoSearch (pelny skan, ekstrahowany verbatim z 2614e8f)
 // vs NOWY (kandydaci z indeksu) — bitowo identyczny innerHTML dropdownu i stan
-// open na baterii zapytan, na fixture stress_2k (54k pokoi) i na mini-mapie
-// brzegowej. Do tego: leniwosc (1 budowa), uniewaznianie (editRev / roomById /
-// areas) i zgodnosc po rename zachowania STAREGO.
+// open na baterii zapytan, na proceduralnym stanie stresowym (53976 pokoi)
+// i na mini-mapie brzegowej. Do tego: leniwosc (1 budowa), uniewaznianie
+// (editRev / roomById / areas) i zgodnosc po rename zachowania STAREGO.
+// Samowystarczalny: zero zewnetrznych fixture (tests/perf/out/ jest gitignore,
+// CI odpala na swiezym checkout) — stan generowany deterministycznie w pamieci.
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -13,9 +15,6 @@ const { performance } = require('perf_hooks');
 const ROOT = path.join(__dirname, '..');
 const NEW = fs.readFileSync(path.join(ROOT, 'arkmap_studio.html'), 'utf8');
 const OLD = execSync('git show 2614e8f:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-
-const FIX = '/mnt/agents/work/repro_repo/tests/perf/out/stress_2k.arkmap';
-if (!fs.existsSync(FIX)) { console.error('BRAK FIXTURE: ' + FIX); process.exit(2); }
 
 let pass = 0, fail = 0;
 function ok(cond, name) { if (cond) { pass++; console.log('  OK   ' + name); } else { fail++; console.log('  FAIL ' + name); } }
@@ -53,13 +52,26 @@ function mkDoc() {
   return { rec, doc: { getElementById: () => el } };
 }
 
-// ── Stan z fixture (kolejnosc wstawiania = kolejnosc pliku, jak applyMap) ────
-function loadFixtureState() {
-  const m = JSON.parse(fs.readFileSync(FIX, 'utf8'));
+// ── Proceduralny stan stresowy (deterministyczny, czysta arytmetyka) ────────
+// 53976 pokoi jak fixture stress_2k: nazwy glownie numeryczne (masa trafien
+// dla podciagow cyfr, cap 25), co 733. bez nazwy, co 997. "Las"; 64 obszary
+// z puli nazw wielowyrazowych (zapytania area i mieszane name+area).
+function mkStressState() {
+  const AREA_NAMES = [
+    'Wyzima', 'Mahakam', 'Redania', 'Poludniowa Redania', 'Lyria i Rivia',
+    'Las Brokilon', 'Stare Miasto', 'Puszcza', 'Skellige', 'Toussaint',
+    'Novigrad', 'Oxenfurt', 'Kaer Morhen', 'Temeria', 'Aedirn', 'Nilfgaard',
+  ];
+  const N_AREAS = 64, N_ROOMS = 53976;
   const roomById = {}, roomArea = {}, areas = new Map();
-  for (const a of m.areas || []) {
-    areas.set(a.id, { id: a.id, name: a.name });
-    for (const r of a.rooms || []) { roomById[r.id] = r; roomArea[r.id] = a.id; }
+  for (let a = 1; a <= N_AREAS; a++) {
+    areas.set(a, { id: a, name: a <= AREA_NAMES.length ? AREA_NAMES[a - 1] : 'Obszar ' + a });
+  }
+  for (let id = 1; id <= N_ROOMS; id++) {
+    const r = { id, x: id % 1000, y: (id / 1000) | 0, z: 0 };
+    if (id % 733 !== 0) r.name = (id % 997 === 0) ? 'Las' : String(id);
+    roomById[id] = r;
+    roomArea[id] = ((id - 1) % N_AREAS) + 1;
   }
   return { roomById, roomArea, areas, editRev: 0, map: { meta: {} } };
 }
@@ -89,12 +101,11 @@ function runQuery(api, state, q) {
 const oldApi = { __src: depsBlock(OLD) + '\n' + oldSearch(OLD), __isNew: false };
 const newApi = { __src: depsBlock(NEW) + '\n' + newSearch(NEW), __isNew: true };
 
-// ═══ T1: zlota bateria na fixture (bitowa identycznosc dropdownu) ═══
-console.log('── T1: zlota bateria na fixture stress_2k ──');
+// ═══ T1: zlota bateria na stanie stresowym (bitowa identycznosc dropdownu) ═══
+console.log('── T1: zlota bateria na stanie stresowym (53976 pokoi) ──');
 {
-  const state = loadFixtureState();
-  const m = JSON.parse(fs.readFileSync(FIX, 'utf8'));
-  const realIds = m.areas[1].rooms.slice(0, 3).map(r => r.id);
+  const state = mkStressState();
+  const realIds = Object.keys(state.roomById).filter(id => state.roomArea[id] === 2).slice(0, 3).map(Number);
   const battery = [
     '1', '12', '123', '7', '0',                       // liczbowe podciagi (masa trafien, cap 25)
     'wyzima', 'wyzi', 'mahakam', 'redania',           // nazwy obszarow (1 pkt)
@@ -167,7 +178,7 @@ console.log('── T2: mini-mapa brzegowa ──');
 // ═══ T3: leniwosc + uniewaznianie + zgodnosc po rename ═══
 console.log('── T3: leniwosc i uniewaznianie ──');
 {
-  const state = loadFixtureState();
+  const state = mkStressState();
   const { rec, doc } = mkDoc();
   const fn = new Function('state', 'document',
     newApi.__src + '\n;return { wpDoSearch, _wpSearchIndex, getBuilds: () => _wpSearchBuilds };');
@@ -206,9 +217,9 @@ console.log('── T3: leniwosc i uniewaznianie ──');
 }
 
 // ═══ T4: wydajnosc (info + miekki assert) ═══
-console.log('── T4: wydajnosc na fixture ──');
+console.log('── T4: wydajnosc na stanie stresowym ──');
 {
-  const state = loadFixtureState();
+  const state = mkStressState();
   const queries = ['wyzima', 'mahakam', '1234', 'lyria i', 'poludniowa redania', '777'];
   // Trwale instancje (jak w apce): indeks/koncery przezywaja miedzy zapytaniami.
   const mkFn = (api) => new Function('state', 'document', api.__src + '\n;return { wpDoSearch };')
