@@ -131,26 +131,46 @@ async function heapMb(page) {
 // (dijkstra domyslnie + osobny wiersz astar; transport off, kierunki all, locki ON).
 async function benchArkmap(item) {
   const loads = [], heaps = [];
-  let lastPage = null;
   for (const fmt of ['arkmap', 'dat']) {
     const filePath = fmt === 'arkmap' ? item.arkmap : item.dat;
     const loadsF = [], heapsF = [];
+    const valDialogs = [];
     for (let run = 0; run < RUNS; run++) {
       const page = await browser.newPage();
+      page.on('console', m => { const t = m.text(); if (t.startsWith('[apps]')) console.log('  page:', t); });
+      console.log(`  W1 ${fmt} run ${run + 1}/${RUNS}: goto...`);
       await page.goto(`${BASE}/arkmap_studio.html`, { waitUntil: 'load' });
       await page.waitForFunction("typeof findPath==='function' && typeof loadArkmap==='function' && typeof loadDat==='function' && typeof state==='object'", { timeout: 30000 });
+      // Dialog walidacji to interaktywny prompt UI, nie koszt mapy — prawdziwa mapa
+      // Arkadii ma ostrzezenia (supresory itp.) i dialog zawiesilby pomiar na kliku.
+      // Auto-akceptujemy i REJESTRUJEMY (trafia do wynikow jako val_dialogs).
+      await page.evaluate(() => {
+        window.__valDialogs = [];
+        window.showValDialog = (valRes, chkRes, filename, isFatal, suppMissing) => {
+          window.__valDialogs.push({ filename: String(filename), isFatal: !!isFatal,
+            errors: (valRes && valRes.errors || []).length, warnings: (valRes && valRes.warnings || []).length,
+            crcOk: chkRes && ('ok' in chkRes) ? !!chkRes.ok : null, supp: (suppMissing || []).length });
+          return Promise.resolve(true);
+        };
+      });
+      console.log(`  W1 ${fmt} run ${run + 1}/${RUNS}: strona gotowa, load...`);
       const h0 = await heapMb(page);
       const t = await page.evaluate(async (abs, fmt, frameWaitSrc) => {
+        console.log('[apps] fetch...');
         const resp = await fetch('/file?abs=' + encodeURIComponent(abs));
         if (!resp.ok) throw new Error('fetch ' + resp.status);
+        console.log('[apps] load ' + fmt + '...');
         const t0 = performance.now();
         if (fmt === 'arkmap') {
           const text = await resp.text();
+          console.log('[apps] text ok, loadArkmap...');
           await loadArkmap(text, abs.split('/').pop());
         } else {
           const buf = await resp.arrayBuffer();
+          console.log('[apps] buf ok, loadDat...');
           await loadDat(new File([buf], abs.split('/').pop()));
         }
+        console.log('[apps] load ok, czekam na klatke...');
         const t1 = performance.now();          // koniec applyMap = mapa gotowa
         const frameOk = await eval(frameWaitSrc);  // pierwsza klatka, sufit 5 s
         const t2 = performance.now();
@@ -159,12 +179,15 @@ async function benchArkmap(item) {
       }, filePath, fmt, FRAME_WAIT);
       loadsF.push(t);
       heapsF.push(r1((await heapMb(page)) - h0));
+      const vd = await page.evaluate(() => window.__valDialogs || []);
+      if (vd.length) valDialogs.push(...vd);
+      console.log(`  W1 ${fmt} run ${run + 1}/${RUNS}: ${r1(t.total_ms)}ms (apply ${r1(t.apply_ms)}ms, klatka ${t.frame_ok ? 'ok' : 'timeout 5s'})${vd.length ? ' DIALOG: ' + JSON.stringify(vd) : ''}`);
       await page.close();
     }
     loads.push({ fmt, ms: statsArr(loadsF.map(x => r1(x.total_ms))),
                  apply_ms: statsArr(loadsF.map(x => r1(x.apply_ms))),
                  frames_ok: loadsF.filter(x => x.frame_ok).length,
-                 heap_mb: statsArr(heapsF) });
+                 heap_mb: statsArr(heapsF), val_dialogs: valDialogs });
   }
 
   // Workloady: tylko na zaladowanym .arkmap — po applyMap model w pamieci jest
@@ -174,13 +197,22 @@ async function benchArkmap(item) {
   {
     const filePath = item.arkmap;
     const page = await browser.newPage();
+    page.on('console', m => { const t = m.text(); if (t.startsWith('[apps]')) console.log('  page:', t); });
+    console.log('  workloads: goto...');
     await page.goto(`${BASE}/arkmap_studio.html`, { waitUntil: 'load' });
     await page.waitForFunction("typeof findPath==='function' && typeof state==='object'", { timeout: 30000 });
+    await page.evaluate(() => { // auto-akceptacja dialogu walidacji (jak w W1)
+      window.showValDialog = () => Promise.resolve(true);
+    });
+    console.log('  workloads: loadArkmap...');
     await page.evaluate(async (abs) => {
       const resp = await fetch('/file?abs=' + encodeURIComponent(abs));
+      console.log('[apps] wl: text ok, loadArkmap...');
       await loadArkmap(await resp.text(), 'x');
       if (!state.map) throw new Error('load fail');
+      console.log('[apps] wl: load ok, rooms=' + Object.keys(state.roomById).length);
     }, filePath);
+    console.log('  workloads: mapa zaladowana');
 
     // W2 per (algo, run) — osobne evaluate: dijkstraPath apki na 432k pokoi
     // moze trwac minuty; jedno dlugie evaluate grozi protocolTimeout.
@@ -199,6 +231,7 @@ async function benchArkmap(item) {
         }, item.pairs, algo, r === 0);
         runsOut.push({ ms: res.ms, found: res.found });
         if (r === 0) perPair.push(...res.pp);
+        console.log(`  W2 arkmap ${algo} run ${r + 1}/${RUNS}: ${res.ms}ms found=${res.found}`);
       }
       w2[algo] = { runs: runsOut, perPair };
     }
@@ -266,6 +299,7 @@ async function benchWebreal(item) {
           const res = await page.evaluate((pairs, algo) => window.__wr.path(pairs, algo, 1)[0], item.pairs, algo);
           runsOut.push({ ms: res.ms, found: res.found });
           if (r === 0) paths0 = res.paths;
+          console.log(`  W2 webreal ${algo} run ${r + 1}/${RUNS}: ${res.ms}ms found=${res.found}`);
         }
         w2[algo] = { runs: runsOut, paths0 };
       }
@@ -292,7 +326,9 @@ async function benchWebreal(item) {
 function lockedSet(item) {
   const m = JSON.parse(fs.readFileSync(item.arkmap, 'utf8'));
   const s = new Set();
-  for (const r of Object.values(m.rooms || {})) if (r.locked) s.add(r.id);
+  const add = r => { if (r.locked) s.add(r.id); };
+  if (m.rooms) for (const r of Object.values(m.rooms)) add(r);           // plaski uklad (starsze fixture'y)
+  for (const a of m.areas || []) for (const r of a.rooms || []) add(r);  // docelowy uklad: areas[].rooms[]
   return s;
 }
 
