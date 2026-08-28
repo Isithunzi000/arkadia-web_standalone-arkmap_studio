@@ -265,12 +265,14 @@ if (apps) {
   const aS = n => apps.sets[n] || {};
   const CA = { amap: '#55bb55', adat: '#d9a030', wreal: '#44bbaa', astar: '#bb77dd', desk: '#d95555' };
 
+  const w1cell = f => f ? fmt(f.load_ms?.med) +
+    `<br><small>verified ${fmt(f.verified_ms?.med)}${f.verified_miss ? ' <b style="color:#d95555">MISS×' + f.verified_miss + '</b>' : ''}</small>` : '—';
   const appW1rows = aNames.map(n => {
     const s = aS(n), wr = s.webreal?.w1;
     const dl = dLoad[n]?.med;
     return `<tr><td>${esc(n)}</td><td>${fmt(s.rooms)}</td>` + hl([
-      { v: s.arkmap?.arkmap_file?.load_ms?.med, cell: fmt(s.arkmap?.arkmap_file?.load_ms?.med) },
-      { v: s.arkmap?.dat_file?.load_ms?.med, cell: fmt(s.arkmap?.dat_file?.load_ms?.med) },
+      { v: s.arkmap?.arkmap_file?.load_ms?.med, cell: w1cell(s.arkmap?.arkmap_file) },
+      { v: s.arkmap?.dat_file?.load_ms?.med, cell: w1cell(s.arkmap?.dat_file) },
       { v: wr?.total_ms?.med, cell: wr ? `${fmt(wr.total_ms.med)}<br><small>parse ${fmt(wr.parse_ms.med)} + mat ${fmt(wr.materialize_ms.med)} + graf ${fmt(wr.graph_ms.med)}${wr.mode === 'skeleton' ? ' [skeleton]' : ''}</small>` : '—' },
       { v: dl, cell: fmt(dl) },
     ]) + `<td>${ratio(dl, s.arkmap?.arkmap_file?.load_ms?.med)}</td><td>${ratio(dl, wr?.total_ms?.med)}</td></tr>`;
@@ -358,6 +360,7 @@ if (apps) {
 <h2 id="apps">APPS — natywne silniki w aplikacjach (headless Chromium)</h2>
 <div class="note">Metodologia: kazda apka liczy SWOIM natywnym kodem i formatem. ArkMap Studio — prawdziwe UI (${esc(apps.meta.chrome)}): loadArkmap/loadDat → applyMap → pierwsza klatka (2×rAF), findPath (Dijkstra domyslnie + wariant A*; wpState neutralny: transport off, kierunki all, locki ON), wpDoSearch, iteracja po state.roomById. Web-real — ich prawdziwy pipeline z npm: mudlet-map-binary-reader@${esc(apps.meta.packages['mudlet-map-binary-reader'])} → mudlet-map-renderer@${esc(apps.meta.packages['mudlet-map-renderer'])} (parseMudletMap → readerFromLoadedMap → PathFinder; tryb auto: plain &lt;50k pokoi, skeleton powyzej). W3 web = N/A — ich biblioteka mapowa nie ma natywnego API wyszukiwania (potwierdzone w kodzie). Powyzej 50k pokoi natywny auto-mode ich readera przechodzi w skeleton (getRooms()=[] — kod), wiec W2/W3b web = N/A i mierzymy dodatkowo plain wymuszony (wiersz informacyjny). Ich PathFinder cache'uje findPath per instancja — neutralizowane swieza instancja per run. Ich silnik IGNORUJE locki pokoi (0× isLocked w bundlu — honoruje tylko locki wyjsc), wiec moze znalezc wiecej sciezek: rozbieznosci idace przez locked pokoje sa OCZEKIWANE i oznaczone, kazda inna = czerwona flaga (gate).</div>
 <h3>W1 — wczytanie w aplikacji (ms, mediana z ${apps.meta.n_runs} runow)</h3>
+<div class="note">W1 ArkMap ma dwie wartosci: <b>load</b> = fetch → applyMap → pierwsza klatka (mapa w pelni uzywalna), <b>verified</b> = moment zakonczenia odroczonej weryfikacji sum kontrolnych i baseInfo, ktora po P3b dzieje sie w tle zaraz po pierwszej klatce i nie blokuje UI. Web-real/desktop licza synchronicznie (jedna wartosc). MISS = hak weryfikacji nie odpalil w 10 s (czerwona flaga).</div>
 <table><tr><th>mapa</th><th>pokoi</th><th>arkmap UI .arkmap</th><th>arkmap UI .dat</th><th>web-real .dat</th><th>desktop .dat</th><th>desk / arkmap</th><th>desk / web-real</th></tr>
 ${appW1rows}
 </table>

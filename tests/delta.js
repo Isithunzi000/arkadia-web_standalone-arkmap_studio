@@ -477,8 +477,10 @@ ok(HTML.includes('id="btn-load-arkdelta"'), 'markup: btn-load-arkdelta pod przyc
 ok(HTML.includes('loadArkdeltaBtn.disabled = !isEdit'), 'integracja: updateEditUI odlokowuje btn-load-arkdelta w trybie edycji (F7)');
 ok(HTML.includes('id="btn-save-arkdelta" class="etb-check" disabled'), 'markup: btn-save-arkdelta pod walidacją (disabled)');
 ok(HTML.includes('id="dlg-arkdelta"') && HTML.includes('id="arkdelta-body"'), 'markup: dialog dlg-arkdelta (błędy walidacji)');
-ok(HTML.includes('state.baseInfo = _computeBaseInfo(null, state._pendingComputed);'),
-  'integracja: baseInfo w wrapperze applyMap z reużyciem computed z verify (v1.49.7)');
+ok(HTML.includes('state._deferVerify = true;') && HTML.includes('state.baseInfo = null;')
+  && HTML.includes('state.baseInfo = _computeBaseInfo(null, (chkRes && chkRes.computed) || null);')
+  && HTML.includes('requestAnimationFrame(() => setTimeout(() => _postLoadVerifyDeferred(mapRef), 0));'),
+  'integracja: baseInfo po pierwszej klatce z reużyciem computed z verify (P3b, fala 3)');
 ok(HTML.includes('_arkdeltaUpdateSaveBtn();'), 'integracja: hook przycisku zapisu w updateUndoRedoUI');
 ok(HTML.includes("btnLoadArkdelta.addEventListener('click'") && HTML.includes("fiArkdelta.addEventListener('change'")
   && HTML.includes("btnSaveArkdelta.addEventListener('click', saveDelta)"), 'integracja: listenery wczytaj/zapisz');

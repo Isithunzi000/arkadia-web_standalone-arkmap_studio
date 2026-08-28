@@ -4760,12 +4760,21 @@ scenario('E20.toBlobNull', async () => {
    + ' URL.createObjectURL = function(){ window.__e20dl = true; return "blob:e20"; };'
    + ' document.getElementById("ep-fmt-png").click();'
    + ' document.getElementById("ep-do-btn").click();');
+  // Hardening (fala 3): pod --virtual-time-budget petla 100x50 ms wyprzedzala realna
+  // async prace eksportu (flake srodowiskowy — zreprodukowany na kodzie sprzed fali 3,
+  // localStorage nie przechodzi miedzy grupami: kazda grupa = swiezy chromium).
+  // Czekanie zdarzeniowe: MutationObserver na #toast + fallback 30 s (asercja bez zmian).
   const t = AEV('E20.toast', await eva('(async function(){'
-   + ' for (var i = 0; i < 100; i++) {'
-   + '   var tx = document.getElementById("toast").textContent;'
-   + '   if (tx.indexOf("Nie udało się wygenerować") !== -1) return tx;'
-   + '   await new Promise(function(res){ setTimeout(res, 50); });'
-   + ' } return null; })()'), 'toast po null z toBlob');
+   + ' return await new Promise(function(resolve){'
+   + '   var el = document.getElementById("toast");'
+   + '   var chk = function(){ var tx = el.textContent;'
+   + '     return tx.indexOf("Nie udało się wygenerować") !== -1 ? tx : null; };'
+   + '   var t0 = chk(); if (t0 !== null) { resolve(t0); return; }'
+   + '   var mo = new MutationObserver(function(){ var t1 = chk();'
+   + '     if (t1 !== null) { mo.disconnect(); resolve(t1); } });'
+   + '   mo.observe(el, { childList: true, characterData: true, subtree: true });'
+   + '   setTimeout(function(){ mo.disconnect(); resolve(null); }, 30000);'
+   + ' }); })()'), 'toast po null z toBlob');
   A('E20.toastShown', t !== null, 'null z toBlob → toast bledu (fix K1), dostano: ' + JSON.stringify(t));
   A('E20.noDownload', ev('window.__e20dl').val === false, 'null z toBlob → zero zapisu/downloadu');
   ex('HTMLCanvasElement.prototype.toBlob = window.__e20orig;');

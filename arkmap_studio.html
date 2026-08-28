@@ -6956,24 +6956,25 @@ async function loadArkmap(text, filename) {
   if (!map || typeof map !== 'object') { toast('✗ To nie jest mapa .arkmap (poprawny JSON, ale nie obiekt mapy)', true); return; }   // audyt A17
 
   const valRes  = validate(map);
-  const chkRes  = verifyChecksums(map);
   const suppMissing = checkSuppressorsInMap(map);   // Arc 29: podwójne linie — ostrzeżenie przy loadzie (non-fatal)
   const isFatal = !valRes.ok && valRes.errors.some(e => e.path === 'format' || e.path === 'version');
   const hasWarnings = (valRes.warnings || []).length > 0;
-  const hasIssues = !valRes.ok || hasWarnings || (chkRes.present && !chkRes.ok) || suppMissing.length > 0;
-
+  // P3b (fala 3): sumy kontrolne weryfikowane PO pierwszej klatce (wrapper applyMap,
+  // sciezka _deferVerify) — nie blokuja loadu ani nie wchodza do decyzji o dialogu.
+  // Dialog dostaje placeholder deferred — sekcja CRC mowi "weryfikacja w tle".
+  const hasIssues = !valRes.ok || hasWarnings || suppMissing.length > 0;
+  const chkRes = map.meta?.checksums?.file ? { present: true, deferred: true } : { present: false };
   if (hasIssues) {
     const confirmed = await showValDialog(valRes, chkRes, filename, isFatal, suppMissing);
     if (!confirmed) return;
   }
 
   state.filename = filename || null;
-  state._pendingComputed = chkRes.computed || null;  // v4: sumy już policzone przez verify — baseInfo je reużyje
   state._loadCheckpointText = text;  // P3a (fala 2): checkpoint .arkmap = surowy tekst pliku (zero serializacji przy load)
+  state._deferVerify = true;         // P3b (fala 3): CRC + baseInfo po pierwszej klatce
   applyMap(map);
-  const label = chkRes.present ? (chkRes.ok ? ' [✓ suma kontrolna]' : ' [⚠ suma kontrolna]') : '';
-  const allOk = valRes.ok && !hasWarnings && (!chkRes.present || chkRes.ok) && suppMissing.length === 0;
-  toast((allOk ? '✓' : '⚠') + ' Wczytano: ' + (filename || 'plik') + fmtSz(text.length) + ' [.arkmap]' + label);
+  const allOk = valRes.ok && !hasWarnings && suppMissing.length === 0;
+  toast((allOk ? '✓' : '⚠') + ' Wczytano: ' + (filename || 'plik') + fmtSz(text.length) + ' [.arkmap]');
 }
 
 function applyMap(map) {
@@ -10427,6 +10428,7 @@ function restoreLastSave() {
   let map;
   try { map = JSON.parse(state.pristineArkmap); }
   catch { toast('✗ Nie mozna przywrocic ostatniego zapisu', true); return; }
+  state._deferVerify = true;  // P3b (fala 3): baseInfo po pierwszej klatce takze po restore
   applyMap(map);
   _arkmapFileHandle = fh;
   _arkmapOverwriteConfirmed = false;  // Arc 32 (UX-5A): re-przypisanie handle = nowa sesja potwierdzenia
@@ -10890,6 +10892,7 @@ async function loadDat(file) {
       if (!confirmed) return;
     }
     state.filename = file.name;
+    state._deferVerify = true;   // P3b (fala 3): baseInfo po pierwszej klatce
     applyMap(arkmap);
     const allClean = res.ok && !hasWarnings && suppMissing.length === 0;
     toast((allClean ? '✓' : '⚠') + ' Wczytano: ' + file.name + fmtSz(file.size) + ' [Mudlet .dat]');
@@ -11148,6 +11151,7 @@ async function olLoadDat() {
     if (olIndex && olIndex.version)  arkmap.meta.user_data.version  = olIndex.version;
     if (olIndex && olIndex.revision) arkmap.meta.user_data.revision = olIndex.revision;
     state.filename = '🌐 online · map_master3.dat';
+    state._deferVerify = true;   // P3b (fala 3): baseInfo po pierwszej klatce
     applyMap(arkmap);
     const allClean = r.ok && !hasWarnings && suppMissing.length === 0;
     toast((allClean ? '✓' : '⚠') + ' Online: map_master3.dat' + fmtSz(buf.length) + ' [Mudlet .dat]');
@@ -13855,6 +13859,8 @@ function _valReportSections(valRes, chkRes, suppMissing) {
   const cl = [];
   if (!chkRes.present) {
     cl.push('Brak sekcji sum kontrolnych w pliku (plik bez weryfikacji spójności).');
+  } else if (chkRes.deferred) {
+    cl.push('Sumy kontrolne: weryfikacja po wczytaniu, w tle — wynik w komunikacie po załadowaniu (P3b).');
   } else if (chkRes.algMismatch) {
     cl.push('⚠ Nieznany lub stary algorytm sum kontrolnych (alg "' + chkRes.algMismatch + '") — nie zweryfikowano.');
     cl.push('Plik mógł zostać zmodyfikowany albo pochodzi ze starej wersji (zapis mapy przeliczy sumy do alg v4).');
@@ -14845,7 +14851,8 @@ Object.assign(state, {
   redoStack:          [],
   deltaLog:           [],   // audyt T3/W17: pełny log sesji dla eksportu kalki — NIE lustro capa; symetria LIFO ogona z undoStack; zeruje tylko applyMap
   baseInfo:           null, // ARKDELTA: tożsamość bazy (crc wariantu bazowego) — liczona raz przy wczytaniu mapy (_computeBaseInfo)
-  _pendingComputed:   null, // v4: computed z verifyChecksums przekazywane do baseInfo przy applyMap (jedno liczenie na load)
+  _deferVerify:       null,  // P3b (fala 3): sciezka loadu prosi o odroczona weryfikacje CRC+baseInfo (konsumowane w wrapperze applyMap)
+  _verifyPending:     false, // P3b: true miedzy applyMap a koncem odroczonej weryfikacji (gating eksportu/importu kalki)
   // dirty = "pamięć może się różnić od ostatniego potwierdzonego zapisu" (audyt A11').
   // Ustawiana przy KAŻDEJ zmianie stosu undo (pushUndo + undo/redo), kasowana
   // WYŁĄCZNIE po potwierdzonym zapisie. Konserwatywna: undo do stanu zapisanego
@@ -15803,6 +15810,23 @@ function updateUndoRedoUI() {
   _arkdeltaUpdateSaveBtn();  // ARKDELTA: zapis kalki aktywny tylko gdy są zmiany
 }
 
+// P3b (fala 3): cialo odroczonej weryfikacji — CRC + baseInfo + hak pomiarowy.
+// Wywolywane z wrappera applyMap przez rAF+setTimeout(0) (pierwsza klatka juz namalowana).
+// Zdublowany/zastary load: state.map !== mapRef → no-op (nowszy load ma wlasny callback).
+function _postLoadVerifyDeferred(mapRef) {
+  if (state.map !== mapRef) return;
+  let chkRes = null;
+  try { chkRes = verifyChecksums(mapRef); } catch (e) { console.warn('[ArkMap] verify post-frame:', e); }
+  // baseInfo z reużyciem computed z verify — jedno liczenie V4 na load (zachowane, odroczone)
+  state.baseInfo = _computeBaseInfo(null, (chkRes && chkRes.computed) || null);
+  state._verifyPending = false;
+  window.__arkmapVerifiedAt = performance.now();  // hak pomiarowy mega-testu (W1: load→verified)
+  if (chkRes && chkRes.present && !chkRes.ok) {
+    console.warn('[ArkMap] suma kontrolna NIEZGODNA:', { badAreas: (chkRes.badAreas || []).length, badRooms: (chkRes.badRooms || []).length });
+    toast('⚠ Suma kontrolna mapy NIEZGODNA — plik zmodyfikowany poza edytorem', true);
+  }
+}
+
 // applyMap editor extensions (per checkpoint Pass 69 sekcja F)
 const _origApplyMap = applyMap;
 applyMap = function(map) {
@@ -15813,8 +15837,6 @@ applyMap = function(map) {
   state.undoStack = [];
   state.redoStack = [];
   state.deltaLog = [];  // ARKDELTA: nowa mapa = pusty log
-  state.baseInfo = _computeBaseInfo(null, state._pendingComputed);  // ARKDELTA: tożsamość bazy nowej mapy (reużycie computed z verify przy load)
-  state._pendingComputed = null;
   _deltaGhostReset();  // ARKDELTA M3: nowa mapa = bez duchów / override'ów / trybu stawiania
   // ARKDELTA M4: panel recenzji otwarty → re-klasyfikacja względem nowej mapy
   if (typeof _deltaReview !== 'undefined' && _deltaReview) {
@@ -15823,6 +15845,22 @@ applyMap = function(map) {
     _renderDeltaPanel();
   }
   state.dirty = false;  // A11': nowa mapa = czysty stan
+  // P3b (fala 3): weryfikacja CRC + baseInfo PO pierwszej klatce dla sciezek loadu
+  // (loadArkmap/loadDat/online/restore ustawiaja _deferVerify). Koszt ~21% loadu
+  // (profil CDP 2026-08-27) schodzi ze sciezki krytycznej. Bezposredni applyMap
+  // (np. harnessy) — baseInfo liczone synchronicznie jak dotychczas.
+  const _deferV = !!state._deferVerify;
+  state._deferVerify = null;
+  if (_deferV) {
+    state.baseInfo = null;
+    state._verifyPending = true;
+    window.__arkmapVerifiedAt = null;  // hak pomiarowy mega-testu (W1: load→verified)
+    const mapRef = state.map;
+    requestAnimationFrame(() => setTimeout(() => _postLoadVerifyDeferred(mapRef), 0));
+  } else {
+    state.baseInfo = _computeBaseInfo(null, null);  // ARKDELTA: tożsamość bazy nowej mapy
+    state._verifyPending = false;
+  }
   // T6/D2: bufor ostatniego punktu kontrolnego (wczytanie). P3a (fala 2): dla loadu .arkmap
   // checkpoint = surowy tekst pliku (podlozony przez loadArkmap) — semantycznie rownowazny
   // kanonicznej serializacji (restoreLastSave robi JSON.parse + applyMap), a koszt ~31%
@@ -20539,6 +20577,7 @@ const _DELTA_EXPORTABLE = new Set([
 ]);
 
 function saveDelta() {
+  if (state._verifyPending) { toast('Trwa weryfikacja sum kontrolnych mapy…', true); return; }  // P3b: kalka potrzebuje gotowego baseInfo
   if (!state.deltaLog || state.deltaLog.length === 0) { toast('Brak zmian do zapisania', true); return; }
   // Arc 34: log niepusty, ale zero eksportowalnych opow (np. same akceptacje walidatora)
   if (!state.deltaLog.some(e => _DELTA_EXPORTABLE.has(e.type))) { toast('Brak zmian do zapisania', true); return; }
@@ -23224,6 +23263,7 @@ fiArkdelta.addEventListener('change', async e => {
   if (!f) return;
   let text;
   try { text = await f.text(); } catch { toast('✗ Nie można odczytać pliku: ' + (f?.name || 'plik'), true); return; }  // audyt K2
+  if (state._verifyPending) { toast('Trwa weryfikacja sum kontrolnych mapy…', true); return; }  // P3b: import kalki potrzebuje gotowego baseInfo
   const res = validateDeltaText(text);
   if (!res.ok) { openDeltaErrors(res.errors); return; }
   const chk = _deltaBaseCheck(res.delta.meta.base);  // M4

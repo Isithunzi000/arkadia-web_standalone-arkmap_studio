@@ -18,7 +18,10 @@ PORT="${ARKTEST_PORT:-18137}"
 CHROME="${CHROMIUM_BIN:-chromium}"
 GRPS="${ARKTEST_GROUPS:-SMOKE}"
 BUDGET="${ARKTEST_BUDGET:-90000}"
-RT_GRPS="${ARKTEST_REALTIME:-E15}"
+# E20 na realnym zegarze (fala 3): pod --virtual-time-budget lancuch
+# click → rAF → eksport PNG → toBlob → toast goni sie z wirtualnym zegarem
+# (flake srodowiskowy, zreprodukowany na kodzie sprzed fali 3) — jak E15/SW.
+RT_GRPS="${ARKTEST_REALTIME:-E15 E20}"
 HAVE_WS=0
 python3 -c 'import websockets' 2>/dev/null && HAVE_WS=1
 OUT="$(mktemp)"; LOG="$(mktemp)"

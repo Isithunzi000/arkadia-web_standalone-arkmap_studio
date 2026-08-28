@@ -243,7 +243,7 @@ console.log('── T7: strazniki strukturalne Tier 3 + piny wersji ──');
 {
   ok(NEW.includes("const APP_VERSION = 'v1.49.7';"), 'pin: APP_VERSION v1.49.7');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok((deltaSrc.match(/v1\.49\.7/g) || []).length === 10, 'pin: delta.js 10x v1.49.7 (4 linie x includes+label + 2 adnotacje)');
+  ok((deltaSrc.match(/v1\.49\.7/g) || []).length === 9, 'pin: delta.js 9x v1.49.7 (4 linie x includes+label + 1 adnotacja; fala 3: adnotacja integracji przeszla na P3b bez numeru wersji)');
   ok(NEW.includes("alg: 'v4',"), 'straznik: addChecksums alg v4');
   ok(NEW.includes('// ====XXH3-64-BEGIN====') && NEW.includes('// ====CANONICAL-V4-BEGIN====') &&
      !NEW.includes('// ====CANONICAL-V3-BEGIN====') && !NEW.includes('function _crcArea(area, roomCrcs)'),

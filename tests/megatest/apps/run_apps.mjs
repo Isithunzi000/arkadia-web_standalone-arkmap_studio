@@ -175,17 +175,28 @@ async function benchArkmap(item) {
         const frameOk = await eval(frameWaitSrc);  // pierwsza klatka, sufit 5 s
         const t2 = performance.now();
         if (!state.map) throw new Error('state.map puste po load — mozliwy dialog walidacji (mapa nie jest czysta?)');
-        return { total_ms: t2 - t0, apply_ms: t1 - t0, frame_ok: frameOk };
+        // P3b (fala 3): weryfikacja CRC/baseInfo odbywa sie po pierwszej klatce.
+        // Hak __arkmapVerifiedAt (performance.now po stronie strony) — sufit 10 s.
+        let verifiedAt = null;
+        const vDeadline = performance.now() + 10000;
+        while (verifiedAt == null && performance.now() < vDeadline) {
+          verifiedAt = window.__arkmapVerifiedAt;
+          if (verifiedAt == null) await new Promise(r => setTimeout(r, 25));
+        }
+        return { total_ms: t2 - t0, apply_ms: t1 - t0, frame_ok: frameOk,
+                 verified_ms: verifiedAt != null ? verifiedAt - t0 : null };
       }, filePath, fmt, FRAME_WAIT);
       loadsF.push(t);
       heapsF.push(r1((await heapMb(page)) - h0));
       const vd = await page.evaluate(() => window.__valDialogs || []);
       if (vd.length) valDialogs.push(...vd);
-      console.log(`  W1 ${fmt} run ${run + 1}/${RUNS}: ${r1(t.total_ms)}ms (apply ${r1(t.apply_ms)}ms, klatka ${t.frame_ok ? 'ok' : 'timeout 5s'})${vd.length ? ' DIALOG: ' + JSON.stringify(vd) : ''}`);
+      console.log(`  W1 ${fmt} run ${run + 1}/${RUNS}: ${r1(t.total_ms)}ms (apply ${r1(t.apply_ms)}ms, verified ${t.verified_ms != null ? r1(t.verified_ms) + 'ms' : 'MISS'}, klatka ${t.frame_ok ? 'ok' : 'timeout 5s'})${vd.length ? ' DIALOG: ' + JSON.stringify(vd) : ''}`);
       await page.close();
     }
     loads.push({ fmt, ms: statsArr(loadsF.map(x => r1(x.total_ms))),
                  apply_ms: statsArr(loadsF.map(x => r1(x.apply_ms))),
+                 verified_ms: statsArr(loadsF.filter(x => x.verified_ms != null).map(x => r1(x.verified_ms))),
+                 verified_miss: loadsF.filter(x => x.verified_ms == null).length,
                  frames_ok: loadsF.filter(x => x.frame_ok).length,
                  heap_mb: statsArr(heapsF), val_dialogs: valDialogs });
   }
@@ -482,7 +493,7 @@ for (const item of ladder) {
   out.sets[item.name] = {
     rooms: item.rooms,
     arkmap: Object.fromEntries(ark.loads.map(l => [l.fmt === 'arkmap' ? 'arkmap_file' : 'dat_file',
-      { load_ms: l.ms, apply_ms: l.apply_ms, frames_ok: l.frames_ok, heap_mb: l.heap_mb }]))
+      { load_ms: l.ms, apply_ms: l.apply_ms, verified_ms: l.verified_ms, verified_miss: l.verified_miss, frames_ok: l.frames_ok, heap_mb: l.heap_mb }]))
       , arkmap_wl: { arkmap: wlStats(ark.wl) },
     webreal: skeleton ? {
       w1: web.w1, heap_mb: web.heap_mb, sanity_found: web.sanity_found,

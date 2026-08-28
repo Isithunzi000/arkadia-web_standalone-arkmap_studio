@@ -456,7 +456,7 @@ console.log('── T9: piny ──');
   // piny wersji
   ok(NEW.includes("const APP_VERSION = 'v1.49.7';"), 'pin: APP_VERSION v1.49.7');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok(deltaSrc.split('v1.49.7').length - 1 === 10, 'pin: delta.js 10x v1.49.7');
+  ok(deltaSrc.split('v1.49.7').length - 1 === 9, 'pin: delta.js 9x v1.49.7 (fala 3: adnotacja integracji P3b bez numeru wersji)');
   const t2 = fs.readFileSync(path.join(ROOT, 'tests', 'tier2_state.js'), 'utf8');
   ok(t2.includes("wersja: v1.49.7"), 'pin: tier2_state.js v1.49.7');
   const t3 = fs.readFileSync(path.join(ROOT, 'tests', 'tier3_format.js'), 'utf8');
