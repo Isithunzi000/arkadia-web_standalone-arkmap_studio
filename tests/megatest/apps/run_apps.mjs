@@ -271,9 +271,33 @@ async function benchArkmap(item) {
 // W2: ich PathFinder, dijkstra (ich domyslna) + astar; SWIEZA instancja per run
 //     (ich findPath ma cache per instancja). W3: N/A (brak natywnego API — kod).
 // W3b: getRooms() -> id->name.
+// SKELETON (auto powyzej 50k pokoi): SkeletonMapReader.getRooms() zwraca [] —
+// udowodnione w kodzie (dist/SkeletonMapReader-*.js: "getRooms() { return []; }").
+// Ich MapGraph.buildGraph iteruje getRooms(), wiec graf jest PUSTY: PathFinder
+// i iteracja sa natywnie N/A. Mierzymy wtedy dodatkowo wymuszony plain
+// (parseMudletMap(buf, {mode:'plain'})) jako wiersz INFORMACYJNY — pokazuje,
+// co ich silnik potrafi, gdyby nie natywne ograniczenie trybu.
+async function webW2(page, item, tag) {
+  // per (algo, run) — osobne evaluate (jak po stronie arkmap): ich Dijkstra
+  // na 432k pokoi tez moze przekroczyc protocolTimeout w jednym calu.
+  const w2 = {};
+  for (const algo of ['dijkstra', 'astar']) {
+    const runsOut = [];
+    let paths0 = null;
+    for (let r = 0; r < RUNS; r++) {
+      const res = await page.evaluate((pairs, algo) => window.__wr.path(pairs, algo, 1)[0], item.pairs, algo);
+      runsOut.push({ ms: res.ms, found: res.found });
+      if (r === 0) paths0 = res.paths;
+      console.log(`  W2 webreal${tag} ${algo} run ${r + 1}/${RUNS}: ${res.ms}ms found=${res.found}`);
+    }
+    w2[algo] = { runs: runsOut, paths0 };
+  }
+  return w2;
+}
+
 async function benchWebreal(item) {
   const loads = [], heaps = [];
-  let w2 = null, w3b = null;
+  let w2 = null, w3b = null, mode0 = null, sanityFound = null;
   for (let run = 0; run < RUNS; run++) {
     const page = await browser.newPage();
     await page.goto(`${BASE}/tests/megatest/apps/page_webreal.html`, { waitUntil: 'load' });
@@ -287,35 +311,90 @@ async function benchWebreal(item) {
     }, item.dat);
     loads.push(w1);
     heaps.push(r1((await heapMb(page)) - h0));
-
     if (run === 0) {
-      // per (algo, run) — osobne evaluate (jak po stronie arkmap): ich Dijkstra
-      // na 432k pokoi tez moze przekroczyc protocolTimeout w jednym calu.
-      w2 = {};
-      for (const algo of ['dijkstra', 'astar']) {
-        const runsOut = [];
-        let paths0 = null;
-        for (let r = 0; r < RUNS; r++) {
-          const res = await page.evaluate((pairs, algo) => window.__wr.path(pairs, algo, 1)[0], item.pairs, algo);
-          runsOut.push({ ms: res.ms, found: res.found });
-          if (r === 0) paths0 = res.paths;
-          console.log(`  W2 webreal ${algo} run ${r + 1}/${RUNS}: ${res.ms}ms found=${res.found}`);
-        }
-        w2[algo] = { runs: runsOut, paths0 };
+      mode0 = w1.mode;
+      console.log(`  web-real: tryb natywny=${mode0}, getRooms()=${w1.rooms}`);
+      if (mode0 === 'skeleton') {
+        // Sanity: jeden run dijkstry na pustym grafie — MUSI dac found=0.
+        const res = await page.evaluate((pairs) => window.__wr.path(pairs, 'dijkstra', 1)[0], item.pairs);
+        sanityFound = res.found;
+        console.log(`  web-real: skeleton — PathFinder natywnie N/A (sanity found=${sanityFound})`);
       }
-      w3b = await page.evaluate((runs) => window.__wr.iter(runs), RUNS);
     }
     await page.close();
   }
-  return {
+  const out = {
     w1: { parse_ms: statsArr(loads.map(l => l.parse_ms)),
           materialize_ms: statsArr(loads.map(l => l.materialize_ms)),
           graph_ms: statsArr(loads.map(l => l.graph_ms)),
           total_ms: statsArr(loads.map(l => l.total_ms)),
-          mode: loads[0].mode },
+          mode: mode0, rooms_reader: loads[0].rooms },
     heap_mb: statsArr(heaps),
-    w2, w3b,
+    w2: null, w3b: null,
   };
+  if (mode0 === 'skeleton') {
+    out.sanity_found = sanityFound;
+    // Wymuszony plain — wiersz informacyjny (NIE natywny): pelny reader + PathFinder.
+    console.log('  web-real: wymuszony plain (informacyjnie)...');
+    const page = await browser.newPage();
+    try {
+      await page.goto(`${BASE}/tests/megatest/apps/page_webreal.html`, { waitUntil: 'load' });
+      await page.waitForFunction('window.__wrReady === true', { timeout: 60000 });
+      const loadsP = [], heapsP = [];
+      let w2p = null, w3bp = null;
+      for (let run = 0; run < RUNS; run++) {
+        const pg = run === 0 ? page : await browser.newPage();
+        if (run > 0) {
+          await pg.goto(`${BASE}/tests/megatest/apps/page_webreal.html`, { waitUntil: 'load' });
+          await pg.waitForFunction('window.__wrReady === true', { timeout: 60000 });
+        }
+        const h0 = await heapMb(pg);
+        const w1 = await pg.evaluate(async (abs) => {
+          const resp = await fetch('/file?abs=' + encodeURIComponent(abs));
+          if (!resp.ok) throw new Error('fetch ' + resp.status);
+          const bytes = new Uint8Array(await resp.arrayBuffer());
+          return await window.__wr.load(bytes, { mode: 'plain' });
+        }, item.dat);
+        loadsP.push(w1);
+        heapsP.push(r1((await heapMb(pg)) - h0));
+        console.log(`  W1 webreal-plain run ${run + 1}/${RUNS}: ${w1.total_ms}ms (rooms=${w1.rooms})`);
+        if (run === 0) {
+          w2p = await webW2(pg, item, '-plain');
+          w3bp = await pg.evaluate((runs) => window.__wr.iter(runs), RUNS);
+        }
+        if (run > 0) await pg.close();
+      }
+      out.plain_forced = {
+        w1: { parse_ms: statsArr(loadsP.map(l => l.parse_ms)),
+              materialize_ms: statsArr(loadsP.map(l => l.materialize_ms)),
+              graph_ms: statsArr(loadsP.map(l => l.graph_ms)),
+              total_ms: statsArr(loadsP.map(l => l.total_ms)),
+              mode: loadsP[0].mode, rooms_reader: loadsP[0].rooms },
+        heap_mb: statsArr(heapsP),
+        w2: w2p, w3b: w3bp,
+      };
+    } catch (e) {
+      // np. OOM przy 432k pokoi — zapisujemy stan, nie wywalamy fazy
+      console.warn('  ! web-real plain wymuszony niedostepny: ' + e.message);
+      out.plain_forced = { error: String(e.message || e) };
+    }
+    await page.close().catch(() => {});
+  } else {
+    // plain natywnie: pelne W2/W3b na tej samej (swiezej) stronie
+    const page = await browser.newPage();
+    await page.goto(`${BASE}/tests/megatest/apps/page_webreal.html`, { waitUntil: 'load' });
+    await page.waitForFunction('window.__wrReady === true', { timeout: 60000 });
+    await page.evaluate(async (abs) => {
+      const resp = await fetch('/file?abs=' + encodeURIComponent(abs));
+      const bytes = new Uint8Array(await resp.arrayBuffer());
+      await window.__wr.load(bytes);
+    }, item.dat);
+    w2 = await webW2(page, item, '');
+    w3b = await page.evaluate((runs) => window.__wr.iter(runs), RUNS);
+    await page.close();
+    out.w2 = w2; out.w3b = w3b;
+  }
+  return out;
 }
 
 // ─── Gate semantyczny ───────────────────────────────────────────────────────
@@ -323,6 +402,9 @@ async function benchWebreal(item) {
 // 2) web-real IGNORUJE locki pokoi (potwierdzone w kodzie: zero isLocked w bundlu),
 //    wiec moze znalezc wiecej — ale kazda rozbieznosc musi wynikac ze sciezki
 //    przez locked pokoj. Inna rozbieznosc = BLAD testu.
+// 3) SKELETON (auto >50k pokoi): ich getRooms()=[] (kod), graf pusty, pathfinding
+//    natywnie N/A — found=0 to stan OCZEKIWANY, nie rozbieznosc. Gate parowy
+//    stosujemy wtedy do wiersza wymuszonego plain (jego semantyka = plain).
 function lockedSet(item) {
   const m = JSON.parse(fs.readFileSync(item.arkmap, 'utf8'));
   const s = new Set();
@@ -335,18 +417,26 @@ function lockedSet(item) {
 function gate(item, arkWl, webWl, deskFound) {
   const problems = [];
   const arkFound = arkWl.w2.dijkstra.perPair;
-  const webPaths = webWl.w2.dijkstra.paths0;
   const locked = lockedSet(item);
   if (deskFound != null) {
     const af = arkFound.filter(Boolean).length;
     if (af !== deskFound) problems.push(`arkmap found=${af} != desktop found=${deskFound}`);
   }
-  for (let i = 0; i < item.pairs.length; i++) {
+  const skeleton = webWl.w1.mode === 'skeleton';
+  if (skeleton) {
+    if (webWl.sanity_found !== 0) problems.push(`skeleton: sanity found=${webWl.sanity_found} != 0 — pusty graf to stan oczekiwany`);
+  }
+  const webPaths = skeleton
+    ? (webWl.plain_forced && webWl.plain_forced.w2 ? webWl.plain_forced.w2.dijkstra.paths0 : null)
+    : webWl.w2.dijkstra.paths0;
+  const tag = skeleton ? 'web-plain!' : 'web-real';
+  if (!webPaths) { if (!skeleton) problems.push('brak sciezek web-real do gate'); }
+  else for (let i = 0; i < item.pairs.length; i++) {
     const a = arkFound[i], w = !!webPaths[i];
-    if (a && !w) problems.push(`para ${item.pairs[i]}: arkmap znalazl, web-real NIE — nieoczekiwane`);
+    if (a && !w) problems.push(`para ${item.pairs[i]}: arkmap znalazl, ${tag} NIE — nieoczekiwane`);
     if (!a && w) {
       const przezLocked = webPaths[i].some(id => locked.has(id));
-      if (!przezLocked) problems.push(`para ${item.pairs[i]}: web-real znalazl, arkmap nie, a sciezka NIE idzie przez locked — nieoczekiwane`);
+      if (!przezLocked) problems.push(`para ${item.pairs[i]}: ${tag} znalazl, arkmap nie, a sciezka NIE idzie przez locked — nieoczekiwane`);
     }
   }
   return problems;
@@ -362,7 +452,7 @@ const out = {
     n_runs: RUNS, date: new Date().toISOString(),
     chrome: CHROME_VER, node: process.version,
     packages: { 'mudlet-map-renderer': '2.6.1', 'mudlet-map-binary-reader': '1.3.0' },
-    note: 'arkmap: prawdziwe UI (findPath/wpDoSearch, wpState neutralny). web-real: ich reader+MapReader+PathFinder; W3 N/A (brak natywnego API); PathFinder cache neutralizowany swieza instancja per run. web-real ignoruje locki pokoi (kod) — rozbieznosci found przez locked pokoje sa OCZEKIWANE.',
+    note: 'arkmap: prawdziwe UI (findPath/wpDoSearch, wpState neutralny). web-real: ich reader+MapReader+PathFinder; W3 N/A (brak natywnego API); PathFinder cache neutralizowany swieza instancja per run. web-real ignoruje locki pokoi (kod) — rozbieznosci found przez locked pokoje sa OCZEKIWANE. Powyzej 50k pokoi natywny auto-mode przechodzi w skeleton: SkeletonMapReader.getRooms()=[] (kod), wiec PathFinder/iteracja sa natywnie N/A — wowczas mierzymy wymuszony plain jako wiersz informacyjny (plain_forced).',
   },
   sets: {},
 };
@@ -383,21 +473,35 @@ for (const item of ladder) {
     w3: { ms: statsArr(w.w3.map(r => r.ms)), hits: w.w3[0].hits },
     w3b: { ms: statsArr(w.w3b.map(r => r.ms)), keys: w.w3b[0].keys },
   });
+  const skeleton = web.w1.mode === 'skeleton';
+  const w2sum = w2 => w2 ? Object.fromEntries(Object.entries(w2).map(([algo, d]) => [algo, { ms: statsArr(d.runs.map(r => r.ms)), found: d.runs[0].found }])) : null;
+  const w3bsum = w3b => w3b ? { ms: statsArr(w3b.map(r => r.ms)), keys: w3b[0].keys } : null;
+  const webFound = skeleton
+    ? (web.plain_forced && web.plain_forced.w2 ? web.plain_forced.w2.dijkstra.runs[0].found : null)
+    : web.w2.dijkstra.runs[0].found;
   out.sets[item.name] = {
     rooms: item.rooms,
     arkmap: Object.fromEntries(ark.loads.map(l => [l.fmt === 'arkmap' ? 'arkmap_file' : 'dat_file',
       { load_ms: l.ms, apply_ms: l.apply_ms, frames_ok: l.frames_ok, heap_mb: l.heap_mb }]))
       , arkmap_wl: { arkmap: wlStats(ark.wl) },
-    webreal: {
+    webreal: skeleton ? {
+      w1: web.w1, heap_mb: web.heap_mb, sanity_found: web.sanity_found,
+      w2: null, w3b: null,   // natywnie N/A: getRooms()=[] w skeleton (kod)
+      plain_forced: web.plain_forced && web.plain_forced.w1 ? {
+        w1: web.plain_forced.w1, heap_mb: web.plain_forced.heap_mb,
+        w2: w2sum(web.plain_forced.w2), w3b: w3bsum(web.plain_forced.w3b),
+      } : { error: (web.plain_forced && web.plain_forced.error) || 'niedostepny' },
+    } : {
       w1: web.w1, heap_mb: web.heap_mb,
-      w2: Object.fromEntries(Object.entries(web.w2).map(([algo, d]) => [algo, { ms: statsArr(d.runs.map(r => r.ms)), found: d.runs[0].found }])),
-      w3b: { ms: statsArr(web.w3b.map(r => r.ms)), keys: web.w3b[0].keys },
+      w2: w2sum(web.w2),
+      w3b: w3bsum(web.w3b),
     },
     gate: { problems: problems.length, desk_found: deskFound,
             arkmap_found: ark.wl.w2.dijkstra.perPair.filter(Boolean).length,
-            webreal_found: web.w2.dijkstra.runs[0].found },
+            webreal_found: skeleton ? 0 : webFound,
+            webplain_found: skeleton ? webFound : null },
   };
-  console.log(`  arkmap .arkmap load=${out.sets[item.name].arkmap.arkmap_file.load_ms.med}ms .dat=${out.sets[item.name].arkmap.dat_file.load_ms.med}ms | web-real=${web.w1.total_ms.med}ms (${web.w1.mode}) | found: arkmap=${out.sets[item.name].gate.arkmap_found} web=${out.sets[item.name].gate.webreal_found} desk=${deskFound} | ${Date.now() - t0}ms`);
+  console.log(`  arkmap .arkmap load=${out.sets[item.name].arkmap.arkmap_file.load_ms.med}ms .dat=${out.sets[item.name].arkmap.dat_file.load_ms.med}ms | web-real=${web.w1.total_ms.med}ms (${web.w1.mode})${skeleton ? ' +plain=' + (web.plain_forced && web.plain_forced.w1 ? web.plain_forced.w1.total_ms.med + 'ms' : 'N/A') : ''} | found: arkmap=${out.sets[item.name].gate.arkmap_found} web=${out.sets[item.name].gate.webreal_found}${skeleton ? ' webplain=' + webFound : ''} desk=${deskFound} | ${Date.now() - t0}ms`);
 }
 
 fs.writeFileSync(path.join(RESULTS, 'results_apps.json'), JSON.stringify(out, null, 1));

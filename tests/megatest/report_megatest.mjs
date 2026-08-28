@@ -290,14 +290,20 @@ if (apps) {
     const s = aS(n);
     const ad = s.arkmap_wl?.arkmap?.w2?.dijkstra, aa = s.arkmap_wl?.arkmap?.w2?.astar;
     const wd = s.webreal?.w2?.dijkstra, wa = s.webreal?.w2?.astar;
+    const pf = s.webreal?.plain_forced;
+    const pd = pf?.w2?.dijkstra, pa = pf?.w2?.astar;
+    const skel = s.webreal?.w1?.mode === 'skeleton';
     const g = s.gate || {};
+    const naSkel = '<small>N/A — skeleton (getRooms()=[], kod)</small>';
     return `<tr><td>${esc(n)}</td>` + hl([
       { v: ad?.ms?.med, cell: fmt(ad?.ms?.med) },
       { v: aa?.ms?.med, cell: fmt(aa?.ms?.med) },
-      { v: wd?.ms?.med, cell: fmt(wd?.ms?.med) },
-      { v: wa?.ms?.med, cell: fmt(wa?.ms?.med) },
+      { v: wd?.ms?.med, cell: skel ? naSkel : fmt(wd?.ms?.med) },
+      { v: wa?.ms?.med, cell: skel ? naSkel : fmt(wa?.ms?.med) },
+      { v: pd?.ms?.med, cell: pd ? fmt(pd.ms.med) : (skel ? `<small>${esc(pf?.error || 'N/A')}</small>` : '—') },
+      { v: pa?.ms?.med, cell: pa ? fmt(pa.ms.med) : (skel ? `<small>${esc(pf?.error || 'N/A')}</small>` : '—') },
       { v: dStat(n, 'path')?.med, cell: fmt(dStat(n, 'path')?.med) },
-    ]) + `<td${g.problems ? ' class="worst"' : ''}><small>${g.arkmap_found ?? '—'} / ${g.webreal_found ?? '—'} / ${g.desk_found ?? '—'}</small></td></tr>`;
+    ]) + `<td${g.problems ? ' class="worst"' : ''}><small>${g.arkmap_found ?? '—'} / ${skel ? '0 (skel)' : (g.webreal_found ?? '—')}${g.webplain_found != null ? ' / ' + g.webplain_found + ' (plain)' : ''} / ${g.desk_found ?? '—'}</small></td></tr>`;
   }).join('\n');
 
   const appW2chart = chart(aNames.map(n => {
@@ -307,6 +313,8 @@ if (apps) {
       { label: 'arkmap A*', val: s.arkmap_wl?.arkmap?.w2?.astar?.ms?.med ?? null, color: CA.astar },
       { label: 'web Dijkstra', val: s.webreal?.w2?.dijkstra?.ms?.med ?? null, color: CA.wreal },
       { label: 'web A*', val: s.webreal?.w2?.astar?.ms?.med ?? null, color: '#2a8f80' },
+      { label: 'web-plain D (inform.)', val: s.webreal?.plain_forced?.w2?.dijkstra?.ms?.med ?? null, color: '#7fd1c8' },
+      { label: 'web-plain A* (inform.)', val: s.webreal?.plain_forced?.w2?.astar?.ms?.med ?? null, color: '#f4a261' },
       { label: 'desktop getPath', val: dStat(n, 'path')?.med ?? null, color: CA.desk },
     ] };
   }));
@@ -322,9 +330,14 @@ if (apps) {
 
   const appW3brows = aNames.map(n => {
     const s = aS(n);
+    const skel = s.webreal?.w1?.mode === 'skeleton';
+    const pw3b = s.webreal?.plain_forced?.w3b;
+    const webCell = skel
+      ? `<small>N/A — skeleton</small>${pw3b ? `<br><small>plain wymuszony: ${fmt(pw3b.ms.med)} (${fmt(pw3b.keys)} kluczy)</small>` : ''}`
+      : fmt(s.webreal?.w3b?.ms?.med);
     return `<tr><td>${esc(n)}</td>` + hl([
       { v: s.arkmap_wl?.arkmap?.w3b?.ms?.med, cell: fmt(s.arkmap_wl?.arkmap?.w3b?.ms?.med) },
-      { v: s.webreal?.w3b?.ms?.med, cell: fmt(s.webreal?.w3b?.ms?.med) },
+      { v: skel ? null : s.webreal?.w3b?.ms?.med, cell: webCell },
       { v: dStat(n, 'iter')?.med, cell: fmt(dStat(n, 'iter')?.med) },
     ]) + `</tr>`;
   }).join('\n');
@@ -334,16 +347,16 @@ if (apps) {
     return `<tr><td>${esc(n)}</td>` + hl([
       { v: s.arkmap?.arkmap_file?.heap_mb?.med, cell: s.arkmap?.arkmap_file ? fmt(s.arkmap.arkmap_file.heap_mb.med) + ' MB' : '—' },
       { v: s.arkmap?.dat_file?.heap_mb?.med, cell: s.arkmap?.dat_file ? fmt(s.arkmap.dat_file.heap_mb.med) + ' MB' : '—' },
-      { v: s.webreal?.heap_mb?.med, cell: s.webreal ? fmt(s.webreal.heap_mb.med) + ' MB' : '—' },
+      { v: s.webreal?.heap_mb?.med, cell: s.webreal ? fmt(s.webreal.heap_mb.med) + ' MB' + (s.webreal.plain_forced?.heap_mb ? `<br><small>plain wymuszony: ${fmt(s.webreal.plain_forced.heap_mb.med)} MB</small>` : '') + (s.webreal.w1?.mode === 'skeleton' ? ' <small>[skeleton]</small>' : '') : '—' },
     ]) + `</tr>`;
   }).join('\n');
 
   const gateProblems = aNames.reduce((acc, n) => acc + (aS(n).gate?.problems || 0), 0);
-  const appsLegend = `<p class="leg"><span style="color:${CA.amap}">■</span> ArkMap Studio (prawdziwe UI) · <span style="color:${CA.adat}">■</span> ArkMap .dat · <span style="color:${CA.wreal}">■</span> web-real (ich pipeline) · <span style="color:${CA.astar}">■</span> wariant A* · <span style="color:${CA.desk}">■</span> desktop · sortowane najlepszy → najgorszy</p>`;
+  const appsLegend = `<p class="leg"><span style="color:${CA.amap}">■</span> ArkMap Studio (prawdziwe UI) · <span style="color:${CA.adat}">■</span> ArkMap .dat · <span style="color:${CA.wreal}">■</span> web-real (ich pipeline) · <span style="color:#7fd1c8">■</span>/<span style="color:#f4a261">■</span> web-plain wymuszony (inform.) · <span style="color:${CA.astar}">■</span> wariant A* · <span style="color:${CA.desk}">■</span> desktop · sortowane najlepszy → najgorszy</p>`;
 
   appsHtml = `
 <h2 id="apps">APPS — natywne silniki w aplikacjach (headless Chromium)</h2>
-<div class="note">Metodologia: kazda apka liczy SWOIM natywnym kodem i formatem. ArkMap Studio — prawdziwe UI (${esc(apps.meta.chrome)}): loadArkmap/loadDat → applyMap → pierwsza klatka (2×rAF), findPath (Dijkstra domyslnie + wariant A*; wpState neutralny: transport off, kierunki all, locki ON), wpDoSearch, iteracja po state.roomById. Web-real — ich prawdziwy pipeline z npm: mudlet-map-binary-reader@${esc(apps.meta.packages['mudlet-map-binary-reader'])} → mudlet-map-renderer@${esc(apps.meta.packages['mudlet-map-renderer'])} (parseMudletMap → readerFromLoadedMap → PathFinder; tryb auto: plain &lt;50k pokoi, skeleton powyzej). W3 web = N/A — ich biblioteka mapowa nie ma natywnego API wyszukiwania (potwierdzone w kodzie). Ich PathFinder cache'uje findPath per instancja — neutralizowane swieza instancja per run. Ich silnik IGNORUJE locki pokoi (0× isLocked w bundlu — honoruje tylko locki wyjsc), wiec moze znalezc wiecej sciezek: rozbieznosci idace przez locked pokoje sa OCZEKIWANE i oznaczone, kazda inna = czerwona flaga (gate).</div>
+<div class="note">Metodologia: kazda apka liczy SWOIM natywnym kodem i formatem. ArkMap Studio — prawdziwe UI (${esc(apps.meta.chrome)}): loadArkmap/loadDat → applyMap → pierwsza klatka (2×rAF), findPath (Dijkstra domyslnie + wariant A*; wpState neutralny: transport off, kierunki all, locki ON), wpDoSearch, iteracja po state.roomById. Web-real — ich prawdziwy pipeline z npm: mudlet-map-binary-reader@${esc(apps.meta.packages['mudlet-map-binary-reader'])} → mudlet-map-renderer@${esc(apps.meta.packages['mudlet-map-renderer'])} (parseMudletMap → readerFromLoadedMap → PathFinder; tryb auto: plain &lt;50k pokoi, skeleton powyzej). W3 web = N/A — ich biblioteka mapowa nie ma natywnego API wyszukiwania (potwierdzone w kodzie). Powyzej 50k pokoi natywny auto-mode ich readera przechodzi w skeleton (getRooms()=[] — kod), wiec W2/W3b web = N/A i mierzymy dodatkowo plain wymuszony (wiersz informacyjny). Ich PathFinder cache'uje findPath per instancja — neutralizowane swieza instancja per run. Ich silnik IGNORUJE locki pokoi (0× isLocked w bundlu — honoruje tylko locki wyjsc), wiec moze znalezc wiecej sciezek: rozbieznosci idace przez locked pokoje sa OCZEKIWANE i oznaczone, kazda inna = czerwona flaga (gate).</div>
 <h3>W1 — wczytanie w aplikacji (ms, mediana z ${apps.meta.n_runs} runow)</h3>
 <table><tr><th>mapa</th><th>pokoi</th><th>arkmap UI .arkmap</th><th>arkmap UI .dat</th><th>web-real .dat</th><th>desktop .dat</th><th>desk / arkmap</th><th>desk / web-real</th></tr>
 ${appW1rows}
@@ -351,9 +364,10 @@ ${appW1rows}
 ${appsLegend}
 ${appW1chart}
 <h3>W2 — pathfinding natywny (ms; found: arkmap / web-real / desktop)</h3>
-<table><tr><th>mapa</th><th>arkmap Dijkstra</th><th>arkmap A*</th><th>web Dijkstra</th><th>web A*</th><th>desktop getPath</th><th>found a/w/d</th></tr>
+<table><tr><th>mapa</th><th>arkmap Dijkstra</th><th>arkmap A*</th><th>web Dijkstra</th><th>web A*</th><th>web-plain D*</th><th>web-plain A**</th><th>desktop getPath</th><th>found a/w/d</th></tr>
 ${appW2rows}
 </table>
+<div class="note">* web-plain = plain WYMUSZONY (parseMudletMap z mode:'plain') — wiersz informacyjny, NIE natywny. Powyzej 50k pokoi ich natywny auto-mode przechodzi w skeleton, gdzie SkeletonMapReader.getRooms() zwraca [] (potwierdzone w kodzie dist/SkeletonMapReader-*.js) — ich MapGraph buduje sie pusty, wiec PathFinder i iteracja sa natywnie N/A. To natywne ograniczenie ich stacku: realna mape Arkadii (27k) obsluguja w plain, map powyzej 50k ich pathfinding natywnie nie obsluguje.</div>
 ${appsLegend}
 ${appW2chart}
 <h3>W3 — szukanie natywne (ms)</h3>

@@ -31,9 +31,12 @@ function r1(x) { return Math.round(x * 10) / 10; }
 
 // W1: natywne loadMudletMap rozbité na parse + materialize (auto mode — natywna
 // strategia per rozmiar: plain <50k, skeleton powyzej), potem budowa grafu PathFinderem.
-async function load(bytes) {
+// opts: undefined = natywnie auto; {mode:'plain'} = wymuszenie (wiersz informacyjny,
+// NIE natywny — skeleton powyzej 50k ma getRooms()=[], wiec PathFinder jest tam
+// natywnie bezuzyteczny; udowodnione w kodzie SkeletonMapReader).
+async function load(bytes, opts) {
   const t0 = now();
-  const loaded = parseMudletMap(bytes);            // natywny parse (auto: plain/streaming)
+  const loaded = parseMudletMap(bytes, opts);      // natywny parse (auto: plain/streaming)
   const t1 = now();
   const reader = readerFromLoadedMap(loaded);      // materializacja IMapReader
   const t2 = now();
