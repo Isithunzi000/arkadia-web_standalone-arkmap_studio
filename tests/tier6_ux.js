@@ -49,8 +49,17 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
   ok(count('pristineArkmap:     null') === 1, 'B1: pristineArkmap w state init (count==1)');
 
   const wrap = extract(HTML, 'applyMap = function(map) {');
-  ok(wrap.includes('state.pristineArkmap = _serializeMap();'),
-    'B2: wrapper applyMap ustawia bufor przy kazdym wczytaniu');
+  ok(wrap.includes('state.pristineArkmap = state._loadCheckpointText || _serializeMap();'),
+    'B2: wrapper applyMap ustawia bufor przy kazdym wczytaniu (P3a: tekst pliku .arkmap, fallback serialize dla .dat/online)');
+  const la = extract(HTML, 'async function loadArkmap(text, filename) {');
+  ok(la.includes('state._loadCheckpointText = text;')
+    && la.indexOf('state._loadCheckpointText = text;') < la.indexOf('applyMap(map);')
+    && la.indexOf('state._loadCheckpointText = text;') > la.indexOf('showValDialog'),
+    'B2a: loadArkmap podklada tekst pliku jako checkpoint tuz przed applyMap, PO bramkach walidacji (anulowanie dialogu = brak stash)');
+  ok(wrap.includes('state._loadCheckpointText = null;'),
+    'B2b: wrapper konsumuje stash i czysci (brak zalegajacego checkpointu dla kolejnych loadow)');
+  ok(count('_loadCheckpointText = text;') === 1,
+    'B2c: dokladnie jedna sciezka podlozenia checkpointu (tylko loadArkmap) — jest ' + count('_loadCheckpointText = text;'));
 
   const save = extract(HTML, 'function _performArkmapSave(onSaved) {');
   // F2.19 (Arc 31, v1.48.3): serializacja na klonie — _serializeMapForSave zamiast _serializeMap.
