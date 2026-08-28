@@ -102,12 +102,15 @@ const TMP_profile = fs.mkdtempSync(path.join('/tmp', 'apps-chrome-'));
 const browser = await puppeteer.launch({
   executablePath: CHROME,
   headless: true,
+  protocolTimeout: 900000,   // 15 min — applyMap na 432k pokoi moze trwac dlugo
   args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
          '--js-flags=--expose-gc', '--enable-precise-memory-info',
          `--user-data-dir=${TMP_profile}`],
 });
 
-const dblraf = 'new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))';
+// rAF w chrome-headless-shell moze nie strzelac (brak pompy klatek) — czekamy
+// na pierwsza klatke z twardym sufitem 5 s i rejestrujemy, czy przyszla.
+const FRAME_WAIT = `Promise.race([new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>r(true)))),new Promise(r=>setTimeout(()=>r(false),5000))])`;
 
 function statsArr(a) {
   const s = [...a].sort((x, y) => x - y);
@@ -137,7 +140,7 @@ async function benchArkmap(item) {
       await page.goto(`${BASE}/arkmap_studio.html`, { waitUntil: 'load' });
       await page.waitForFunction("typeof findPath==='function' && typeof loadArkmap==='function' && typeof loadDat==='function' && typeof state==='object'", { timeout: 30000 });
       const h0 = await heapMb(page);
-      const t = await page.evaluate(async (abs, fmt, dblrafSrc) => {
+      const t = await page.evaluate(async (abs, fmt, frameWaitSrc) => {
         const resp = await fetch('/file?abs=' + encodeURIComponent(abs));
         if (!resp.ok) throw new Error('fetch ' + resp.status);
         const t0 = performance.now();
@@ -148,49 +151,57 @@ async function benchArkmap(item) {
           const buf = await resp.arrayBuffer();
           await loadDat(new File([buf], abs.split('/').pop()));
         }
-        await eval(dblrafSrc);   // 2x rAF = pierwsza klatka po applyMap
-        const t1 = performance.now();
+        const t1 = performance.now();          // koniec applyMap = mapa gotowa
+        const frameOk = await eval(frameWaitSrc);  // pierwsza klatka, sufit 5 s
+        const t2 = performance.now();
         if (!state.map) throw new Error('state.map puste po load — mozliwy dialog walidacji (mapa nie jest czysta?)');
-        return t1 - t0;
-      }, filePath, fmt, dblraf);
-      loadsF.push(r1(t));
+        return { total_ms: t2 - t0, apply_ms: t1 - t0, frame_ok: frameOk };
+      }, filePath, fmt, FRAME_WAIT);
+      loadsF.push(t);
       heapsF.push(r1((await heapMb(page)) - h0));
       await page.close();
     }
-    loads.push({ fmt, ms: statsArr(loadsF), heap_mb: statsArr(heapsF) });
+    loads.push({ fmt, ms: statsArr(loadsF.map(x => r1(x.total_ms))),
+                 apply_ms: statsArr(loadsF.map(x => r1(x.apply_ms))),
+                 frames_ok: loadsF.filter(x => x.frame_ok).length,
+                 heap_mb: statsArr(heapsF) });
   }
 
-  // Workloady: osobno dla kazdego formatu (kazdy na swiezo zaladowanej stronie).
+  // Workloady: tylko na zaladowanym .arkmap — po applyMap model w pamieci jest
+  // identyczny dla obu formatow (to sedno paritetu), wiec W2/W3/W3b na .dat
+  // daloby te same liczby przy dwojnej cenie. Format rozroznia W1 i W4.
   const wl = {};
-  for (const fmt of ['arkmap', 'dat']) {
-    const filePath = fmt === 'arkmap' ? item.arkmap : item.dat;
+  {
+    const filePath = item.arkmap;
     const page = await browser.newPage();
     await page.goto(`${BASE}/arkmap_studio.html`, { waitUntil: 'load' });
     await page.waitForFunction("typeof findPath==='function' && typeof state==='object'", { timeout: 30000 });
-    await page.evaluate(async (abs, fmt) => {
+    await page.evaluate(async (abs) => {
       const resp = await fetch('/file?abs=' + encodeURIComponent(abs));
-      if (fmt === 'arkmap') await loadArkmap(await resp.text(), 'x');
-      else await loadDat(new File([await resp.arrayBuffer()], 'x.dat'));
+      await loadArkmap(await resp.text(), 'x');
       if (!state.map) throw new Error('load fail');
-    }, filePath, fmt);
+    }, filePath);
 
-    const w2 = await page.evaluate((pairs, runs) => {
-      const out = {};
-      for (const algo of ['dijkstra', 'astar']) {
-        wpState.transportMode = 'off'; wpState.dirMode = 'all'; wpState.avoidLocked = true;
-        wpState.algorithm = algo;
-        const runsOut = [];
-        const perPair = [];
-        for (let r = 0; r < runs; r++) {
+    // W2 per (algo, run) — osobne evaluate: dijkstraPath apki na 432k pokoi
+    // moze trwac minuty; jedno dlugie evaluate grozi protocolTimeout.
+    const w2 = {};
+    for (const algo of ['dijkstra', 'astar']) {
+      const runsOut = [];
+      const perPair = [];
+      for (let r = 0; r < RUNS; r++) {
+        const res = await page.evaluate((pairs, algo, first) => {
+          wpState.transportMode = 'off'; wpState.dirMode = 'all'; wpState.avoidLocked = true;
+          wpState.algorithm = algo;
           const t0 = performance.now();
-          let found = 0;
-          for (const [a, b] of pairs) { const p = findPath(a, b); if (p) found++; if (r === 0) perPair.push(!!p); }
-          runsOut.push({ ms: Math.round((performance.now() - t0) * 10) / 10, found });
-        }
-        out[algo] = { runs: runsOut, perPair };
+          let found = 0; const pp = [];
+          for (const [a, b] of pairs) { const p = findPath(a, b); if (p) found++; if (first) pp.push(!!p); }
+          return { ms: Math.round((performance.now() - t0) * 10) / 10, found, pp };
+        }, item.pairs, algo, r === 0);
+        runsOut.push({ ms: res.ms, found: res.found });
+        if (r === 0) perPair.push(...res.pp);
       }
-      return out;
-    }, item.pairs, RUNS);
+      w2[algo] = { runs: runsOut, perPair };
+    }
 
     const w3 = await page.evaluate((terms, runs) => {
       let dd = document.getElementById('wp-dd-0');
@@ -216,7 +227,7 @@ async function benchArkmap(item) {
       return runsOut;
     }, RUNS);
 
-    wl[fmt] = { w2, w3, w3b };
+    wl.w2 = w2; wl.w3 = w3; wl.w3b = w3b;
     await page.close();
   }
   return { loads, wl };
@@ -245,15 +256,19 @@ async function benchWebreal(item) {
     heaps.push(r1((await heapMb(page)) - h0));
 
     if (run === 0) {
-      w2 = await page.evaluate((pairs, runs) => {
-        const out = {};
-        for (const algo of ['dijkstra', 'astar']) {
-          const runsOut = window.__wr.path(pairs, algo, runs);
-          out[algo] = { runs: runsOut.map(({ ms, found }) => ({ ms, found })),
-                        paths0: runsOut[0].paths };
+      // per (algo, run) — osobne evaluate (jak po stronie arkmap): ich Dijkstra
+      // na 432k pokoi tez moze przekroczyc protocolTimeout w jednym calu.
+      w2 = {};
+      for (const algo of ['dijkstra', 'astar']) {
+        const runsOut = [];
+        let paths0 = null;
+        for (let r = 0; r < RUNS; r++) {
+          const res = await page.evaluate((pairs, algo) => window.__wr.path(pairs, algo, 1)[0], item.pairs, algo);
+          runsOut.push({ ms: res.ms, found: res.found });
+          if (r === 0) paths0 = res.paths;
         }
-        return out;
-      }, item.pairs, RUNS);
+        w2[algo] = { runs: runsOut, paths0 };
+      }
       w3b = await page.evaluate((runs) => window.__wr.iter(runs), RUNS);
     }
     await page.close();
@@ -283,7 +298,7 @@ function lockedSet(item) {
 
 function gate(item, arkWl, webWl, deskFound) {
   const problems = [];
-  const arkFound = arkWl.arkmap.w2.dijkstra.perPair;
+  const arkFound = arkWl.w2.dijkstra.perPair;
   const webPaths = webWl.w2.dijkstra.paths0;
   const locked = lockedSet(item);
   if (deskFound != null) {
@@ -334,15 +349,16 @@ for (const item of ladder) {
   });
   out.sets[item.name] = {
     rooms: item.rooms,
-    arkmap: Object.fromEntries(ark.loads.map(l => [l.fmt === 'arkmap' ? 'arkmap_file' : 'dat_file', { load_ms: l.ms, heap_mb: l.heap_mb }]))
-      , arkmap_wl: { arkmap: wlStats(ark.wl.arkmap), dat: wlStats(ark.wl.dat) },
+    arkmap: Object.fromEntries(ark.loads.map(l => [l.fmt === 'arkmap' ? 'arkmap_file' : 'dat_file',
+      { load_ms: l.ms, apply_ms: l.apply_ms, frames_ok: l.frames_ok, heap_mb: l.heap_mb }]))
+      , arkmap_wl: { arkmap: wlStats(ark.wl) },
     webreal: {
       w1: web.w1, heap_mb: web.heap_mb,
       w2: Object.fromEntries(Object.entries(web.w2).map(([algo, d]) => [algo, { ms: statsArr(d.runs.map(r => r.ms)), found: d.runs[0].found }])),
       w3b: { ms: statsArr(web.w3b.map(r => r.ms)), keys: web.w3b[0].keys },
     },
     gate: { problems: problems.length, desk_found: deskFound,
-            arkmap_found: ark.wl.arkmap.w2.dijkstra.perPair.filter(Boolean).length,
+            arkmap_found: ark.wl.w2.dijkstra.perPair.filter(Boolean).length,
             webreal_found: web.w2.dijkstra.runs[0].found },
   };
   console.log(`  arkmap .arkmap load=${out.sets[item.name].arkmap.arkmap_file.load_ms.med}ms .dat=${out.sets[item.name].arkmap.dat_file.load_ms.med}ms | web-real=${web.w1.total_ms.med}ms (${web.w1.mode}) | found: arkmap=${out.sets[item.name].gate.arkmap_found} web=${out.sets[item.name].gate.webreal_found} desk=${deskFound} | ${Date.now() - t0}ms`);
