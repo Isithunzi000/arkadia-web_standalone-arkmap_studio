@@ -14054,7 +14054,14 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 
       // Sekcja: checksums
       if (chkRes.present) {
-        if (chkRes.ok) {
+        if (chkRes.deferred) {
+          // Arc 40 (v1.50.2): placeholder deferred z loadArkmap (P3b — weryfikacja po klatce)
+          // nie ma pol wyniku (badAreas itd.) — dialog renderuje tylko notke, bez dotykania wyniku.
+          const note = document.createElement('div');
+          note.style.cssText = 'font-size: 11px;color:var(--dim)';
+          note.textContent = '(sumy kontrolne: weryfikacja po wczytaniu, w tle — wynik w komunikacie po załadowaniu)';
+          body.appendChild(note);
+        } else if (chkRes.ok) {
           const ok = document.createElement('div'); ok.className = 'val-ok-line';
           ok.textContent = '✓ Suma kontrolna pliku: OK';
           body.appendChild(ok);
@@ -14884,7 +14891,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.50.1';
+const APP_VERSION = 'v1.50.2';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)

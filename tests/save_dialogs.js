@@ -231,7 +231,7 @@ console.log('— Sekcja B: piny strukturalne —');
 
 // ═══ Sekcja C — pin wersji ═══
 console.log('— Sekcja C: pin wersji —');
-ok(HTML.includes("const APP_VERSION = 'v1.50.1';"), 'C1 APP_VERSION = v1.50.1');
+ok(HTML.includes("const APP_VERSION = 'v1.50.2';"), 'C1 APP_VERSION = v1.50.2');
 
 // ═══ A4.5 (UX-5): potwierdzenie pierwszego nadpisu + autobackup IndexedDB ═══
 console.log('— A4.5 (UX-5): confirm nadpisu + backup IndexedDB —');
@@ -432,6 +432,77 @@ ASYNC_PINS_SD.push((async () => {
   ok(rc === false && c.dls.length === 0 && !c.toasts.some(t => /Pobranych/.test(t)),
     'A4.6: AbortError (anulowanie) -> bez fallbacku, bez toastu (regresja K6)');
 })());
+
+// ═══ Sekcja D (Arc 40, v1.50.2): showValDialog z placeholderem deferred ═══
+// Bug: loadArkmap (P3b) podaje dialogowi { present: true, deferred: true } — body
+// nie mialo galezi deferred i crashowalo na chkRes.badAreas.slice (cicha smierc
+// loadu .arkmap z sumami + jakikolwiek warning/suppressor, np. mapa 0.208.0).
+// Lekcja pokrycia: pin "chkRes.deferred" zaspokajal sie raportem schowka — D1
+// liczy DOKLADNIE 2 miejsca obslugi (raport + body).
+console.log('— Sekcja D (Arc 40): showValDialog — placeholder deferred —');
+{
+  const dlgSrc = extract(HTML, "window.showValDialog = function(valRes, chkRes, filename, isFatal, suppMissing) {");
+  ok(HTML.split('chkRes.deferred').length - 1 === 2,
+    'D1: deferred obsluzony w DOKLADNIE 2 miejscach (raport schowka + body dialogu) — jest ' + (HTML.split('chkRes.deferred').length - 1));
+  const iDef = dlgSrc.indexOf('if (chkRes.deferred) {');
+  const iOk  = dlgSrc.indexOf('if (chkRes.ok) {');
+  ok(iDef > 0 && iOk > 0 && iDef < iOk, 'D2: body dialogu — gałąź deferred PRZED gałęzią ok (nie spada do badAreas)');
+
+  // Behawioralnie: render body z placeholderem deferred (verbatim IIFE + stub DOM)
+  const iife = extract(HTML, "(function() {\n  const overlay  = document.getElementById('val-modal-overlay');");
+  const suppSrc = extract(HTML, 'function _suppLine(m) {') + '\n' + extract(HTML, 'function _suppSort(missing) {');
+  const mkEl = () => {
+    const el = {
+      className: '', textContent: '', style: {}, children: [], _ls: {}, _cls: new Set(),
+      set innerHTML(v) { if (v === '') this.children.length = 0; },
+      get innerHTML() { return ''; },
+      classList: { add(c) { el._cls.add(c); }, remove(c) { el._cls.delete(c); }, contains(c) { return el._cls.has(c); } },
+      appendChild(c) { this.children.push(c); },
+      addEventListener(ev, fn) { this._ls[ev] = fn; },
+    };
+    return el;
+  };
+  const allText = (el) => [el.textContent || '', ...el.children.map(allText)].join('\n');
+  const mkDialog = () => {
+    const els = {};
+    const doc = { getElementById: (id) => (els[id] = els[id] || mkEl()), createElement: () => mkEl(), addEventListener() {} };
+    const win = {};
+    new Function('document', 'window', 'saveWithDialog', 'buildDiagnosticsReport', '_valReportSections',
+                 '_copyReportToClipboard', '_reportMapName', '_reportTs', '_reportHtmlDoc', 'APP_VERSION', 'navigator', 'console',
+      suppSrc + '\n' + iife + ')();\n;return 0;')(
+      doc, win, () => {}, () => '', () => '', () => {}, () => 'm', () => 't', () => '', 'vT', { clipboard: { writeText: async () => {} } }, console);
+    return { els, show: win.showValDialog };
+  };
+  const FULL = { present: true, ok: false, fileOk: false, badAreas: [{ name: 'ObsZ', id: 7 }], badRooms: [], missingRooms: [], missingAreas: [], extraRooms: [], extraAreas: [] };
+
+  ASYNC_PINS_SD.push((async () => {
+    // D3-D7: placeholder deferred — pre-fix: TypeError na badAreas.slice (cicha smierc loadu)
+    const d1 = mkDialog();
+    let threw = null, resolved = null;
+    const supp = [{ roomA: 7226, dir: 'n', roomB: 16210, oppDir: 's' }];
+    try {
+      const p = d1.show({ ok: true, errors: [], warnings: [{ path: 'areas[0]', msg: 'w' }] }, { present: true, deferred: true }, 'm.arkmap', false, supp);
+      p.then((r) => { resolved = r; }, (e) => { threw = e; });  // executor catchuje throw w reject
+    } catch (e) { threw = e; }
+    await new Promise((r) => setTimeout(r, 0));  // wykonaj executor przed asercjami
+    ok(threw === null, 'D3: render z { present: true, deferred: true } NIE rzuca (pre-fix: TypeError badAreas.slice)');
+    const txt = allText(d1.els['val-modal-body']);
+    ok(txt.includes('weryfikacja po wczytaniu'), 'D4: body pokazuje notke deferred (weryfikacja w tle)');
+    ok(!/niezgodn/i.test(txt), 'D5: body NIE spada do gałęzi niezgodnej sumy (badAreas/badRooms)');
+    ok(txt.includes('PODWÓJNE LINIE — 1'), 'D6: sekcja podwójnych linii renderuje się przy deferze');
+    d1.els['val-btn-load']._ls.click();
+    await new Promise((r) => setTimeout(r, 0));
+    ok(resolved === true, 'D7: przycisk Wczytaj rozwiązuje dialog true');
+
+    // D8: pelny wynik verifyChecksums — gałąź niezgodnej sumy nadal dziala (regresja else-if)
+    const d2 = mkDialog();
+    let threw2 = null;
+    try { d2.show({ ok: true, errors: [], warnings: [] }, FULL, 'm.arkmap', false, null); } catch (e) { threw2 = e; }
+    const txt2 = allText(d2.els['val-modal-body']);
+    ok(threw2 === null && txt2.includes('niezgodna') && txt2.includes('Obszar: ObsZ (id=7)'),
+      'D8: pełny chkRes — sekcja niezgodnej sumy renderuje obszary (bez zmian)');
+  })());
+}
 
 Promise.all(ASYNC_PINS_SD).then(() => {
   console.log(`\n═══ save_dialogs.js: PASS ${pass} / FAIL ${fail} ═══`);

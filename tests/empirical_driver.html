@@ -4697,6 +4697,74 @@ scenario('E27.geometry', async () => {
     'po sweepie: _deltaReview = null (stan pomocniczy przywrocony)');
 });
 
+// ═══ GRUPA E28 (Arc 40, v1.50.2) — loadArkmap z deferrem CRC + dialog walidacyjny ═══
+// Repro buga z mapy 0.208.0: .arkmap z sumami v4 + podwójne linie → showValDialog
+// crashował na chkRes.badAreas.slice (placeholder deferred nie miał gałęzi w body
+// dialogu) — cicha śmierć loadu (zero dialogu, zero toastu, mapa nie wchodziła).
+// Tu pełna ścieżka w realnej przeglądarce: dialog z notką deferred → Wczytaj → mapa.
+scenario('E28.deferred_dialog', async () => {
+  ex('window.requestAnimationFrame = function(cb){ return setTimeout(function(){ cb(performance.now()); }, 0); };');
+  const ark = W().datToArkmap(fixBuf.slice(0));
+  // para pokoi A--d-->B / B--opp-->A (jeden obszar, jeden poziom) bez custom lines
+  // — wzorzec macierzy save_dialogs A1: dubel bez suppressora → dokładnie 1 flaga.
+  const OPP = { e: 'w', w: 'e', n: 's', s: 'n', ne: 'sw', sw: 'ne', nw: 'se', se: 'nw', up: 'down', down: 'up' };
+  let pair = null;
+  outer: for (const area of ark.areas) {
+    const byId = {};
+    for (const r of (area.rooms || [])) byId[r.id] = r;
+    for (const r of (area.rooms || [])) {
+      for (const d in (r.exits || {})) {
+        const b = byId[r.exits[d]], opp = OPP[d];
+        if (!b || !opp || !b.exits || b.exits[opp] !== r.id || b.z !== r.z) continue;
+        if ((r.custom_lines && r.custom_lines[d]) || (b.custom_lines && b.custom_lines[opp])) continue;
+        pair = { r, d, b, opp }; break outer;
+      }
+    }
+  }
+  A('E28.pair', !!pair, 'fixture ma parę dwukierunkową bez custom lines (baza repro)');
+  if (!pair) return;
+  const nRooms = ark.areas.reduce((s, a) => s + (a.rooms || []).length, 0);  // pelny przelot — break outer konczylby liczenie
+  const supp0 = W().checkSuppressorsInMap(ark).length;  // baseline: fixture sam moze miec podwojne linie
+  pair.r.custom_lines = Object.assign({}, pair.r.custom_lines,
+    { [pair.d]: { points: [[0.5, 0.2], [1.2, -0.3]], color: [255, 0, 0] } });
+  const v = W().validate(ark);
+  A('E28.validate', v.ok && (v.warnings || []).length === 0,
+    'walidacja czysta — dialog wyzwalaja TYLKO podwójne linie (izolacja repro)');
+  A('E28.supp', W().checkSuppressorsInMap(ark).length === supp0 + 1,
+    'checkSuppressorsInMap: baseline ' + supp0 + ' + 1 syntetyczna flaga');
+  if (!ark.meta) ark.meta = {};
+  ark.meta.checksums = W()._computeV4Checksums(ark);  // sumy v4 → loadArkmap podepnie placeholder deferred
+  W().__e28text = JSON.stringify(ark);
+  ex('window.__e28err = null;'
+   + ' window.addEventListener("unhandledrejection", function(e){ window.__e28err = String(e.reason && e.reason.message || e.reason); });');
+  ex('loadArkmap(window.__e28text, "e28.arkmap")');  // async — dialog czeka na klik, nie awaitujemy
+  await eva('new Promise(function(res){ setTimeout(res, 400); })');
+  A('E28.dialog.open', AEV('E28.dialog.open.ev', ev('document.getElementById("val-modal-overlay").classList.contains("open")'), 'overlay') === true,
+    'dialog walidacyjny OTWARTY (pre-fix: crash w body → cicha śmierć, brak dialogu)');
+  const bodyTxt = AEV('E28.dialog.txt.ev', ev('document.getElementById("val-modal-body").textContent'), 'body');
+  A('E28.dialog.note', typeof bodyTxt === 'string' && bodyTxt.includes('weryfikacja po wczytaniu'),
+    'body pokazuje notkę deferred (weryfikacja w tle)');
+  A('E28.dialog.supp', typeof bodyTxt === 'string' && bodyTxt.includes('PODWÓJNE LINIE — ' + (supp0 + 1)),
+    'body pokazuje sekcję podwójnych linii (baseline fixtury ' + supp0 + ' + 1 syntetyczna flaga)');
+  A('E28.dialog.nobadsum', typeof bodyTxt === 'string' && !/niezgodn/i.test(bodyTxt),
+    'body NIE spada do gałęzi niezgodnej sumy (placeholder nie ma badAreas)');
+  ex('document.getElementById("val-btn-load").click()');
+  await eva('new Promise(function(res){ setTimeout(res, 600); })');
+  const st = AEV('E28.state.ev', ev('({ loaded: !!state.map, rooms: Object.keys(state.roomById).length,'
+    + ' pending: state._verifyPending, err: window.__e28err,'
+    + ' dlgOpen: document.getElementById("val-modal-overlay").classList.contains("open") })'), 'stan po Wczytaj');
+  if (st) {
+    A('E28.loaded', st.loaded === true && st.rooms === nRooms,
+      'mapa wczytana po Wczytaj (' + st.rooms + '/' + nRooms + ' pokoi) — pre-fix: cicha śmierć, 0 pokoi');
+    A('E28.verified', st.pending === false, 'odroczona weryfikacja CRC domknięta (_verifyPending false)');
+    A('E28.noerr', st.err === null, 'zero unhandledrejection na całej ścieżce');
+    A('E28.dialog.closed', st.dlgOpen === false, 'dialog zamknięty po Wczytaj');
+  }
+  // restore: kanoniczna baza + czysty stan pomocniczy
+  ex('delete window.__e28text; delete window.__e28err;');
+  await loadBase('dat');
+});
+
 async function runAll() {
   await appReady();
   try { W().addEventListener('error', e => REC('FAIL', 'js-error', String(e.message || e))); } catch (e) {}

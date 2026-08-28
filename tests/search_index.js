@@ -216,13 +216,21 @@ console.log('── T3: leniwosc i uniewaznianie ──');
     'po rename obszaru: NOWY == STARY i trafia nowa nazwe obszaru');
 }
 
-// ═══ T4: wydajnosc (info + miekki assert) ═══
+// ═══ T4: wydajnosc (deterministyczne bramki + pomiar tylko informacyjnie) ═══
+// Lekcja Arc 40: porownawczy assert wall-clock (NOWY vs STARY) jest zalezny od
+// srodowiska — na szybkim runnerze STARY skan short-circuituje tanio, a zapytania
+// obszarowe dominuja scoringiem, wiec ratio ~1x i bramka "nie wolniejszy niz 1.5x"
+// jest losowa (CI 7862759/31f13fe). Bramki twarde musza byc deterministyczne:
+// (a) indeks buduje sie DOKLADNIE raz na cala baterie (licznik, nie zegar),
+// (b) absolutny sufit czasu cieplej baterii z ogromnym zapasem (~50x).
+// Ratio STARY/NOWY zostaje jako log informacyjny.
 console.log('── T4: wydajnosc na stanie stresowym ──');
 {
   const state = mkStressState();
   const queries = ['wyzima', 'mahakam', '1234', 'lyria i', 'poludniowa redania', '777'];
   // Trwale instancje (jak w apce): indeks/koncery przezywaja miedzy zapytaniami.
-  const mkFn = (api) => new Function('state', 'document', api.__src + '\n;return { wpDoSearch };')
+  const mkFn = (api) => new Function('state', 'document',
+    api.__src + '\n;return { wpDoSearch' + (api.__isNew ? ', getBuilds: () => _wpSearchBuilds' : '') + ' };')
     (state, mkDoc().doc);
   const oldF = mkFn(oldApi), newF = mkFn(newApi);
   const bench = (f, reps) => {
@@ -234,10 +242,15 @@ console.log('── T4: wydajnosc na stanie stresowym ──');
     }
     return times.sort((a, b) => a - b)[Math.floor(reps / 2)];
   };
+  // Rozgrzewka poza pomiarem: budowa indeksu + cieple sciezki cache/GC.
+  for (const q of queries) { oldF.wpDoSearch(0, q); newF.wpDoSearch(0, q); }
+  const buildsAfterWarm = newF.getBuilds();
   const tOld = bench(oldF, 3);
-  const tNew = bench(newF, 3);   // pierwszy rep zawiera budowe indeksu — mediana z 3 go pomija
-  console.log(`  STARY: ${tOld.toFixed(1)} ms / bateria, NOWY: ${tNew.toFixed(1)} ms (x${(tOld / tNew).toFixed(1)})`);
-  ok(tNew <= tOld * 1.5, 'NOWY nie wolniejszy niz 1.5x STAREGO (oczekiwane: znacznie szybszy)');
+  const tNew = bench(newF, 3);   // juz w pelni cieply — bez budowy indeksu w pierwszym repie
+  console.log(`  [info] STARY: ${tOld.toFixed(1)} ms / bateria, NOWY: ${tNew.toFixed(1)} ms (x${(tOld / tNew).toFixed(1)}) — pomiar informacyjny, nie bramka`);
+  ok(buildsAfterWarm === 1 && newF.getBuilds() === 1,
+    'indeks zbudowany DOKŁADNIE raz na rozgrzewke + cala baterie (deterministycznie, warm)');
+  ok(tNew < 2000, 'ciepla bateria NOWEGO < 2000 ms (twardy sufit; faktycznie ~' + tNew.toFixed(1) + ' ms)');
 }
 
 console.log(`\n═══ PODSUMOWANIE: ${pass} OK, ${fail} FAIL ═══`);

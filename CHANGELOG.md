@@ -2,6 +2,16 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.50.2 — Fix: cicha śmierć loadu .arkmap z odroczoną weryfikacją CRC (crash w dialogu walidacyjnym) (Arc 40)
+
+Realny defekt zgłoszony z produkcji: online `.arkmap` nie dawał się wczytać (`.dat` działał). Przyczyna: `loadArkmap` przy mapie z sumami kontrolnymi przekazuje do `showValDialog` placeholder `{ present: true, deferred: true }` (weryfikacja CRC po pierwszej klatce, P3b), a sekcja sum kontrolnych w ciele dialogu nie miała gałęzi `deferred` — spadała do `else` i dotykała `chkRes.badAreas.slice(...)` na undefined → TypeError. Cicho, bo caller (`olLoadArkmap`) nie awaituje loadu — unhandled rejection bez toasta. Wyzwalacz: aktualna mapa online ma 7 podwójnych linii (walidacja czysta, same flagi informacyjne), co otwiera dialog na każdym loadzie. Defekt wprowadzony w fali 3 (defer CRC), wyszedł w v1.50.0; v1.50.1, sync transportów i sam plik mapy na GitHubu są niewinne.
+
+- `showValDialog`: gałąź `chkRes.deferred` przed testem `ok` — dialog renderuje notkę o weryfikacji w tle zamiast dotykać pól wyniku, których placeholder nie ma. Po kliknięciu „Wczytaj” wynik CRC dociera standardowo tostem po załadowaniu.
+- Sweep klasy defektu (producenci × konsumenci `chkRes`, `valRes`, `baseInfo`): jedyna dziura była dokładnie ta para (ciało dialogu × placeholder deferred); raport do schowka, toast odroczonej weryfikacji i konsumenci `baseInfo` mają guardy — zweryfikowane w kodzie 100%.
+- Zachowanie po fixie: online `.arkmap` pokazuje dialog informacyjny „PODWÓJNE LINIE — 7” (projekt Arc 29, jedno kliknięcie „Wczytaj”) — to feature, nie regresja.
+- Testy: sekcja D w tests/save_dialogs.js (8 asercji: piny statyczne gałęzi + scenariusze behawioralne na verbatim-ekstrakcie IIFE dialogu; repro-first: 5 czerwonych na kodzie sprzed fixa) + scenariusz empiryczny E28 (11 asercji, prawdziwa przeglądarka: syntetyczna podwójna linia na baseline fixtury, dialog → Wczytaj → 26988 pokoi, zero unhandledrejection).
+- CI: hartowanie T4 w tests/search_index.js — porównawczy assert wall-clock (NOWY vs STARY, ratio zależne od środowiska; czerwone runy 7862759/31f13fe) zdegradowany do logu informacyjnego; bramki twarde są deterministyczne: indeks budowany dokładnie raz na baterię (licznik) + absolutny sufit 2000 ms na ciepłą baterię. Naprawa PIN_MAP w tests/changelog_tags.js: przywrócony pin v1.50.0→Arc 38 (nadpisany duplikatem klucza przy poprzednim bumpie) + pin v1.50.2→Arc 40.
+
 ## v1.50.1 — Hardening: stash checkpointu i flaga defer czyszczone przy wyjątku w oknie loadu (Arc 39)
 
 Jedyny realny finding ze sweepu audytowego fal 1–5 (dwa silniki zewnętrzne, zbieżnie + sweep mechaniczny): wrapper applyMap nie chronił okna między podłożeniem `_loadCheckpointText`/`_deferVerify` (loadArkmap) a ich konsumpcją — wyjątek w `_origApplyMap`/`exitEditMode`/resetach zostawiał zastały tekst, który następny load skonsumowałby jako `pristineArkmap` (restoreLastSave przywróciłoby złą mapę; backup autozapisu zapisałby zły checkpoint). Osiągalność egzotyczna (mapa przechodząca walidację, crashująca w applyMap), waga niska — załatane repro-first.
