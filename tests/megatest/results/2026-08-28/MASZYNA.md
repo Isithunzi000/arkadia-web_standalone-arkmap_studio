@@ -1,4 +1,4 @@
-# Maszyna pomiarowa (mega-test 2026-08-27)
+# Maszyna pomiarowa (mega-test 2026-08-28)
 
 - CPU: AMD Athlon Silver 3050U with Radeon Graphics (2C/2T)
 - RAM: 29995 MB (heap Node w teście: 6144 MB)
@@ -6,5 +6,5 @@
 - Node: v20.20.1
 - Mudlet desktop: mudlet 4.22.0  
 - Aplikacja: v1.49.7
-- Repo: 46acd1e
+- Repo: 0202bec
 - Uwaga: maszyna bez innego obciążenia w trakcie pomiaru; wszystkie silniki w jednej sesji.

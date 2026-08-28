@@ -231,7 +231,7 @@ console.log('— Sekcja B: piny strukturalne —');
 
 // ═══ Sekcja C — pin wersji ═══
 console.log('— Sekcja C: pin wersji —');
-ok(HTML.includes("const APP_VERSION = 'v1.49.7';"), 'C1 APP_VERSION = v1.49.7');
+ok(HTML.includes("const APP_VERSION = 'v1.50.0';"), 'C1 APP_VERSION = v1.50.0');
 
 // ═══ A4.5 (UX-5): potwierdzenie pierwszego nadpisu + autobackup IndexedDB ═══
 console.log('— A4.5 (UX-5): confirm nadpisu + backup IndexedDB —');

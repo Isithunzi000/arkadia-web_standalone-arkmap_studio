@@ -2,6 +2,18 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.50.0 — Fale optymalizacyjne 1–5: cache adjacency i pełny A* cross-area w planerze, load .arkmap bez serializacji checkpointu i z weryfikacją CRC po pierwszej klatce, indeks tokenowy szukajki; mega-test z dual W1 i gatem kosztowym (Arc 38)
+
+Pięć fal optymalizacyjnych pod prawdziwe obciążenie (drabinka 27k–432k pokoi), każda z harnessami snapshotowo-różnicowymi (bitowa zgodność z kodem sprzed fali) i pełną kampanią empiryczną. Rejestracja: mega-test 2026-08-28 (5 szczebli × 5 przebiegów, [raport](docs/megatest_raport_2026-08-28.html)). Adnotacja: META.json biegu zapisało app_version v1.49.7 — bump wykonany po biegu, kod mierzony jest identyczny z finalnym v1.50.0.
+
+- **Fala 1 (P1+P2, planer):** leniwy cache adjacency `_adjCache` (wersja = editRev + referencja roomById) zamiast per-pop merge exits/special_exits — bitowo identyczna kolejność relaksacji; A* cross-area bez fallbacku do Dijkstry: dwupoziomowa admisybilna heurystyka (euklides/maxEdgeDist×minEdgeW + areaDist z grafu obszarów) — koszt identyczny z Dijkstra, obszary niespójne: szybkie null zamiast pełnej eksploracji.
+- **Fala 2 (P3a, load .arkmap):** checkpoint pristine z surowego tekstu pliku (stash podkładany przez loadArkmap przed applyMap, po bramkach walidacji) zamiast serializacji — zdjęte ~31% czasu loadu (`_serializeMap`); restoreLastSave semantycznie bez zmian (JSON.parse + applyMap).
+- **Fala 3 (P3b):** weryfikacja sum kontrolnych i baseInfo po pierwszej klatce (rAF+setTimeout, `_postLoadVerifyDeferred`) na ścieżkach loadArkmap/loadDat/online/restoreLastSave — CRC nie blokuje UI; bramki `_verifyPending` przy zapisie .arkdelta, toast przy niezgodnej sumie; mega-test: dual W1 (load + verified, hak `__arkmapVerifiedAt`).
+- **Fala 4 (instrumentacja mega-testu):** gate kosztowy — per para manifestu koszty ścieżek w naszym modelu wag (exit_weights/wagi pokoi); nasz A* musi być równy kosztowo naszemu Dijkstrze, ich A* nie tańszy poza trasami przez locki (ich silnik ignoruje locki pokoi). Bez zmian w kodzie apki.
+- **Fala 5 (P5, szukajka planera):** indeks tokenowy wpDoSearch (token → trafienia w nazwie pokoju/obszaru; leniwy, wersjonowany jak `_adjCache`) zamiast pełnego skanu przy każdym klawiszu; scoring i kolejność wyników bitowo identyczne (złota bateria 21 zapytań + 16 brzegowych).
+- **Wyniki biegu 2026-08-28** (mediany, vs bieg sprzed fal na tej samej maszynie): wczytanie .arkmap −23…−29% (27k: 941 ms); W2 Dijkstra −26…−53%; szukajka do −98% (432k: 797 → 15 ms); A* @432k: 248 ms vs 1733 ms ich A*; gate kosztowy zielony (101 par, 0 flag); zgodność found z Mudlet desktop 100% na każdym szczeblu.
+- Stare wyniki mega-testu (2026-08-27, sprzed fal) usunięte z repo — semantyka W1/W2 zmieniona, liczby nieporównywalne.
+
 ## v1.49.7 — Import tras: twardy limit waypointow; parse .dat bez narzutu F2.9/F2.10; silnik sum v4 ~2x szybciej; tanszy applyMap; walidacja kierunkow bez falszywych alarmow (Arc 37)
 
 Fala A arca 37: jedyny realny finding z audytow (F-PLANNER-2) + zniesienie regresji parse .dat z benchmarku 2026-08-26. Piny repro-first: share_link T6 (limit), tier3_format T7 (straznik optymalizacji); zachowanie warningow F2.9/F2.10 pinowane verbatim w audit_ext (A2.9/A2.10) — zielone bez zmian.
