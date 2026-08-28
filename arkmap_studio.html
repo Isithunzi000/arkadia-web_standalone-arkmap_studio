@@ -14884,7 +14884,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.50.0';
+const APP_VERSION = 'v1.50.1';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -15888,43 +15888,53 @@ function _postLoadVerifyDeferred(mapRef) {
 // applyMap editor extensions (per checkpoint Pass 69 sekcja F)
 const _origApplyMap = applyMap;
 applyMap = function(map) {
-  // Wyjdź z trybu edycji przy ładowaniu nowej mapy
-  if (state.editMode) exitEditMode(true);
-  _origApplyMap(map);
-  // Reset editor state (Pass 59 — 11 dodatkowych kroków)
-  state.undoStack = [];
-  state.redoStack = [];
-  state.deltaLog = [];  // ARKDELTA: nowa mapa = pusty log
-  _deltaGhostReset();  // ARKDELTA M3: nowa mapa = bez duchów / override'ów / trybu stawiania
-  // ARKDELTA M4: panel recenzji otwarty → re-klasyfikacja względem nowej mapy
-  if (typeof _deltaReview !== 'undefined' && _deltaReview) {
-    _deltaReview.items = classifyDelta(_deltaReview.delta);
-    document.getElementById('dp-base').textContent = _arkdeltaBaseNote(_deltaReview.delta.meta.base);
-    _renderDeltaPanel();
+  // Hardening audytowy (v1.50.1): okno miedzy stash (loadArkmap) a konsumpcja nizej —
+  // wyjatek w exitEditMode/_origApplyMap/resetach nie moze zostawic _loadCheckpointText
+  // ani _deferVerify (nastepny load zjadlby zastaly tekst jako pristineArkmap).
+  // Catch czysci BEZ konsumpcji i przepuszcza blad dalej — happy path bitowo bez zmian.
+  try {
+    // Wyjdź z trybu edycji przy ładowaniu nowej mapy
+    if (state.editMode) exitEditMode(true);
+    _origApplyMap(map);
+    // Reset editor state (Pass 59 — 11 dodatkowych kroków)
+    state.undoStack = [];
+    state.redoStack = [];
+    state.deltaLog = [];  // ARKDELTA: nowa mapa = pusty log
+    _deltaGhostReset();  // ARKDELTA M3: nowa mapa = bez duchów / override'ów / trybu stawiania
+    // ARKDELTA M4: panel recenzji otwarty → re-klasyfikacja względem nowej mapy
+    if (typeof _deltaReview !== 'undefined' && _deltaReview) {
+      _deltaReview.items = classifyDelta(_deltaReview.delta);
+      document.getElementById('dp-base').textContent = _arkdeltaBaseNote(_deltaReview.delta.meta.base);
+      _renderDeltaPanel();
+    }
+    state.dirty = false;  // A11': nowa mapa = czysty stan
+    // P3b (fala 3): weryfikacja CRC + baseInfo PO pierwszej klatce dla sciezek loadu
+    // (loadArkmap/loadDat/online/restore ustawiaja _deferVerify). Koszt ~21% loadu
+    // (profil CDP 2026-08-27) schodzi ze sciezki krytycznej. Bezposredni applyMap
+    // (np. harnessy) — baseInfo liczone synchronicznie jak dotychczas.
+    const _deferV = !!state._deferVerify;
+    state._deferVerify = null;
+    if (_deferV) {
+      state.baseInfo = null;
+      state._verifyPending = true;
+      window.__arkmapVerifiedAt = null;  // hak pomiarowy mega-testu (W1: load→verified)
+      const mapRef = state.map;
+      requestAnimationFrame(() => setTimeout(() => _postLoadVerifyDeferred(mapRef), 0));
+    } else {
+      state.baseInfo = _computeBaseInfo(null, null);  // ARKDELTA: tożsamość bazy nowej mapy
+      state._verifyPending = false;
+    }
+    // T6/D2: bufor ostatniego punktu kontrolnego (wczytanie). P3a (fala 2): dla loadu .arkmap
+    // checkpoint = surowy tekst pliku (podlozony przez loadArkmap) — semantycznie rownowazny
+    // kanonicznej serializacji (restoreLastSave robi JSON.parse + applyMap), a koszt ~31%
+    // loadu (profil CDP 2026-08-27) znika. Fallback _serializeMap() dla .dat/online/restore.
+    state.pristineArkmap = state._loadCheckpointText || _serializeMap();
+    state._loadCheckpointText = null;
+  } catch (e) {
+    state._loadCheckpointText = null;
+    state._deferVerify = null;
+    throw e;
   }
-  state.dirty = false;  // A11': nowa mapa = czysty stan
-  // P3b (fala 3): weryfikacja CRC + baseInfo PO pierwszej klatce dla sciezek loadu
-  // (loadArkmap/loadDat/online/restore ustawiaja _deferVerify). Koszt ~21% loadu
-  // (profil CDP 2026-08-27) schodzi ze sciezki krytycznej. Bezposredni applyMap
-  // (np. harnessy) — baseInfo liczone synchronicznie jak dotychczas.
-  const _deferV = !!state._deferVerify;
-  state._deferVerify = null;
-  if (_deferV) {
-    state.baseInfo = null;
-    state._verifyPending = true;
-    window.__arkmapVerifiedAt = null;  // hak pomiarowy mega-testu (W1: load→verified)
-    const mapRef = state.map;
-    requestAnimationFrame(() => setTimeout(() => _postLoadVerifyDeferred(mapRef), 0));
-  } else {
-    state.baseInfo = _computeBaseInfo(null, null);  // ARKDELTA: tożsamość bazy nowej mapy
-    state._verifyPending = false;
-  }
-  // T6/D2: bufor ostatniego punktu kontrolnego (wczytanie). P3a (fala 2): dla loadu .arkmap
-  // checkpoint = surowy tekst pliku (podlozony przez loadArkmap) — semantycznie rownowazny
-  // kanonicznej serializacji (restoreLastSave robi JSON.parse + applyMap), a koszt ~31%
-  // loadu (profil CDP 2026-08-27) znika. Fallback _serializeMap() dla .dat/online/restore.
-  state.pristineArkmap = state._loadCheckpointText || _serializeMap();
-  state._loadCheckpointText = null;
   state.editDirty = false; state.editSnapshot = null; state.areaSnapshot = null;  // krok 3
   state.selectedLabel = null;  // krok 4
   if (_lockInterval) { clearInterval(_lockInterval); _lockInterval = null; }

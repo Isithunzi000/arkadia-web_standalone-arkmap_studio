@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.50.1 — Hardening: stash checkpointu i flaga defer czyszczone przy wyjątku w oknie loadu (Arc 39)
+
+Jedyny realny finding ze sweepu audytowego fal 1–5 (dwa silniki zewnętrzne, zbieżnie + sweep mechaniczny): wrapper applyMap nie chronił okna między podłożeniem `_loadCheckpointText`/`_deferVerify` (loadArkmap) a ich konsumpcją — wyjątek w `_origApplyMap`/`exitEditMode`/resetach zostawiał zastały tekst, który następny load skonsumowałby jako `pristineArkmap` (restoreLastSave przywróciłoby złą mapę; backup autozapisu zapisałby zły checkpoint). Osiągalność egzotyczna (mapa przechodząca walidację, crashująca w applyMap), waga niska — załatane repro-first.
+
+- Wrapper applyMap: try/catch na całym oknie stash→konsumpcja; catch czyści obie flagi do null (stan inicjalny, idempotentnie) BEZ konsumpcji i przepuszcza wyjątek dalej. Happy path bitowo bez zmian (wyłącznie wcięcie, żadna linia nietknięta semantycznie).
+- Nowy harness tests/checkpoint_stash.js (20 asercji): piny statyczne + scenariusze behawioralne (throw w _origApplyMap / exitEditMode / _computeBaseInfo, brak konsumpcji zastanego tekstu przy kolejnym loadzie, pin P3a happy path, idempotentność). Repro-first: na kodzie sprzed fixa 8 asercji czerwonych (hook ARKMAP_HTML).
+- Sweep fal 1–5 poza tym findingiem czysty: zero dywergencji bitowych; 6 innych findingów silników sfalsyfikowanych kodem i bateriami golden (m.in. rzekome pomijanie idRoom przy pustych kandydatach — falsyfikacja baterią T1/T2 search_index.js).
+
 ## v1.50.0 — Fale optymalizacyjne 1–5: cache adjacency i pełny A* cross-area w planerze, load .arkmap bez serializacji checkpointu i z weryfikacją CRC po pierwszej klatce, indeks tokenowy szukajki; mega-test z dual W1 i gatem kosztowym (Arc 38)
 
 Pięć fal optymalizacyjnych pod prawdziwe obciążenie (drabinka 27k–432k pokoi), każda z harnessami snapshotowo-różnicowymi (bitowa zgodność z kodem sprzed fali) i pełną kampanią empiryczną. Rejestracja: mega-test 2026-08-28 (5 szczebli × 5 przebiegów, [raport](docs/megatest_raport_2026-08-28.html)). Adnotacja: META.json biegu zapisało app_version v1.49.7 — bump wykonany po biegu, kod mierzony jest identyczny z finalnym v1.50.0.
