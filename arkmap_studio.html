@@ -11989,6 +11989,42 @@ function wpRebuildList() {
   if (typeof wpUpdatePlanningMode === 'function') wpUpdatePlanningMode();
 }
 
+// ── P5 (fala 5): indeks tokenowy searcha planera ─────────────────────────────
+// token (slowo rozdzielone bialymi znakami, lowercase) → listy id trafien w nazwie
+// pokoju (n) i w nazwie obszaru (a). Leniwy (budowa przy pierwszym wpDoSearch),
+// wersjonowany jak _adjCache: editRev + referencje roomById/areas — kazda mutacja
+// nazwy przechodzi przez pushUndo/editRev albo podmiane roomById/areas (kontrakt
+// cache'u z fali 1), wiec indeks uniewaznia sie automatycznie.
+// Dokladnosc: slowo zapytania nie zawiera bialych znakow (split po \s+), wiec
+// name.includes(slowo) ⟺ istnieje token nazwy taki, ze token.includes(slowo).
+let _wpSearchIdx = null;
+let _wpSearchBuilds = 0;   // licznik budow (harness: leniwosc + uniewaznianie)
+function _wpSearchIndex() {
+  const ver = state.editRev || 0, src = state.roomById, ar = state.areas;
+  if (_wpSearchIdx && _wpSearchIdx.ver === ver && _wpSearchIdx.src === src && _wpSearchIdx.areas === ar) return _wpSearchIdx;
+  const tok = new Map();
+  const ord = new Map();   // roomId → pozycja w roomById (stabilnosc tie-breakow sortu)
+  let i = 0;
+  for (const id in src) {
+    const r = src[id];
+    ord.set(r.id, i++);
+    const areaObj = ar.get(state.roomArea[id]);
+    const nameLow = (r.name || '').toLowerCase();
+    const areaLow = (areaObj?.name || '').toLowerCase();
+    for (const t of new Set(nameLow.split(/\s+/).filter(Boolean))) {
+      let e = tok.get(t); if (!e) { e = { n: [], a: [] }; tok.set(t, e); }
+      e.n.push(r.id);
+    }
+    for (const t of new Set(areaLow.split(/\s+/).filter(Boolean))) {
+      let e = tok.get(t); if (!e) { e = { n: [], a: [] }; tok.set(t, e); }
+      e.a.push(r.id);
+    }
+  }
+  _wpSearchIdx = { ver, src, areas: ar, tok, ord };
+  _wpSearchBuilds++;
+  return _wpSearchIdx;
+}
+
 function wpDoSearch(idx, query) {
   const dd = document.getElementById('wp-dd-' + idx);
   if (!dd) return;
@@ -11998,23 +12034,45 @@ function wpDoSearch(idx, query) {
   const words = q.split(/\s+/).filter(Boolean);
   const hits = [];
 
-  for (const r of Object.values(state.roomById)) {
-    const nameLow = (r.name || '').toLowerCase();
-    const areaObj = state.areas.get(state.roomArea[r.id]);
-    const areaLow = (areaObj?.name || '').toLowerCase();
-    const idMatch = !isNaN(byNum) && r.id === byNum;
-    if (words.length === 0 && !idMatch) continue;
-    // score: each word matched in name = 2pts, in area = 1pt
-    let score = 0;
-    let allMatch = true;
-    for (const w of words) {
-      const inName = nameLow.includes(w);
-      const inArea = areaLow.includes(w);
-      if (!inName && !inArea) { allMatch = false; break; }
-      score += inName ? 2 : 1;
+  // P5: kandydaci z indeksu tokenowego zamiast pelnego skanu; scoring bez zmian.
+  // Kolejnosc kandydatow = kolejnosc roomById (po ord) — identyczna z dawna
+  // iteracja Object.values, wiec stabilny sort daje bitowo te same wyniki.
+  const sIdx = _wpSearchIndex();
+  let cand = null;   // Set id spelniajacych wszystkie slowa (per slowo: name LUB area)
+  for (const w of words) {
+    const uni = new Set();
+    for (const [t, e] of sIdx.tok) {
+      if (!t.includes(w)) continue;
+      for (const id of e.n) uni.add(id);
+      for (const id of e.a) uni.add(id);
     }
-    if (allMatch || idMatch) {
-      hits.push({ roomId: r.id, name: r.name || `#${r.id}`, areaName: areaObj?.name || '', score: idMatch ? 999 : score });
+    cand = cand === null ? uni : new Set([...cand].filter(id => uni.has(id)));
+    if (cand.size === 0) break;
+  }
+  const idRoom = (!isNaN(byNum) && state.roomById[byNum]) ? byNum : null;
+  if (idRoom !== null) { if (!cand) cand = new Set(); cand.add(idRoom); }
+  if (cand) {
+    const ids = [...cand].sort((x, y) => sIdx.ord.get(x) - sIdx.ord.get(y));
+    for (const id of ids) {
+      const r = state.roomById[id];
+      if (!r) continue;
+      const nameLow = (r.name || '').toLowerCase();
+      const areaObj = state.areas.get(state.roomArea[r.id]);
+      const areaLow = (areaObj?.name || '').toLowerCase();
+      const idMatch = !isNaN(byNum) && r.id === byNum;
+      if (words.length === 0 && !idMatch) continue;
+      // score: each word matched in name = 2pts, in area = 1pt
+      let score = 0;
+      let allMatch = true;
+      for (const w of words) {
+        const inName = nameLow.includes(w);
+        const inArea = areaLow.includes(w);
+        if (!inName && !inArea) { allMatch = false; break; }
+        score += inName ? 2 : 1;
+      }
+      if (allMatch || idMatch) {
+        hits.push({ roomId: r.id, name: r.name || `#${r.id}`, areaName: areaObj?.name || '', score: idMatch ? 999 : score });
+      }
     }
   }
   hits.sort((a, b) => b.score - a.score);
