@@ -17,6 +17,7 @@ import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'url';
 import puppeteer from 'puppeteer-core';
+import { mapCostModel, costGatePairs } from './cost_model.mjs';   // fala 4: gate kosztowy
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../..');
@@ -231,20 +232,40 @@ async function benchArkmap(item) {
     for (const algo of ['dijkstra', 'astar']) {
       const runsOut = [];
       const perPair = [];
+      const perCost = [];   // fala 4: koszt per para w modelu wag apki (gate kosztowy)
       for (let r = 0; r < RUNS; r++) {
         const res = await page.evaluate((pairs, algo, first) => {
           wpState.transportMode = 'off'; wpState.dirMode = 'all'; wpState.avoidLocked = true;
           wpState.algorithm = algo;
           const t0 = performance.now();
-          let found = 0; const pp = [];
-          for (const [a, b] of pairs) { const p = findPath(a, b); if (p) found++; if (first) pp.push(!!p); }
-          return { ms: Math.round((performance.now() - t0) * 10) / 10, found, pp };
+          let found = 0; const pp = []; const paths = [];
+          for (const [a, b] of pairs) { const p = findPath(a, b); if (p) found++; if (first) { pp.push(!!p); paths.push(p); } }
+          const ms = Math.round((performance.now() - t0) * 10) / 10;
+          // Fala 4: koszty liczone PO zatrzymaniu stoperka (zero kontaminacji pomiaru),
+          // wagami z cache'u adjacency — dokladnie tymi, ktorymi relaksuja dijkstraPath/astarPath.
+          const costOf = p => {
+            if (!p) return null;
+            const adj = _adjFor().adj;
+            let c = 0;
+            for (let i = 0; i + 1 < p.length; i++) {
+              const adjL = adj.get(+p[i]);
+              // min po wpisach o tym samym celu (duplikaty dir->v) — jak relaksacja;
+              // zgodnosc z replika Node (cost_model.mjs) pinowana w tests/cost_gate.js
+              let w = Infinity;
+              if (adjL) for (const e of adjL) if (e.id === +p[i + 1] && e.w < w) w = e.w;
+              if (w === Infinity) return null;  // krok poza modelem — dla naszych sciezek nie powinno sie zdarzyc
+              c += w;
+            }
+            return c;
+          };
+          const cc = first ? paths.map(costOf) : [];
+          return { ms, found, pp, cc };
         }, item.pairs, algo, r === 0);
         runsOut.push({ ms: res.ms, found: res.found });
-        if (r === 0) perPair.push(...res.pp);
+        if (r === 0) { perPair.push(...res.pp); perCost.push(...res.cc); }
         console.log(`  W2 arkmap ${algo} run ${r + 1}/${RUNS}: ${res.ms}ms found=${res.found}`);
       }
-      w2[algo] = { runs: runsOut, perPair };
+      w2[algo] = { runs: runsOut, perPair, perCost };
     }
 
     const w3 = await page.evaluate((terms, runs) => {
@@ -416,19 +437,13 @@ async function benchWebreal(item) {
 // 3) SKELETON (auto >50k pokoi): ich getRooms()=[] (kod), graf pusty, pathfinding
 //    natywnie N/A — found=0 to stan OCZEKIWANY, nie rozbieznosc. Gate parowy
 //    stosujemy wtedy do wiersza wymuszonego plain (jego semantyka = plain).
-function lockedSet(item) {
-  const m = JSON.parse(fs.readFileSync(item.arkmap, 'utf8'));
-  const s = new Set();
-  const add = r => { if (r.locked) s.add(r.id); };
-  if (m.rooms) for (const r of Object.values(m.rooms)) add(r);           // plaski uklad (starsze fixture'y)
-  for (const a of m.areas || []) for (const r of a.rooms || []) add(r);  // docelowy uklad: areas[].rooms[]
-  return s;
-}
-
+// Fala 4: lockedSet + koszt sciezki w naszym modelu zyja w cost_model.mjs
+// (wspoldzielone z tests/cost_gate.js, ktory pinuje rownowaznosc z kodem apki).
 function gate(item, arkWl, webWl, deskFound) {
   const problems = [];
   const arkFound = arkWl.w2.dijkstra.perPair;
-  const locked = lockedSet(item);
+  const cm = mapCostModel(item.arkmap);
+  const locked = cm.locked;
   if (deskFound != null) {
     const af = arkFound.filter(Boolean).length;
     if (af !== deskFound) problems.push(`arkmap found=${af} != desktop found=${deskFound}`);
@@ -450,7 +465,19 @@ function gate(item, arkWl, webWl, deskFound) {
       if (!przezLocked) problems.push(`para ${item.pairs[i]}: ${tag} znalazl, arkmap nie, a sciezka NIE idzie przez locked — nieoczekiwane`);
     }
   }
-  return problems;
+
+  // ── Fala 4: gate kosztowy (plan 4.1) ──
+  // (a) nasz A* == nasz Dijkstra kosztowo (MUSI) — per para.
+  // (b) ich A* (koszt w NASZYM modelu wag) >= nasz Dijkstra; taniej i sciezka
+  //     czysta (bez lockow pokoi/wyjsc) => czerwona flaga z liczbami do raportu.
+  //     Taniej po trasie skazonej lockami => OCZEKIWANE (ich silnik ignoruje
+  //     locki pokoi — jak w gate found powyzej).
+  const webAstarPaths = skeleton
+    ? (webWl.plain_forced && webWl.plain_forced.w2 ? webWl.plain_forced.w2.astar.paths0 : null)
+    : (webWl.w2 && webWl.w2.astar ? webWl.w2.astar.paths0 : null);
+  const cg = costGatePairs(item.pairs, arkWl.w2.dijkstra.perCost, arkWl.w2.astar.perCost, webAstarPaths, cm, tag);
+  for (const p of cg.problems) problems.push(p);
+  return { problems, costGate: { checked: cg.checked, expected_locks: cg.expectedLocks, flags: cg.flags } };
 }
 
 // ─── Petla glowna ───────────────────────────────────────────────────────────
@@ -476,8 +503,11 @@ for (const item of ladder) {
   const web = await benchWebreal(item);
   const deskFound = deskRows ? (deskRows.filter(r => r.file === item.name)[0]?.path_found ?? null) : null;
 
-  const problems = gate(item, ark.wl, web, deskFound);
+  const g = gate(item, ark.wl, web, deskFound);
+  const problems = g.problems;
   for (const p of problems) { console.error('  GATE: ' + p); gateFails++; }
+  if (g.costGate.checked > 0)
+    console.log(`  gate kosztowy: ${g.costGate.checked} par porownanych, flagi=${g.costGate.flags.length}, oczekiwane-tansze-przez-locki=${g.costGate.expected_locks}`);
 
   const wlStats = w => ({
     w2: Object.fromEntries(Object.entries(w.w2).map(([algo, d]) => [algo, { ms: statsArr(d.runs.map(r => r.ms)), found: d.runs[0].found }])),
@@ -510,7 +540,10 @@ for (const item of ladder) {
     gate: { problems: problems.length, desk_found: deskFound,
             arkmap_found: ark.wl.w2.dijkstra.perPair.filter(Boolean).length,
             webreal_found: skeleton ? 0 : webFound,
-            webplain_found: skeleton ? webFound : null },
+            webplain_found: skeleton ? webFound : null,
+            cost_checked: g.costGate.checked,
+            cost_expected_locks: g.costGate.expected_locks,
+            cost_flags: g.costGate.flags },
   };
   console.log(`  arkmap .arkmap load=${out.sets[item.name].arkmap.arkmap_file.load_ms.med}ms .dat=${out.sets[item.name].arkmap.dat_file.load_ms.med}ms | web-real=${web.w1.total_ms.med}ms (${web.w1.mode})${skeleton ? ' +plain=' + (web.plain_forced && web.plain_forced.w1 ? web.plain_forced.w1.total_ms.med + 'ms' : 'N/A') : ''} | found: arkmap=${out.sets[item.name].gate.arkmap_found} web=${out.sets[item.name].gate.webreal_found}${skeleton ? ' webplain=' + webFound : ''} desk=${deskFound} | ${Date.now() - t0}ms`);
 }

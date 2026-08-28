@@ -354,11 +354,29 @@ if (apps) {
   }).join('\n');
 
   const gateProblems = aNames.reduce((acc, n) => acc + (aS(n).gate?.problems || 0), 0);
+  // Fala 4: agregacja gate'a kosztowego (plan 4.1) — flagi z liczbami per mapa.
+  const costAgg = aNames.reduce((acc, n) => {
+    const g = aS(n).gate || {};
+    acc.checked += g.cost_checked || 0;
+    acc.expected += g.cost_expected_locks || 0;
+    for (const f of g.cost_flags || []) acc.flags.push({ map: n, ...f });
+    return acc;
+  }, { checked: 0, expected: 0, flags: [] });
+  const costGateHtml = costAgg.checked === 0 && costAgg.flags.length === 0
+    ? ''
+    : `<p>Gate kosztowy (fala 4): ${costAgg.flags.length === 0
+        ? `<b class="ok">ZIELONY</b> — ${costAgg.checked} par porownanych: nasz A* zawsze rowny kosztowo naszemu Dijkstrze, a ich A* nigdy nie tanszy od naszego Dijkstry poza trasami skazonymi lockami (${costAgg.expected} oczekiwanych tanszych przez locki — ich silnik je ignoruje)`
+        : `<b class="bad">CZERWONY — ${costAgg.flags.length} flag</b> (ich A* tanszy od naszego Dijkstry na trasie BEZ lockow)`}.</p>`
+      + (costAgg.flags.length === 0 ? '' :
+        `<table><tr><th>mapa</th><th>para</th><th>nasz Dijkstra</th><th>ich A*</th><th>silnik</th></tr>`
+        + costAgg.flags.map(f => `<tr><td>${esc(f.map)}</td><td><small>${esc(f.pair.join(' → '))}</small></td><td>${fmt(f.our_dijkstra)}</td><td class="worst">${fmt(f.their_astar)}</td><td>${esc(f.engine)}</td></tr>`).join('\n')
+        + `</table>
+<div class="note">Powyzsze pary to dowod, ze ich A* liczy taniej niz optymalny Dijkstra na rownych zasadach (bez lockow na trasie) — czyli ich silnik przecina trase wzgledem modelu wyjsc/wag (niedopuszczalna heurystyka albo rozjazd modelu). Kazdy taki wpis wymaga wyjasnienia przed publikacja wnioskow.</div>`);
   const appsLegend = `<p class="leg"><span style="color:${CA.amap}">■</span> ArkMap Studio (prawdziwe UI) · <span style="color:${CA.adat}">■</span> ArkMap .dat · <span style="color:${CA.wreal}">■</span> web-real (ich pipeline) · <span style="color:#7fd1c8">■</span>/<span style="color:#f4a261">■</span> web-plain wymuszony (inform.) · <span style="color:${CA.astar}">■</span> wariant A* · <span style="color:${CA.desk}">■</span> desktop · sortowane najlepszy → najgorszy</p>`;
 
   appsHtml = `
 <h2 id="apps">APPS — natywne silniki w aplikacjach (headless Chromium)</h2>
-<div class="note">Metodologia: kazda apka liczy SWOIM natywnym kodem i formatem. ArkMap Studio — prawdziwe UI (${esc(apps.meta.chrome)}): loadArkmap/loadDat → applyMap → pierwsza klatka (2×rAF), findPath (Dijkstra domyslnie + wariant A*; wpState neutralny: transport off, kierunki all, locki ON), wpDoSearch, iteracja po state.roomById. Web-real — ich prawdziwy pipeline z npm: mudlet-map-binary-reader@${esc(apps.meta.packages['mudlet-map-binary-reader'])} → mudlet-map-renderer@${esc(apps.meta.packages['mudlet-map-renderer'])} (parseMudletMap → readerFromLoadedMap → PathFinder; tryb auto: plain &lt;50k pokoi, skeleton powyzej). W3 web = N/A — ich biblioteka mapowa nie ma natywnego API wyszukiwania (potwierdzone w kodzie). Powyzej 50k pokoi natywny auto-mode ich readera przechodzi w skeleton (getRooms()=[] — kod), wiec W2/W3b web = N/A i mierzymy dodatkowo plain wymuszony (wiersz informacyjny). Ich PathFinder cache'uje findPath per instancja — neutralizowane swieza instancja per run. Ich silnik IGNORUJE locki pokoi (0× isLocked w bundlu — honoruje tylko locki wyjsc), wiec moze znalezc wiecej sciezek: rozbieznosci idace przez locked pokoje sa OCZEKIWANE i oznaczone, kazda inna = czerwona flaga (gate).</div>
+<div class="note">Metodologia: kazda apka liczy SWOIM natywnym kodem i formatem. ArkMap Studio — prawdziwe UI (${esc(apps.meta.chrome)}): loadArkmap/loadDat → applyMap → pierwsza klatka (2×rAF), findPath (Dijkstra domyslnie + wariant A*; wpState neutralny: transport off, kierunki all, locki ON), wpDoSearch, iteracja po state.roomById. Web-real — ich prawdziwy pipeline z npm: mudlet-map-binary-reader@${esc(apps.meta.packages['mudlet-map-binary-reader'])} → mudlet-map-renderer@${esc(apps.meta.packages['mudlet-map-renderer'])} (parseMudletMap → readerFromLoadedMap → PathFinder; tryb auto: plain &lt;50k pokoi, skeleton powyzej). W3 web = N/A — ich biblioteka mapowa nie ma natywnego API wyszukiwania (potwierdzone w kodzie). Powyzej 50k pokoi natywny auto-mode ich readera przechodzi w skeleton (getRooms()=[] — kod), wiec W2/W3b web = N/A i mierzymy dodatkowo plain wymuszony (wiersz informacyjny). Ich PathFinder cache'uje findPath per instancja — neutralizowane swieza instancja per run. Ich silnik IGNORUJE locki pokoi (0× isLocked w bundlu — honoruje tylko locki wyjsc), wiec moze znalezc wiecej sciezek: rozbieznosci idace przez locked pokoje sa OCZEKIWANE i oznaczone, kazda inna = czerwona flaga (gate). Gate kosztowy (fala 4): per para liczone sa koszty sciezek w NASZYM modelu wag (exit_weights / wagi pokoi) — nasz A* MUSI byc rowny kosztowo naszemu Dijkstrze, a ich A* MUSI byc nie tanszy niz nasz Dijkstra; tanszy na trasie bez lockow = czerwona flaga z liczbami, tanszy przez locki = oczekiwane.</div>
 <h3>W1 — wczytanie w aplikacji (ms, mediana z ${apps.meta.n_runs} runow)</h3>
 <div class="note">W1 ArkMap ma dwie wartosci: <b>load</b> = fetch → applyMap → pierwsza klatka (mapa w pelni uzywalna), <b>verified</b> = moment zakonczenia odroczonej weryfikacji sum kontrolnych i baseInfo, ktora po P3b dzieje sie w tle zaraz po pierwszej klatce i nie blokuje UI. Web-real/desktop licza synchronicznie (jedna wartosc). MISS = hak weryfikacji nie odpalil w 10 s (czerwona flaga).</div>
 <table><tr><th>mapa</th><th>pokoi</th><th>arkmap UI .arkmap</th><th>arkmap UI .dat</th><th>web-real .dat</th><th>desktop .dat</th><th>desk / arkmap</th><th>desk / web-real</th></tr>
@@ -386,7 +404,8 @@ ${appW3brows}
 <table><tr><th>mapa</th><th>arkmap UI .arkmap</th><th>arkmap UI .dat</th><th>web-real .dat</th></tr>
 ${appW4rows}
 </table>
-<p>Gate semantyczny: ${gateProblems === 0 ? '<b class="ok">ZIELONY</b> — wszystkie rozbieznosci found wyjasnione lockami pokoi (oczekiwane dla ich silnika)' : `<b class="bad">CZERWONY — ${gateProblems} problemow</b>`}.</p>`;
+<p>Gate semantyczny: ${gateProblems === 0 ? '<b class="ok">ZIELONY</b> — wszystkie rozbieznosci found wyjasnione lockami pokoi (oczekiwane dla ich silnika)' : `<b class="bad">CZERWONY — ${gateProblems} problemow</b>`}.</p>
+${costGateHtml}`;
 }
 
 // ---------- HTML ----------
