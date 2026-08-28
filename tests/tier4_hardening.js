@@ -344,6 +344,10 @@ console.log('── T6: dijkstra — kolizja kluczy, priorytet SE ──');
     constsBlock,
     extract(NEW, 'function _edgeWeight(room, dir, neighborRoom) {'),
     extract(NEW, 'function _dirAllowed(dir, room) {'),
+    // P1 (fala 1): dijkstraPath czyta krawedzie z cache'a adjacency — maszyneria w wycinku
+    'let _adjCache = null;',
+    extract(NEW, 'function _adjBuild() {'),
+    extract(NEW, 'function _adjFor() {'),
     extract(NEW, 'function dijkstraPath(fromId, toId) {'),
   ].join('\n');
   const fn = new Function('state', 'wpState',

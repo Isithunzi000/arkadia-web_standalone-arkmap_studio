@@ -11245,6 +11245,114 @@ function _dirAllowed(dir, room) {
   return wpState.dirMode !== 'cardinal';
 }
 
+// ── Cache adjacency planera (optymalizacja P1, fala 1) ──────────────────────
+// Leniwy (pierwsze zapytanie po zmianie), wersjonowany: state.editRev + referencja
+// roomById (applyMap tworzy nowy obiekt). Mutacje mapy MUSZĄ podbijać state.editRev.
+// Wpis krawędzi: { id, w, cls, lk, x, y, z }:
+//   id  — cel (wartość z exits/special_exits BEZ koercji — trafia do dist/prev/heap),
+//   w   — _edgeWeight;  cls — 0 kardynalne (idx≤8) / 1 pionowe (idx 9–12) / 2 specjalne+nieznane,
+//   lk  — krawędź zlockowana (exit_locks/special_exit_locks źródła),
+//   x,y,z — współrzędne celu (heurystyka A* bez lookupu roomById per krawędź).
+// Lista posortowana stabilnie po id (Array.sort w V8 jest stabilny) — bitowo ta sama
+// kolejność relaksacji co dotychczasowe Object.entries(merge).sort((a,b)=>a[1]-b[1]);
+// remis = kolejność wstawiania (exits przed special_exits; kolizja klucza trzyma
+// pozycję z exits — semantyka audytu T4/W8). Filtry dirMode i locked pokoi zostają
+// w pętli zapytania (dane wpState / runtime). Klucz mapy: +id (id numeryczne wg formatu).
+// areaMin: Map(obszarA → Map(obszarB → min waga krawędzi A→B)) — heurystyka A* cross-area.
+let _adjCache = null;  // { ver, src, adj, areaMin, areaDistMemo }
+
+function _adjBuild() {
+  const adj = new Map();
+  const areaMin = new Map();
+  const ra = state.roomArea || {};
+  for (const id in state.roomById) {
+    const room = state.roomById[id];
+    const exits = room.exits, se = room.special_exits;
+    if (!exits && !se) continue;
+    const exitLockSet = room.exit_locks && room.exit_locks.length ? new Set(room.exit_locks) : null;
+    const specLockSet = room.special_exit_locks && room.special_exit_locks.length ? new Set(room.special_exit_locks) : null;
+    // Merge z priorytetem SE>exits, kolizja klucza trzyma pozycję z exits (jak Object.assign):
+    const merged = [];
+    const posByDir = new Map();
+    const put = (dir, nid, isSpecial) => {
+      const at = posByDir.get(dir);
+      if (at === undefined) { posByDir.set(dir, merged.length); merged.push({ dir, nid, isSpecial }); }
+      else { const m = merged[at]; m.nid = nid; m.isSpecial = true; }
+    };
+    if (exits) for (const dir in exits) put(dir, exits[dir], false);
+    if (se) for (const dir in se) put(dir, se[dir], true);
+    const out = [];
+    for (const m of merged) {
+      const nid = m.nid;
+      if (!nid) continue;                      // jak dotychczas: falsy cel pomijany
+      const nbr = state.roomById[nid];
+      if (!nbr) continue;                      // jak dotychczas: cel poza mapą pomijany
+      let cls;
+      if (m.isSpecial) cls = 2;
+      else { const d = DIR_BY_SHORT[m.dir]; cls = !d ? 2 : (d.idx <= 8 ? 0 : 1); }
+      out.push({
+        id: nid,
+        w: _edgeWeight(room, m.dir, nbr),
+        cls,
+        lk: !!((exitLockSet && exitLockSet.has(m.dir)) || (specLockSet && specLockSet.has(m.dir))),
+        x: nbr.x, y: nbr.y, z: nbr.z ?? 0,
+      });
+    }
+    if (!out.length) continue;
+    out.sort((a, b) => a.id - b.id);  // stabilny — remis zachowuje kolejność wstawiania
+    adj.set(+id, out);
+    const a = ra[id];
+    if (a !== undefined) for (const e of out) {
+      const b = ra[e.id];
+      if (b === undefined || b === a) continue;
+      let tos = areaMin.get(a);
+      if (!tos) { tos = new Map(); areaMin.set(a, tos); }
+      if (e.w < (tos.get(b) ?? Infinity)) tos.set(b, e.w);
+    }
+  }
+  return { adj, areaMin };
+}
+
+function _adjFor() {
+  const ver = state.editRev || 0;
+  const src = state.roomById;
+  if (_adjCache && _adjCache.ver === ver && _adjCache.src === src) return _adjCache;
+  const built = _adjBuild();
+  _adjCache = { ver, src, adj: built.adj, areaMin: built.areaMin, areaDistMemo: new Map() };
+  return _adjCache;
+}
+
+// Odległości obszarów DO celu po odwróconym grafie (min wagi graniczne) — dopuszczalna
+// dolna granica kosztu przekroczeń granic. Memo per (wersja cache'u, obszar celu).
+function _areaDistances(cache, areaTo) {
+  let dist = cache.areaDistMemo.get(areaTo);
+  if (dist) return dist;
+  dist = new Map([[areaTo, 0]]);
+  const rev = new Map();  // obszar będący celem krawędzi → [{from, w}]
+  for (const [a, tos] of cache.areaMin)
+    for (const [b, w] of tos) {
+      let l = rev.get(b);
+      if (!l) { l = []; rev.set(b, l); }
+      l.push({ from: a, w });
+    }
+  const heap = [[0, areaTo]];
+  while (heap.length) {
+    const [d, a] = _heapPop(heap);
+    if (d > (dist.get(a) ?? Infinity)) continue;
+    const l = rev.get(a);
+    if (!l) continue;
+    for (const e of l) {
+      const nd = d + e.w;
+      if (nd < (dist.get(e.from) ?? Infinity)) {
+        dist.set(e.from, nd);
+        _heapPush(heap, [nd, e.from]);
+      }
+    }
+  }
+  cache.areaDistMemo.set(areaTo, dist);
+  return dist;
+}
+
 // ── Transporty (statki/dyliżanse) — wirtualne krawędzie (model Delwinga) ─────
 // Koszt hopu: Σczasów przejazdu × ratio + kara za wejście na pokład (raz na podróż).
 // Kara pokrywa średnie oczekiwanie na odjazd — dzięki temu bezpośrednia przeprawa
@@ -11421,6 +11529,7 @@ function dijkstraPath(fromId, toId) {
   const prev = new Map();
   const visited = new Set();
   const heap = [[0, fromId]];
+  const adj = _adjFor().adj;  // P1: zcache'owana adjacency (zamiast merge+sort per pop)
 
   while (heap.length > 0) {
     const [cost, cur] = _heapPop(heap);
@@ -11434,19 +11543,17 @@ function dijkstraPath(fromId, toId) {
     if (room.locked && wpState.avoidLocked && cur !== fromId) continue;  // audyt deep N6: wyjatek STARTU — z locked mozna WYJSC, guard tnie dalsza trase
     if (cur === toId) break;
 
-    const exitLockSet = new Set(room.exit_locks || []);
-    const specLockSet = new Set(room.special_exit_locks || []);
-    const allExits = {};  // audyt T4/W8: jawny merge — priorytet SE>exits przy kolizji kluczy (efekt identyczny jak Object.assign)
-    Object.assign(allExits, room.exits || {});
-    Object.assign(allExits, room.special_exits || {});
-    for (const [dir, nid] of Object.entries(allExits).sort((a, b) => a[1] - b[1])) {
-      if (!nid || visited.has(nid)) continue;
-      if (exitLockSet.has(dir) || specLockSet.has(dir)) continue; // locked exit — pathfinder skips
-      if (!_dirAllowed(dir, room)) continue; // filtr kierunków planera (wpState.dirMode)
+    // Krawędzie z cache'u: lk/cls/w zcache'owane; !nid i !nbr odfiltrowane przy budowie.
+    const adjL = adj.get(+cur);
+    if (adjL) for (const e of adjL) {
+      const nid = e.id;
+      if (visited.has(nid)) continue;
+      if (e.lk) continue; // locked exit — pathfinder skips
+      if (e.cls === 2 ? wpState.dirMode !== 'all' : (e.cls === 1 && wpState.dirMode === 'cardinal')) continue; // filtr kierunków planera (wpState.dirMode)
       const nbr = state.roomById[nid];
       if (!nbr) continue;
       if (wpState.avoidLocked && nbr.locked) continue; // audyt ext F2.15: nie wchodzimy do locked (Dijkstra)
-      const newCost = cost + _edgeWeight(room, dir, nbr);
+      const newCost = cost + e.w;
       if (newCost < (dist.get(nid) ?? Infinity)) {
         dist.set(nid, newCost);
         prev.set(nid, cur);
@@ -11511,7 +11618,9 @@ function _recomputeAstarParams() {
   state.astarParams = { maxEdgeDist: _maxDist, minEdgeW: _minW };
 }
 
-// A* z euklidesową heurystyką; fallback na Dijkstrę przy trasach cross-area
+// A* z heurystyką euklidesową; trasy cross-area obsługuje heurystyka dwupoziomowa
+// (max z euklidesowej i dolnej granicy z grafu obszarów) — admisybilna, więc dawny
+// fallback do Dijkstry nie jest już potrzebny na ścieżce głównej.
 function astarPath(fromId, toId) {
   if (fromId === toId) return [fromId];
   _pathHops = new Map(); // A* nie używa hopów (transport ⇒ dispatcher wymusza Dijkstrę), ale resetuje stan
@@ -11519,27 +11628,45 @@ function astarPath(fromId, toId) {
   const roomTo   = state.roomById[toId];
   if (!roomFrom || !roomTo) return null;
 
-  // Cross-area: współrzędne z różnych przestrzeni — heurystyka bez sensu → Dijkstra
-  if (state.roomArea[fromId] !== state.roomArea[toId]) return dijkstraPath(fromId, toId);
-
   // Recalculate params if editing (rooms/exits may have changed)
   if (state.editMode) _recomputeAstarParams();
 
-  // Admissible heurystyka: h(n) = dist_euklidesowa / maxEdgeDist * minEdgeW
-  // Normalizacja przez maxEdgeDist gwarantuje że h nigdy nie przeszacuje kosztu
-  // nawet przy portalu/special_exit który geometrycznie jest bardzo długi (ale kosztuje 1).
   const { maxEdgeDist, minEdgeW } = state.astarParams ?? { maxEdgeDist: 1, minEdgeW: 1 };
-  const h = (rid) => {
-    const r = state.roomById[rid];
-    if (!r) return 0;
-    const dx = r.x - roomTo.x, dy = r.y - roomTo.y, dz = (r.z ?? 0) - (roomTo.z ?? 0);
-    return Math.sqrt(dx*dx + dy*dy + dz*dz) / maxEdgeDist * minEdgeW;
+  const cache = _adjFor();
+  const adj = cache.adj;
+  const ra = state.roomArea || {};
+  const aFrom = ra[fromId], aTo = ra[toId];
+  // Cross-area: dolna granica kosztu przekroczeń granic (graf obszarów, min wagi).
+  // Obszary niespójne w rzucie na graf obszarów ⇒ trasa nie istnieje (każda realna
+  // trasa rzutuje się na ścieżkę w grafie obszarów) — szybkie null zamiast eksploracji.
+  let areaDist = null;
+  if (aFrom !== undefined && aTo !== undefined && aFrom !== aTo) {
+    areaDist = _areaDistances(cache, aTo);
+    if (!areaDist.has(aFrom)) return null;
+  }
+
+  // Admissible + konsystentna heurystyka:
+  //   h(n) = max( euklides(n)/maxEdgeDist*minEdgeW , areaDist[obszar(n)] )
+  // Euklides: koszt krawędzi ≥ jej długość/maxEdgeDist*minEdgeW (maxEdgeDist liczone
+  // z portalami/special_exits), więc nierówność trójkąta trzyma także między obszarami.
+  // areaDist: każda trasa przekracza granice obszarów krawędziami nie tańszymi niż
+  // minima graniczne. Max dwóch konsystentnych heurystyk jest konsystentny, więc
+  // A* z visited zwraca koszt identyczny z Dijkstrą (asercja w tests/pathfinding_cache.js).
+  const h = (rid, x, y, z) => {
+    const dx = x - roomTo.x, dy = y - roomTo.y, dz = z - (roomTo.z ?? 0);
+    let hh = Math.sqrt(dx*dx + dy*dy + dz*dz) / maxEdgeDist * minEdgeW;
+    if (areaDist) {
+      const a = ra[rid];
+      const ad = (a === aTo) ? 0 : (a === undefined ? undefined : areaDist.get(a));
+      if (ad !== undefined && ad > hh) hh = ad;
+    }
+    return hh;
   };
 
   const g    = new Map([[fromId, 0]]);
   const prev = new Map();
   const visited = new Set();
-  const heap = [[h(fromId), fromId]];
+  const heap = [[h(fromId, roomFrom.x, roomFrom.y, roomFrom.z ?? 0), fromId]];
 
   while (heap.length > 0) {
     const [, cur] = _heapPop(heap);
@@ -11554,23 +11681,21 @@ function astarPath(fromId, toId) {
     if (cur === toId) break;
     const gCur = g.get(cur) ?? Infinity;
 
-    const exitLockSet = new Set(room.exit_locks || []);
-    const specLockSet = new Set(room.special_exit_locks || []);
-    const allExits = {};  // audyt T4/W8: jawny merge — priorytet SE>exits przy kolizji kluczy (efekt identyczny jak Object.assign)
-    Object.assign(allExits, room.exits || {});
-    Object.assign(allExits, room.special_exits || {});
-    for (const [dir, nid] of Object.entries(allExits).sort((a, b) => a[1] - b[1])) {
-      if (!nid || visited.has(nid)) continue;
-      if (exitLockSet.has(dir) || specLockSet.has(dir)) continue; // locked exit — pathfinder skips
-      if (!_dirAllowed(dir, room)) continue; // filtr kierunków planera (wpState.dirMode)
+    // Krawędzie z cache'u: lk/cls/w/współrzędne zcache'owane (jak w dijkstraPath).
+    const adjL = adj.get(+cur);
+    if (adjL) for (const e of adjL) {
+      const nid = e.id;
+      if (visited.has(nid)) continue;
+      if (e.lk) continue; // locked exit — pathfinder skips
+      if (e.cls === 2 ? wpState.dirMode !== 'all' : (e.cls === 1 && wpState.dirMode === 'cardinal')) continue; // filtr kierunków planera (wpState.dirMode)
       const nbr = state.roomById[nid];
       if (!nbr) continue;
       if (wpState.avoidLocked && nbr.locked) continue; // audyt ext F2.15: nie wchodzimy do locked (A*)
-      const newG = gCur + _edgeWeight(room, dir, nbr);
+      const newG = gCur + e.w;
       if (newG < (g.get(nid) ?? Infinity)) {
         g.set(nid, newG);
         prev.set(nid, cur);
-        _heapPush(heap, [newG + h(nid), nid]);
+        _heapPush(heap, [newG + h(nid, e.x, e.y, e.z), nid]);
       }
     }
   }
