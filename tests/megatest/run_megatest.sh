@@ -8,7 +8,7 @@
 #   MUDLET_BIN=/sciezka/Mudlet-4.22.0.AppImage  — binarka desktopu (faza desktop)
 #   MEGATEST_DISPLAY=1 — faza desktop na prawdziwej sesji graficznej (pomija offscreen i xvfb)
 #   HEAP=MB — sufit heapu Node (domyslnie auto: min(6144, 50% RAM))
-#   SKIP_INPUTS=1 / SKIP_WEB=1 / SKIP_ARKMAP=1 / SKIP_DESKTOP=1 — pomin faze
+#   SKIP_INPUTS=1 / SKIP_WEB=1 / SKIP_ARKMAP=1 / SKIP_DESKTOP=1 / SKIP_APPS=1 — pomin faze
 #   Opcje CLI (nadpisuja env): --only/--skip/--desktop-only/--dry-run — zobacz --help
 #   SKIP_REPORT=1 — bez raportu HTML
 # Kryteria limitu (zarejestrowane przed pomiarem — NIE RUSZAC po fakcie):
@@ -26,7 +26,7 @@ cd "$(dirname "$0")/../.."
 #   --dry-run — wypisuje plan faz i konczy (nic nie kasuje, nic nie mierzy)
 #   MEGATEST_DATE=YYYY-MM-DD — wymusza katalog wynikow (domyslnie dzisiejsza data;
 #     przydatne przy dokladaniu faz do biegu sprzed polnocy)
-# Flagi nadpisuja zmienne SKIP_INPUTS/SKIP_MANIFEST/SKIP_WEB/SKIP_ARKMAP/SKIP_DESKTOP/SKIP_REPORT.
+# Flagi nadpisuja zmienne SKIP_INPUTS/SKIP_MANIFEST/SKIP_WEB/SKIP_ARKMAP/SKIP_DESKTOP/SKIP_APPS/SKIP_REPORT.
 RUNS=""
 ONLY=""
 SKIPCLI=""
@@ -49,12 +49,12 @@ RUNS="${RUNS:-5}"
 
 has_ph() { case ",$1," in *",$2,"*) return 0;; *) return 1;; esac; }
 if [ -n "$ONLY" ]; then
-  for ph in inputs manifest web arkmap desktop; do
+  for ph in inputs manifest web arkmap desktop apps; do
     has_ph "$ONLY" "$ph" || eval "SKIP_$(echo "$ph" | tr '[:lower:]' '[:upper:]')=1"
   done
 fi
 for ph in ${SKIPCLI//,/ }; do
-  has_ph "inputs,manifest,web,arkmap,desktop,report" "$ph" || { echo "nieznana faza: $ph"; exit 2; }
+  has_ph "inputs,manifest,web,arkmap,desktop,apps,report" "$ph" || { echo "nieznana faza: $ph"; exit 2; }
   eval "SKIP_$(echo "$ph" | tr '[:lower:]' '[:upper:]')=1"
 done
 DATE="${MEGATEST_DATE:-$(date +%F)}"   # MEGATEST_DATE=YYYY-MM-DD — dokladanie do istniejacego katalogu (np. bieg przez polnoc)
@@ -67,7 +67,7 @@ HEAP="${HEAP:-$AUTO_HEAP}"
 echo "== MEGA-TEST: ArkMap vs mudlet-web vs Mudlet desktop =="
 echo "wyniki: $RESULTS | runs: $RUNS | heap Node: $HEAP MB"
 ph() { [ "${!1:-0}" = 1 ] && echo "SKIP" || echo "RUN"; }
-echo "plan faz: inputs=$(ph SKIP_INPUTS) manifest=$(ph SKIP_MANIFEST) web=$(ph SKIP_WEB) arkmap=$(ph SKIP_ARKMAP) desktop=$(ph SKIP_DESKTOP) report=$(ph SKIP_REPORT)"
+echo "plan faz: inputs=$(ph SKIP_INPUTS) manifest=$(ph SKIP_MANIFEST) web=$(ph SKIP_WEB) arkmap=$(ph SKIP_ARKMAP) desktop=$(ph SKIP_DESKTOP) apps=$(ph SKIP_APPS) report=$(ph SKIP_REPORT)"
 [ "$DRY" = 1 ] && exit 0
 command -v node >/dev/null || { echo "BRAK node"; exit 2; }
 mkdir -p "$RESULTS"
@@ -79,7 +79,8 @@ mkdir -p "$RESULTS"
 [ "${SKIP_ARKMAP:-0}" != 1 ] && rm -f "$RESULTS"/results_arkmap_node.json
 [ "${SKIP_DESKTOP:-0}" != 1 ] && rm -f "$RESULTS"/results_desktop.json "$RESULTS"/results_desktop.jsonl \
       "$RESULTS"/desktop.done "$RESULTS"/desktop.error "$RESULTS"/ram_desktop.txt
-if [ "${SKIP_MANIFEST:-0}" = 1 ] && { [ "${SKIP_WEB:-0}" != 1 ] || [ "${SKIP_DESKTOP:-0}" != 1 ]; }; then
+[ "${SKIP_APPS:-0}" != 1 ] && rm -f "$RESULTS"/results_apps.json
+if [ "${SKIP_MANIFEST:-0}" = 1 ] && { [ "${SKIP_WEB:-0}" != 1 ] || [ "${SKIP_DESKTOP:-0}" != 1 ] || [ "${SKIP_APPS:-0}" != 1 ]; }; then
   [ -f "$RESULTS/manifest.lua" ] && [ -f "$RESULTS/manifest.json" ] || {
     echo "BLAD: manifest pominiety, ale brak $RESULTS/manifest.lua — najpierw pelny bieg"; exit 1; }
   MRUNS=$(node -e "try{process.stdout.write(String(JSON.parse(require('fs').readFileSync('$RESULTS/manifest.json','utf8')).runs))}catch(e){process.stdout.write('?')}" 2>/dev/null)
@@ -186,6 +187,14 @@ if [ "${SKIP_DESKTOP:-0}" != 1 ]; then
   bash tests/megatest/desktop/run_desktop.sh "$RESULTS" || exit 1
 else
   echo "=== faza D: SKIP ==="
+fi
+
+if [ "${SKIP_APPS:-0}" != 1 ]; then
+  echo "=== faza APPS: natywne silniki w headless Chromium (ArkMap Studio UI vs mudlet-map-renderer) ==="
+  (cd tests/megatest/apps && npm ci --no-audit --no-fund) || { echo "npm ci niepowodzenie"; exit 1; }
+  node tests/megatest/apps/run_apps.mjs "$RESULTS" "$RUNS" || exit 1
+else
+  echo "=== faza APPS: SKIP ==="
 fi
 
 echo "== mega-test zakonczony =="

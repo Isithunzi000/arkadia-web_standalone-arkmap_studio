@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>megatest apps — web-real harness</title>
+<!-- Importmap: jedyne gołe specyfikatory w bundlach to mudlet-map-binary-reader
+     (z binary.mjs) oraz qtdatastream-web (+/types,+/bytes — z readera 1.3.0). -->
+<script type="importmap">
+{
+  "imports": {
+    "mudlet-map-binary-reader": "/node_modules/mudlet-map-binary-reader/dist/index.js",
+    "qtdatastream-web": "/node_modules/qtdatastream-web/dist/index.js",
+    "qtdatastream-web/types": "/node_modules/qtdatastream-web/dist/src/types.js",
+    "qtdatastream-web/bytes": "/node_modules/qtdatastream-web/dist/src/bytes.js",
+    "konva": "/node_modules/konva/lib/index.js"
+  }
+}
+</script>
+</head>
+<body>
+<script type="module">
+// Harness fazy apps: prawdziwy pipeline mudlet-web (reader -> MapReader -> PathFinder),
+// bez renderera UI. Wszystko mierzone performance.now(), wyniki na window.__wrResult.
+import { parseMudletMap, readerFromLoadedMap } from '/node_modules/mudlet-map-renderer/dist/binary.mjs';
+import { PathFinder } from '/node_modules/mudlet-map-renderer/dist/index.mjs';
+
+const S = { reader: null, mode: null };
+
+function now() { return performance.now(); }
+function r1(x) { return Math.round(x * 10) / 10; }
+
+// W1: natywne loadMudletMap rozbité na parse + materialize (auto mode — natywna
+// strategia per rozmiar: plain <50k, skeleton powyzej), potem budowa grafu PathFinderem.
+async function load(bytes) {
+  const t0 = now();
+  const loaded = parseMudletMap(bytes);            // natywny parse (auto: plain/streaming)
+  const t1 = now();
+  const reader = readerFromLoadedMap(loaded);      // materializacja IMapReader
+  const t2 = now();
+  const pf = new PathFinder(reader);               // budowa grafu (MapGraph w konstruktorze)
+  const t3 = now();
+  S.reader = reader;
+  S.mode = loaded.kind;
+  return { parse_ms: r1(t1 - t0), materialize_ms: r1(t2 - t1), graph_ms: r1(t3 - t2),
+           total_ms: r1(t3 - t0), mode: loaded.kind, rooms: reader.getRooms().length };
+}
+
+// W2: ich PathFinder, algo 'dijkstra' (ich domyslna) lub 'astar'.
+// Swieza instancja PathFinder per run — ich findPath cache'uje wyniki per instancja,
+// bez tego runy 2..N mierzylyby cache (~0 ms).
+function path(pairs, algo, runs) {
+  if (!S.reader) throw new Error('najpierw load()');
+  const out = [];
+  for (let r = 0; r < runs; r++) {
+    const pf = new PathFinder(S.reader, algo);
+    const t0 = now();
+    let found = 0;
+    const paths = [];
+    for (const [a, b] of pairs) {
+      const p = pf.findPath(a, b);
+      if (p) found++;
+      paths.push(p || null);
+    }
+    out.push({ ms: r1(now() - t0), found, paths });
+  }
+  return out;
+}
+
+// W3b: ich IMapReader.getRooms() -> tabela id->name (odpowiednik iteracji po mapie).
+function iter(runs) {
+  if (!S.reader) throw new Error('najpierw load()');
+  const out = [];
+  for (let r = 0; r < runs; r++) {
+    const t0 = now();
+    const tab = {};
+    for (const room of S.reader.getRooms()) tab[room.id] = room.name;
+    const n = Object.keys(tab).length;
+    out.push({ ms: r1(now() - t0), keys: n });
+  }
+  return out;
+}
+
+// W3: brak natywnego API wyszukiwania w mudlet-map-renderer (potwierdzone w kodzie —
+// zero search/findRoom w dist). Ich klient ma autocomplete UI, to nie silnik mapy.
+
+window.__wr = { load, path, iter };
+window.__wrReady = true;
+</script>
+</body>
+</html>

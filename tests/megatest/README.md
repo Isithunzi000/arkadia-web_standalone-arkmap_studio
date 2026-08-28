@@ -9,6 +9,7 @@ samej maszynie**. Cel: twarde dane (czas, RAM, limity) pod propozycje formatu
 | ArkMap | silniki z `arkmap_studio.html` (verbatim, jak w perf labie) | W1 parse `.dat`/`.arkmap` (Node) |
 | mudlet-web | `mudlet-map-binary-reader@2.0.0` (dokladnie ten pakiet, ktorego uzywa mudlet-web) | W1 parse `.dat` (Node) + tryb streamingowy |
 | Mudlet desktop | binarka release (AppImage) + Lua API | W1 `loadMap` (restore+audit+init2D — pelna cena uzytkownika), W2 `getPath`, W3 `searchRoom`/`getRooms`, W4 RAM procesu |
+| **Faza `apps`** (natywne silniki) | ArkMap Studio jako prawdziwe UI w headless Chromium vs `mudlet-map-renderer@2.6.1` + reader `@1.3.0` (dokladnie ten stack, ktorym zyje ich apka) | W1 load→pierwsza klatka, W2 `findPath` (Dijkstra domyslnie + A*), W3 `wpDoSearch` (web: N/A — brak natywnego API), W3b iteracja, W4 heap po GC. Ich `PathFinder` cache'uje `findPath` — neutralizowane swieza instancja per run. Ich silnik ignoruje locki pokoi (0× `isLocked` w bundlu) — rozbieznosci `found` przez locked pokoje sa oczekiwane, kazda inna wywala bieg (gate) |
 
 ## Jednorazowy setup (5 minut)
 
@@ -34,7 +35,10 @@ Fazy mozna wybierac z linii polecen: `--only desktop` (albo `--desktop-only`) od
 ```
 
 - `5` = przebiegow na punkt pomiaru (mediana). Domyslnie 5.
-- Fazy mozna pomijac: `SKIP_INPUTS=1 SKIP_WEB=1 SKIP_ARKMAP=1 SKIP_DESKTOP=1`.
+- Fazy mozna pomijac: `SKIP_INPUTS=1 SKIP_WEB=1 SKIP_ARKMAP=1 SKIP_DESKTOP=1 SKIP_APPS=1`.
+- Faza `apps` wymaga Chromium/Chrome (`CHROME_BIN=...` albo `chromium` w PATH) i `npm ci`
+  w `tests/megatest/apps/` (runner robi to sam). Izolowany profil przegladarki, zero sieci
+  poza lokalnym serwerem plikow.
 - Desktop odpala sie z `-platform offscreen --profile megatest --offline`
   (zero polaczen z gra); jesli offscreen nie wstanie, runner sam sprobuje `xvfb-run`.
 - Po zakonczeniu: `tests/megatest/results/<data>/` + `docs/megatest_raport_<data>.html`.

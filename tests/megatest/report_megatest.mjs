@@ -17,6 +17,7 @@ const web = readJson('results_web.json');
 const ark = readJson('results_arkmap_node.json');
 const meta = readJson('META.json');
 const ramDesktop = readJson('ram_desktop.txt');
+const apps = readJson('results_apps.json');
 let maszyna = '';
 try { maszyna = fs.readFileSync(path.join(RESULTS, 'MASZYNA.md'), 'utf8'); } catch {}
 
@@ -256,6 +257,121 @@ if (biggest) {
   </ul>`;
 }
 
+// ---------- APPS: natywne silniki w aplikacjach (headless Chromium) ----------
+let appsHtml = '', appsNav = '';
+if (apps) {
+  appsNav = '<a href="#apps">apps (natywne)</a>';
+  const aNames = Object.keys(apps.sets || {});
+  const aS = n => apps.sets[n] || {};
+  const CA = { amap: '#55bb55', adat: '#d9a030', wreal: '#44bbaa', astar: '#bb77dd', desk: '#d95555' };
+
+  const appW1rows = aNames.map(n => {
+    const s = aS(n), wr = s.webreal?.w1;
+    const dl = dLoad[n]?.med;
+    return `<tr><td>${esc(n)}</td><td>${fmt(s.rooms)}</td>` + hl([
+      { v: s.arkmap?.arkmap_file?.load_ms?.med, cell: fmt(s.arkmap?.arkmap_file?.load_ms?.med) },
+      { v: s.arkmap?.dat_file?.load_ms?.med, cell: fmt(s.arkmap?.dat_file?.load_ms?.med) },
+      { v: wr?.total_ms?.med, cell: wr ? `${fmt(wr.total_ms.med)}<br><small>parse ${fmt(wr.parse_ms.med)} + mat ${fmt(wr.materialize_ms.med)} + graf ${fmt(wr.graph_ms.med)}${wr.mode === 'skeleton' ? ' [skeleton]' : ''}</small>` : '—' },
+      { v: dl, cell: fmt(dl) },
+    ]) + `<td>${ratio(dl, s.arkmap?.arkmap_file?.load_ms?.med)}</td><td>${ratio(dl, wr?.total_ms?.med)}</td></tr>`;
+  }).join('\n');
+
+  const appW1chart = chart(aNames.map(n => {
+    const s = aS(n);
+    return { group: `${n} (${fmt(s.rooms)} pokoi)`, bars: [
+      { label: 'arkmap UI .arkmap', val: s.arkmap?.arkmap_file?.load_ms?.med ?? null, color: CA.amap },
+      { label: 'arkmap UI .dat', val: s.arkmap?.dat_file?.load_ms?.med ?? null, color: CA.adat },
+      { label: 'web-real .dat', val: s.webreal?.w1?.total_ms?.med ?? null, color: CA.wreal },
+      { label: 'desktop .dat', val: dLoad[n]?.med ?? null, color: CA.desk },
+    ] };
+  }));
+
+  const appW2rows = aNames.map(n => {
+    const s = aS(n);
+    const ad = s.arkmap_wl?.arkmap?.w2?.dijkstra, aa = s.arkmap_wl?.arkmap?.w2?.astar;
+    const wd = s.webreal?.w2?.dijkstra, wa = s.webreal?.w2?.astar;
+    const g = s.gate || {};
+    return `<tr><td>${esc(n)}</td>` + hl([
+      { v: ad?.ms?.med, cell: fmt(ad?.ms?.med) },
+      { v: aa?.ms?.med, cell: fmt(aa?.ms?.med) },
+      { v: wd?.ms?.med, cell: fmt(wd?.ms?.med) },
+      { v: wa?.ms?.med, cell: fmt(wa?.ms?.med) },
+      { v: dStat(n, 'path')?.med, cell: fmt(dStat(n, 'path')?.med) },
+    ]) + `<td${g.problems ? ' class="worst"' : ''}><small>${g.arkmap_found ?? '—'} / ${g.webreal_found ?? '—'} / ${g.desk_found ?? '—'}</small></td></tr>`;
+  }).join('\n');
+
+  const appW2chart = chart(aNames.map(n => {
+    const s = aS(n);
+    return { group: `${n} (${fmt(s.rooms)} pokoi)`, bars: [
+      { label: 'arkmap Dijkstra', val: s.arkmap_wl?.arkmap?.w2?.dijkstra?.ms?.med ?? null, color: CA.amap },
+      { label: 'arkmap A*', val: s.arkmap_wl?.arkmap?.w2?.astar?.ms?.med ?? null, color: CA.astar },
+      { label: 'web Dijkstra', val: s.webreal?.w2?.dijkstra?.ms?.med ?? null, color: CA.wreal },
+      { label: 'web A*', val: s.webreal?.w2?.astar?.ms?.med ?? null, color: '#2a8f80' },
+      { label: 'desktop getPath', val: dStat(n, 'path')?.med ?? null, color: CA.desk },
+    ] };
+  }));
+
+  const appW3rows = aNames.map(n => {
+    const s = aS(n), w3 = s.arkmap_wl?.arkmap?.w3;
+    return `<tr><td>${esc(n)}</td>` + hl([
+      { v: w3?.ms?.med, cell: w3 ? `${fmt(w3.ms.med)}<br><small>hits ${w3.hits}</small>` : '—' },
+      { v: null, cell: '<small>N/A — brak natywnego API (kod)</small>' },
+      { v: dStat(n, 'search')?.med, cell: fmt(dStat(n, 'search')?.med) },
+    ]) + `</tr>`;
+  }).join('\n');
+
+  const appW3brows = aNames.map(n => {
+    const s = aS(n);
+    return `<tr><td>${esc(n)}</td>` + hl([
+      { v: s.arkmap_wl?.arkmap?.w3b?.ms?.med, cell: fmt(s.arkmap_wl?.arkmap?.w3b?.ms?.med) },
+      { v: s.webreal?.w3b?.ms?.med, cell: fmt(s.webreal?.w3b?.ms?.med) },
+      { v: dStat(n, 'iter')?.med, cell: fmt(dStat(n, 'iter')?.med) },
+    ]) + `</tr>`;
+  }).join('\n');
+
+  const appW4rows = aNames.map(n => {
+    const s = aS(n);
+    return `<tr><td>${esc(n)}</td>` + hl([
+      { v: s.arkmap?.arkmap_file?.heap_mb?.med, cell: s.arkmap?.arkmap_file ? fmt(s.arkmap.arkmap_file.heap_mb.med) + ' MB' : '—' },
+      { v: s.arkmap?.dat_file?.heap_mb?.med, cell: s.arkmap?.dat_file ? fmt(s.arkmap.dat_file.heap_mb.med) + ' MB' : '—' },
+      { v: s.webreal?.heap_mb?.med, cell: s.webreal ? fmt(s.webreal.heap_mb.med) + ' MB' : '—' },
+    ]) + `</tr>`;
+  }).join('\n');
+
+  const gateProblems = aNames.reduce((acc, n) => acc + (aS(n).gate?.problems || 0), 0);
+  const appsLegend = `<p class="leg"><span style="color:${CA.amap}">■</span> ArkMap Studio (prawdziwe UI) · <span style="color:${CA.adat}">■</span> ArkMap .dat · <span style="color:${CA.wreal}">■</span> web-real (ich pipeline) · <span style="color:${CA.astar}">■</span> wariant A* · <span style="color:${CA.desk}">■</span> desktop · sortowane najlepszy → najgorszy</p>`;
+
+  appsHtml = `
+<h2 id="apps">APPS — natywne silniki w aplikacjach (headless Chromium)</h2>
+<div class="note">Metodologia: kazda apka liczy SWOIM natywnym kodem i formatem. ArkMap Studio — prawdziwe UI (${esc(apps.meta.chrome)}): loadArkmap/loadDat → applyMap → pierwsza klatka (2×rAF), findPath (Dijkstra domyslnie + wariant A*; wpState neutralny: transport off, kierunki all, locki ON), wpDoSearch, iteracja po state.roomById. Web-real — ich prawdziwy pipeline z npm: mudlet-map-binary-reader@${esc(apps.meta.packages['mudlet-map-binary-reader'])} → mudlet-map-renderer@${esc(apps.meta.packages['mudlet-map-renderer'])} (parseMudletMap → readerFromLoadedMap → PathFinder; tryb auto: plain &lt;50k pokoi, skeleton powyzej). W3 web = N/A — ich biblioteka mapowa nie ma natywnego API wyszukiwania (potwierdzone w kodzie). Ich PathFinder cache'uje findPath per instancja — neutralizowane swieza instancja per run. Ich silnik IGNORUJE locki pokoi (0× isLocked w bundlu — honoruje tylko locki wyjsc), wiec moze znalezc wiecej sciezek: rozbieznosci idace przez locked pokoje sa OCZEKIWANE i oznaczone, kazda inna = czerwona flaga (gate).</div>
+<h3>W1 — wczytanie w aplikacji (ms, mediana z ${apps.meta.n_runs} runow)</h3>
+<table><tr><th>mapa</th><th>pokoi</th><th>arkmap UI .arkmap</th><th>arkmap UI .dat</th><th>web-real .dat</th><th>desktop .dat</th><th>desk / arkmap</th><th>desk / web-real</th></tr>
+${appW1rows}
+</table>
+${appsLegend}
+${appW1chart}
+<h3>W2 — pathfinding natywny (ms; found: arkmap / web-real / desktop)</h3>
+<table><tr><th>mapa</th><th>arkmap Dijkstra</th><th>arkmap A*</th><th>web Dijkstra</th><th>web A*</th><th>desktop getPath</th><th>found a/w/d</th></tr>
+${appW2rows}
+</table>
+${appsLegend}
+${appW2chart}
+<h3>W3 — szukanie natywne (ms)</h3>
+<table><tr><th>mapa</th><th>arkmap wpDoSearch</th><th>web</th><th>desktop searchRoom</th></tr>
+${appW3rows}
+</table>
+<div class="note">wpDoSearch: skan nazw+obszarow ze scoringiem, cap 25 wynikow w dropdownie — to natywna semantyka apki, nie pelny skan jak w fazie Node.</div>
+<h3>W3b — iteracja natywna (ms)</h3>
+<table><tr><th>mapa</th><th>arkmap (state.roomById)</th><th>web (getRooms)</th><th>desktop (getRooms)</th></tr>
+${appW3brows}
+</table>
+<h3>W4 — heap po wczytaniu (MB, delta po GC; desktop RAM w sekcji W4 wyzej)</h3>
+<table><tr><th>mapa</th><th>arkmap UI .arkmap</th><th>arkmap UI .dat</th><th>web-real .dat</th></tr>
+${appW4rows}
+</table>
+<p>Gate semantyczny: ${gateProblems === 0 ? '<b class="ok">ZIELONY</b> — wszystkie rozbieznosci found wyjasnione lockami pokoi (oczekiwane dla ich silnika)' : `<b class="bad">CZERWONY — ${gateProblems} problemow</b>`}.</p>`;
+}
+
 // ---------- HTML ----------
 const html = `<!DOCTYPE html>
 <html lang="pl"><head><meta charset="utf-8">
@@ -287,7 +403,7 @@ nav a{color:#8af;margin-right:1em}
 </style></head><body>
 <h1>Mega-test: ArkMap Studio vs mudlet-web vs Mudlet desktop</h1>
 <p>Katalog wynikow: <code>${esc(RESULTS)}</code>${meta ? ` · ArkMap ${esc(meta.app_version)} · Mudlet ${esc(meta.mudlet_desktop)} · reader ${esc(meta.mudlet_map_binary_reader)} · Node ${esc(meta.node)} · runs ${meta.runs} · seed ${esc(meta.seed_manifestu)}` : ''}</p>
-<nav><a href="#w1">W1 wczytanie</a><a href="#w2">W2 getPath</a><a href="#w3">W3 searchRoom</a><a href="#w3b">W3b getRooms</a><a href="#w4">W4 pamiec</a><a href="#det">determinizm</a><a href="#pitch">pitch .arkmap</a><a href="#uwagi">uwagi</a></nav>
+<nav><a href="#w1">W1 wczytanie</a><a href="#w2">W2 getPath</a><a href="#w3">W3 searchRoom</a><a href="#w3b">W3b getRooms</a><a href="#w4">W4 pamiec</a><a href="#det">determinizm</a><a href="#pitch">pitch .arkmap</a><a href="#uwagi">uwagi</a>${appsNav}</nav>
 
 <h2 id="w1">W1 — wczytanie mapy</h2>
 <h3>Wartosci (mediana z ${meta?.runs || '?'} runow, ms; pod spodem rozrzut min–max wzgledem mediany; <span style="color:#8e8">zielony = najlepszy</span>, <span style="color:#e99">czerwony = najgorszy</span> w wierszu)</h3>
@@ -354,6 +470,8 @@ ${pitch}
 <li>RAM desktopu niepomierzalny w tej sesji (bug samplera — AppImage nie nazywa sie "mudlet"; poprawione w run_desktop.sh).</li>
 <li>Wszystkie silniki mierzone w jednej sesji, na tej samej maszynie, na identycznych plikach; pary pokoi i frazy deterministyczne (seed ${manifest?.seed || '?'}).</li>
 </ul>
+
+${appsHtml}
 
 <h2>Maszyna</h2>
 <pre>${esc(maszyna || 'brak MASZYNA.md')}</pre>

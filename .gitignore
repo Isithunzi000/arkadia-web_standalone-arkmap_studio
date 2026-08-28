@@ -2,3 +2,4 @@
 map_master3.dat
 tests/perf/out/
 tests/megatest/web/node_modules/
+tests/megatest/apps/node_modules/
