@@ -36,9 +36,12 @@ Fazy mozna wybierac z linii polecen: `--only desktop` (albo `--desktop-only`) od
 
 - `5` = przebiegow na punkt pomiaru (mediana). Domyslnie 5.
 - Fazy mozna pomijac: `SKIP_INPUTS=1 SKIP_WEB=1 SKIP_ARKMAP=1 SKIP_DESKTOP=1 SKIP_APPS=1`.
-- Faza `apps` wymaga Chromium/Chrome (`CHROME_BIN=...` albo `chromium` w PATH) i `npm ci`
-  w `tests/megatest/apps/` (runner robi to sam). Izolowany profil przegladarki, zero sieci
-  poza lokalnym serwerem plikow.
+- Faza `apps` wymaga przegladarki headless — TA SAMA co w perf labie: jesli masz juz
+  `.chrome-hs/` z perf labu, dziala od razu. Jak nie: komenda pobierania
+  `chrome-headless-shell` w `tests/perf/README.md`. Kolejnosc szukania:
+  `CHROMIUM_BIN` → `.chrome-hs/` w repo → `~/.local/chrome-hs/` → systemowe chromium.
+  Plus `npm ci` w `tests/megatest/apps/` (runner robi to sam). Izolowany profil
+  przegladarki, zero sieci poza lokalnym serwerem plikow.
 - Desktop odpala sie z `-platform offscreen --profile megatest --offline`
   (zero polaczen z gra); jesli offscreen nie wstanie, runner sam sprobuje `xvfb-run`.
 - Po zakonczeniu: `tests/megatest/results/<data>/` + `docs/megatest_raport_<data>.html`.

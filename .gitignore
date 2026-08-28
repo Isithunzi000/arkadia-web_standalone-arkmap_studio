@@ -3,3 +3,6 @@ map_master3.dat
 tests/perf/out/
 tests/megatest/web/node_modules/
 tests/megatest/apps/node_modules/
+
+# chrome-headless-shell pobierany lokalnie (tests/perf/README.md)
+.chrome-hs/

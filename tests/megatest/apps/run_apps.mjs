@@ -37,15 +37,25 @@ const TERMS = manifest.search_terms;
 console.log(`== apps == runs=${RUNS}${SMOKE ? ' (SMOKE)' : ''} szczebli=${ladder.length} par/szczebel=${manifest.pairs_per_map}`);
 
 // ─── Chromium ───────────────────────────────────────────────────────────────
+// Ta sama konwencja co perf lab (tests/perf/run.sh): CHROMIUM_BIN/CHROME_BIN ->
+// .chrome-hs w repo -> ~/.local/chrome-hs -> systemowe. Pobieranie
+// chrome-headless-shell: patrz tests/perf/README.md (jedna komenda).
 function findChrome() {
-  if (process.env.CHROME_BIN && fs.existsSync(process.env.CHROME_BIN)) return process.env.CHROME_BIN;
+  for (const env of ['CHROMIUM_BIN', 'CHROME_BIN']) {
+    if (process.env[env] && fs.existsSync(process.env[env])) return process.env[env];
+  }
+  const home = process.env.HOME || '';
+  for (const c of [
+    path.join(ROOT, '.chrome-hs/chrome-headless-shell-linux64/chrome-headless-shell'),
+    path.join(home, '.local/chrome-hs/chrome-headless-shell-linux64/chrome-headless-shell'),
+  ]) { if (fs.existsSync(c)) return c; }
   for (const bin of ['chromium', 'chromium-browser', 'google-chrome-stable', 'google-chrome']) {
     try { const p = execSync(`command -v ${bin}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); if (p) return p; } catch {}
   }
   return null;
 }
 const CHROME = findChrome();
-if (!CHROME) fail('nie znaleziono Chromium/Chrome — ustaw CHROME_BIN albo zainstaluj chromium');
+if (!CHROME) fail('nie znaleziono przegladarki — pobierz chrome-headless-shell (tests/perf/README.md) albo ustaw CHROMIUM_BIN');
 const CHROME_VER = execSync(`"${CHROME}" --version`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
 console.log(`chrome: ${CHROME_VER}`);
 
