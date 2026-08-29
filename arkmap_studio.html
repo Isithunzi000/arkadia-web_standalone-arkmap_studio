@@ -21118,28 +21118,63 @@ function _deltaTryFold(head, op) {
   return null;
 }
 
-// Zamknij lancuchy zablokowane przez referencje nadchodzacego opu (warunek §8).
-// Konserwatywnie: ref pokoju zamyka tez lancuchy cl:/sup: tego pokoju,
-// ref obszaru — lancuchy label: tego obszaru, dowolny ref room: — lancuch 'paint'.
-function _deltaBlockChains(open, refs, exceptKey) {
-  for (const k of [...open.keys()]) {
-    if (k === exceptKey) continue;
-    let hit = false;
-    for (const r of refs) {
-      if (r === k) { hit = true; break; }
-      if (r.startsWith('room:') &&
-          (k.startsWith('cl:' + r.slice(5) + ':') || k.startsWith('sup:' + r.slice(5) + ':'))) { hit = true; break; }
-      if (r.startsWith('area:') && k.startsWith('label:' + r.slice(5) + ':')) { hit = true; break; }
-      if (k === 'paint' && r.startsWith('room:')) { hit = true; break; }
-    }
-    if (hit) open.delete(k);
-  }
-}
+// Blokowanie lancuchow przez referencje nadchodzacego opu (warunek §8) — zindeksowane.
+// Konserwatywnie (jak w wersji skanujacej): ref room:X zamyka tez lancuchy cl:/sup:
+// pokoju X, ref area:A — lancuchy label: obszaru A, dowolny ref room: — lancuch 'paint'.
+// F7 perf (2026-08-29): naiwny skan open x refs byl O(n^2) — bench_kalka 6787 opow:
+// buildDelta 325 ms -> 3586 ms (~11x). Indeksy odwrotne clByRoom/labelByArea
+// zamieniaja skan na trafienia proporcjonalne do liczby faktycznie zamykanych
+// lancuchow (zlozonosc liniowa). Semantyka 1:1 z wersja skanujaca: dokladne
+// trafienie klucza, reguly room:/area:, regula 'paint', pominiecie exceptKey
+// (wlasnie wchloniety lancuch zostaje otwarty). Rejestracja po skladnikach znanych
+// przy otwarciu — klucze moga zawierac ':' w sid-ach (np. 'cl:d:12:n'), wiec
+// indeksy NIE parsuja kluczy.
 
 // Wejscie nietkniete; wyjscie: nowa tablica, seq przenumerowane 1..N.
 function _compactDeltaOps(ops) {
   const out = [];            // scalone opy (null = dziura po vanish)
   const open = new Map();    // klucz lancucha -> indeks glowy w out
+  const keyMeta = new Map();     // klucz -> { t: 'room'|'area', id } (wyrejestrowanie z indeksu)
+  const clByRoom = new Map();    // roomId -> Set otwartych kluczy 'cl:'/'sup:' tego pokoju
+  const labelByArea = new Map(); // areaId -> Set otwartych kluczy 'label:' tego obszaru
+  const _openChain = (k, idx, op) => {
+    open.set(k, idx);
+    const T = op.target || {};
+    if (k.startsWith('cl:') || k.startsWith('sup:')) {
+      const id = String(T.roomId);
+      keyMeta.set(k, { t: 'room', id });
+      let s = clByRoom.get(id); if (!s) clByRoom.set(id, s = new Set());
+      s.add(k);
+    } else if (k.startsWith('label:')) {
+      const id = String(T.areaId);
+      keyMeta.set(k, { t: 'area', id });
+      let s = labelByArea.get(id); if (!s) labelByArea.set(id, s = new Set());
+      s.add(k);
+    }
+  };
+  const _closeChain = (k) => {
+    if (!open.has(k)) return;
+    open.delete(k);
+    const m = keyMeta.get(k);
+    if (!m) return;
+    keyMeta.delete(k);
+    const idxMap = m.t === 'room' ? clByRoom : labelByArea;
+    const s = idxMap.get(m.id);
+    if (s) { s.delete(k); if (s.size === 0) idxMap.delete(m.id); }
+  };
+  const _blockByRefs = (refs, exceptKey) => {
+    for (const r of refs) {
+      if (r !== exceptKey) _closeChain(r);                     // dokladne trafienie klucza (r === k)
+      if (r.startsWith('room:')) {
+        const s = clByRoom.get(r.slice(5));
+        if (s) for (const k of [...s]) { if (k !== exceptKey) _closeChain(k); }
+        if (exceptKey !== 'paint') _closeChain('paint');
+      } else if (r.startsWith('area:')) {
+        const s = labelByArea.get(r.slice(5));
+        if (s) for (const k of [...s]) { if (k !== exceptKey) _closeChain(k); }
+      }
+    }
+  };
   for (const src of ops) {
     const op = { seq: 0, type: src.type,
                  target: JSON.parse(JSON.stringify(src.target || {})),
@@ -21157,19 +21192,19 @@ function _compactDeltaOps(ops) {
     }
     const key = _deltaChainKey(op);
     const refs = _deltaOpRefs(op);
-    let foldedInto = null, appended = false;
+    let foldedInto = null;
     if (key !== null && open.has(key)) {
       const hi = open.get(key);
       const r = _deltaTryFold(out[hi], op);
       if (r === 'folded') foldedInto = key;
-      else if (r === 'vanish') { out[hi] = null; open.delete(key); foldedInto = key; }
+      else if (r === 'vanish') { out[hi] = null; _closeChain(key); foldedInto = key; }
     }
-    _deltaBlockChains(open, refs, foldedInto);
+    _blockByRefs(refs, foldedInto);
     if (!foldedInto) {
       // Op niechloniety: wchodzi do pliku; glowe lancucha otwieraja tylko typy
       // majace kontynuacje (DELETE_* nigdy — ich jedyna rola to vanish-para wyzej).
-      if (key !== null && !/^DELETE_/.test(op.type)) { open.set(key, out.length); }
-      out.push(op); appended = true;
+      if (key !== null && !/^DELETE_/.test(op.type)) { _openChain(key, out.length, op); }
+      out.push(op);
     }
   }
   return out.filter(Boolean).map((o, i) => { o.seq = i + 1; return o; });
