@@ -9,3 +9,4 @@ tests/megatest/apps/node_modules/
 
 # cache pythona z laboratorium checksums
 __pycache__/
+.empirical_chrome_*.log
