@@ -241,9 +241,9 @@ console.log('── T6 (W18 v2): exitEditMode — undo/redo czyszczone, deltaLog
 // ═══ T7: strazniki strukturalne + piny wersji ═══
 console.log('── T7: strazniki strukturalne Tier 3 + piny wersji ──');
 {
-  ok(NEW.includes("const APP_VERSION = 'v1.50.2';"), 'pin: APP_VERSION v1.50.2');
+  ok(NEW.includes("const APP_VERSION = 'v1.50.3';"), 'pin: APP_VERSION v1.50.3');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok((deltaSrc.match(/v1\.50\.2/g) || []).length === 9, 'pin: delta.js 9x v1.50.2 (4 linie x includes+label + 1 adnotacja; fala 3: adnotacja integracji przeszla na P3b bez numeru wersji)');
+  ok((deltaSrc.match(/v1\.50\.3/g) || []).length === 9, 'pin: delta.js 9x v1.50.3 (4 linie x includes+label + 1 adnotacja; fala 3: adnotacja integracji przeszla na P3b bez numeru wersji)');
   ok(NEW.includes("alg: 'v4',"), 'straznik: addChecksums alg v4');
   ok(NEW.includes('// ====XXH3-64-BEGIN====') && NEW.includes('// ====CANONICAL-V4-BEGIN====') &&
      !NEW.includes('// ====CANONICAL-V3-BEGIN====') && !NEW.includes('function _crcArea(area, roomCrcs)'),

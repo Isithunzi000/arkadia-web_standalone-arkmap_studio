@@ -5797,7 +5797,7 @@ function writeQMapSI(w, o) {
 // QMap<QString, QUInt> — customLinesStyle
 function readQMapSU2(r) {
   const n = r.readUInt32(), o = {};
-  for (let i = 0; i < n; i++) { const k = readQString(r), v = r.readUInt32(); o[k] = v; }
+  for (let i = 0; i < n; i++) { const k = readQString(r), v = r.readUInt32(); _setMapKey(o, k, v); }  // Arc 41 (v1.50.3): __proto__-safe (readQMapSU2)
   return o;
 }
 function writeQMapSU2(w, o) {
@@ -5809,7 +5809,7 @@ function writeQMapSU2(w, o) {
 // QMap<QString, QBool> — customLinesArrow
 function readQMapSB(r) {
   const n = r.readUInt32(), o = {};
-  for (let i = 0; i < n; i++) { const k = readQString(r), v = !!r.readInt8(); o[k] = v; }
+  for (let i = 0; i < n; i++) { const k = readQString(r), v = !!r.readInt8(); _setMapKey(o, k, v); }  // Arc 41 (v1.50.3): __proto__-safe
   return o;
 }
 function writeQMapSB(w, o) {
@@ -5821,7 +5821,7 @@ function writeQMapSB(w, o) {
 // QMap<QString, QColor> — customLinesColor
 function readQMapSC(r) {
   const n = r.readUInt32(), o = {};
-  for (let i = 0; i < n; i++) { const k = readQString(r), v = readQColor(r); o[k] = v; }
+  for (let i = 0; i < n; i++) { const k = readQString(r), v = readQColor(r); _setMapKey(o, k, v); }  // Arc 41 (v1.50.3): __proto__-safe (readQMapSC)
   return o;
 }
 function writeQMapSC(w, o) {
@@ -6957,7 +6957,12 @@ async function loadArkmap(text, filename) {
 
   const valRes  = validate(map);
   const suppMissing = checkSuppressorsInMap(map);   // Arc 29: podwójne linie — ostrzeżenie przy loadzie (non-fatal)
-  const isFatal = !valRes.ok && valRes.errors.some(e => e.path === 'format' || e.path === 'version');
+  // Arc 41 (v1.50.3): bledy STRUKTURALNE (areas nie jest tablica / obszar nie jest
+  // obiektem / obszar bez rooms) sa fatalne — applyMap gwarantowanie rzuci na nich
+  // (7008+), dialog nie moze oferowac "Wczytaj". Dopasowanie DOKLADNE: glebsze sciezki
+  // (np. areas[0].rooms[3].x) zostaja soft — to bledy polowe, mapa laduje sie normalnie.
+  const _isStructural = (p) => p === 'areas' || /^areas\[\d+\]$/.test(p) || /^areas\[\d+\]\.rooms$/.test(p);
+  const isFatal = !valRes.ok && valRes.errors.some(e => e.path === 'format' || e.path === 'version' || _isStructural(e.path));
   const hasWarnings = (valRes.warnings || []).length > 0;
   // P3b (fala 3): sumy kontrolne weryfikowane PO pierwszej klatce (wrapper applyMap,
   // sciezka _deferVerify) — nie blokuja loadu ani nie wchodza do decyzji o dialogu.
@@ -6969,15 +6974,36 @@ async function loadArkmap(text, filename) {
     if (!confirmed) return;
   }
 
+  const _prevFilename = state.filename;
   state.filename = filename || null;
   state._loadCheckpointText = text;  // P3a (fala 2): checkpoint .arkmap = surowy tekst pliku (zero serializacji przy load)
   state._deferVerify = true;         // P3b (fala 3): CRC + baseInfo po pierwszej klatce
-  applyMap(map);
+  try {
+    applyMap(map);
+  } catch (e) {
+    // Arc 41 (v1.50.3): choke point D-S1 — loadArkmap NIGDY nie rejectuje z applyMap.
+    // Nieawaitowani callerzy (drop listener / loadCallback) sa bezpieczni z konstrukcji.
+    // Rollback filename: stara mapa zyje dalej, nie moze nosic nazwy nieudanego pliku.
+    state.filename = _prevFilename;
+    toast('✗ Nie udało się wczytać mapy — ' + e.message, true);
+    console.error(e);
+    return;
+  }
   const allOk = valRes.ok && !hasWarnings && suppMissing.length === 0;
   toast((allOk ? '✓' : '⚠') + ' Wczytano: ' + (filename || 'plik') + fmtSz(text.length) + ' [.arkmap]');
 }
 
 function applyMap(map) {
+  // Arc 41 (v1.50.3): preflight strukturalny PRZED jakakolwiek mutacja stanu.
+  // Rzut tutaj jest czysty (stara mapa/indeksy/undo nietkniete) dla wszystkich
+  // callerow (loadArkmap/loadDat/olLoadDat/restoreLastSave) — niezaleznie od tego,
+  // co user kliknal w dialogu walidacji.
+  if (!map || typeof map !== 'object' || !Array.isArray(map.areas))
+    throw new Error('niepoprawna struktura mapy (areas)');
+  for (const a of map.areas) {
+    if (!a || typeof a !== 'object' || !Array.isArray(a.rooms))
+      throw new Error('niepoprawna struktura mapy (areas[].rooms)');
+  }
   // v1.4.59: każde wczytanie mapy (plik .arkmap / plik .dat / online) zeruje akceptacje PRZEGLĄDARKI
   // (globalne, trwałe w localStorage). To, co siedzi w meta wczytywanego pliku, zostaje NIETKNIĘTE.
   // Arc 34 (v1.49.4): tryb 'browser' usuniety — oba klucze to legacy smiec, czyszczone przy okazji.
@@ -6987,6 +7013,7 @@ function applyMap(map) {
   // v1.4.60: zamknij okna pokazujące dane STAREJ mapy (osierocone po wczytaniu nowej).
   // Lista obszarów NIE jest tu — sama się odświeża przez buildAreaList() niżej.
   ['validate-panel','room-panel'].forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.remove('visible'); });
+  if (typeof hideCtxMenu === 'function') hideCtxMenu();  // Arc 41 (v1.50.3): menu kontekstowe pokazuje dane starej mapy — zamknij przy loadzie (typeof-guard: harnessy ewaluuja applyMap bez pelnego DOM)
   // Planer trasy: waypointy to ID starej mapy → po wczytaniu (zwł. innej mapy) nieaktualne. Zamknij i zresetuj.
   try {
     if (typeof wpState !== 'undefined') {
@@ -11113,8 +11140,11 @@ async function olLoadArkmap() {
     await olRefreshIndexOnFallback();  // audyt ext F2.13: TOCTOU fallback (.arkmap)
     const buf = await olFetchFile(olBaseUrl + OL_F, OL_F, olIndex?.arkmap_size);
     closeOnlineConfirm();
+    olSetBusy(false);  // Arc 41 (v1.50.3): faza pobierania zamknieta — dialog walidacji to juz nie "pobieranie"
     // Ta sama ścieżka co „Wczytaj .arkmap…" z dysku (validate + checksumy + applyMap)
-    loadArkmap(new TextDecoder().decode(buf), '🌐 online · map_master3.arkmap');
+    // Arc 41 (v1.50.3): await — ewentualny rejection laduje w catch z tostem,
+    // a _olActiveLabel jest trzymany az do konca dialogu (zamyka wektor re-entrancji online).
+    await loadArkmap(new TextDecoder().decode(buf), '🌐 online · map_master3.arkmap');
   } catch(e) {
     toast('✗ Online .arkmap — ' + (e.name === 'AbortError' ? 'przekroczono limit czasu (180 s)' : 'błąd: ' + e.message), true);
     console.error(e);
@@ -12733,7 +12763,7 @@ document.getElementById('wp-import-textarea').addEventListener('input', function
   const code = this.value.trim();
   if (!code) { warn.style.display = 'none'; return; }
   const res = wpDecodeRoute(code);
-  if (!res || !res.valid.length) { warn.style.display = 'none'; return; }
+  if (!res || !res.valid || !res.valid.length) { warn.style.display = 'none'; return; }  // Arc 41 (v1.50.3): wynik {error:'too-many'} nie ma .valid — bez guarda byl TypeError
   if (wpHasActiveRoute()) {
     const cur = wpState.waypoints.filter(w => w.roomId !== null).length;
     warn.textContent = `⚠ Aktualna trasa (${cur} waypointów) zostanie zastąpiona.`;
@@ -13358,19 +13388,25 @@ async function handleDropFiles(files) {
       if (file.name.endsWith('.arkmap')) {
         let text;
         try { text = await file.text(); } catch { toast('✗ Nie można odczytać pliku: ' + (file?.name || 'plik'), true); return; }  // audyt K2
-        await loadArkmap(text, file.name);
+        try { await loadArkmap(text, file.name); }
+        catch (e) { toast('✗ Nie udało się wczytać mapy — ' + e.message, true); console.error(e); }  // Arc 41 (v1.50.3)
       } else if (file.name.endsWith('.dat')) {
         state.filename = file.name; await loadDat(file);
       } else {
         let text;
         try { text = await file.text(); } catch { toast('✗ Nie można odczytać pliku: ' + (file?.name || 'plik'), true); return; }  // audyt K2
         let parsed; try { parsed = JSON.parse(text); } catch { toast('✗ Nie można odczytać pliku: ' + (file?.name || 'plik'), true); return; }
-        if (parsed?.format === 'arkmap') await loadArkmap(text, file.name);  // audyt ext F2.21: nazwa pliku jak w galezi .arkmap
+        if (parsed?.format === 'arkmap') {  // audyt ext F2.21: nazwa pliku jak w galezi .arkmap
+          try { await loadArkmap(text, file.name); }
+          catch (e) { toast('✗ Nie udało się wczytać mapy — ' + e.message, true); console.error(e); }  // Arc 41 (v1.50.3)
+        }
         else toast('✗ Nieznany format JSON (oczekiwano .arkmap)', true);
       }
     };
     if (checkLocalLoadDuringEdit(doLoad)) return;
     await doLoad();
+  } else if (files.length > 1) {
+    toast('✗ Wczytaj tylko jeden plik naraz', true);  // Arc 41 (v1.50.3): problemem jest liczba plikow, nie format
   } else {
     toast('✗ Nieobsługiwany format — użyj .arkmap lub .dat', true);
   }
@@ -13995,6 +14031,10 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 
   window.showValDialog = function(valRes, chkRes, filename, isFatal, suppMissing) {
     return new Promise(resolve => {
+      // Arc 41 (v1.50.3): re-entrancja (np. drop pliku przy otwartym dialogu) — nowy
+      // dialog anuluje poprzedni (resolve false = "Anuluj"), stary loadArkmap konczy sie
+      // czysto zamiast wisiec na await na zawsze (E-S1).
+      if (_resolve) { const prev = _resolve; _resolve = null; prev(false); }
       _resolve = resolve;
       _curValArgs = { valRes, chkRes, filename: filename || '', suppMissing: suppMissing || null };
       body.innerHTML = '';
@@ -14891,7 +14931,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.50.2';
+const APP_VERSION = 'v1.50.3';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)
@@ -17777,9 +17817,6 @@ function commitRoomEdit() {
     label = `Edycja pokoju "${roomName}" (#${roomId})`;
   }
 
-  const doFn   = () => { Object.assign(state.roomById[roomId], after); scheduleDraw(); };
-  const undoFn = () => { Object.assign(state.roomById[roomId], before); scheduleDraw(); };
-
   pushUndo({ type: labelType, roomId, before, after, label });
   state.redoStack = [];
   state.editSnapshot = after;
@@ -17984,38 +18021,6 @@ function deleteRoom(roomId, label) {
     scheduleDraw();
   };
 
-  const undoFn = () => {
-    // Przywróć pokój
-    area.rooms.push(snap);
-    state.roomById[roomId] = snap;
-    state.roomArea[roomId] = areaId;
-    // Przywróć incoming exits
-    for (const inc of removedIncoming) {
-      const src = state.roomById[inc.sourceId];
-      if (!src) continue;
-      src.exits = src.exits || {};
-      src.exits[inc.dir] = roomId;
-      if (inc.door)       { src.doors = src.doors || {};               src.doors[inc.dir] = inc.door; }
-      if (inc.exitWeight) { src.exit_weights = src.exit_weights || {}; src.exit_weights[inc.dir] = inc.exitWeight; }
-      if (inc.exitLock)   { src.exit_locks = src.exit_locks || [];     if (!src.exit_locks.includes(inc.dir)) src.exit_locks.push(inc.dir); }
-      if (inc.customLine) { src.custom_lines = src.custom_lines || {}; src.custom_lines[inc.dir] = JSON.parse(JSON.stringify(inc.customLine)); }
-    }
-    // Przywróć incoming special exits
-    for (const inc of removedIncomingSpecial) {
-      const src = state.roomById[inc.sourceId];
-      if (!src) continue;
-      src.special_exits = src.special_exits || {};
-      src.special_exits[inc.cmd] = roomId;
-      if (inc.specLock)   { src.special_exit_locks = src.special_exit_locks || []; if (!src.special_exit_locks.includes(inc.cmd)) src.special_exit_locks.push(inc.cmd); }
-      if (inc.customLine) { src.custom_lines = src.custom_lines || {}; src.custom_lines[inc.cmd] = JSON.parse(JSON.stringify(inc.customLine)); }
-      if (inc.door)       { src.doors = src.doors || {};               src.doors[inc.cmd] = inc.door; }
-      if (inc.exitWeight) { src.exit_weights = src.exit_weights || {}; src.exit_weights[inc.cmd] = inc.exitWeight; }
-    }
-    if (typeof buildRoomsZ === 'function') buildRoomsZ();
-    if (typeof buildAreaList === 'function') buildAreaList();
-    scheduleDraw();
-  };
-
   doFn();
   const wpCleared = state._lastWpCleared || [];
   state._lastWpCleared = null;
@@ -18037,11 +18042,6 @@ function commitAddArea(name) {
     state.map.areas = state.map.areas || [];
     state.map.areas.push(newArea);
     state.areas.set(newId, newArea);
-    if (typeof buildAreaList === 'function') buildAreaList();
-  };
-  const undoFn = () => {
-    state.map.areas = (state.map.areas || []).filter(a => a.id !== newId);
-    state.areas.delete(newId);
     if (typeof buildAreaList === 'function') buildAreaList();
   };
 
@@ -18197,18 +18197,6 @@ function commitDeleteArea(areaId, label) {
     state._lastWpCleared2 = _wpCleared2;
     scheduleDraw();
   };
-  const undoFn = () => {
-    state.map.areas = state.map.areas || [];
-    const restored = JSON.parse(JSON.stringify(snap));
-    state.map.areas.push(restored);
-    state.areas.set(areaId, restored);
-    for (const r of (restored.rooms || [])) {
-      state.roomById[r.id] = r;
-      state.roomArea[r.id] = areaId;
-    }
-    if (typeof buildAreaList === 'function') buildAreaList();
-    scheduleDraw();
-  };
 
   doFn();
   closeAreaPanel();
@@ -18278,9 +18266,6 @@ function commitEditArea(areaId) {
 
   const after = JSON.parse(JSON.stringify(area));
   if (JSON.stringify(before) === JSON.stringify(after)) { toast('Brak zmian'); return; }
-
-  const doFn   = () => { const a = state.areas.get(areaId); if (a) Object.assign(a, after); buildAreaList(); scheduleDraw(); };
-  const undoFn = () => { const a = state.areas.get(areaId); if (a) Object.assign(a, before); buildAreaList(); scheduleDraw(); };
 
   pushUndo({ type: 'EDIT_AREA', areaId, before, after,
     label: `Edycja obszaru "${after.name}" (#${areaId})` });
@@ -18396,16 +18381,6 @@ function commitMoveRoomToArea(roomId, targetAreaId, label) {
     // dostaje kanoniczny guard; przeniesienie zostaje (zatwierdzone dialogiem, ma wpis undo)
     if (state.editMode && state.editDirty && state.selected) showDirtyConfirm(() => jumpToRoom(roomId));
     else jumpToRoom(roomId);
-  };
-  const undoFn = () => {
-    toArea.rooms   = (toArea.rooms || []).filter(r => r.id !== roomId);
-    fromArea.rooms = fromArea.rooms || [];
-    fromArea.rooms.push(room);
-    room.area = fromAreaId;
-    state.roomArea[roomId] = fromAreaId;
-    if (typeof buildAreaList === 'function') buildAreaList();
-    // audyt T2/K3: martwy closure — undo/redo MOVE_ROOM_TO_AREA idzie przez dispatcher
-    // (data-only, bez nawigacji); zostawione dla symetrii, bez clearow dirty
   };
 
   doFn();
@@ -18533,9 +18508,6 @@ function commitMoveRoom(room, fromX, fromY, fromZ, toX, toY, toZ, label) {
   if (fromX === toX && fromY === toY && fromZ === toZ) return; // no-move guard (Pass 54)
   const roomId = room.id;
   const roomName = room.name || '#' + roomId;
-
-  const doFn   = () => { room.x = toX;   room.y = toY;   room.z = toZ;   scheduleDraw(); };
-  const undoFn = () => { room.x = fromX; room.y = fromY; room.z = fromZ; scheduleDraw(); };
 
   pushUndo({ type: 'MOVE_ROOM', roomId, fromX, fromY, fromZ, toX, toY, toZ,
     label: label || `Przesunięcie pokoju "${roomName}" (#${roomId})` });
@@ -18884,9 +18856,12 @@ function commitSetPosition() {
   const px = document.getElementById('pos-x');
   const py = document.getElementById('pos-y');
   const pz = document.getElementById('pos-z');
-  const newX = Math.round(parseInt(px?.value) || 0);
-  const newY = Math.round(parseInt(py?.value) || 0);
-  const newZ = Math.round(parseInt(pz?.value) || 0);
+  const _px = parseInt(px?.value), _py = parseInt(py?.value), _pz = parseInt(pz?.value);
+  // Arc 41 (v1.50.3): puste/nieparsowalne pole nie moze cicho zresetowac wspolrzednej do 0
+  if (isNaN(_px) || isNaN(_py) || isNaN(_pz)) { toast('✗ Niepoprawna współrzędna — podaj liczby całkowite', true); return; }
+  const newX = Math.round(_px);
+  const newY = Math.round(_py);
+  const newZ = Math.round(_pz);
   if (newX === room.x && newY === room.y && newZ === (room.z ?? 0)) {
     closeDialog('dlg-set-position');
     toast('Brak zmian');
@@ -19179,7 +19154,6 @@ function commitSuppressor(dir) {
   const prevCL = room.custom_lines[dir] ? JSON.parse(JSON.stringify(room.custom_lines[dir])) : null;
   const newCL  = { points: [], color: [255, 0, 0] };
   const doFn   = () => { room.custom_lines[dir] = JSON.parse(JSON.stringify(newCL)); scheduleDraw(); };
-  const undoFn = () => { if (prevCL) room.custom_lines[dir] = JSON.parse(JSON.stringify(prevCL)); else delete room.custom_lines[dir]; scheduleDraw(); };
   doFn();
   pushUndo({ type: 'ADD_SUPPRESSOR', roomId, dir, prevCL: prevCL || undefined, hadContainer, label: `Dodanie pustej custom line dir=${dir} w pokoju "${name}" (#${roomId})` });  // audyt T4/S7
   state.redoStack = [];

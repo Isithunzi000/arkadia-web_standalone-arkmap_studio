@@ -396,7 +396,9 @@ console.log('── T7: v1.5.41 — via-path (dyliżans przez pokoje) ──');
   const wrA = NEW.indexOf('function wpRecalcPaths()');
   ok(NEW.slice(wrA, wrA + 400).includes('_hopViaCache.clear()'), 'via: cache czyszczone w wpRecalcPaths (edycje mapy)');
   const amA = NEW.indexOf('function applyMap(map)');
-  ok(NEW.slice(amA, amA + 2000).includes('_hopViaCache.clear()'), 'via: cache czyszczone w applyMap (nowa mapa)');
+  // Arc 41: okno poszerzone 2000→4000 — preflight strukturalny (v1.50.3) na starcie
+  // applyMap odsunal _hopViaCache.clear() poza stare okno; semantyka asercji bez zmian.
+  ok(NEW.slice(amA, amA + 4000).includes('_hopViaCache.clear()'), 'via: cache czyszczone w applyMap (nowa mapa)');
 
   // Funkcjonalny: syntetyczna mini-mapa 1—2—3—4 + linia lądowa z DEFS
   const mkRoom = (id, x, exits) => ({ id, x, y: 0, z: 0, exits });

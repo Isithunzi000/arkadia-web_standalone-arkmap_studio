@@ -1234,7 +1234,9 @@ console.log('— A2.20 (F2.20): skroty +/-/f nieaktywne w formularzach —');
 console.log('— A2.21 (F2.21): drop .json przekazuje nazwe pliku —');
 {
   const dropBlock = blockSlice(HTML, 'async function handleDropFiles(files) {', '// Cały dokument obsługuje drag&drop');
-  ok(/parsed\?\.format === 'arkmap'\) await loadArkmap\(text, file\.name\);/.test(dropBlock),
+  // Arc 41 (v1.50.3): loadArkmap w obu galeziach ma try/catch (D-S1) — wzorzec
+  // pinuje obecnosc wywolania z (text, file.name), nie dokladna skladnie.
+  ok(/parsed\?\.format === 'arkmap'\)[\s\S]{0,200}?loadArkmap\(text, file\.name\)/.test(dropBlock),
     'A2.21 (F2.21): loadArkmap(text, file.name) w galezi .json (pre-fix: nazwa gubiona)');
 }
 

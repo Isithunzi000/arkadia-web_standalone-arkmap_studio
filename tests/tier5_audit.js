@@ -50,13 +50,14 @@ console.log('— A: F1 __proto__ —');
   o['__proto__'] = 'nadpisane';  // writable:true — edytor moze nadpisac
   ok(o['__proto__'] === 'nadpisane', 'A5: __proto__ nadpisywalne (writable)');
 
-  for (const fn of ['readQMapSU', 'readQMapSS', 'readQMapSI']) {
+  // Arc 41 (v1.50.3): SU2/SB/SC tez __proto__-safe — objete asercja A6.
+  for (const fn of ['readQMapSU', 'readQMapSS', 'readQMapSI', 'readQMapSU2', 'readQMapSB', 'readQMapSC']) {
     const body = extract(HTML, 'function ' + fn + '(r) {');
     ok(body.includes('_setMapKey(o, k, v)') && !body.includes('o[k] = v'),
       'A6: ' + fn + ' uzywa _setMapKey (zero surowego o[k] = v)');
   }
   const uses = HTML.split('_setMapKey(').length - 1;
-  ok(uses === 8, 'A7: _setMapKey uzyte 8x (definicja + 3 readery + 4 edytory/commit) — jest ' + uses);
+  ok(uses === 11, 'A7: _setMapKey uzyte 11x (definicja + 6 readerow + 4 edytory/commit; Arc 41: +SU2/SB/SC) — jest ' + uses);
 }
 
 // ═══ Sekcja B: F2 — backlink room.area w _replaceRoomData ═══
