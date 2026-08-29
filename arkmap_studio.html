@@ -2599,6 +2599,8 @@
       </div>
       <div class="vd-sub">
         <span class="vd-sub-lbl" id="dp-base"></span>
+        <span id="dp-sig" style="font-size:11px"></span>
+        <span id="dp-areas" style="font-size:11px"></span>
         <span class="vd-sub-break"></span>
         <button class="vd-btn dp-filter" data-f="all">Wszystkie</button>
         <button class="vd-btn dp-filter" data-f="ok">Do naniesienia</button>
@@ -20309,6 +20311,75 @@ function _deltaChecksums(meta, ops) {
   return { file: h({ format: ARKDELTA_FORMAT, format_version: ARKDELTA_FORMAT_VERSION, meta, ops }), ops: ops.map(h) };
 }
 
+// ── Weryfikacja podpisu (D8, spec .arkdelta §9) — async, NIE odmawia wczytania ──
+// Stany: unsigned (brak sig i pol autora), claimed (pola autora bez sig —
+// deklaracja bez dowodu), ok (podpis zgodny), bad (sig uszkodzony/niezgodny
+// albo deklarowany identyfikator nie pasuje do klucza — glosne ostrzezenie,
+// kalka i tak trafia do recenzji). sig = Ed25519 nad ASCII "arkdelta-v3:" +
+// checksums.file; klucz z meta.author_pubkey (objety checksums.file).
+async function _deltaVerifySignature(delta) {
+  const cs = delta.checksums || {}, meta = delta.meta || {};
+  const author = typeof meta.author === 'string' ? meta.author : null;
+  const authorId = typeof meta.author_id === 'string' ? meta.author_id : null;
+  const pubHex = typeof meta.author_pubkey === 'string' ? meta.author_pubkey : null;
+  if (cs.sig === undefined || cs.sig === null)
+    return (author || authorId || pubHex) ? { state: 'claimed', author, authorId } : { state: 'unsigned' };
+  if (typeof cs.sig !== 'string' || !/^[0-9a-f]{128}$/.test(cs.sig)) return { state: 'bad', author, authorId };
+  if (!pubHex || !/^[0-9a-f]{64}$/.test(pubHex)) return { state: 'bad', author, authorId };
+  const pub = _identityFromHex(pubHex);
+  const msg = new TextEncoder().encode('arkdelta-v3:' + cs.file);
+  const sig = _identityFromHex(cs.sig);
+  let good = false;
+  try {
+    const key = await crypto.subtle.importKey('raw', pub, { name: 'Ed25519' }, false, ['verify']);
+    good = await crypto.subtle.verify('Ed25519', key, sig, msg);
+  } catch (e) { good = false; }
+  if (!good) { try { good = await _edVerify(pub, msg, sig); } catch (e) { good = false; } }
+  if (!good) return { state: 'bad', author, authorId };
+  const realId = await _identityAuthorId(pub);
+  const idOk = authorId === null || authorId === realId;
+  return { state: 'ok', author, authorId: realId, idOk };
+}
+
+// ── Ryzyko per-obszar (D4, spec .arkdelta §4) ────────────────────────────────
+// Porownuje sumy per-obszar z naglowka kalki z biezaca mapa: green = obszar
+// nietkniety od zapisu kalki, yellow = zmieniony, red = nie istnieje na mapie.
+// Zwraca null, gdy kalka nie niesie sum per-obszar (stary producent).
+function _deltaAreaRisk(delta) {
+  const base = delta.meta && delta.meta.base && delta.meta.base.areas;
+  if (!base || typeof base !== 'object') return null;
+  const cur = (state.baseInfo && state.baseInfo.areas) || {};
+  const out = [];
+  for (const aid of Object.keys(base).sort((a, b) => (+a) - (+b))) {
+    const live = state.map && state.map.areas ? state.map.areas.find(a => String(a.id) === String(aid)) : null;
+    out.push({ id: aid, name: live ? live.name : ('#' + aid),
+               cls: !live ? 'red' : (cur[aid] === base[aid] ? 'green' : 'yellow') });
+  }
+  return out;
+}
+
+// ── Operacje z komendami (kategoria recenzji) ────────────────────────────────
+// Op niesie komendy MUD, gdy pokojowe payloady maja special_exits albo klucze
+// user_data z rodziny skryptow (bind/gate/walk_*/dir_bind/team_follow_link),
+// albo gdy op kasuje specjalne wyjscie (payload.cmd to komenda).
+const _DELTA_CMD_UD_KEYS = ['bind', 'walk_pre_cmd', 'walk_post_cmd', 'gate', 'dir_bind', 'team_follow_link'];
+function _deltaOpHasCommands(op) {
+  if (op.type === 'DELETE_SPECIAL_EXIT') return true;
+  const p = op.payload || {};
+  const rooms = [];
+  if (p.room) rooms.push(p.room);
+  if (p.before) rooms.push(p.before);
+  if (p.after) rooms.push(p.after);
+  if (p.label && p.label.text) { /* etykieta: tekst, nie komenda */ }
+  for (const r of rooms) {
+    if (!r || typeof r !== 'object') continue;
+    if (r.special_exits && Object.keys(r.special_exits).length) return true;
+    const ud = r.user_data || {};
+    for (const k of _DELTA_CMD_UD_KEYS) if (ud[k] !== undefined && ud[k] !== '' && ud[k] !== null) return true;
+  }
+  return false;
+}
+
 // ── baseInfo: tożsamość bazy (crc liczone RAZ, przy wczytaniu mapy) ─────────
 function _computeBaseInfo(map, precomputed) {
   // F1: parametr opcjonalny — domyslnie state.map; generator kalki liczy baze z mapy zrodlowej
@@ -21397,6 +21468,29 @@ const _DELTA_SCHEMA = {
   EDIT_ENV_COLOR:       { target: ['envId'], payload: ['newColor'] },
 };
 
+// D1 (spec .arkdelta §4): ZAMKNIETY zbior pol opu — nieznany klucz w opie albo
+// na pierwszym poziomie target/payload = odmowa wczytania (fail-closed: kalka
+// z obcego producenta nie moze przemycic pol, ktorych reader nie rozumie).
+// Klucze wymagane: _DELTA_SCHEMA; opcjonalne (emitowane przez v3): nizej.
+// Glebsze kontenery (room/label/cl/area/changes/before/after) nie sa strict —
+// to dane uzytkownika (np. user_data wewnatrz room).
+const _DELTA_OPT_TARGET = {};  // obecnie brak opcjonalnych pol celu
+const _DELTA_OPT_PAYLOAD = {
+  MOVE_ROOM:           ['fromX', 'fromY', 'fromZ'],
+  MOVE_ROOM_TO_AREA:   ['fromAreaId'],
+  ADD_EXIT:            ['bidirectional'],
+  DELETE_EXIT:         ['exitId'],
+  DELETE_SPECIAL_EXIT: ['targetId'],
+  DELETE_AREA:         ['name'],
+  EDIT_AREA:           ['user_data', 'beforeName', 'beforeUserData'],
+  DELETE_CL:           ['cl'],
+  DELETE_SUPPRESSOR:   ['cl'],
+  MOVE_LABEL:          ['fromX', 'fromY'],
+  RESIZE_LABEL:        ['fromX', 'fromY', 'fromW', 'fromH'],
+  EDIT_ENV_COLOR:      ['oldColor'],
+};
+const _DELTA_OP_KEYS = new Set(['seq', 'type', 'target', 'payload', 'label']);
+
 // ── audyt ext F1.5: pozycje referencyjne sid d:N — JEDNO zrodlo prawdy ──────
 // sid-y walidujemy/tlumaczymy WYLACZNIE w pozycjach referencyjnych (klucze ref
 // target/payload per typ + wartosci id-owe w kontenerach: id, exits, special_exits,
@@ -21596,6 +21690,19 @@ function validateDeltaText(text) {
     try { _deltaScanDeep(op, k => { if (k === '__proto__' || k === 'constructor' || k === 'prototype') badKey = k; }, () => {}); }
     catch (e) { errors.push(tag + ': zbyt głęboko zagnieżdżona struktura.'); continue; }  // audyt T4/S8
     if (badKey) { errors.push(tag + ': niedozwolony klucz "' + badKey + '".'); continue; }
+    // D1 ops-strict: zamkniety zbior pol (odmowa przy nieznanym kluczu) — PO
+    // strazniku kluczy, zeby __proto__ dostalo swoj komunikat bezpieczenstwa.
+    let unknownKey = null;
+    for (const k of Object.keys(op)) if (!_DELTA_OP_KEYS.has(k)) { unknownKey = k; break; }
+    if (!unknownKey) {
+      const allowT = new Set([...schema.target, ...(_DELTA_OPT_TARGET[op.type] || [])]);
+      for (const k of Object.keys(op.target)) if (!allowT.has(k)) { unknownKey = k; break; }
+      if (!unknownKey) {
+        const allowP = new Set([...schema.payload, ...(_DELTA_OPT_PAYLOAD[op.type] || [])]);
+        for (const k of Object.keys(op.payload)) if (!allowP.has(k)) { unknownKey = k; break; }
+      }
+    }
+    if (unknownKey) { errors.push(tag + ': nieznane pole "' + unknownKey + '" — plik nie pochodzi z tej wersji ArkMap Studio. Plik nie został wczytany.'); continue; }
     // Najpierw definicja własna opu (ADD_*) — inaczej własny sid wygląda jak użycie bez definicji.
     const ownSid = (op.type === 'ADD_ROOM' && _DELTA_SID_RE.test(String(op.target.roomId))) ? String(op.target.roomId)
                  : (op.type === 'ADD_AREA' && _DELTA_SID_RE.test(String(op.target.areaId))) ? String(op.target.areaId)
@@ -21886,7 +21993,8 @@ function _deltaRoomDiff(before, after, resolve) {
 
 function _deltaClsItem(op, cls, note, jump) {
   return { seq: op.seq, type: op.type, label: op.label || op.type, cls, note: note || '',
-           jump: jump || null, checked: cls === 'ok' || cls === 'hard' };
+           jump: jump || null, checked: cls === 'ok' || cls === 'hard',
+           cmds: _deltaOpHasCommands(op) };
 }
 
 // ── F1: cien stanu — wspoldzielony (Arc 31 F5, v1.48.0) ────────────────────
@@ -23527,6 +23635,58 @@ function _drawDeltaGhosts(rs) {
   ctx.restore();
 }
 
+// D8: banner podpisu w naglowku panelu recenzji (stan z _deltaVerifySignature).
+function _deltaRenderSig(delta) {
+  const el = document.getElementById('dp-sig');
+  if (!el) return;
+  const si = delta._sigInfo || { state: 'unsigned' };
+  el.textContent = '';
+  el.style.color = '';
+  el.title = '';
+  if (si.state === 'unsigned') return;
+  if (si.state === 'ok' && si.idOk !== false) {
+    el.textContent = ' · ✓ podpis zgodny — autor: ' + (si.author || '?') + ' (' + (si.authorId || '') + ')';
+    el.style.color = 'var(--ok)';
+    el.title = 'Podpis cyfrowy zweryfikowany z kluczem autora zapisanego w pliku';
+  } else if (si.state === 'ok') {
+    el.textContent = ' · ⚠ podpis zgodny, ale identyfikator autora nie pasuje do klucza';
+    el.style.color = '#f0883e';
+    el.title = 'Podpis kryptograficznie poprawny, lecz deklarowany identyfikator autora nie odpowiada kluczowi z pliku';
+  } else if (si.state === 'claimed') {
+    el.textContent = ' · ℹ deklarowany autor: ' + (si.author || '?') + ' — bez podpisu (deklaracja bez dowodu)';
+    el.style.color = 'var(--dim)';
+    el.title = 'Kalka niesie nazwę autora, ale nie niesie podpisu — każdy mógł ją wpisać';
+  } else {
+    el.textContent = ' · ⚠ PODPIS NIEPRAWIDŁOWY — treść nienaruszona, ale podpis nie pasuje do klucza';
+    el.style.color = 'var(--err)';
+    el.title = 'Suma kontrolna pliku jest zgodna, ale podpis cyfrowy nie pochodzi od deklarowanego klucza — traktuj autora jako niepotwierdzonego';
+  }
+}
+
+// D4: chipy ryzyka per-obszar w naglowku panelu recenzji.
+function _deltaRenderAreas(delta) {
+  const el = document.getElementById('dp-areas');
+  if (!el) return;
+  el.textContent = '';
+  const risks = _deltaAreaRisk(delta);
+  if (!risks || !risks.length) return;
+  const colors = { green: 'var(--ok)', yellow: '#f0883e', red: 'var(--err)' };
+  const names = { green: 'obszar nietknięty od zapisu kalki',
+                  yellow: 'obszar zmienił się od zapisu kalki — możliwe konflikty',
+                  red: 'obszar nie istnieje na wczytanej mapie' };
+  const pre = document.createElement('span');
+  pre.textContent = ' · obszary: ';
+  el.appendChild(pre);
+  for (const r of risks) {
+    const chip = document.createElement('span');
+    chip.textContent = r.name;
+    chip.style.color = colors[r.cls];
+    chip.title = names[r.cls];
+    chip.style.marginRight = '6px';
+    el.appendChild(chip);
+  }
+}
+
 function openDeltaReview(delta) {
   _deltaGhostReset();  // M3: nowa kalka = czyste duchy/override'y
   _deltaAppliedSeqs = new Set();  // nowa kalka = czysta historia nanoszenia
@@ -23534,6 +23694,8 @@ function openDeltaReview(delta) {
   _deltaReview = { delta, originalOps: JSON.parse(JSON.stringify(delta.ops)), items: classifyDelta(delta), filter: 'all' };  // audyt T4/C-K5: reszta kalki skladana z ORYGINALU
   document.getElementById('dp-base').textContent = _arkdeltaBaseNote(delta.meta.base);
   document.getElementById('dp-rebase').style.display = 'none';
+  _deltaRenderSig(delta);   // D8: banner podpisu
+  _deltaRenderAreas(delta); // D4: ryzyko per-obszar
   _renderDeltaPanel();
   document.getElementById('delta-panel').classList.add('visible');
 }
@@ -23546,14 +23708,23 @@ function _deltaReviewReportText() {
   if (!R) return '';
   const counts = { ok: 0, hard: 0, done: 0, impossible: 0 };
   for (const it of R.items) counts[it.cls]++;
+  const si = R.delta._sigInfo || { state: 'unsigned' };
+  const sigLine = si.state === 'ok' && si.idOk !== false ? 'Podpis: zgodny — autor: ' + (si.author || '?') + ' (' + (si.authorId || '') + ')'
+    : si.state === 'ok' ? 'Podpis: zgodny, ale identyfikator autora nie pasuje do klucza'
+    : si.state === 'claimed' ? 'Podpis: brak — deklarowany autor (' + (si.author || '?') + ') bez dowodu'
+    : si.state === 'bad' ? 'Podpis: NIEPRAWIDŁOWY — autor niepotwierdzony'
+    : 'Podpis: brak (kalka anonimowa)';
   const sum = [
     'Operacji w kalce: ' + R.items.length,
     'Do naniesienia: ' + counts.ok + ' · Konflikty: ' + counts.hard + ' · Zrobione: ' + counts.done + ' · Niewykonalne: ' + counts.impossible,
+    'Operacji z komendami: ' + R.items.filter(i => i.cmds).length,
+    sigLine,
     'Baza kalki: ' + _arkdeltaBaseNote(R.delta.meta.base),
   ];
   const lines = R.items.map(it => {
     let s = '- [#' + it.seq + '] ' + it.label + ' — ' + _DELTA_CLS_BADGE[it.cls][0];
     if (it.cls === 'done' && it.session) s += ' (naniesione z kalki)';
+    if (it.cmds) s += ' — ⚡ komendy';
     if (it.note) s += ' — ' + it.note;
     if (it.diff && it.diff.length) s += ' — ' + it.diff.join(' · ');
     return s;
@@ -23752,14 +23923,23 @@ async function _deltaReviewReportHtml(onProgress) {
   if (!R) return '';
   const counts = { ok: 0, hard: 0, done: 0, impossible: 0 };
   for (const it of R.items) counts[it.cls]++;
+  const si = R.delta._sigInfo || { state: 'unsigned' };
+  const sigLine = si.state === 'ok' && si.idOk !== false ? 'Podpis: zgodny — autor: ' + (si.author || '?') + ' (' + (si.authorId || '') + ')'
+    : si.state === 'ok' ? 'Podpis: zgodny, ale identyfikator autora nie pasuje do klucza'
+    : si.state === 'claimed' ? 'Podpis: brak — deklarowany autor (' + (si.author || '?') + ') bez dowodu'
+    : si.state === 'bad' ? 'Podpis: NIEPRAWIDŁOWY — autor niepotwierdzony'
+    : 'Podpis: brak (kalka anonimowa)';
   const sum = [
     'Operacji w kalce: ' + R.items.length,
     'Do naniesienia: ' + counts.ok + ' · Konflikty: ' + counts.hard + ' · Zrobione: ' + counts.done + ' · Niewykonalne: ' + counts.impossible,
+    'Operacji z komendami: ' + R.items.filter(i => i.cmds).length,
+    sigLine,
     'Baza kalki: ' + _arkdeltaBaseNote(R.delta.meta.base),
   ];
   const lines = R.items.map(it => {
     let s = '- [#' + it.seq + '] ' + it.label + ' — ' + _DELTA_CLS_BADGE[it.cls][0];
     if (it.cls === 'done' && it.session) s += ' (naniesione z kalki)';
+    if (it.cmds) s += ' — ⚡ komendy';
     if (it.note) s += ' — ' + it.note;
     if (it.diff && it.diff.length) s += ' — ' + it.diff.join(' · ');
     return s;
@@ -23851,6 +24031,15 @@ function _renderDeltaPanel() {
     // albo panel przed chwila naniost ("naniesione z kalki") — badge to rozroznia.
     badge.textContent = (it.cls === 'done' && it.session) ? 'naniesione ✓' : _DELTA_CLS_BADGE[it.cls][0];
     row.appendChild(badge);
+    // Kategoria „z komendami": op niesie skrypty MUD — badge zachęca do wglądu.
+    if (it.cmds) {
+      const cb2 = document.createElement('span');
+      cb2.className = 'dp-badge';
+      cb2.style.color = '#d2a8ff';
+      cb2.textContent = '⚡ komendy';
+      cb2.title = 'Operacja niesie komendy (skrypty / specjalne wyjście) — sprawdź treść przed naniesieniem';
+      row.appendChild(cb2);
+    }
     if (it.note) {
       const note = document.createElement('span');
       note.className = 'dp-note';
@@ -24011,6 +24200,7 @@ fiArkdelta.addEventListener('change', async e => {
   if (state._verifyPending) { toast('Trwa weryfikacja sum kontrolnych mapy…', true); return; }  // P3b: import kalki potrzebuje gotowego baseInfo
   const res = validateDeltaText(text);
   if (!res.ok) { openDeltaErrors(res.errors); return; }
+  res.delta._sigInfo = await _deltaVerifySignature(res.delta);  // D8: banner w panelu recenzji
   const chk = _deltaBaseCheck(res.delta.meta.base);  // M4
   if (chk) _openDeltaMismatch(res.delta, chk);
   else openDeltaReview(res.delta);

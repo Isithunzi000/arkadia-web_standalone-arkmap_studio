@@ -54,6 +54,7 @@ node tests/preserve_unknown.js # D3 (v1.51.0): unknown keys przetrwuja round-tri
 node tests/delta_compact.js   # D5 (v1.51.0): kompaktowanie logu kalki — 6 regul, warunek referencyjny, etykieta ostatniego skladnika, seq 1..N, idempotentnosc; koperta v3 builderow (D1/D4/D8-writer)
 node tests/identity_wordlist.js # D8 (v1.51.0): slownik 2048 slow (SHA-256 zamrozone, straznik na skrotach), Ed25519 RFC 8032, PBKDF2 600k, kod odzyskiwania (LLL i L-L-L, tolerancja, NFC), kontrakt _identityForSigning
 node tests/identity_dialog.js   # D8 (v1.51.0): dialog tozsamosci — przycisk nad drop-zone, stany brak/aktywna, Utworz/Importuj/Pokaz kod/Wyczysc (dwuklik), XSS-escape, stub DOM+IDB
+node tests/delta_sig.js         # D8/D4 (v1.51.0): ops-strict reader, weryfikacja podpisu Ed25519 (ok/bad/claimed/unsigned, idOk), ryzyko per-obszar green/yellow/red, kategoria "z komendami"
 ```
 
 ### tests/checksums/ — laboratorium sum kontrolnych v4

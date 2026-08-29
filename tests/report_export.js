@@ -401,6 +401,8 @@ const ASYNC_PINS_RE = [];
       summaryLines: [
         'Operacji w kalce: 4',
         'Do naniesienia: 1 · Konflikty: 1 · Zrobione: 1 · Niewykonalne: 1',
+        'Operacji z komendami: 0',
+        'Podpis: brak (kalka anonimowa)',
         'Baza kalki: Kalka bez informacji o wersji mapy, na której ją zapisano.',
       ],
       opLines: refLines,
