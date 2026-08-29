@@ -704,6 +704,7 @@
 
 <div class="note">Przed zapisem obliczane są <strong>hierarchiczne checksums XXH3-64</strong> (pokoje → obszary → plik). Tablice sortowane są deterministycznie (ID rosnąco) aby plik był przyjazny dla systemów kontroli wersji (git diff).</div>
 <div class="note">Pliki zapisane starszą wersją aplikacji mają starszy algorytm sum (pole <code>alg</code> inne niż <code>v4</code>) — przy wczytaniu zobaczysz komunikat o nieobsługiwanym algorytmie (sumy nie są wtedy weryfikowane); przy najbliższym zapisie sumy przeliczą się do obecnego formatu (v4).</div>
+<div class="warn">Od <strong>v1.51.0</strong> obowiązuje ujednolicona koperta <strong>.arkmap v2</strong> (<code>format</code>, <code>format_version</code> i <code>checksums</code> na najwyższym poziomie pliku). Pliki w starszych układach (np. sumy w <code>meta.checksums</code>) są odrzucane z komunikatem — to świadoma zmiana łamiąca, bez migracji. Starszy plik otworzysz poprzednią wersją aplikacji albo wczytasz źródłowy .dat i zapiszesz mapę ponownie.</div>
 
 <h3>Eksportuj Mudlet .dat</h3>
 <p>Konwertuje mapę z formatu .arkmap do binarnego formatu Mudlet i pobiera plik. Eksport .dat jest dostępny tylko poza trybem edycji — przycisk jest zablokowany gdy edycja jest aktywna.</p>
@@ -756,8 +757,20 @@
 <h3>Po nałożeniu</h3>
 <p>Panel klasyfikuje operacje ponownie — naniesione przechodzą do klasy „naniesione". Dostępne są dwa przyciski zapisu: <strong>💾 Zapisz naniesione zmiany…</strong> — zapisuje do pliku zmiany już naniesione na mapę w tej sesji (rebase: kalka zaktualizowana do nowej bazy, z efektywnymi pozycjami, jeśli użyto pozycji zastępczych) oraz <strong>📤 Zapisz resztę kalki…</strong> — zapisuje operacje, których nie naniesiono (konflikty, niewykonalne, odznaczone), w pierwotnej postaci. Stopka ma też eksport podsumowania recenzji: <strong>📋 Kopiuj podsumowanie</strong> (schowek) i <strong>⬇ Zapisz raport .md</strong> (<code>raport-recenzji-*.md</code>) — pełna lista operacji z klasyfikacją i powodami w Markdown.</p>
 
+<h3>Podpis kalki i tożsamość autora</h3>
+<p>Kalkę możesz zapisać <strong>anonimowo</strong> (domyślnie) albo <strong>podpisać swoją tożsamością</strong>. Przycisk <strong>🪪 Tożsamość autora…</strong> (nad polem wczytywania plików) otwiera dialog tożsamości:</p>
+<ul>
+  <li><strong>Utwórz</strong> — wpisujesz nick, aplikacja generuje klucz Ed25519 i pokazuje <strong>kod przeniesienia</strong>: nick + sześć słów ze słownika + trzy litery kontrolne (np. <code>zbyszek:abecadlo adept adwokat agawa agrafka agregat-hwo</code>). Zapisz go w bezpiecznym miejscu — to jedyny sposób odzyskania tożsamości na innym urządzeniu albo po wyczyszczeniu danych przeglądarki.</li>
+  <li><strong>Importuj</strong> — wklejasz kod przeniesienia. Akceptowane są obie formy zapisu liter kontrolnych (sklejone <code>-hwo</code> i rozdzielone <code>-h-w-o</code>), separatory i wielkość liter słów nie mają znaczenia; nick musi zgadzać się co do litery.</li>
+  <li><strong>Pokaż kod</strong> — wyświetla kod przeniesienia aktywnej tożsamości.</li>
+  <li><strong>Wyczyść</strong> — usuwa tożsamość z przeglądarki (wymaga dwukrotnego kliknięcia); kolejne kalki zapisują się znowu anonimowo.</li>
+</ul>
+<p>Przy aktywnej tożsamości każda zapisywana kalka dostaje w metadanych proweniencję (nick, identyfikator autora, klucz publiczny, czas utworzenia) oraz <strong>podpis Ed25519</strong> treści pliku. Nick jest kryptograficznie związany z kluczem — tożsamości nie da się podrobić bez kodu. Tożsamość jest przechowywana lokalnie w przeglądarce (IndexedDB) i nie opuszcza Twojego urządzenia.</p>
+<p>Przy wczytywaniu kalki panel recenzji pokazuje wynik weryfikacji podpisu: <strong>zielony</strong> — podpis poprawny i zgodny z identyfikatorem autora, <strong>bursztynowy</strong> — kalka anonimowa albo podpis bez klucza do weryfikacji, <strong>czerwony</strong> — podpis nie zgadza się z treścią pliku. Zły podpis to głośne ostrzeżenie, nie blokada — decyzja o nałożeniu kalki zawsze należy do Ciebie. Panel pokazuje też <strong>ryzyko obszarów</strong> (zielony/żółty/czerwony — zgodność obszaru z sumą zapisanej bazy) i wyróżnia operacje niosące komendy (⚡).</p>
+<div class="note">Kalki w starym układzie pliku (sprzed v1.51.0) nie są wczytywane — zapisz kalkę ponownie z logu zmian albo zaktualizuj ArkMap Studio. To świadoma zmiana łamiąca (koperta <strong>.arkdelta v3</strong>), bez migracji.</div>
+
 <h3>Bezpieczeństwo</h3>
-<div class="note">Pliki .arkdelta są walidowane fail-closed (format, wersja formatu, checksums XXH3-64, integralność identyfikatorów symbolicznych) — uszkodzony plik jest odrzucany w całości z listą błędów. Nowe obiekty w kalce są anonimowe: dostają świeże numery ID przy nakładaniu. Undo/redo działa jak przy zwykłych edycjach.</div>
+<div class="note">Pliki .arkdelta są walidowane fail-closed (format, wersja formatu, checksums XXH3-64, integralność identyfikatorów symbolicznych, zamknięte zbiory pól operacji) — uszkodzony plik jest odrzucany w całości z listą błędów. Nowe obiekty w kalce są anonimowe: dostają świeże numery ID przy nakładaniu. Undo/redo działa jak przy zwykłych edycjach.</div>
 <p>Specyfikacja techniczna formatu: <em>ArkDelta Format Specification</em> (docs/arkdelta_spec.html).</p>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -870,7 +883,7 @@
 <h2 id="formats">26. Obsługiwane formaty plików</h2>
 
 <h3>.arkmap</h3>
-<p>Autorski format projektu ArkMap Studio. Plik JSON z deterministyczną serializacją (posortowane klucze, inline arrays prymitywów). Zawiera:</p>
+<p>Autorski format projektu ArkMap Studio. Plik JSON w kopercie <strong>v2</strong> (od v1.51.0): <code>format</code>, <code>format_version</code> i checksums na najwyższym poziomie, deterministyczna serializacja (posortowane klucze, inline arrays prymitywów). Zawiera:</p>
 <ul>
   <li>Pełne dane mapy (pokoje, wyjścia, drzwi, wagi, custom lines, etykiety, obszary)</li>
   <li>Metadane (nazwa mapy, font symboli, user_data)</li>
@@ -881,7 +894,7 @@
 <p>Pełna specyfikacja formatu: patrz osobny dokument <em>ArkMap Format Specification</em>.</p>
 
 <h3>.arkdelta (kalka zmian)</h3>
-<p>Autorski format delty edycyjnej ArkMap Studio. Plik JSON z deterministyczną serializacją i checksums XXH3-64 (zbiorczy + per-operacja). Zawiera wyłącznie operacje edycji względem wersji bazowej (identyfikowanej sumą XXH3-64 mapy). Nowe pokoje/obszary/etykiety są anonimowe (symboliczne identyfikatory <code>d:N</code>) — przy nakładaniu dostają świeże numery ID. Walidacja fail-closed: uszkodzony plik jest odrzucany w całości. Szczegóły użycia: sekcja <a href="#arkdelta">Kalka zmian .arkdelta</a>; specyfikacja: <em>ArkDelta Format Specification</em>.</p>
+<p>Autorski format delty edycyjnej ArkMap Studio. Plik JSON w kopercie <strong>v3</strong> (od v1.51.0): <code>format</code>, <code>format_version</code> i checksums na najwyższym poziomie, deterministyczna serializacja, sumy XXH3-64 (zbiorcza + meta + per-operacja). Zawiera wyłącznie operacje edycji względem wersji bazowej (identyfikowanej sumą XXH3-64 mapy i sumami obszarów). Log operacji jest kompaktowany przy zapisie (łańcuchy edycji tego samego obiektu składają się w jedną operację). Kalka może być anonimowa albo podpisana Ed25519 z proweniencją autora (rozdział <a href="#arkdelta">Kalka zmian .arkdelta</a>). Nowe pokoje/obszary/etykiety są anonimowe (symboliczne identyfikatory <code>d:N</code>) — przy nakładaniu dostają świeże numery ID. Walidacja fail-closed: uszkodzony lub staroformatowy plik jest odrzucany w całości. Szczegóły użycia: sekcja <a href="#arkdelta">Kalka zmian .arkdelta</a>; specyfikacja: <em>ArkDelta Format Specification</em>.</p>
 
 <h3>.dat (Mudlet)</h3>
 <p>Binarny format map klienta Mudlet (QDataStream). Odczyt obsługuje wersje 17–22. Zapis zawsze w wersji 20 (standard Arkadii). Roundtrip .dat → .arkmap → .dat daje byte-identyczny wynik dla plików w wersji 20 (potwierdzone testami SHA-256). Pliki w innych wersjach (17–19, 21–22) są odczytywane poprawnie, ale zapisywane jako wersja 20.</p>
