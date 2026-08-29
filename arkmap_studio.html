@@ -16045,18 +16045,41 @@ function _postLoadVerifyDeferred(mapRef) {
   // F5 (D8): weryfikacja podpisu autora .arkmap — async, nie blokuje; stany jak w kalkach.
   // Wynik trzymany w state._mapSigInfo (konsumowany przez rozszerzenia rejestru — F6/F7).
   if (typeof _arkmapVerifySignature === 'function') {
-    _arkmapVerifySignature(mapRef).then(sigInfo => {
+    _arkmapVerifySignature(mapRef).then(async sigInfo => {
       if (state.map !== mapRef) return;  // zdublowany/zastary load — porzucono
       state._mapSigInfo = sigInfo;
       if (!sigInfo || sigInfo.state === 'unsigned') return;
-      if (sigInfo.state === 'ok' && sigInfo.idOk !== false)
-        toast('✓ Plik podpisany — autor: ' + (sigInfo.author || '?') + ' (' + (sigInfo.authorId || '?') + ')', false);
+      // F6: wymiar rejestru (online; offline = brak eskalacji, tylko dopisek)
+      if (typeof _registryEnrich === 'function' && (sigInfo.state === 'ok' || sigInfo.state === 'claimed')) {
+        try { sigInfo.registry = await _registryEnrich(sigInfo.author, sigInfo.pubkeyHex); }
+        catch (e) { sigInfo.registry = 'offline'; }
+        if (state.map !== mapRef) return;  // w trakcie enrich wszedl nowy load
+      }
+      const reg = sigInfo.registry || 'na';
+      if (sigInfo.state === 'ok' && sigInfo.idOk !== false) {
+        if (reg === 'match')
+          toast('✓ Plik podpisany — autor: ' + (sigInfo.author || '?') + ' (' + (sigInfo.authorId || '?') + ') · zweryfikowany w rejestrze', false);
+        else if (reg === 'missing')
+          toast('⚠ Podpis zgodny, ale nick ' + (sigInfo.author || '?') + ' nie figuruje w rejestrze — tożsamość spoza rejestru', true);
+        else if (reg === 'mismatch')
+          toast('⚠ Podpis zgodny z kluczem, ale nick ' + (sigInfo.author || '?') + ' należy w rejestrze do INNEJ tożsamości — możliwe podszywanie', true);
+        else if (reg === 'revoked')
+          toast('⚠ Tożsamość autora ' + (sigInfo.author || '?') + ' została UNIEWAŻNIONA — podpis martwej tożsamości', true);
+        else
+          toast('✓ Plik podpisany — autor: ' + (sigInfo.author || '?') + ' (' + (sigInfo.authorId || '?') + ')' + (reg === 'offline' ? ' · rejestr niedostępny (offline)' : ''), false);
+      }
       else if (sigInfo.state === 'ok')
         toast('⚠ Podpis zgodny z kluczem, ale identyfikator autora w pliku nie pasuje — plik modyfikowany poza edytorem', true);
       else if (sigInfo.state === 'bad')
         toast('⚠ Podpis autora NIEZGODNY — plik zmodyfikowany poza edytorem albo podpis sfabrykowany', true);
-      else if (sigInfo.state === 'claimed')
-        toast('ℹ Plik deklaruje autora ' + (sigInfo.author || '?') + ', ale nie niesie podpisu — deklaracja bez dowodu', false);
+      else if (sigInfo.state === 'claimed') {
+        if (reg === 'revoked' || reg === 'mismatch')
+          toast('⚠ Plik deklaruje autora ' + (sigInfo.author || '?') + ' bez podpisu, a deklaracja KOLIDUJE z rejestrem — traktuj jako fałszywą', true);
+        else if (reg === 'match')
+          toast('ℹ Plik deklaruje autora ' + (sigInfo.author || '?') + ' (zgodnego z rejestrem), ale nie niesie podpisu — deklaracja bez dowodu', false);
+        else
+          toast('ℹ Plik deklaruje autora ' + (sigInfo.author || '?') + ', ale nie niesie podpisu — deklaracja bez dowodu' + (reg === 'offline' ? ' · rejestr niedostępny (offline)' : ''), false);
+      }
     }).catch(e => console.warn('[ArkMap] weryfikacja podpisu:', e));
   }
 }
@@ -20269,8 +20292,9 @@ async function _identityVerifySig(pubHex, sigHex, payloadStr) {
   return good;
 }
 
-// Utworz/import: nick + slowa → rekord; zwraca { rec, code }.
-async function _identityCreate(nick, words) {
+// Derywacja rekordu BEZ zapisu (F6: orkiestracja rejestru wklada sie miedzy
+// derywacje a _identityStore — tworzenie online, import z weryfikacja).
+async function _identityDeriveRecord(nick, words) {
   const n = _identityCanonNick(nick);
   const err = _identityValidateNick(nick);
   if (err) throw new Error(err);
@@ -20279,9 +20303,14 @@ async function _identityCreate(nick, words) {
   const pubHex = _identityHex(keys.pubBytes);
   const rec = { nick: n, pubkeyHex: pubHex, authorId: await _identityAuthorId(keys.pubBytes),
     seedB64: btoa(String.fromCharCode(...seed)), words: words.slice() };
+  const code = n + ':' + words.join('-') + '-' + (await _identityChecksumLetters(n, words));
+  return { rec, code, sign: keys.sign };
+}
+// Utworz/import: nick + slowa → rekord; zwraca { rec, code }.
+async function _identityCreate(nick, words) {
+  const { rec, code } = await _identityDeriveRecord(nick, words);
   await _identityStore(rec);
   _identitySession = undefined;  // wymus ponowne zaladowanie
-  const code = n + ':' + words.join('-') + '-' + (await _identityChecksumLetters(n, words));
   return { rec, code };
 }
 async function _identityImport(codeText) {
@@ -20300,6 +20329,168 @@ async function _identityShowCode() {
   return _identityCanonNick(rec.nick) + ':' + rec.words.join('-') + '-' + (await _identityChecksumLetters(rec.nick, rec.words));
 }
 // ====IDENTITY-V1-END====
+
+// ====REGISTRY-CLIENT-BEGIN====
+// ── F6: klient publicznego rejestru tożsamości ──────────────────────────────
+// Odczyt: raw.githubusercontent (publiczne, offline-graceful). Zapis: gateway
+// Vercel (token repo nigdy nie wychodzi do klienta). Kontrakt + piny domen:
+// tests/registry_client.js (krzyzowo z api/_core.js w repo rejestru).
+const _REGISTRY_API = 'https://arkmap-identity-registry.vercel.app/api';
+const _REGISTRY_RAW = 'https://raw.githubusercontent.com/Isithunzi000/arkadia-arkmap-identity-registry/main/entries/';
+function _registryRegisterMsg(nick, pubkeyHex) { return 'arkmap-registry-v1:register:' + nick + ':' + pubkeyHex; }
+function _registryRevokeMsg(nick) { return 'arkmap-registry-v1:revoke:' + nick; }
+
+async function _registryFetchJson(url, opts) {
+  const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+  let timer = null;
+  if (ctrl) timer = setTimeout(() => { try { ctrl.abort(); } catch (e) {} }, 10000);
+  try {
+    return await fetch(url, Object.assign({}, opts || {}, ctrl ? { signal: ctrl.signal } : {}));
+  } finally { if (timer) clearTimeout(timer); }
+}
+
+// Cache sesji — entry/404 keszowane, 'offline' NIE (ponowienie po powrocie sieci).
+const _registrySessionCache = new Map();
+function _registryCachePut(nick, entry) {
+  _registrySessionCache.set(nick, entry ? { status: 'ok', entry } : { status: 'unregistered' });
+}
+
+// Zwraca { status:'ok', entry } | { status:'unregistered' } | { status:'offline' }.
+// 'offline' = wynik nierozstrzygnieTY (brak sieci / timeout / blad serwera) — NIGDY
+// nie traktowany jak brak wpisu.
+async function _registryFetchEntry(nick) {
+  nick = _identityCanonNick(nick);
+  if (!nick) return { status: 'unregistered' };
+  if (_registrySessionCache.has(nick)) return _registrySessionCache.get(nick);
+  let out;
+  try {
+    const r = await _registryFetchJson(_REGISTRY_RAW + encodeURIComponent(nick) + '.json');
+    if (r.status === 404) out = { status: 'unregistered' };
+    else if (r.ok) out = { status: 'ok', entry: await r.json() };
+    else out = { status: 'offline' };
+  } catch (e) { out = { status: 'offline' }; }
+  if (out.status !== 'offline') _registrySessionCache.set(nick, out);
+  return out;
+}
+
+// Rejestracja nicku (PoP: podpis kluczem prywatnym nad komunikatem rejestracji).
+async function _registryRegister(rec, sign) {
+  const sig = _identityHex(await sign(new TextEncoder().encode(_registryRegisterMsg(rec.nick, rec.pubkeyHex))));
+  const r = await _registryFetchJson(_REGISTRY_API + '/register', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nick: rec.nick, pubkey: rec.pubkeyHex, author_id: rec.authorId, sig }),
+  });
+  let body = null;
+  try { body = await r.json(); } catch (e) {}
+  return { code: r.status, body };
+}
+
+// Unieważnienie nicku (podpis weryfikowany przez serwer wzgledem klucza Z REJESTRU).
+async function _registryRevoke(id) {
+  const sig = _identityHex(await id.sign(new TextEncoder().encode(_registryRevokeMsg(id.nick))));
+  const r = await _registryFetchJson(_REGISTRY_API + '/revoke', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nick: id.nick, sig }),
+  });
+  let body = null;
+  try { body = await r.json(); } catch (e) {}
+  return { code: r.status, body };
+}
+
+// Macierz weryfikacji online (F6): dokleja wymiar rejestru do wyniku podpisu.
+// registry: 'match' | 'missing' | 'mismatch' | 'revoked' | 'offline' | 'na'.
+async function _registryEnrich(author, pubkeyHex) {
+  if (!author) return 'na';
+  const r = await _registryFetchEntry(author);
+  if (r.status === 'offline') return 'offline';
+  if (r.status === 'unregistered') return 'missing';
+  const e = r.entry || {};
+  if (e.revoked) return 'revoked';
+  if (typeof e.pubkey === 'string' && typeof pubkeyHex === 'string' && e.pubkey !== pubkeyHex) return 'mismatch';
+  return 'match';
+}
+
+// Wspolne etykiety wymiaru rejestru (toast .arkmap + banner .arkdelta).
+function _registryEnrichLabel(registry) {
+  switch (registry) {
+    case 'match':    return { suffix: ' · zweryfikowany w rejestrze', cls: 'green' };
+    case 'missing':  return { suffix: ' · nick spoza rejestru', cls: 'orange' };
+    case 'mismatch': return { suffix: ' · KOLIZJA: nick w rejestrze należy do innej tożsamości', cls: 'red' };
+    case 'revoked':  return { suffix: ' · TOŻSAMOŚĆ UNIEWAŻNIONA', cls: 'red' };
+    case 'offline':  return { suffix: ' · rejestr niedostępny (offline)', cls: 'grey' };
+    default:         return { suffix: '', cls: 'grey' };
+  }
+}
+
+// Tworzenie online (F6): dostepnosc nicku → derywacja → rejestracja → dopiero zapis lokalny.
+// Fail-closed: bez rejestracji tozsamosc NIE powstaje (brak anonimowych nickow kolidujacych z rejestrem).
+async function _identityCreateOnline(nick, words, onStage) {
+  const n = _identityCanonNick(nick);
+  const err = _identityValidateNick(nick);
+  if (err) throw new Error(err);
+  if (onStage) onStage('check');
+  const avail = await _registryFetchEntry(n);
+  if (avail.status === 'offline')
+    throw new Error('Tworzenie tożsamości wymaga internetu — nick jest rejestrowany w publicznym rejestrze. Spróbuj ponownie, gdy będziesz online.');
+  if (avail.status === 'ok' && avail.entry && avail.entry.revoked)
+    throw new Error('Ten nick został unieważniony i nie może być zarejestrowany ponownie. Wybierz inny.');
+  if (avail.status === 'ok')
+    throw new Error('Ten nick jest już zajęty w rejestrze. Wybierz inny.');
+  if (onStage) onStage('derive');
+  const d = await _identityDeriveRecord(n, words);
+  if (onStage) onStage('register');
+  const reg = await _registryRegister(d.rec, d.sign);
+  if (reg.code === 409) throw new Error('Ten nick został właśnie zajęty — wybierz inny.');
+  if (reg.code === 410) throw new Error('Ten nick został unieważniony i nie może być zarejestrowany ponownie.');
+  if (reg.code !== 201 && reg.code !== 200)
+    throw new Error('Rejestracja nicku nie powiodła się (HTTP ' + reg.code + '). Tożsamość NIE została utworzona — spróbuj ponownie.');
+  await _identityStore(d.rec);
+  _identitySession = undefined;
+  if (reg.body && reg.body.entry) _registryCachePut(d.rec.nick, reg.body.entry);
+  else _registryCachePut(d.rec.nick, { version: 1, nick: d.rec.nick, author_id: d.rec.authorId, pubkey: d.rec.pubkeyHex, revoked: false });
+  return { rec: d.rec, code: d.code };
+}
+
+// Import online (F6): kod → derywacja → wpis w rejestrze MUSI pasowac do klucza.
+// Fail-closed: cudzy/uniewazniony/nieistniejacy nick albo brak sieci = odmowa.
+async function _identityImportOnline(codeText) {
+  const { nick, words } = await _identityParseCode(codeText);
+  const d = await _identityDeriveRecord(nick, words);
+  const r = await _registryFetchEntry(d.rec.nick);
+  if (r.status === 'offline')
+    throw new Error('Import wymaga internetu — nick jest weryfikowany w publicznym rejestrze. Spróbuj ponownie, gdy będziesz online.');
+  if (r.status === 'unregistered')
+    throw new Error('Nick z tego kodu nie figuruje w rejestrze — sprawdź literówkę albo utwórz nową tożsamość.');
+  const e = r.entry || {};
+  if (e.revoked)
+    throw new Error('Ta tożsamość została unieważniona — nie można jej już używać.');
+  if (e.pubkey !== d.rec.pubkeyHex)
+    throw new Error('Ten nick jest zarejestrowany na inny klucz — kod jest błędny albo to cudzy nick.');
+  await _identityStore(d.rec);
+  _identitySession = undefined;
+  return { rec: d.rec, code: d.code };
+}
+
+// Unieważnienie online (F6): podpis → gateway → po sukcesie lokalne wyczyszczenie.
+async function _identityRevokeOnline() {
+  const id = await _identityActive();
+  if (!id) throw new Error('Brak aktywnej tożsamości.');
+  let rev;
+  try {
+    rev = await _registryRevoke(id);
+  } catch (e) {
+    throw new Error('Unieważnienie wymaga internetu — spróbuj ponownie, gdy będziesz online.');
+  }
+  if (rev.code === 404) throw new Error('Nick nie figuruje w rejestrze — nie ma czego unieważniać.');
+  if (rev.code === 403) throw new Error('Serwer odrzucił podpis unieważnienia.');
+  if (rev.code !== 200)
+    throw new Error('Unieważnienie nie powiodło się (HTTP ' + rev.code + ') — spróbuj ponownie.');
+  if (rev.body && rev.body.entry) _registryCachePut(id.nick, rev.body.entry);
+  else _registrySessionCache.delete(id.nick);
+  await _identityClear();
+  return true;
+}
+// ====REGISTRY-CLIENT-END====
 
 // ====ARKMAP-SIG-BEGIN====
 // ── Podpis .arkmap (F5) — lustro kontraktu .arkdelta (P-LOCK-4: te same nazwy ──
@@ -20331,14 +20522,14 @@ async function _arkmapVerifySignature(arkmap) {
     const authorId = typeof meta.author_id === 'string' ? meta.author_id : null;
     const pubHex = typeof meta.author_pubkey === 'string' ? meta.author_pubkey : null;
     if (cs.sig === undefined || cs.sig === null)
-      return (author || authorId || pubHex) ? { state: 'claimed', author, authorId } : { state: 'unsigned' };
-    if (typeof cs.sig !== 'string' || !/^[0-9a-f]{128}$/.test(cs.sig)) return { state: 'bad', author, authorId };
-    if (!pubHex || !/^[0-9a-f]{64}$/.test(pubHex)) return { state: 'bad', author, authorId };
+      return (author || authorId || pubHex) ? { state: 'claimed', author, authorId, pubkeyHex: pubHex } : { state: 'unsigned' };
+    if (typeof cs.sig !== 'string' || !/^[0-9a-f]{128}$/.test(cs.sig)) return { state: 'bad', author, authorId, pubkeyHex: pubHex };
+    if (!pubHex || !/^[0-9a-f]{64}$/.test(pubHex)) return { state: 'bad', author, authorId, pubkeyHex: pubHex };
     const good = await _identityVerifySig(pubHex, cs.sig, _sigPayload('arkmap-v2:', arkmap));
-    if (!good) return { state: 'bad', author, authorId };
+    if (!good) return { state: 'bad', author, authorId, pubkeyHex: pubHex };
     const realId = await _identityAuthorId(_identityFromHex(pubHex));
     const idOk = authorId === null || authorId === realId;
-    return { state: 'ok', author, authorId: realId, idOk };
+    return { state: 'ok', author, authorId: realId, idOk, pubkeyHex: pubHex };
   } catch (e) { return { state: 'bad', author: null, authorId: null, verifyError: true }; }
 }
 // ====ARKMAP-SIG-END====
@@ -20392,6 +20583,7 @@ async function _identityUiRefresh(showCode) {
       + '<label style="font-size:10px;color:var(--dim);letter-spacing:0.8px;text-transform:uppercase">Nick autora</label>'
       + '<input class="ap-input" id="id-nick" type="text" maxlength="32" placeholder="np. zbyszek">'
       + '<div style="font-size:10px;color:var(--dim);margin-top:2px">Tylko litery a-z i cyfry (bez polskich znaków); wielkość liter bez znaczenia.</div>'
+      + '<div id="id-nick-avail" style="font-size:11px;margin-top:2px;min-height:14px"></div>'
       + '<label style="font-size:10px;color:var(--dim);letter-spacing:0.8px;text-transform:uppercase;display:block;margin-top:8px">Liczba słów w kodzie odzyskiwania</label>'
       + '<div id="id-words-seg" style="display:flex;gap:4px;margin-top:4px">'
       + '<button type="button" data-w="3">3 · wygodnie</button>'
@@ -20425,6 +20617,24 @@ async function _identityUiRefresh(showCode) {
       segPaint();
     }; });
     segPaint();
+    // F6: podglad dostepnosci nicku (debounce, online) — tylko wskazowka; bramka jest przy tworzeniu.
+    const nickIn = document.getElementById('id-nick');
+    const availEl = document.getElementById('id-nick-avail');
+    let availTimer = null;
+    nickIn.addEventListener('input', () => {
+      availEl.textContent = '';
+      if (availTimer) clearTimeout(availTimer);
+      const n = _identityCanonNick(nickIn.value);
+      if (!n || _identityValidateNick(n)) return;
+      availTimer = setTimeout(async () => {
+        const r = await _registryFetchEntry(n);
+        if (_identityCanonNick(nickIn.value) !== n) return;  // pole zmienione w trakcie
+        if (r.status === 'offline') { availEl.textContent = '? dostępność nieznana (offline)'; availEl.style.color = 'var(--dim)'; }
+        else if (r.status === 'ok' && r.entry && r.entry.revoked) { availEl.textContent = '✗ nick unieważniony na zawsze'; availEl.style.color = 'var(--err)'; }
+        else if (r.status === 'ok') { availEl.textContent = '✗ nick zajęty'; availEl.style.color = 'var(--err)'; }
+        else { availEl.textContent = '✓ nick dostępny'; availEl.style.color = 'var(--ok)'; }
+      }, 500);
+    });
     const btnC = document.getElementById('id-btn-create');
     btnC.onclick = async () => {
       const errEl = document.getElementById('id-create-err');
@@ -20433,10 +20643,12 @@ async function _identityUiRefresh(showCode) {
       const nick = document.getElementById('id-nick').value;
       const verr = _identityValidateNick(nick);
       if (verr) { errEl.textContent = verr; errEl.style.display = 'block'; return; }
-      btnC.disabled = true; btnC.textContent = 'Derywuję klucz (ok. 1 s)…';
+      btnC.disabled = true;
+      const stageTxt = { check: 'Sprawdzam dostępność nicku…', derive: 'Derywuję klucz (ok. 1 s)…', register: 'Rejestruję nick…' };
       try {
-        const r = await _identityCreate(nick, _identityGenWords(_identityUiWordCount));
-        toast('Tożsamość utworzona — kalka będzie podpisana');
+        await _identityCreateOnline(nick, _identityGenWords(_identityUiWordCount),
+          (st) => { btnC.textContent = stageTxt[st] || '…'; });
+        toast('Tożsamość utworzona i zarejestrowana — kalka będzie podpisana');
         await _identityUiRefresh(true);  // kod od razu widoczny w stanie aktywnym
         outEl.innerHTML = '';
       } catch (e) {
@@ -20450,8 +20662,8 @@ async function _identityUiRefresh(showCode) {
       errEl.style.display = 'none';
       btnI.disabled = true; btnI.textContent = 'Sprawdzam kod (ok. 1 s)…';
       try {
-        await _identityImport(document.getElementById('id-import-in').value);
-        toast('Tożsamość zaimportowana — kalka będzie podpisana');
+        await _identityImportOnline(document.getElementById('id-import-in').value);
+        toast('Tożsamość zaimportowana — zgodna z rejestrem');
         await _identityUiRefresh(false);
       } catch (e) {
         errEl.textContent = e.message; errEl.style.display = 'block';
@@ -20470,7 +20682,17 @@ async function _identityUiRefresh(showCode) {
       + '<div style="font-size:10px;color:var(--dim)">Dotyczy map .arkmap i kalek .arkdelta. Wyłącz, aby zapisać plik anonimowo — tożsamość zostaje na maszynie.</div>'
       + '<div id="id-code-out"></div>'
       + '<button id="id-btn-show" style="margin-top:8px">Pokaż kod odzyskiwania</button>'
-      + '<button id="id-btn-clear" class="btn-err" style="margin-top:6px;margin-left:6px">Wyczyść z tej maszyny</button>';
+      + '<button id="id-btn-clear" class="btn-err" style="margin-top:6px;margin-left:6px">Wyczyść z tej maszyny</button>'
+      // F6: strefa niebezpieczna — uniewaznienie trwale, publiczne, uzbrajane kliknieniem + wpisaniem nicku.
+      + '<hr style="opacity:.3;margin:12px 0">'
+      + '<div style="font-size:10px;color:var(--err);letter-spacing:0.8px;text-transform:uppercase">Strefa niebezpieczna</div>'
+      + '<button id="id-btn-revoke-arm" class="btn-err" style="margin-top:6px">Unieważnij tożsamość…</button>'
+      + '<div id="id-revoke-panel" style="display:none;margin-top:6px">'
+      + '<div style="font-size:11px;color:var(--err);line-height:1.5">Unieważnienie jest <b>trwałe i publiczne</b>: nick trafi na listę unieważnionych <b>na zawsze</b> — nikt (Ty też) nie zarejestruje go ponownie, a pliki podpisane tą tożsamością zaczną pokazywać ostrzeżenie. Aby potwierdzić, wpisz swój nick: <b>' + escHtml(id.nick) + '</b></div>'
+      + '<input class="ap-input" id="id-revoke-in" type="text" autocomplete="off" placeholder="' + escHtml(id.nick) + '">'
+      + '<button id="id-btn-revoke" class="btn-err" disabled style="margin-top:6px">Unieważnij na zawsze</button>'
+      + '<div id="id-revoke-err" style="display:none;font-size:11px;color:var(--err);margin-top:4px"></div>'
+      + '</div>';
     const signTg = document.getElementById('id-sign-toggle');
     if (signTg) signTg.onchange = (ev) => {
       try { localStorage.setItem('arkmap-sign-files', ev.target.checked ? '1' : '0'); } catch (e) {}
@@ -20488,6 +20710,32 @@ async function _identityUiRefresh(showCode) {
       await _identityClear();
       toast('Tożsamość wyczyszczona z tej maszyny — kalka znów będzie anonimowa');
       await _identityUiRefresh(false);
+    };
+    // F6: uniewaznienie — arm → panel (bez autofocusa) → wpisz kanoniczny nick → aktywny przycisk.
+    const btnArm = document.getElementById('id-btn-revoke-arm');
+    const revPanel = document.getElementById('id-revoke-panel');
+    const revIn = document.getElementById('id-revoke-in');
+    const btnRev = document.getElementById('id-btn-revoke');
+    btnArm.onclick = () => {
+      const open = revPanel.style.display === 'block';
+      revPanel.style.display = open ? 'none' : 'block';
+      btnArm.style.display = open ? '' : 'none';
+    };
+    revIn.addEventListener('input', () => {
+      btnRev.disabled = _identityCanonNick(revIn.value) !== id.nick;
+    });
+    btnRev.onclick = async () => {
+      const errEl = document.getElementById('id-revoke-err');
+      errEl.style.display = 'none';
+      btnRev.disabled = true; btnRev.textContent = 'Unieważniam…';
+      try {
+        await _identityRevokeOnline();
+        toast('Tożsamość unieważniona na zawsze — nick nie wróci do puli', false);
+        await _identityUiRefresh(false);
+      } catch (e) {
+        errEl.textContent = e.message; errEl.style.display = 'block';
+        btnRev.disabled = false; btnRev.textContent = 'Unieważnij na zawsze';
+      }
     };
     if (showCode) {
       const code = await _identityShowCode();
@@ -20536,15 +20784,15 @@ async function _deltaVerifySignature(delta) {
   const authorId = typeof meta.author_id === 'string' ? meta.author_id : null;
   const pubHex = typeof meta.author_pubkey === 'string' ? meta.author_pubkey : null;
   if (cs.sig === undefined || cs.sig === null)
-    return (author || authorId || pubHex) ? { state: 'claimed', author, authorId } : { state: 'unsigned' };
-  if (typeof cs.sig !== 'string' || !/^[0-9a-f]{128}$/.test(cs.sig)) return { state: 'bad', author, authorId };
-  if (!pubHex || !/^[0-9a-f]{64}$/.test(pubHex)) return { state: 'bad', author, authorId };
+    return (author || authorId || pubHex) ? { state: 'claimed', author, authorId, pubkeyHex: pubHex } : { state: 'unsigned' };
+  if (typeof cs.sig !== 'string' || !/^[0-9a-f]{128}$/.test(cs.sig)) return { state: 'bad', author, authorId, pubkeyHex: pubHex };
+  if (!pubHex || !/^[0-9a-f]{64}$/.test(pubHex)) return { state: 'bad', author, authorId, pubkeyHex: pubHex };
   // P-LOCK-1: payload = caly kanoniczny obiekt minus checksums.sig.
   const good = await _identityVerifySig(pubHex, cs.sig, _sigPayload('arkdelta-v3:', delta));
-  if (!good) return { state: 'bad', author, authorId };
+  if (!good) return { state: 'bad', author, authorId, pubkeyHex: pubHex };
   const realId = await _identityAuthorId(_identityFromHex(pubHex));
   const idOk = authorId === null || authorId === realId;
-  return { state: 'ok', author, authorId: realId, idOk };
+  return { state: 'ok', author, authorId: realId, idOk, pubkeyHex: pubHex };
 }
 
 // ── Ryzyko per-obszar (D4, spec .arkdelta §4) ────────────────────────────────
@@ -23892,18 +24140,29 @@ function _deltaRenderSig(delta) {
   el.style.color = '';
   el.title = '';
   if (si.state === 'unsigned') return;
+  // F6: wymiar rejestru — wspolne etykiety z toastem .arkmap (_registryEnrichLabel).
+  const reg = (typeof _registryEnrichLabel === 'function') ? _registryEnrichLabel(si.registry || 'na') : { suffix: '', cls: 'grey' };
   if (si.state === 'ok' && si.idOk !== false) {
-    el.textContent = ' · ✓ podpis zgodny — autor: ' + (si.author || '?') + ' (' + (si.authorId || '') + ')';
-    el.style.color = 'var(--ok)';
-    el.title = 'Podpis cyfrowy zweryfikowany z kluczem autora zapisanego w pliku';
+    el.textContent = ' · ✓ podpis zgodny — autor: ' + (si.author || '?') + ' (' + (si.authorId || '') + ')' + reg.suffix;
+    el.style.color = reg.cls === 'red' ? 'var(--err)' : (reg.cls === 'orange' ? '#f0883e' : 'var(--ok)');
+    el.title = 'Podpis cyfrowy zweryfikowany z kluczem autora zapisanego w pliku'
+      + (si.registry === 'match' ? '; nick potwierdzony w publicznym rejestrze'
+        : si.registry === 'missing' ? '; UWAGA: nick nie figuruje w publicznym rejestrze'
+        : si.registry === 'mismatch' ? '; UWAGA: nick w rejestrze należy do innej tożsamości — możliwe podszywanie'
+        : si.registry === 'revoked' ? '; UWAGA: ta tożsamość została unieważniona'
+        : si.registry === 'offline' ? '; rejestr niedostępny (offline) — weryfikacja wyłącznie lokalna'
+        : '');
   } else if (si.state === 'ok') {
     el.textContent = ' · ⚠ podpis zgodny, ale identyfikator autora nie pasuje do klucza';
     el.style.color = '#f0883e';
     el.title = 'Podpis kryptograficznie poprawny, lecz deklarowany identyfikator autora nie odpowiada kluczowi z pliku';
   } else if (si.state === 'claimed') {
-    el.textContent = ' · ℹ deklarowany autor: ' + (si.author || '?') + ' — bez podpisu (deklaracja bez dowodu)';
-    el.style.color = 'var(--dim)';
-    el.title = 'Kalka niesie nazwę autora, ale nie niesie podpisu — każdy mógł ją wpisać';
+    const clash = si.registry === 'mismatch' || si.registry === 'revoked';
+    el.textContent = ' · ℹ deklarowany autor: ' + (si.author || '?') + ' — bez podpisu (deklaracja bez dowodu)' + reg.suffix;
+    el.style.color = clash ? 'var(--err)' : 'var(--dim)';
+    el.title = clash
+      ? 'Deklarowany autor koliduje z publicznym rejestrem (cudzy albo unieważniony nick) — traktuj deklarację jako fałszywą'
+      : 'Kalka niesie nazwę autora, ale nie niesie podpisu — każdy mógł ją wpisać';
   } else {
     el.textContent = ' · ⚠ PODPIS NIEPRAWIDŁOWY — treść nienaruszona, ale podpis nie pasuje do klucza';
     el.style.color = 'var(--err)';
@@ -24449,6 +24708,12 @@ fiArkdelta.addEventListener('change', async e => {
   const res = validateDeltaText(text);
   if (!res.ok) { openDeltaErrors(res.errors); return; }
   res.delta._sigInfo = await _deltaVerifySignature(res.delta);  // D8: banner w panelu recenzji
+  // F6: wymiar rejestru (online; offline = dopisek bez eskalacji)
+  if (typeof _registryEnrich === 'function'
+      && (res.delta._sigInfo.state === 'ok' || res.delta._sigInfo.state === 'claimed')) {
+    try { res.delta._sigInfo.registry = await _registryEnrich(res.delta._sigInfo.author, res.delta._sigInfo.pubkeyHex); }
+    catch (e) { res.delta._sigInfo.registry = 'offline'; }
+  }
   const chk = _deltaBaseCheck(res.delta.meta.base);  // M4
   if (chk) _openDeltaMismatch(res.delta, chk);
   else openDeltaReview(res.delta);

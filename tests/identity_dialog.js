@@ -99,6 +99,40 @@ globalThis.indexedDB = {
   },
 };
 
+// F6: stub rejestru tozsamosci (in-memory) — odczyt raw + gateway register/revoke.
+// Semantyka jak api/_core.js: 404 gdy brak, 409 nick_taken, 410 po uniewaznieniu,
+// revoke ustawia tombstone revoked_by=owner.
+const _regEntries = new Map();  // nick -> entry
+globalThis.fetch = async (url, opts) => {
+  const mApi = String(url).match(/^https:\/\/arkmap-identity-registry\.vercel\.app\/api\/(register|revoke)$/);
+  if (mApi) {
+    const b = JSON.parse(opts.body);
+    if (mApi[1] === 'register') {
+      const cur = _regEntries.get(b.nick);
+      if (cur && cur.revoked) return { status: 410, ok: false, json: async () => ({ error: 'nick_revoked' }) };
+      if (cur && cur.pubkey !== b.pubkey) return { status: 409, ok: false, json: async () => ({ error: 'nick_taken' }) };
+      if (cur) return { status: 200, ok: true, json: async () => ({ status: 'already', entry: cur }) };
+      const entry = { version: 1, nick: b.nick, author_id: b.author_id, pubkey: b.pubkey,
+        registered_at: '2026-08-29T00:00:00.000Z', register_sig: b.sig,
+        revoked: false, revoked_at: null, revoke_sig: null, revoked_by: null };
+      _regEntries.set(b.nick, entry);
+      return { status: 201, ok: true, json: async () => ({ status: 'registered', entry }) };
+    }
+    const cur = _regEntries.get(b.nick);
+    if (!cur) return { status: 404, ok: false, json: async () => ({ error: 'not_registered' }) };
+    if (cur.revoked) return { status: 200, ok: true, json: async () => ({ status: 'already_revoked', entry: cur }) };
+    cur.revoked = true; cur.revoked_at = '2026-08-29T00:00:00.000Z'; cur.revoke_sig = b.sig; cur.revoked_by = 'owner';
+    return { status: 200, ok: true, json: async () => ({ status: 'revoked', entry: cur }) };
+  }
+  const mRaw = String(url).match(/\/entries\/([a-z0-9]{1,32})\.json$/);
+  if (mRaw) {
+    const cur = _regEntries.get(mRaw[1]);
+    if (!cur) return { status: 404, ok: false, json: async () => { throw new Error('404'); } };
+    return { status: 200, ok: true, json: async () => JSON.parse(JSON.stringify(cur)) };
+  }
+  throw new Error('fetch stub: nieznany URL ' + url);
+};
+
 const code = blockSlice('// ====IDENTITY-V1-BEGIN====', '// === ARKDELTA START ===') +
   '\n;return { _identityUiRefresh, _identityActive };';
 const api = new Function('document', 'toast', 'openDialog', 'closeDialog', 'escHtml', code)(
@@ -212,6 +246,40 @@ console.log('── T6: charset / persistencja selektora ──');
   const m2 = el('id-code-out')._html.match(/ala:([a-z]+-){3}[a-z]+-[a-z]{3}/);
   ok(!!m2, 'selektor zapamietany: nowa tozsamosc ma 4 slowa (z localStorage)');
   await el('id-btn-clear').onclick(); await el('id-btn-clear').onclick();
+}
+
+// ── T7: strefa niebezpieczna — uniewaznienie tozsamosci (F6) ──
+console.log('── T7: uniewaznienie tozsamosci ──');
+{
+  el('id-nick').value = 'duch';
+  await el('id-btn-create').onclick();
+  await tick();
+  ok(_regEntries.has('duch') && !_regEntries.get('duch').revoked, 'rejestr: nick zapisany przy tworzeniu (online-only)');
+  const bodyHtml = el('identity-body')._html;
+  ok(bodyHtml.includes('Strefa niebezpieczna') && bodyHtml.includes('Unieważnij na zawsze'),
+     'dialog: strefa niebezpieczna z przyciskiem unieważnienia');
+  ok(/id="id-btn-revoke" class="btn-err" disabled/.test(bodyHtml), 'przycisk "Unieważnij na zawsze" startuje wylaczony');
+  await el('id-btn-revoke-arm').onclick();
+  ok(el('id-revoke-panel').style.display === 'block', 'arm otwiera panel (bez domyslnego fokusu — brak .focus() w kodzie)');
+  el('id-revoke-in').value = 'inny';
+  el('id-revoke-in').oninput && el('id-revoke-in').oninput();
+  ok(el('id-btn-revoke').disabled === true, 'bledny nick: przycisk pozostaje wylaczony');
+  el('id-revoke-in').value = 'DUCH';  // wielkosc liter bez znaczenia
+  el('id-revoke-in').oninput();
+  ok(el('id-btn-revoke').disabled === false, 'kanoniczny nick (case-insensitive) odblokowuje przycisk');
+  await el('id-btn-revoke').onclick();
+  await tick();
+  const tomb = _regEntries.get('duch');
+  ok(tomb && tomb.revoked === true && tomb.revoked_by === 'owner' && typeof tomb.revoke_sig === 'string',
+     'rejestr: tombstone z revoke_sig i revoked_by=owner');
+  ok(el('identity-status').textContent === 'pliki będą anonimowe', 'po unieważnieniu tozsamosc lokalna wyczyszczona');
+  ok(toasts.some(t => /unieważniona na zawsze/.test(t)), 'toast potwierdzenia unieważnienia');
+  // Wariant A: nick uniewazniony nie wraca do puli.
+  el('id-nick').value = 'duch';
+  await el('id-btn-create').onclick();
+  ok(/unieważniony/.test(el('id-create-err').textContent)
+     && el('identity-status').textContent === 'pliki będą anonimowe',
+     'wariant A: ponowna rejestracja unieważnionego nicku odmowiona');
 }
 
 async function _identityActiveStill(api2) { return api2._identityActive(); }

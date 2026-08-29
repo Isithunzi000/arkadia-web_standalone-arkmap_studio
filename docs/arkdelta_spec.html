@@ -156,7 +156,7 @@
 
 <div class="note"><strong>Open meta:</strong> <code>meta</code> is an open object — readers MUST ignore unknown <code>meta</code> keys (forward compatibility). Operations, in contrast, are strict (see <a href="#validation">§10</a>).</div>
 
-<div class="warn"><strong>Threat model:</strong> the author fields and the optional signature prove <strong>continuity of identity</strong> — that the same key holder (nick cryptographically bound to a key) produced several overlays. They do <em>not</em> prove any real-world identity: there is no nickname registry, and two users can pick the same nick — the fingerprint (<code>author_id</code>) is the arbiter. User interfaces should always show nick <em>and</em> fingerprint, never the nick alone. A signature also does not make the content safe: an overlay can carry executable commands in payloads regardless of who signed it — the "operations with commands" review category (<a href="#apply">§11</a>) remains the primary defense.</div>
+<div class="warn"><strong>Threat model:</strong> the author fields and the optional signature prove <strong>continuity of identity</strong> — that the same key holder (nick cryptographically bound to a key) produced several overlays. A public nickname registry (§9, "Public registry") additionally binds a nick to exactly one key — first come, first served, with owner-initiated permanent revocation — so a signed file can be checked against the registry for nick ownership and revocation. The registry still does <em>not</em> prove any real-world identity: a registered nick proves only that its holder derived the matching key first. User interfaces should always show nick <em>and</em> fingerprint, never the nick alone. The registry is also not a trust or moderation layer: registration is uncurated, and a signature — registered or not — does not make the content safe: an overlay can carry executable commands in payloads regardless of who signed it — the "operations with commands" review category (<a href="#apply">§11</a>) remains the primary defense.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="base">4. Base Identity</h2>
@@ -331,7 +331,26 @@
   <li>Signatures are additive: they do not bump <code>format_version</code>.</li>
 </ul>
 
-<div class="warn"><strong>What a signature proves:</strong> continuity of identity — the same key holder produced the overlay. It does not prove real-world identity (no nickname registry; the fingerprint is the arbiter) and it does not vouch for content safety (see the threat model in <a href="#meta">§3</a>).</div>
+<div class="warn"><strong>What a signature proves:</strong> continuity of identity — the same key holder produced the overlay. With the public registry (below) it can additionally be checked for nick ownership and revocation. It still does not prove real-world identity (registration is uncurated) and it does not vouch for content safety (see the threat model in <a href="#meta">§3</a>).</div>
+
+<h3>Public registry</h3>
+<p>Signers MAY register their nick in the public ArkMap identity registry, binding the canonical nick to their public key. The registry data lives in a public GitHub repository (<code>Isithunzi000/arkadia-arkmap-identity-registry</code>), one JSON document per nick at <code>entries/&lt;nick&gt;.json</code>, readable by any client over plain HTTPS (no authentication). Writes are only accepted through an unauthenticated-but-proof-gated gateway (<code>https://arkmap-identity-registry.vercel.app/api</code>):</p>
+<ul>
+  <li><strong>Register</strong> — <code>POST /api/register</code> with <code>{ nick, pubkey, author_id, sig }</code>, where <code>sig</code> is an Ed25519 proof of possession over <code>"arkmap-registry-v1:register:" + nick + ":" + pubkey</code>. The server validates the canonical nick form (<code>^[a-z0-9]{1,32}$</code>, lowercase only), checks <code>author_id</code> against the key, and verifies the proof before writing. Registration is idempotent: re-registering the same nick with the same key succeeds; a different key is refused (<code>nick_taken</code>).</li>
+  <li><strong>Revoke</strong> — <code>POST /api/revoke</code> with <code>{ nick, sig }</code>, where <code>sig</code> is an Ed25519 signature over <code>"arkmap-registry-v1:revoke:" + nick</code>, verified against the key <em>stored in the registry</em> (never against a key supplied with the request). Revocation writes a permanent <strong>tombstone</strong>: <code>revoked: true</code>, <code>revoked_at</code>, <code>revoke_sig</code>, <code>revoked_by: "owner"</code>. A revoked nick can never be registered again (<code>410 nick_revoked</code>) — this is deliberate: it makes revocation ungameable (no revoke-then-reclaim-by-attacker window).</li>
+</ul>
+<p>A registry entry records <code>version</code>, <code>nick</code>, <code>author_id</code>, <code>pubkey</code>, <code>registered_at</code>, <code>register_sig</code>, and the revocation fields above. The format of entries is versioned by <code>version</code> (currently <code>1</code>).</p>
+
+<h3>Registry-aware reader policy</h3>
+<p>Registry checks are <strong>never a load gate</strong>: they refine how authorship is reported, and an unreachable registry (offline, blocked, down) must leave the reader fully functional — local signature verification still runs and the registry dimension is reported as unavailable. For a file carrying author fields with a signature that verifies locally, a registry-aware reader reports one of:</p>
+<ul>
+  <li><strong>match</strong> — entry exists, not revoked, <code>pubkey</code> equals <code>meta.author_pubkey</code>: nick ownership confirmed (report as verified).</li>
+  <li><strong>missing</strong> — no entry for the nick: signature valid but the identity is self-asserted only (report as a caution).</li>
+  <li><strong>mismatch</strong> — entry exists, not revoked, but names a different key: the nick belongs to someone else (loud warning — possible impersonation).</li>
+  <li><strong>revoked</strong> — entry is a tombstone: the identity was permanently revoked by its owner (loud warning).</li>
+  <li><strong>offline</strong> — registry could not be consulted: no escalation, report as unavailable.</li>
+</ul>
+<p>For a <em>declaration without proof</em> (author fields without a signature), a registry <strong>mismatch</strong> or <strong>revoked</strong> result escalates the report from "unproven" to "conflicting with the registry — treat as false"; a match leaves it unproven (anyone can type a registered nick into an unsigned file).</p>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="validation">10. Validation Rules</h2>
@@ -428,6 +447,7 @@
   <tr><td>1</td><td>2026-08</td><td>Initial format — ArkMap Studio v1.6.0</td></tr>
   <tr><td>2</td><td>2026-08</td><td>Checksums migrated from CRC-32 (8 hex) to XXH3-64 (16 hex) over the same canonical serialization — unified with the .arkmap checksum engine; base identity follows .arkmap alg v4 (ArkMap Studio v1.45.0). Version 1 files are refused loudly (no migration path — re-create the delta).</td></tr>
   <tr><td>3</td><td>2026-08</td><td><strong>Breaking</strong> (ArkMap Studio v1.51.0): unified envelope with <code>.arkmap</code> — <code>format</code> and <code>format_version</code> moved from <code>meta</code> to the top level; <code>checksums.file</code> now covers <code>{ format, format_version, meta, ops }</code>. New: per-area base checksums <code>meta.base.areas</code> (§4) with green/yellow/red risk classification; normative producer-side log compaction (§8); optional provenance fields <code>author</code>/<code>author_id</code>/<code>author_pubkey</code>/<code>created</code> (§3) with optional Ed25519 signatures <code>checksums.sig</code> (§9) — author fields require a signature; validation documents the nesting-depth guard (§10) and the open-meta / strict-ops asymmetry (§12); Unicode hashing pinned (raw UTF-8 bytes, producers SHOULD emit NFC). Version 2 files are refused as an unsupported format version — no migration path (re-create the overlay).</td></tr>
+  <tr><td>3</td><td>2026-08</td><td>Additive / normative refinement (ArkMap Studio v1.52.0): signature payload redefined as <code>"arkdelta-v3:"</code> + the canonical serialization of the whole object minus <code>checksums.sig</code> (was: the file checksum alone). Signatures written by v1.51.0 do not verify under the new payload and are reported as invalid — re-save the overlay to re-sign (no legacy verification path). Top-level key whitelist added to validation (§10); recovery code word count 3–6 (default 3) with canonical nick (lowercase <code>a-z</code>/<code>0-9</code>) feeding the key-derivation salt; public identity registry with proof-of-possession registration and permanent owner revocation (§9 "Public registry").</td></tr>
 </table>
 
 </body>
