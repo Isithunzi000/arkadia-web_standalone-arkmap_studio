@@ -89,7 +89,7 @@ console.log('── T1 (W3): v4 — etykiety/nazwy/kolory wchodza do sumy, puste
 
   const aEmpty5 = { id: 5, name: 'Pusty', rooms: [] };
   const aEmpty9 = { id: 9, name: 'Pusty', rooms: [] };
-  const sumOf = (m) => { api.addChecksums(m); return m.meta.checksums; };
+  const sumOf = (m) => { api.addChecksums(m); return m.checksums; };
   const s5 = sumOf(mkMap([aEmpty5])), s9 = sumOf(mkMap([aEmpty9]));
   ok(s5.areas['5'] !== s9.areas['9'], 'puste obszary o roznych id maja rozne sumy (Claude#6)');
 
@@ -121,7 +121,7 @@ console.log('── T2 (W3): addChecksums/verifyChecksums — v4, badAreas, miss
                             fg_color: [1, 2, 3], bg_color: [4, 5, 6] }] };
   const map = mkMap([area]);
   api.addChecksums(map);
-  ok(map.meta.checksums.alg === 'v4', 'addChecksums zapisuje alg: v4');
+  ok(map.checksums.alg === 'v4', 'addChecksums zapisuje alg: v4');
   const res = api.verifyChecksums(map);
   ok(res.ok === true && res.missingRooms.length === 0, 'swieze checksums v4 → verify ok');
 
@@ -136,7 +136,7 @@ console.log('── T2 (W3): addChecksums/verifyChecksums — v4, badAreas, miss
 
   const map3 = mkMap([{ id: 5, name: 'A5', rooms: [mkRoom(1), mkRoom(2)] }]);
   api.addChecksums(map3);
-  delete map3.meta.checksums.rooms['2'];
+  delete map3.checksums.rooms['2'];
   const res3 = api.verifyChecksums(map3);
   ok(res3.ok === false && res3.missingRooms.length === 1 && res3.missingRooms[0] === 2,
      'brak wpisu w stored.rooms → missingRooms + ok:false (Claude#5)');
@@ -144,15 +144,15 @@ console.log('── T2 (W3): addChecksums/verifyChecksums — v4, badAreas, miss
   // Arc 20 (v1.48.3): kazdy alg != v4 to GLOSNY algMismatch (present:true, ok:false) —
   // cichy skip bylby dziura downgrade'owa (plik ze starymi sumami wygladalby na „bez sum").
   const map4 = mkMap([{ id: 5, name: 'A5', rooms: [mkRoom(1)] }]);
-  map4.meta.checksums = { file: 'deadbeef', areas: { '5': 'cafe' }, rooms: { '1': 'cafe' } };
+  map4.checksums = { file: 'deadbeef', areas: { '5': 'cafe' }, rooms: { '1': 'cafe' } };
   const res4 = api.verifyChecksums(map4);
   ok(res4.present === true && res4.ok === false && res4.algMismatch === 'undefined',
      'plik z sumami v1 (bez alg) → glosny algMismatch (Arc 20)');
-  map4.meta.checksums.alg = 'v2';
+  map4.checksums.alg = 'v2';
   const res4b = api.verifyChecksums(map4);
   ok(res4b.present === true && res4b.ok === false && res4b.algMismatch === 'v2',
      'plik z sumami v2 → glosny algMismatch="v2" (Arc 20)');
-  map4.meta.checksums.alg = 'v3';
+  map4.checksums.alg = 'v3';
   const res4c = api.verifyChecksums(map4);
   ok(res4c.present === true && res4c.ok === false && res4c.algMismatch === 'v3',
      'plik z sumami v3 (poprzedni alg) → glosny algMismatch="v3" (Arc 20)');

@@ -1190,9 +1190,9 @@ console.log('— A2.19 (F2.19): zapis na klonie — live model bez mutacji, bajt
     const snapDat = JSON.stringify(stDat.map);
     const clone = apiDat._canonicalCloneForSave();
     const cloneRooms = (clone.areas || []).flatMap(a => a.rooms || []);
-    ok(cloneRooms.length > 0 && cloneRooms.every(r => !('area' in r)) && !!(clone.meta && clone.meta.checksums)
+    ok(cloneRooms.length > 0 && cloneRooms.every(r => !('area' in r)) && !!clone.checksums
       && JSON.stringify(stDat.map) === snapDat,
-      'A2.19 (F2.19): kanoniczny klon do .dat (room.area out, checksums in), live nietkniety');
+      'A2.19 (F2.19): kanoniczny klon do .dat (room.area out, checksums in — top-level, koperta v2), live nietkniety');
   }
   // Statyczne: call-site'y przelaczone na sciezke klonujaca
   ok((HTML.match(/const text = _serializeMapForSave\(\);/g) || []).length === 2

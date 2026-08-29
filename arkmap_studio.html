@@ -4238,8 +4238,8 @@ const DOOR_RGB = { open: 'rgb(10,155,10)', closed: 'rgb(226,205,59)', locked: 'r
 const LINE_INT = { solid: 1, dash: 2, dot: 3, dash_dot: 4, dash_dot_dot: 5 };
 const LINE_STR = Object.fromEntries(Object.entries(LINE_INT).map(([k, v]) => [v, k]));
 
-const FORMAT  = 'arkmap';
-const VERSION = 1;
+const FORMAT         = 'arkmap';
+const FORMAT_VERSION = 2;   // koperta v2 (D1): format_version + checksums na top-level; pliki v1 odrzucane
 
 // (CRC-32 usunięte w v1.45.0 — jedyny konsument (sumy .arkdelta) zmigrowany na XXH3-64,
 //  zunifikowany z silnikiem sum .arkmap; stableStringify pozostaje kanonizacją treści kalki)
@@ -4672,7 +4672,7 @@ function validate(map) {
   const warnings = [];
 
   if (map.format !== FORMAT)  errors.push(err('format',  `must be "${FORMAT}"`));
-  if (map.version !== VERSION) errors.push(err('version', `must be ${VERSION}`));
+  if (map.format_version !== FORMAT_VERSION) errors.push(err('format_version', `must be ${FORMAT_VERSION}`));
 
   // meta: required object
   if (map.meta === undefined || map.meta === null) {
@@ -4768,7 +4768,7 @@ function validate(map) {
 // ── checksum.js ──────────────────────────────────────────────────────────────
 // Hierarchiczne sumy kontrolne XXH3-64 (alg v4) dla integralności pliku .arkmap
 // Struktura: plik → obszary → pokoje
-// Zapis: meta.checksums = { alg:'v4', file, areas:{id→hex16}, rooms:{id→hex16} }
+// Zapis (koperta v2): top-level checksums = { alg:'v4', file, meta, areas:{id→hex16}, rooms:{id→hex16} }
 // Kodowanie kanoniczne wg spec: tests/checksums/CANONICAL_V4.md
 // Weryfikacja wyłącznie alg 'v4'; brak sum → cicho; inny alg → GŁOŚNE ostrzeżenie (algMismatch).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -5380,8 +5380,52 @@ function _hashFileCanon(colors, areaRaw) {
   try { _encodeFileBody(B, colors, areaRaw); return _xxh3pair(B.b, B.n); } finally { B.release(); }
 }
 
+// ── Kodowanie obiektu meta (prefix 'm4') — checksums.meta, koperta v2 (D2) ──
+// Generyczne kodowanie wartosci JSON: tagi typow, klucze obiektow w porzadku
+// bajtowym UTF-8, rekurencja. Klucze z wartoscia undefined pomijane (jak w
+// serializacji); undefined/null w tablicach kodowane jako null. Spec: CANONICAL_V4.md
+// (sekcja „Meta object encoding"); wektory: tests/checksums/vectors_v4_meta.json.
+const _V4_META_MAX_DEPTH = 60;   // jak _DELTA_MAX_DEPTH — glebokie meta → wyjatek → verifyError (nigdy RangeError)
+function _encodeMetaValue(B, v, depth) {
+  if (depth > _V4_META_MAX_DEPTH) throw new Error('meta-canon-depth');
+  if (v === null || v === undefined) { B.u8(0); return; }
+  const t = typeof v;
+  if (t === 'boolean') { B.u8(v ? 2 : 1); return; }
+  if (t === 'number') {
+    if (Number.isInteger(v) && v >= -2147483648 && v <= 2147483647) { B.u8(3); B.i32(v); }
+    else { B.u8(4); B.f64(v); }
+    return;
+  }
+  if (t === 'string') { B.u8(5); B.str(v); return; }
+  if (t === 'object') {
+    if (Array.isArray(v)) {
+      B.u8(6); B.u32(v.length);
+      for (const item of v) _encodeMetaValue(B, item, depth + 1);
+      return;
+    }
+    const ks = _utf8SortArr(Object.keys(v).filter(k => v[k] !== undefined));
+    B.u8(7); B.u32(ks.length);
+    for (const k of ks) { B.str(k); _encodeMetaValue(B, v[k], depth + 1); }
+    return;
+  }
+  B.u8(0);   // typy spoza JSON (function/symbol) — nie wystepuja po JSON.parse; deterministycznie jako null
+}
+// _encodeMetaBody(B, meta) — 'm4' + cialo obiektu top-level (meta jest zawsze obiektem)
+function _encodeMetaBody(B, meta) {
+  B.u8(0x6D); B.u8(0x34);                                        // 'm4'
+  const m = (meta && typeof meta === 'object' && !Array.isArray(meta)) ? meta : {};
+  const ks = _utf8SortArr(Object.keys(m).filter(k => m[k] !== undefined));
+  B.u32(ks.length);
+  for (const k of ks) { B.str(k); _encodeMetaValue(B, m[k], 1); }
+}
+function _hashMetaCanon(meta) {
+  const B = _canonBuf; B.reset();
+  try { _encodeMetaBody(B, meta); return _xxh3pair(B.b, B.n); } finally { B.release(); }
+}
+
 // _computeV4Checksums(arkmap) — jeden wspólny przebieg liczenia sum alg v4.
-// Read-only (bez klonowania, bez mutacji mapy). Zwraca dokładnie kształt meta.checksums.
+// Read-only (bez klonowania, bez mutacji mapy). Zwraca dokładnie kształt top-level checksums
+// (koperta v2: alg/file/meta/areas/rooms; meta = integrity meta, file = identity bez meta).
 // Może rzucić na uszkodzonych danych — wyjątek łapie WYŁĄCZNIE verifyChecksums (ścieżka wczytania);
 // ścieżki zapisu (addChecksums, baseInfo, delta) celowo fail-loud: wyjątek tam = bug aplikacji.
 function _computeV4Checksums(arkmap) {
@@ -5407,27 +5451,34 @@ function _computeV4Checksums(arkmap) {
   return {
     alg: 'v4',
     file: _pairHex64(_hashFileCanon(arkmap.colors, areaRaw)),
+    meta: _pairHex64(_hashMetaCanon(arkmap.meta)),
     areas, rooms,
   };
 }
 
-// addChecksums(arkmap) — oblicza i wstawia sumy v4 do meta. In-place, zwraca arkmap.
+// addChecksums(arkmap) — stempluje meta.app_version (objete checksums.meta) i wstawia
+// sumy v4 na TOP-LEVEL arkmap.checksums (koperta v2). In-place, zwraca arkmap.
+// APP_VERSION moze nie istniec w kontekscie harnessow node (ekstrakcja blokow) — wtedy bez stempla.
 function addChecksums(arkmap) {
   if (!arkmap.meta) arkmap.meta = {};
-  arkmap.meta.checksums = _computeV4Checksums(arkmap);
+  if (typeof APP_VERSION !== 'undefined') arkmap.meta.app_version = APP_VERSION;
+  arkmap.checksums = _computeV4Checksums(arkmap);
   return arkmap;
 }
 
 // verifyChecksums(arkmap) — weryfikacja hierarchiczna alg v4. NIGDY nie rzuca (biegnie przed
 // dialogiem walidacji): uszkodzone dane → verifyError, a głos ma walidacja.
-// Zwraca: { present, ok, fileOk, badAreas:[{id,name}], badRooms:[{roomId,areaId,areaName}],
+// Czyta sumy z TOP-LEVEL arkmap.checksums (koperta v2); meta.checksums (uklad v1) jest ignorowane
+// — pliki v1 odrzuca wczesniej walidacja (format_version !== 2 = fatal).
+// Zwraca: { present, ok, fileOk, metaOk?, badAreas:[{id,name}], badRooms:[{roomId,areaId,areaName}],
 //           missingRooms:[id], missingAreas:[{id,name}], extraRooms:[klucz], extraAreas:[klucz],
 //           computed? (pełny zestaw do reużycia), algMismatch?, verifyError? }
+// metaOk — osobny, INFORMACYJNY sygnal integrity meta (D2); nie wchodzi do ok.
 // Brak sekcji sum → present:false (cicho; świeże/zaimportowane pliki).
 // Alg inny niż v4 → present:true, ok:false, algMismatch — GŁOŚNO: cichy skip byłby dziurą downgrade'ową.
 function verifyChecksums(arkmap) {
   const empty = { badAreas: [], badRooms: [], missingRooms: [], missingAreas: [], extraRooms: [], extraAreas: [] };
-  const stored = arkmap.meta?.checksums;
+  const stored = arkmap.checksums;
   if (!stored || !stored.file) return { present: false, ok: true, fileOk: true, ...empty };
   if (stored.alg !== 'v4') {
     return { present: true, ok: false, fileOk: false, algMismatch: String(stored.alg), ...empty };
@@ -5461,7 +5512,9 @@ function verifyChecksums(arkmap) {
   const fileOk = stored.file === computed.file;
   const ok = fileOk && !badAreas.length && !badRooms.length && !missingRooms.length
              && !missingAreas.length && !extraRooms.length && !extraAreas.length;
-  return { present: true, ok, fileOk, badAreas, badRooms, missingRooms, missingAreas, extraRooms, extraAreas, computed };
+  // D2: integrity meta — informacyjnie, poza ok; undefined gdy plik nie niesie checksums.meta
+  const metaOk = (typeof stored.meta === 'string') ? stored.meta === computed.meta : undefined;
+  return { present: true, ok, fileOk, metaOk, badAreas, badRooms, missingRooms, missingAreas, extraRooms, extraAreas, computed };
 }
 // ====CANONICAL-V4-END====
 
@@ -6661,7 +6714,7 @@ function datToArkmap(arrayBuffer) {
   for (const [k, v] of Object.entries(raw.mCustomEnvColors || {})) custom_env_colors[k] = qcolor(v);
 
   const map = {
-    format: FORMAT, version: VERSION,
+    format: FORMAT, format_version: FORMAT_VERSION,
     meta: {
       map_name:                 raw.mUserData?.map_name || (raw.areaNames?.[-1] !== 'Default Area' ? raw.areaNames?.[-1] : null) || _datFallbackMapName(raw),
       symbol_font:              qfont(raw.mapSymbolFont),
@@ -6962,13 +7015,13 @@ async function loadArkmap(text, filename) {
   // (7008+), dialog nie moze oferowac "Wczytaj". Dopasowanie DOKLADNE: glebsze sciezki
   // (np. areas[0].rooms[3].x) zostaja soft — to bledy polowe, mapa laduje sie normalnie.
   const _isStructural = (p) => p === 'areas' || /^areas\[\d+\]$/.test(p) || /^areas\[\d+\]\.rooms$/.test(p);
-  const isFatal = !valRes.ok && valRes.errors.some(e => e.path === 'format' || e.path === 'version' || _isStructural(e.path));
+  const isFatal = !valRes.ok && valRes.errors.some(e => e.path === 'format' || e.path === 'format_version' || _isStructural(e.path));
   const hasWarnings = (valRes.warnings || []).length > 0;
   // P3b (fala 3): sumy kontrolne weryfikowane PO pierwszej klatce (wrapper applyMap,
   // sciezka _deferVerify) — nie blokuja loadu ani nie wchodza do decyzji o dialogu.
   // Dialog dostaje placeholder deferred — sekcja CRC mowi "weryfikacja w tle".
   const hasIssues = !valRes.ok || hasWarnings || suppMissing.length > 0;
-  const chkRes = map.meta?.checksums?.file ? { present: true, deferred: true } : { present: false };
+  const chkRes = map.checksums?.file ? { present: true, deferred: true } : { present: false };   // koperta v2: sumy na top-level
   if (hasIssues) {
     const confirmed = await showValDialog(valRes, chkRes, filename, isFatal, suppMissing);
     if (!confirmed) return;
@@ -14047,7 +14100,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
       if (!valRes.ok) {
         const sec = document.createElement('div');
         const t = document.createElement('div'); t.className = 'val-section-title';
-        const isCritical = valRes.errors.some(e => e.path === 'format' || e.path === 'version');
+        const isCritical = valRes.errors.some(e => e.path === 'format' || e.path === 'format_version');
         t.textContent = 'WALIDACJA — ' + valRes.errors.length + ' błąd(ów)' + (isCritical ? ' [KRYTYCZNE]' : '');
         sec.appendChild(t);
         const list = document.createElement('div'); list.className = 'val-error-list';
@@ -15929,6 +15982,11 @@ function _postLoadVerifyDeferred(mapRef) {
   if (chkRes && chkRes.present && !chkRes.ok) {
     console.warn('[ArkMap] suma kontrolna NIEZGODNA:', { badAreas: (chkRes.badAreas || []).length, badRooms: (chkRes.badRooms || []).length });
     toast('⚠ Suma kontrolna mapy NIEZGODNA — plik zmodyfikowany poza edytorem', true);
+  }
+  // D2: integrity meta — osobny, informacyjny sygnal (suma pliku/identity zostaje nietknięta)
+  if (chkRes && chkRes.present && chkRes.metaOk === false) {
+    console.warn('[ArkMap] suma metadanych NIEZGODNA — metadane zmodyfikowane poza edytorem');
+    toast('ℹ Metadane mapy zmodyfikowane poza edytorem (treść mapy bez zmian)', false);
   }
 }
 
@@ -20296,7 +20354,7 @@ function _kalkaSetMap(side, map, label) {
 // Wspolna walidacja wejscia: fatalne bledy formatu → odmowa; ostrzezenia → notka przy nazwie.
 function _kalkaValidateInput(map) {
   const res = validate(map);
-  const fatal = !res.ok && res.errors.some(e => e.path === 'format' || e.path === 'version');
+  const fatal = !res.ok && res.errors.some(e => e.path === 'format' || e.path === 'format_version');
   const warns = (!res.ok) || ((res.warnings || []).length > 0);
   return { fatal, warns };
 }

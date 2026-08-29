@@ -35,7 +35,7 @@ const GOOD_FONT = { family: 'Sans', point_size: 12, pixel_size: 12, style_hint: 
 const GOOD_LABEL = { id: 1, x: 0, y: 0, z: 0, width: 4, height: 1.2, text: 'L',
                      fg_color: [1, 2, 3], bg_color: [4, 5, 6] };
 const GOOD_ROOM = { id: 1, x: 0, y: 0, z: 0, env: 1 };
-const goodMap = () => ({ format: 'arkmap', version: 1,
+const goodMap = () => ({ format: 'arkmap', format_version: 2,
   meta: { map_name: 'M', symbol_font: { ...GOOD_FONT }, symbol_font_fudge_factor: 1, use_only_map_font: false },
   colors: {}, areas: [] });
 
@@ -100,7 +100,8 @@ console.log('— T5: validate() top-level —');
 const v = m => validate(m);
 ok(v(goodMap()).ok === true, 'minimalna poprawna mapa: ok=true, zero bledow');
 ok(v({ ...goodMap(), format: 'mudlet' }).errors.some(e => e.path === 'format'), 'zly format');
-ok(v({ ...goodMap(), version: 2 }).errors.some(e => e.path === 'version'), 'zla wersja');
+ok(v({ ...goodMap(), format_version: 1 }).errors.some(e => e.path === 'format_version'), 'zla wersja (v1 odrzucana — koperta v2)');
+ok(v({ ...goodMap(), format_version: 3 }).errors.some(e => e.path === 'format_version'), 'zla wersja (v3 z przyszlosci odrzucana)');
 ok(v({ ...goodMap(), meta: undefined }).errors.some(e => e.path === 'meta' && e.msg === 'required'), 'brak meta');
 ok(v({ ...goodMap(), meta: [] }).errors.some(e => e.path === 'meta' && e.msg === 'must be an object'), 'meta tablica');
 ok(v({ ...goodMap(), meta: { ...goodMap().meta, map_name: 1 } }).errors.some(e => e.path === 'meta.map_name'), 'map_name nie-string');

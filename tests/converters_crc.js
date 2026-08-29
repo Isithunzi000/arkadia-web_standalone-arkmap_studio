@@ -111,9 +111,9 @@ console.log('— T2: round-trip .arkmap → applyMap → _serializeMap —');
   api._prepareArkmapForSave();
   const round = api._serializeMap();
   ok(round === original, 're-serializacja po wczytaniu bajtowo identyczna z plikiem (base.crc stabilny)');
-  const crcOrig = JSON.parse(original).meta.checksums.file;
-  const crcRound = JSON.parse(round).meta.checksums.file;
-  ok(crcOrig === crcRound, 'meta.checksums.file przed i po round-tripie identyczne');
+  const crcOrig = JSON.parse(original).checksums.file;
+  const crcRound = JSON.parse(round).checksums.file;
+  ok(crcOrig === crcRound, 'checksums.file (top-level) przed i po round-tripie identyczne');
 }
 
 // ── T3: checksumy weryfikowalne po round-tripie ────────────────────────────
@@ -134,11 +134,11 @@ console.log('— T4: czułość CRC na zmianę mapy —');
 {
   const { state, api } = makeCtx();
   api.applyMap(JSON.parse(fs.readFileSync(out1, 'utf8')));
-  const crcBefore = (() => { api._prepareArkmapForSave(); return JSON.parse(api._serializeMap()).meta.checksums.file; })();
+  const crcBefore = (() => { api._prepareArkmapForSave(); return JSON.parse(api._serializeMap()).checksums.file; })();
   const anyRoom = state.map.areas.find(a => a.rooms.length > 0).rooms[0];
   anyRoom.name = anyRoom.name + 'X';
-  const crcAfter = (() => { api._prepareArkmapForSave(); return JSON.parse(api._serializeMap()).meta.checksums.file; })();
-  ok(crcBefore !== crcAfter, 'zmiana nazwy pokoju → inne meta.checksums.file (delta odróżni bazę)');
+  const crcAfter = (() => { api._prepareArkmapForSave(); return JSON.parse(api._serializeMap()).checksums.file; })();
+  ok(crcBefore !== crcAfter, 'zmiana nazwy pokoju → inne checksums.file (delta odróżni bazę)');
 }
 
 console.log('');

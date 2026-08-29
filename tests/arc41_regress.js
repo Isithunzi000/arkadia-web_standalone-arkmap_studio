@@ -51,8 +51,8 @@ for (const p of ['areas', 'areas[0]', 'areas[12]', 'areas[0].rooms', 'areas[3].r
 for (const p of ['areas[0].rooms[3].x', 'areas[0].labels', 'areasx', 'areas[0].rooms.', 'areas[0].rooms[0]', 'meta', 'colors'])
   ok(_isStructural(p) === false, 'F1-A: glebsza/polowa sciezka NIE jest fatalna: ' + p);
 const isFatalLine = sliceAB('const isFatal =', '_isStructural(e.path));');
-ok(isFatalLine.includes("e.path === 'format'") && isFatalLine.includes("e.path === 'version'"),
-  'F1-A: isFatal = format | version | strukturalne (kompozycja)');
+ok(isFatalLine.includes("e.path === 'format'") && isFatalLine.includes("e.path === 'format_version'"),
+  'F1-A: isFatal = format | format_version | strukturalne (kompozycja, koperta v2)');
 
 // ── F1-B: preflight applyMap PRZED mutacja ──────────────────────────────────
 console.log('— F1-B: preflight strukturalny applyMap —');

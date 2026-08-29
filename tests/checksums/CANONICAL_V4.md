@@ -155,16 +155,26 @@ hashem swojego obszaru, a obszar hashem pliku.
 
 ## 6. Zapis w pliku
 
+Koperta v2 (format_version 2): sumy na **top-level** pliku .arkmap
+(w format_version 1 mieszkały w `meta.checksums` — stare pliki są
+odrzucane przez walidację, nie ma migracji):
+
 ```
-meta.checksums = {
+checksums = {
   alg: 'v4',
   file: <16 hex>,
+  meta: <16 hex>,
   areas: { "<areaId>": <16 hex>, ... },
   rooms: { "<roomId>": <16 hex>, ... }
 }
 ```
 
 Klucze słowników: `String(id)`.
+
+Role: `file` = **tożsamość** mapy (bez `meta` — edycje metadanych nie
+zmieniają tożsamości; na tym opiera się dopasowanie bazy kalki
+.arkdelta); `meta` = **integralność** metadanych (wykrywa zewnętrzne
+edycje `meta` bez ruszania tożsamości).
 
 ## 7. Weryfikacja (verifyChecksums)
 
@@ -178,8 +188,55 @@ Klucze słowników: `String(id)`.
   `missingAreas` (obiekt bez wpisu sumy), `extraRooms`, `extraAreas`
   (sieroty: wpis sumy bez obiektu; porządek bajtowy kluczy-stringów).
   Każda z tych niezgodności → `ok:false`.
+- `metaOk` — osobny, **informacyjny** sygnał integralności `meta`:
+  porównanie zapisanego `checksums.meta` z policzonym; nie wchodzi do
+  `ok` (metadane są adnotacją, nie treścią mapy). `undefined`, gdy
+  plik nie niesie `checksums.meta`.
 - Zwraca też `computed` (pełny zestaw policzonych sum) do reużycia przez
   `_computeBaseInfo` — jedno liczenie na wczytanie pliku.
 - Asymetria celowa: ścieżka wczytania jest niezawodna (no-throw),
   ścieżki zapisu (`addChecksums`, `_computeBaseInfo`, kalka) są
   fail-loud — wyjątek tam oznacza bug aplikacji, nie dane usera.
+
+## 8. Kodowanie obiektu meta — prefix `m4` (checksums.meta, koperta v2)
+
+Suma `checksums.meta` = XXH3-64 (seed 0) kanonicznego kodowania całego
+obiektu `meta`. Kodowanie generyczne (dowolne wartości JSON), rekurencyjne,
+z tagami typów — w przeciwieństwie do enkoderów `r4`/`a4`/`f4`, które mają
+fiksowane układy pól.
+
+```
+meta_enc = 'm4' ++ u32(liczba kluczy) ++ (str(klucz) ++ wartosc)*   // klucze: UTF-8 bajtowo rosnąco
+```
+
+Klucze o wartości `undefined` są pomijane (zgodnie z konwencją
+serializacji, która takich kluczy nie zapisuje).
+
+Tagi typów wartości (1 bajt przed treścią):
+
+| Tag | Typ | Treść |
+|---|---|---|
+| `0` | null | (nic); `undefined` w tablicach kodowane jak null |
+| `1` | false | (nic) |
+| `2` | true | (nic) |
+| `3` | int32 | `i32` — liczby całkowite z zakresu [-2^31, 2^31-1] |
+| `4` | f64 | `f64` — wszystkie pozostałe liczby (z normalizacją -0 i NaN jak w §2) |
+| `5` | string | `str` |
+| `6` | array | `u32` liczba elementów, potem elementy (kolejność zachowana) |
+| `7` | object | `u32` liczba kluczy, potem pary `str(klucz) ++ wartosc`, klucze UTF-8 bajtowo rosnąco |
+
+Uwagi:
+
+- Rozróżnienie int/float jest wartościowe, nie składniowe: każda liczba
+  o wartości całkowitej mieszczącej się w i32 koduje się tagiem 3 —
+  niezależnie od tego, czy w JSON zapisano `1` czy `1.0` i niezależnie
+  od języka enkodera (w JS `1` i `1.0` to ta sama liczba; enkodery w
+  językach rozróżniających typy MUSZĄ stosować tę samą regułę wartości).
+- Typy spoza JSON (function/symbol — niewystępujące po `JSON.parse`)
+  kodują się deterministycznie jako null (tag 0).
+- Strażnik głębokości: zagnieżdżenie > 60 poziomów (jak
+  `_DELTA_MAX_DEPTH`) przerywa kodowanie wyjątkiem — w ścieżce
+  weryfikacji łapanym do `verifyError` (nigdy RangeError poza
+  walidatorem), w ścieżkach zapisu fail-loud.
+- Wektory: `tests/checksums/vectors_v4_meta.json` (osobny plik —
+  `vectors_v4.json` pozostaje zamrożony bajtowo).

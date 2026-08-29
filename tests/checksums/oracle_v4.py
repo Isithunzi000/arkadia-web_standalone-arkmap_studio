@@ -266,6 +266,55 @@ def enc_file(colors, areas):
     return bytes(out)
 
 
+# ---------- kodowanie obiektu meta (prefix 'm4') — checksums.meta, koperta v2 ----------
+# Generyczne, rekurencyjne kodowanie wartosci JSON z tagami typow.
+# Spec: CANONICAL_V4.md §8. Wektory: vectors_v4_meta.json (osobny plik).
+
+META_MAX_DEPTH = 60
+
+
+def _enc_meta_value(v, out, depth):
+    if depth > META_MAX_DEPTH:
+        raise ValueError('meta-canon-depth')
+    if v is None:
+        out += u8(0)
+    elif v is False:
+        out += u8(1)
+    elif v is True:
+        out += u8(2)
+    elif isinstance(v, (int, float)):
+        # rozroznienie wartosciowe (jak w JS): calkowita w i32 -> tag 3, inaczej f64
+        if float(v).is_integer() and -(1 << 31) <= v <= (1 << 31) - 1:
+            out += u8(3) + i32(int(v))
+        else:
+            out += u8(4) + f64(v)
+    elif isinstance(v, str):
+        out += u8(5) + s_enc(v)
+    elif isinstance(v, list):
+        out += u8(6) + u32(len(v))
+        for item in v:
+            _enc_meta_value(item, out, depth + 1)
+    elif isinstance(v, dict):
+        keys = utf8_keysort(v.keys())
+        out += u8(7) + u32(len(keys))
+        for k in keys:
+            out += s_enc(k)
+            _enc_meta_value(v[k], out, depth + 1)
+    else:
+        out += u8(0)  # typy spoza JSON — deterministycznie jako null
+
+
+def enc_meta(meta):
+    out = bytearray(b'm4')
+    m = meta if isinstance(meta, dict) else {}
+    keys = utf8_keysort(m.keys())
+    out += u32(len(keys))
+    for k in keys:
+        out += s_enc(k)
+        _enc_meta_value(m[k], out, 1)
+    return bytes(out)
+
+
 # ---------- golden fixture ----------
 
 def tiny_png_b64():
@@ -362,7 +411,7 @@ def build_fixture():
     ]
     fixture = {
         'format': 'arkmap',
-        'format_version': 1,
+        'format_version': 2,
         'meta': {
             'name': 'golden-fixture-v4',
             'source_file': 'golden_fixture.dat',
@@ -468,6 +517,37 @@ def main():
     with open(out_v, 'w', encoding='utf-8') as f:
         json.dump(vectors, f, ensure_ascii=False, indent=2, sort_keys=True)
 
+    # ── wektory kodowania meta (prefix 'm4') — OSOBNY plik (vectors_v4.json zamrożony) ──
+    meta_enc = enc_meta(fixture['meta'])
+    meta_edge = []
+    edge_cases = [
+        ('empty', {}),
+        ('int_i32', {'a': 1}),
+        ('int_boundaries', {'min': -2147483648, 'max': 2147483647}),
+        ('int_beyond_i32_as_f64', {'big': 1099511627776}),          # 2^40 → tag 4
+        ('float_noninteger', {'a': 1.5}),
+        ('float_integral_as_i32', {'a': 2.0}),                      # 2.0 → tag 3 (reguła wartości)
+        ('neg_zero_as_pos', {'a': -0.0}),                           # -0 → +0
+        ('bools_null', {'t': True, 'f': False, 'n': None}),
+        ('unicode', {'s': 'zażółć gęślą jaźń 🐉'}),
+        ('nested_array', {'arr': [1, 'x', None, [2]]}),
+        ('nested_object_keysorted', {'o': {'b': 1, 'a': 2, 'ą': 3}}),
+        ('fixture_like', {'name': 'golden-fixture-v4', 'source_file': 'golden_fixture.dat'}),
+    ]
+    for name, obj in edge_cases:
+        e = enc_meta(obj)
+        meta_edge.append({'name': name, 'enc_hex': e.hex(), 'hash': xxh3_hex(e)})
+    meta_vectors = {
+        'algorithm': 'XXH3-64', 'seed': 0, 'hex_len': 16,
+        'domain_prefix': 'm4',
+        'golden': {'meta': {'hash': xxh3_hex(meta_enc), 'enc_len': len(meta_enc)},
+                   'meta_enc_hex': meta_enc.hex()},
+        'edge': meta_edge,
+    }
+    out_vm = os.path.join(HERE, 'vectors_v4_meta.json')
+    with open(out_vm, 'w', encoding='utf-8') as f:
+        json.dump(meta_vectors, f, ensure_ascii=False, indent=2, sort_keys=True)
+
     # golden fixture jako kompletny plik .arkmap (bez checksums —
     # sumy dopisze aplikacja podczas testu)
     out_f = os.path.join(HERE, 'golden_fixture.arkmap')
@@ -480,8 +560,12 @@ def main():
         print('area %s: %s (%d B)' % (aid, v['hash'], v['enc_len']))
     for rid, v in sorted(room_vecs.items(), key=lambda t: int(t[0])):
         print('room %s: %s (%d B)' % (rid, v['hash'], v['enc_len']))
+    print('meta :', meta_vectors['golden']['meta']['hash'],
+          '(%d B enc)' % meta_vectors['golden']['meta']['enc_len'])
     print('sanity vectors:', len(vectors['sanity']))
+    print('meta edge vectors:', len(meta_vectors['edge']))
     print('written:', out_v)
+    print('written:', out_vm)
     print('written:', out_f)
 
 
