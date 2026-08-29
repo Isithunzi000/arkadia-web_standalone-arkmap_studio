@@ -1941,7 +1941,7 @@
     <div class="sb-section">
       <div class="sb-section-title">Wczytaj</div>
       <button id="btn-identity" style="margin-bottom:4px">🪪 Tożsamość autora&hellip;</button>
-      <div id="identity-status" style="font-size:10px;color:var(--dim);text-align:center;margin-bottom:6px">kalka będzie anonimowa</div>
+      <div id="identity-status" style="font-size:10px;color:var(--dim);text-align:center;margin-bottom:6px">pliki będą anonimowe</div>
       <div id="drop-zone">
         <strong>Upuść plik .arkmap / .dat</strong>
         <p>lub użyj przycisków poniżej</p>
@@ -4261,6 +4261,9 @@ const LINE_STR = Object.fromEntries(Object.entries(LINE_INT).map(([k, v]) => [v,
 
 const FORMAT         = 'arkmap';
 const FORMAT_VERSION = 2;   // koperta v2 (D1): format_version + checksums na top-level; pliki v1 odrzucane
+// P-LOCK-3: komplet kluczy top-level koperty v2 (spec §: areas/checksums/colors/
+// format/format_version/meta). Obce klucze sa zachowywane (D3), ale sygnalizowane przy loadzie.
+const _ARKMAP_TOP_KEYS = new Set(['format', 'format_version', 'meta', 'colors', 'areas', 'checksums']);
 
 // (CRC-32 usunięte w v1.45.0 — jedyny konsument (sumy .arkdelta) zmigrowany na XXH3-64,
 //  zunifikowany z silnikiem sum .arkmap; stableStringify pozostaje kanonizacją treści kalki)
@@ -7031,6 +7034,10 @@ async function loadArkmap(text, filename) {
 
   const valRes  = validate(map);
   const suppMissing = checkSuppressorsInMap(map);   // Arc 29: podwójne linie — ostrzeżenie przy loadzie (non-fatal)
+  // P-LOCK-3: obce klucze TOP-LEVEL — zachowane (D3), ale glosno sygnalizowane.
+  const extraTop = Object.keys(map).filter(k => !_ARKMAP_TOP_KEYS.has(k));
+  if (extraTop.length)
+    toast('ℹ Plik niesie pola spoza specyfikacji: ' + extraTop.join(', ') + ' (zachowane przy zapisie)', false);
   // Arc 41 (v1.50.3): bledy STRUKTURALNE (areas nie jest tablica / obszar nie jest
   // obiektem / obszar bez rooms) sa fatalne — applyMap gwarantowanie rzuci na nich
   // (7008+), dialog nie moze oferowac "Wczytaj". Dopasowanie DOKLADNE: glebsze sciezki
@@ -10554,12 +10561,12 @@ function saveArkmapAs() {
   _performArkmapSaveAs();
 }
 
-function _performArkmapSaveAs() {
+async function _performArkmapSaveAs() {
   // Zawsze pokaż dialog wyboru pliku (ignoruj istniejący handle)
   if (!state.map) return;
-  const text = _serializeMapForSave();  // T6/D2: serializuj raz — zapis + bufor (audyt ext F2.19: na klonie)
+  const saveRev = state.editRev || 0;  // T6-F2: rev PRZED awaitem — edycja w oknie podpisu (F5, async serializacja) = dirty zostaje
+  const text = await _serializeMapForSaveSigned();  // T6/D2: serializuj raz — zapis + bufor (audyt ext F2.19: na klonie); F5: podpis D8
   // A11': dirty kasowane dopiero po POTWIERDZONYM zapisie (success-pointy niżej), nie przed dialogiem
-  const saveRev = state.editRev || 0;  // T6-F2: edycja wspolbiezna z async save = dirty zostaje
   const suggestedName = _arkmapSuggestedName();
   const hasFSAPI = typeof window.showSaveFilePicker === 'function';
   if (hasFSAPI) {
@@ -10607,6 +10614,23 @@ function _canonicalCloneForSave() {
 // audyt ext F2.19: pelna sciezka serializacji na klonie (kanonizacja + checksumy + strip + stableStringify)
 function _serializeMapForSave() {
   const clone = _canonicalCloneForSave();
+  for (const area of (clone.areas || [])) {
+    for (const room of (area.rooms || [])) {
+      _stripRoomDefaults(room);
+    }
+  }
+  return stableStringify(clone);
+}
+
+// F5: wariant zapisu z podpisem tozsamosci (async — WebCrypto). Bez tozsamosci
+// albo przy wylaczonym przelaczniku bajtowo identyczny z _serializeMapForSave().
+async function _serializeMapForSaveSigned() {
+  const clone = _canonicalCloneForSave();
+  // F5: awaria podpisu nigdy nie blokuje zapisu — plik wychodzi anonimowy + ostrzezenie.
+  if (typeof _arkmapApplySignature === 'function') {
+    try { await _arkmapApplySignature(clone); }
+    catch (e) { console.warn('[ArkMap] podpis pominiety:', e); toast('⚠ Nie udało się podpisać pliku — zapis bez podpisu', true); }
+  }
   for (const area of (clone.areas || [])) {
     for (const room of (area.rooms || [])) {
       _stripRoomDefaults(room);
@@ -10774,11 +10798,11 @@ function _showOverwriteConfirm(name, onConfirm) {
   openDialog('dlg-confirm-overwrite');
 }
 
-function _performArkmapSave(onSaved) {
+async function _performArkmapSave(onSaved) {
   if (!state.map) return;
-  const text = _serializeMapForSave();  // T6/D2: serializuj raz — zapis + bufor (audyt ext F2.19: na klonie)
+  const saveRev = state.editRev || 0;  // T6-F2: rev PRZED awaitem — edycja w oknie podpisu (F5, async serializacja) = dirty zostaje
+  const text = await _serializeMapForSaveSigned();  // T6/D2: serializuj raz — zapis + bufor (audyt ext F2.19: na klonie); F5: podpis D8
   // A11': dirty kasowane dopiero po POTWIERDZONYM zapisie; clear PRZED onSaved (latentny TypeError z A16 nie pominie cleara)
-  const saveRev = state.editRev || 0;  // T6-F2: edycja wspolbiezna z async save = dirty zostaje
   const suggestedName = _arkmapSuggestedName();
 
   // K6: jeśli mamy istniejący handle → zapisz bezpośrednio (Pass 59)
@@ -16018,6 +16042,23 @@ function _postLoadVerifyDeferred(mapRef) {
     console.warn('[ArkMap] suma metadanych NIEZGODNA — metadane zmodyfikowane poza edytorem');
     toast('ℹ Metadane mapy zmodyfikowane poza edytorem (treść mapy bez zmian)', false);
   }
+  // F5 (D8): weryfikacja podpisu autora .arkmap — async, nie blokuje; stany jak w kalkach.
+  // Wynik trzymany w state._mapSigInfo (konsumowany przez rozszerzenia rejestru — F6/F7).
+  if (typeof _arkmapVerifySignature === 'function') {
+    _arkmapVerifySignature(mapRef).then(sigInfo => {
+      if (state.map !== mapRef) return;  // zdublowany/zastary load — porzucono
+      state._mapSigInfo = sigInfo;
+      if (!sigInfo || sigInfo.state === 'unsigned') return;
+      if (sigInfo.state === 'ok' && sigInfo.idOk !== false)
+        toast('✓ Plik podpisany — autor: ' + (sigInfo.author || '?') + ' (' + (sigInfo.authorId || '?') + ')', false);
+      else if (sigInfo.state === 'ok')
+        toast('⚠ Podpis zgodny z kluczem, ale identyfikator autora w pliku nie pasuje — plik modyfikowany poza edytorem', true);
+      else if (sigInfo.state === 'bad')
+        toast('⚠ Podpis autora NIEZGODNY — plik zmodyfikowany poza edytorem albo podpis sfabrykowany', true);
+      else if (sigInfo.state === 'claimed')
+        toast('ℹ Plik deklaruje autora ' + (sigInfo.author || '?') + ', ale nie niesie podpisu — deklaracja bez dowodu', false);
+    }).catch(e => console.warn('[ArkMap] weryfikacja podpisu:', e));
+  }
 }
 
 // applyMap editor extensions (per checkpoint Pass 69 sekcja F)
@@ -20195,6 +20236,39 @@ async function _identityForSigning() {
     sign: async (msg) => _identityHex(await id.sign(new TextEncoder().encode(msg))) };
 }
 
+// ── Podpisywanie plikow (F5) ─────────────────────────────────────────────────
+// Przelacznik globalny (persist localStorage): domyslnie WLACZONY — tozsamosc
+// aktywna = pliki podpisywane. Wylaczenie = zapis anonimowy bez kasowania tozsamosci.
+function _identitySignEnabled() {
+  try { return localStorage.getItem('arkmap-sign-files') !== '0'; } catch (e) { return true; }
+}
+
+// P-LOCK-1: payload podpisu = cala kanoniczna postac obiektu MINUS checksums.sig.
+// Obejmuje wiec tresc, meta (z polami autora), wszystkie wpisy checksums oraz —
+// dla .arkmap — zachowane obce klucze top-level (D3). Wspolny dla obu formatow
+// (P-LOCK-4: identyczna konstrukcja, rozni sie tylko domena: 'arkmap-v2:' / 'arkdelta-v3:').
+function _sigPayload(domain, obj) {
+  const chk = obj.checksums || {};
+  const rest = {};
+  for (const k of Object.keys(chk)) if (k !== 'sig') rest[k] = chk[k];
+  return domain + stableStringify(Object.assign({}, obj, { checksums: rest }));
+}
+
+// Wspolna weryfikacja Ed25519 (WebCrypto, fallback BigInt). Zwraca true/false, nie rzuca.
+async function _identityVerifySig(pubHex, sigHex, payloadStr) {
+  if (typeof pubHex !== 'string' || !/^[0-9a-f]{64}$/.test(pubHex)) return false;
+  if (typeof sigHex !== 'string' || !/^[0-9a-f]{128}$/.test(sigHex)) return false;
+  const pub = _identityFromHex(pubHex), sig = _identityFromHex(sigHex);
+  const msg = new TextEncoder().encode(payloadStr);
+  let good = false;
+  try {
+    const key = await crypto.subtle.importKey('raw', pub, { name: 'Ed25519' }, false, ['verify']);
+    good = await crypto.subtle.verify('Ed25519', key, sig, msg);
+  } catch (e) { good = false; }
+  if (!good) { try { good = await _edVerify(pub, msg, sig); } catch (e) { good = false; } }
+  return good;
+}
+
 // Utworz/import: nick + slowa → rekord; zwraca { rec, code }.
 async function _identityCreate(nick, words) {
   const n = _identityCanonNick(nick);
@@ -20227,6 +20301,48 @@ async function _identityShowCode() {
 }
 // ====IDENTITY-V1-END====
 
+// ====ARKMAP-SIG-BEGIN====
+// ── Podpis .arkmap (F5) — lustro kontraktu .arkdelta (P-LOCK-4: te same nazwy ──
+// pol: meta.author/author_id/author_pubkey/created + checksums.sig; domena 'arkmap-v2:').
+
+// Wpisuje pola autora w meta, PRZELICZA checksums (checksums.meta musi objac pola
+// autora) i doklada checksums.sig. Zwraca true gdy podpisano. Kopia robocza —
+// wywolywane wylacznie na kanonicznym klonie do zapisu.
+async function _arkmapApplySignature(arkmap) {
+  if (typeof _identitySignEnabled === 'function' && !_identitySignEnabled()) return false;
+  const id = (typeof _identityForSigning === 'function') ? await _identityForSigning() : null;
+  if (!id) return false;
+  if (!arkmap.meta) arkmap.meta = {};
+  arkmap.meta.author = id.nick;
+  arkmap.meta.author_id = id.authorId;
+  arkmap.meta.author_pubkey = id.pubkeyHex;
+  arkmap.meta.created = new Date().toISOString();
+  addChecksums(arkmap);  // przeliczenie: suma meta obejmuje pola autora
+  arkmap.checksums.sig = await id.sign(_sigPayload('arkmap-v2:', arkmap));
+  return true;
+}
+
+// Weryfikacja podpisu .arkmap. NIGDY nie rzuca. Stany jak w .arkdelta:
+// unsigned / claimed (pola autora bez sig) / ok (+idOk) / bad.
+async function _arkmapVerifySignature(arkmap) {
+  try {
+    const cs = arkmap.checksums || {}, meta = arkmap.meta || {};
+    const author = typeof meta.author === 'string' ? meta.author : null;
+    const authorId = typeof meta.author_id === 'string' ? meta.author_id : null;
+    const pubHex = typeof meta.author_pubkey === 'string' ? meta.author_pubkey : null;
+    if (cs.sig === undefined || cs.sig === null)
+      return (author || authorId || pubHex) ? { state: 'claimed', author, authorId } : { state: 'unsigned' };
+    if (typeof cs.sig !== 'string' || !/^[0-9a-f]{128}$/.test(cs.sig)) return { state: 'bad', author, authorId };
+    if (!pubHex || !/^[0-9a-f]{64}$/.test(pubHex)) return { state: 'bad', author, authorId };
+    const good = await _identityVerifySig(pubHex, cs.sig, _sigPayload('arkmap-v2:', arkmap));
+    if (!good) return { state: 'bad', author, authorId };
+    const realId = await _identityAuthorId(_identityFromHex(pubHex));
+    const idOk = authorId === null || authorId === realId;
+    return { state: 'ok', author, authorId: realId, idOk };
+  } catch (e) { return { state: 'bad', author: null, authorId: null, verifyError: true }; }
+}
+// ====ARKMAP-SIG-END====
+
 // ── UI: dialog tozsamosci (D8) ─────────────────────────────────────────────
 // Przycisk nad polem wczytywania ("Tożsamość autora…"), status pod spodem.
 // Derywacja PBKDF2 trwa ~1 s — przyciski na ten czas dostaja stan "czekaj".
@@ -20248,6 +20364,10 @@ function _identityLoadWordCount() {
   } catch (e) {}
   return _IDENTITY_WORDS_DEFAULT;
 }
+function _identityStatusText(id) {
+  if (!id) return 'pliki będą anonimowe';
+  return '🪪 ' + id.nick + ' · ' + id.authorId + (_identitySignEnabled() ? '' : ' · podpis wyłączony');
+}
 let _identityCryptoCap;  // cache: undefined=niesprawdzone
 function _identityCryptoAvailable() {
   if (_identityCryptoCap === undefined)
@@ -20258,7 +20378,7 @@ function _identityCryptoAvailable() {
 async function _identityUiRefresh(showCode) {
   const id = await _identityActive();
   const st = document.getElementById('identity-status');
-  if (st) st.textContent = id ? ('🪪 ' + id.nick + ' · ' + id.authorId) : 'kalka będzie anonimowa';
+  if (st) st.textContent = _identityStatusText(id);
   const body = document.getElementById('identity-body');
   if (!body) return;
   if (!_identityCryptoAvailable()) {
@@ -20268,7 +20388,7 @@ async function _identityUiRefresh(showCode) {
   }
   if (!id) {
     body.innerHTML =
-      '<div style="font-size:12px;margin-bottom:8px">Brak tożsamości na tej maszynie — zapisana kalka będzie anonimowa.</div>'
+      '<div style="font-size:12px;margin-bottom:8px">Brak tożsamości na tej maszynie — zapisywane pliki będą anonimowe.</div>'
       + '<label style="font-size:10px;color:var(--dim);letter-spacing:0.8px;text-transform:uppercase">Nick autora</label>'
       + '<input class="ap-input" id="id-nick" type="text" maxlength="32" placeholder="np. zbyszek">'
       + '<div style="font-size:10px;color:var(--dim);margin-top:2px">Tylko litery a-z i cyfry (bez polskich znaków); wielkość liter bez znaczenia.</div>'
@@ -20339,14 +20459,25 @@ async function _identityUiRefresh(showCode) {
       }
     };
   } else {
+    const signOn = _identitySignEnabled();
     body.innerHTML =
-      '<div style="font-size:12px;margin-bottom:6px">Tożsamość aktywna — zapisana kalka będzie podpisana cyfrowo.</div>'
+      '<div style="font-size:12px;margin-bottom:6px">Tożsamość aktywna.</div>'
       + '<div style="font-size:12px">Autor: <b>' + escHtml(id.nick) + '</b></div>'
       + '<div style="font-size:11px;color:var(--dim)">identyfikator: ' + escHtml(id.authorId) + '</div>'
       + '<div style="font-size:11px;color:var(--dim);word-break:break-all">odcisk klucza: ' + escHtml(id.pubkeyHex) + '</div>'
+      + '<label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;cursor:pointer;user-select:none">'
+      + '<input type="checkbox" id="id-sign-toggle"' + (signOn ? ' checked' : '') + '> Podpisuj pliki moją tożsamością</label>'
+      + '<div style="font-size:10px;color:var(--dim)">Dotyczy map .arkmap i kalek .arkdelta. Wyłącz, aby zapisać plik anonimowo — tożsamość zostaje na maszynie.</div>'
       + '<div id="id-code-out"></div>'
       + '<button id="id-btn-show" style="margin-top:8px">Pokaż kod odzyskiwania</button>'
       + '<button id="id-btn-clear" class="btn-err" style="margin-top:6px;margin-left:6px">Wyczyść z tej maszyny</button>';
+    const signTg = document.getElementById('id-sign-toggle');
+    if (signTg) signTg.onchange = (ev) => {
+      try { localStorage.setItem('arkmap-sign-files', ev.target.checked ? '1' : '0'); } catch (e) {}
+      const st2 = document.getElementById('identity-status');
+      if (st2) st2.textContent = _identityStatusText(id);
+      toast(ev.target.checked ? 'Podpisywanie plików włączone' : 'Podpisywanie plików wyłączone — zapis będzie anonimowy', false);
+    };
     document.getElementById('id-btn-show').onclick = async () => {
       const code = await _identityShowCode();
       if (code) document.getElementById('id-code-out').innerHTML = _identityUiCodeBox(code);
@@ -20376,6 +20507,9 @@ _identityUiRefresh(false);
 
 const ARKDELTA_FORMAT = 'arkdelta';
 const ARKDELTA_FORMAT_VERSION = 3;  // koperta v3 (D1): format/format_version/checksums na top-level
+// P-LOCK-2: kompletna whitelist kluczy top-level — obce klucze nie byly objete
+// podpisem przed P-LOCK-1, wiec walidator odrzuca je glosno (fail-closed).
+const _DELTA_TOP_KEYS = new Set(['format', 'format_version', 'meta', 'ops', 'checksums']);
 const ARKDELTA_MAX_OPS = 5000;
 const ARKDELTA_MAX_BYTES = 8 * 1024 * 1024;
 const _DELTA_SID_RE = /^d:[1-9][0-9]*$/;
@@ -20405,17 +20539,10 @@ async function _deltaVerifySignature(delta) {
     return (author || authorId || pubHex) ? { state: 'claimed', author, authorId } : { state: 'unsigned' };
   if (typeof cs.sig !== 'string' || !/^[0-9a-f]{128}$/.test(cs.sig)) return { state: 'bad', author, authorId };
   if (!pubHex || !/^[0-9a-f]{64}$/.test(pubHex)) return { state: 'bad', author, authorId };
-  const pub = _identityFromHex(pubHex);
-  const msg = new TextEncoder().encode('arkdelta-v3:' + cs.file);
-  const sig = _identityFromHex(cs.sig);
-  let good = false;
-  try {
-    const key = await crypto.subtle.importKey('raw', pub, { name: 'Ed25519' }, false, ['verify']);
-    good = await crypto.subtle.verify('Ed25519', key, sig, msg);
-  } catch (e) { good = false; }
-  if (!good) { try { good = await _edVerify(pub, msg, sig); } catch (e) { good = false; } }
+  // P-LOCK-1: payload = caly kanoniczny obiekt minus checksums.sig.
+  const good = await _identityVerifySig(pubHex, cs.sig, _sigPayload('arkdelta-v3:', delta));
   if (!good) return { state: 'bad', author, authorId };
-  const realId = await _identityAuthorId(pub);
+  const realId = await _identityAuthorId(_identityFromHex(pubHex));
   const idOk = authorId === null || authorId === realId;
   return { state: 'ok', author, authorId: realId, idOk };
 }
@@ -21516,6 +21643,7 @@ function _deltaSerializeOps(ops, base) {
 // _identityForSigning dostarcza Faza 5 (modul tozsamosci); typeof-guard utrzymuje
 // harnessy node (ekstrakcja bez modulu tozsamosci = sciezka anonimowa).
 async function _deltaMaybeSign(text) {
+  if (typeof _identitySignEnabled === 'function' && !_identitySignEnabled()) return text;  // F5: przelacznik
   const id = (typeof _identityForSigning === 'function') ? await _identityForSigning() : null;
   if (!id) return text;
   const d = JSON.parse(text);
@@ -21524,7 +21652,8 @@ async function _deltaMaybeSign(text) {
   d.meta.author_pubkey = id.pubkeyHex;
   d.meta.created = new Date().toISOString();
   d.checksums = _deltaChecksums(d.meta, d.ops);
-  d.checksums.sig = await id.sign('arkdelta-v3:' + d.checksums.file);
+  // P-LOCK-1: podpis nad calym kanonicznym obiektem minus checksums.sig (nie tylko file).
+  d.checksums.sig = await id.sign(_sigPayload('arkdelta-v3:', d));
   return stableStringify(d);
 }
 
@@ -21752,6 +21881,11 @@ function validateDeltaText(text) {
   if (delta.format !== ARKDELTA_FORMAT) return { ok: false, errors: ['To nie jest plik .arkdelta.'] };
   if (delta.format_version !== ARKDELTA_FORMAT_VERSION)
     return { ok: false, errors: ['Nieobsługiwana wersja formatu kalki: ' + (delta.format_version ?? 'brak') + ' (ta wersja ArkMap Studio obsługuje: ' + ARKDELTA_FORMAT_VERSION + '). Kalki w starym formacie nie są wczytywane — zapisz kalkę ponownie z logu zmian albo zaktualizuj ArkMap Studio. Plik nie został wczytany.'] };
+
+  // P-LOCK-2: obce klucze top-level = odmowa (nie sa objete specyfikacja ani podpisem).
+  const extraTop = Object.keys(delta).filter(k => !_DELTA_TOP_KEYS.has(k));
+  if (extraTop.length)
+    return { ok: false, errors: ['Plik .arkdelta zawiera pola spoza specyfikacji (' + extraTop.join(', ') + '). Plik nie został wczytany.'] };
 
   // audyt ext F1.2: straznik glebokosci PRZED checksumami — stableStringify jest
   // rekurencyjne; bez guarda glebokie ops wywalaja RangeError poza walidator.

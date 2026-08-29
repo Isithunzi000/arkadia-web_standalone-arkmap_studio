@@ -136,6 +136,8 @@
 
 <p>Keys at every level are serialized in sorted order (see <a href="#serialization">§5</a>). The file is produced by <code>buildDelta()</code> from the editor's full edit log and consumed by <code>validateDeltaText()</code> + <code>applyDelta()</code>.</p>
 
+<div class="note"><strong>Closed top level:</strong> the top-level key set is <em>closed</em> — exactly the five keys shown above. Readers refuse files carrying any other top-level key. (Unlike <code>meta</code>, which is open, unknown top-level keys were historically covered by no checksum, so they cannot pass silently.)</div>
+
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="meta">3. meta Object</h2>
 
@@ -144,7 +146,7 @@
   <tr><td><code>ops_count</code></td><td>integer</td><td class="req">REQ</td><td>Number of operations; must equal <code>ops.length</code></td></tr>
   <tr><td><code>base</code></td><td>object</td><td class="req">REQ</td><td>Base identity (see <a href="#base">§4</a>); may be empty if the base could not be identified</td></tr>
   <tr><td><code>app_version</code></td><td>string</td><td class="req">REQ</td><td>ArkMap Studio version that produced the file (informational)</td></tr>
-  <tr><td><code>author</code></td><td>string</td><td class="opt">OPT</td><td>Author nickname, chosen by the user (for humans). Added in format version 3. See the signature rules in <a href="#signatures">§9</a> — author fields require a signature.</td></tr>
+  <tr><td><code>author</code></td><td>string</td><td class="opt">OPT</td><td>Author nickname, chosen by the user (for humans). Canonical form: lowercase, characters <code>a-z</code> and <code>0-9</code> only (1–32 characters) — case is insignificant everywhere, including key derivation. Added in format version 3. See the signature rules in <a href="#signatures">§9</a> — author fields require a signature.</td></tr>
   <tr><td><code>author_id</code></td><td>string</td><td class="opt">OPT</td><td>Author fingerprint (for machines): the first 16 lowercase hex characters of SHA-256 over the raw bytes of <code>author_pubkey</code>. Added in format version 3.</td></tr>
   <tr><td><code>author_pubkey</code></td><td>string</td><td class="opt">OPT</td><td>Author's Ed25519 public key, 64 lowercase hex characters (32 bytes). Covered by <code>checksums.file</code>, so it cannot be swapped without invalidating the file checksum. Added in format version 3.</td></tr>
   <tr><td><code>created</code></td><td>string</td><td class="opt">OPT</td><td>Creation timestamp, ISO 8601. Informational. Added in format version 3.</td></tr>
@@ -313,10 +315,10 @@
 <p>An overlay exists in exactly one of two states: <strong>anonymous</strong> (no author fields, no signature) or <strong>signed</strong> (author fields plus a valid signature). There is no third state — see the anomaly rule below.</p>
 
 <h3>What is signed</h3>
-<p>The signature is an <strong>Ed25519</strong> signature over the ASCII byte string <code>"arkdelta-v3:" + checksums.file</code> (domain prefix + the 16 lowercase hex characters of the file checksum). It is stored as <code>checksums.sig</code> — 128 lowercase hex characters (64 bytes). Signing the checksum rather than the byte stream keeps the scheme independent of serialization details, and storing the signature inside the <code>checksums</code> object keeps it outside the checksum input by construction — no circularity, no exclusion rules, and unsigned files are completely unaffected.</p>
+<p>The signature is an <strong>Ed25519</strong> signature over the UTF-8 byte string <code>"arkdelta-v3:" + canonicalSerialization(whole object minus checksums.sig)</code> — the domain prefix followed by the canonical form (§5) of the entire envelope, with only the <code>sig</code> key excluded from <code>checksums</code>. It is stored as <code>checksums.sig</code> — 128 lowercase hex characters (64 bytes). The payload therefore binds the content, the metadata (including the author fields), every checksum entry, and any unknown top-level keys a lenient reader might otherwise keep. The canonical serialization is the same deterministic, key-sorted form used for the file itself, so the payload is well-defined regardless of byte-level key order in the file. Storing the signature inside <code>checksums</code> keeps it outside every checksum input by construction — no circularity, and unsigned files are completely unaffected.</p>
 
 <h3>Keys and fingerprint</h3>
-<p>The signer's public key is stored in <code>meta.author_pubkey</code> (Ed25519, 32 bytes, lowercase hex). Because <code>meta</code> is covered by <code>checksums.file</code>, the key cannot be swapped without invalidating the file checksum. The fingerprint <code>meta.author_id</code> is the first 16 lowercase hex characters of SHA-256 over the raw public-key bytes. How the key pair is generated or stored is implementation-defined (ArkMap Studio derives it deterministically from a user-held recovery code — see the user manual); the format defines only the field semantics.</p>
+<p>The signer's public key is stored in <code>meta.author_pubkey</code> (Ed25519, 32 bytes, lowercase hex). Because <code>meta</code> is covered by <code>checksums.file</code>, the key cannot be swapped without invalidating the file checksum. The fingerprint <code>meta.author_id</code> is the first 16 lowercase hex characters of SHA-256 over the raw public-key bytes. How the key pair is generated or stored is implementation-defined (ArkMap Studio derives it deterministically via PBKDF2-SHA256 from a user-held recovery code of 3–6 words — default 3 — from a frozen 2048-word list, salted with the canonical nick — see the user manual); the format defines only the field semantics.</p>
 
 <h3>Producer rule</h3>
 <p>A producer that writes <em>any</em> author field (<code>author</code>, <code>author_id</code>, <code>author_pubkey</code>) MUST sign the file (write <code>checksums.sig</code>). Author fields without a signature are an anomaly: a reader reports them as a <em>declaration without proof</em> and treats the authorship as unverified.</p>
@@ -341,6 +343,7 @@
   <li><strong>JSON</strong> — the file must parse as a single JSON object.</li>
   <li><strong>Magic</strong> — top-level <code>format</code> must be <code>"arkdelta"</code>.</li>
   <li><strong>Version</strong> — top-level <code>format_version</code> must equal <code>3</code> (an unknown or older version — including 1 and 2 — is refused loudly and advises updating ArkMap Studio).</li>
+  <li><strong>Top-level whitelist</strong> — keys other than <code>format</code>, <code>format_version</code>, <code>meta</code>, <code>ops</code>, <code>checksums</code> at the top level are refused.</li>
   <li><strong>Nesting depth</strong> — <code>meta</code> and every operation are scanned before any checksum computation; a structure nested deeper than 60 levels is refused. (Checksum computation serializes recursively — the guard turns a potential stack overflow into a controlled, precise refusal.)</li>
   <li><strong>File checksum</strong> — <code>checksums.file</code> must match the canonical form of <code>{ format, format_version, meta, ops }</code>; on mismatch, per-op checksums localize the corrupted operations by <code>seq</code>.</li>
   <li><strong>Operation count</strong> — at most 5000 operations; <code>meta.ops_count</code> must equal <code>ops.length</code>.</li>

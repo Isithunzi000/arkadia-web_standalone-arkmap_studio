@@ -75,7 +75,7 @@ const deltaCode =
   blockSlice('// ====IDENTITY-V1-BEGIN====', '// ── UI: dialog + wiring') + '\n' +
   '\n;return { validateDeltaText, buildDelta, _deltaChecksums, _deltaMaybeSign, _deltaVerifySignature,' +
   ' _deltaAreaRisk, _deltaOpHasCommands, _deltaClsItem, _identityCreate, _identityClear, stableStringify,' +
-  ' _identityDeriveSeed, _identityKeysFromSeed, _identityHex };';
+  ' _identityDeriveSeed, _identityKeysFromSeed, _identityHex, _sigPayload };';
 const stateStub = {
   deltaLog: [],
   baseInfo: { crc: 'a'.repeat(16), areas: { '1': 'aaaabbbbccccdddd', '2': '1111222233334444' } },
@@ -177,10 +177,36 @@ console.log('── T2: weryfikacja podpisu ──');
   wrongId.checksums = api._deltaChecksums(wrongId.meta, wrongId.ops);
   const seed = await api._identityDeriveSeed('Zbyszek', PIN_WORDS);
   const keys = await api._identityKeysFromSeed(seed);
-  wrongId.checksums.sig = api._identityHex(await keys.sign(new TextEncoder().encode('arkdelta-v3:' + wrongId.checksums.file)));
+  wrongId.checksums.sig = api._identityHex(await keys.sign(new TextEncoder().encode(api._sigPayload('arkdelta-v3:', wrongId))));
   const vW = await api._deltaVerifySignature(wrongId);
   ok(vW.state === 'ok' && vW.idOk === false && vW.authorId === 'cb4b9b4a5514412d',
      'podpis zgodny, ale author_id nie pasuje do klucza → idOk=false');
+
+  // P-LOCK-1: podpis obejmuje CALY obiekt minus sig — obcy klucz top-level
+  // dolozony PO podpisaniu uniewaznia podpis (przed F5 byl poza zakresem).
+  const extra = JSON.parse(signedText);
+  extra.obcy_top = { x: 1 };
+  const vExtra = await api._deltaVerifySignature(extra);
+  ok(vExtra.state === 'bad', 'P-LOCK-1: obcy klucz top-level po podpisie → bad');
+  // P-LOCK-2: walidator odrzuca obce klucze top-level glosno (fail-closed).
+  const vWl = api.validateDeltaText(api.stableStringify(extra));
+  ok(vWl.ok === false && /spoza specyfikacji/.test(vWl.errors.join(' ')),
+     'P-LOCK-2: walidator odrzuca obcy klucz top-level (fail-closed)');
+  // zmiana dowolnego wpisu checksums (np. ops) tez uniewaznia podpis:
+  const chkT = JSON.parse(signedText);
+  chkT.checksums.ops = chkT.checksums.ops.slice(); chkT.checksums.ops[0] = 'f'.repeat(16);
+  // (suma file nie obejmuje checksums, wiec walidacja checksumow by to przepuscila...)
+  ok((await api._deltaVerifySignature(chkT)).state === 'bad',
+     'P-LOCK-1: przeklamany wpis checksums.ops → podpis bad (wpisy checksums objete)');
+
+  // F5: przelacznik podpisywania — wylaczony → _deltaMaybeSign zwraca tekst bez zmian.
+  globalThis.localStorage = { getItem: () => '0', setItem() {}, removeItem() {} };
+  const unsignedText = await api._deltaMaybeSign(mkDeltaText());
+  ok(unsignedText === mkDeltaText() && JSON.parse(unsignedText).checksums.sig === undefined,
+     'flip switch OFF → kalka anonimowa mimo aktywnej tozsamosci');
+  delete globalThis.localStorage;
+  const reSigned = await api._deltaMaybeSign(mkDeltaText());
+  ok(/^[0-9a-f]{128}$/.test(JSON.parse(reSigned).checksums.sig), 'flip switch ON (brak wpisu) → kalka podpisana');
   await api._identityClear();
 }
 

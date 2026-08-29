@@ -246,7 +246,7 @@ const ASYNC_PINS_SD = [];
      HTML.includes('id="dlg-backups"') && HTML.includes('id="bak-list"') &&
      HTML.includes('id="btn-backups"') && HTML.includes('id="bak-clear"'),
     'A4.5 (UX-5): dialogi dlg-confirm-overwrite + dlg-backups + przyciski w DOM (pre-fix: brak)');
-  const pas = HTML.includes('function _performArkmapSave(onSaved) {') ? extract(HTML, 'function _performArkmapSave(onSaved) {') : '';
+  const pas = HTML.includes('async function _performArkmapSave(onSaved) {') ? extract(HTML, 'async function _performArkmapSave(onSaved) {') : '';
   const iGate = pas.indexOf('_showOverwriteConfirm('), iCreate = pas.indexOf('createWritable(');
   const iBak = pas.indexOf('_bakPut('), iWrite = pas.indexOf('writable.write(');
   ok(iGate !== -1 && iCreate !== -1 && iGate < iCreate,
@@ -265,7 +265,7 @@ const ASYNC_PINS_SD = [];
 {
   // — behawioralny A: pierwszy zapis pyta, drugi cicho; backup przed write —
   const SRC = 'let _arkmapFileHandle = handle0, _arkmapOverwriteConfirmed = false;\n'
-    + extract(HTML, 'function _performArkmapSave(onSaved) {') + '\n'
+    + extract(HTML, 'async function _performArkmapSave(onSaved) {') + '\n'
     + 'return { save: _performArkmapSave, get confirmed() { return _arkmapOverwriteConfirmed; } };';
   const state = { map: { format: 'arkmap' }, editRev: 0, pristineArkmap: 'OLD', dirty: true };
   const seq = [], writes = [];
@@ -277,9 +277,9 @@ const ASYNC_PINS_SD = [];
       close: async () => {},
     }),
   };
-  const api = new Function('state', '_serializeMapForSave', '_arkmapSuggestedName', 'saveWithDialog',
+  const api = new Function('state', '_serializeMapForSaveSigned', '_arkmapSuggestedName', 'saveWithDialog',
     'toast', '_updateSaveButtonText', '_showOverwriteConfirm', '_bakPut', 'handle0', SRC)
-    (state, () => 'NEW', () => 'mapa.arkmap', async () => null, () => {}, () => {},
+    (state, async () => 'NEW', () => 'mapa.arkmap', async () => null, () => {}, () => {},
       (name, cb) => { confirmCalls++; confirmName = name; confirmCb = cb; },
       async (name, text) => { seq.push('bak:' + name + ':' + text); },
       handle0);

@@ -61,23 +61,34 @@ console.log('— B: D2(c) Przywroc ostatni zapis —');
   ok(count('_loadCheckpointText = text;') === 1,
     'B2c: dokladnie jedna sciezka podlozenia checkpointu (tylko loadArkmap) — jest ' + count('_loadCheckpointText = text;'));
 
-  const save = extract(HTML, 'function _performArkmapSave(onSaved) {');
+  const save = extract(HTML, 'async function _performArkmapSave(onSaved) {');
   // F2.19 (Arc 31, v1.48.3): serializacja na klonie — _serializeMapForSave zamiast _serializeMap.
-  ok((save.split('const text = _serializeMapForSave()').length - 1) === 1
-    && !save.includes('() => _serializeMapForSave()') && save.includes('writable.write(text)'),
-    'B3: _performArkmapSave serializuje raz (const text, F2.19: na klonie), zero leniwych lambd');
+  // F5 (v1.52.0): wariant z podpisem — _serializeMapForSaveSigned (async, D8).
+  ok((save.split('const text = await _serializeMapForSaveSigned()').length - 1) === 1
+    && !save.includes('() => _serializeMapForSave') && save.includes('writable.write(text)'),
+    'B3: _performArkmapSave serializuje raz (const text, F2.19: na klonie; F5: podpis D8), zero leniwych lambd');
   ok((save.split('state.pristineArkmap = text;').length - 1) === 4,
     'B4: bufor ustawiany przy 4/4 punktow sukcesu zapisu — jest '
     + (save.split('state.pristineArkmap = text;').length - 1));
+  // F5 (v1.52.0): rev MUSI byc zrzucony przed awaitem serializacji — inaczej edycja
+  // w oknie podpisu (async) wymyka sie bramce T6-F2 i dirty zostaje skasowane mimo
+  // ze plik jej nie zawiera (okno utraty danych, flake E14.race).
+  ok(save.indexOf('const saveRev = state.editRev || 0;') !== -1
+    && save.indexOf('const saveRev = state.editRev || 0;') < save.indexOf('await _serializeMapForSaveSigned()'),
+    'B4a: _performArkmapSave — saveRev PRZED await serializacji (T6-F2 szczelne przy podpisie D8)');
 
-  const saveAs = extract(HTML, 'function _performArkmapSaveAs() {');
+  const saveAs = extract(HTML, 'async function _performArkmapSaveAs() {');
   // F2.19 (Arc 31, v1.48.3): serializacja na klonie — _serializeMapForSave zamiast _serializeMap.
-  ok((saveAs.split('const text = _serializeMapForSave()').length - 1) === 1
-    && !saveAs.includes('() => _serializeMapForSave()'),
-    'B5: _performArkmapSaveAs serializuje raz (luka z audytu planu zamknieta, F2.19: na klonie)');
+  // F5 (v1.52.0): wariant z podpisem — _serializeMapForSaveSigned (async, D8).
+  ok((saveAs.split('const text = await _serializeMapForSaveSigned()').length - 1) === 1
+    && !saveAs.includes('() => _serializeMapForSave'),
+    'B5: _performArkmapSaveAs serializuje raz (luka z audytu planu zamknieta, F2.19: na klonie; F5: podpis D8)');
   ok((saveAs.split('state.pristineArkmap = text;').length - 1) === 2,
     'B6: bufor przy 2/2 punktow sukcesu Zapisz-kopie — jest '
     + (saveAs.split('state.pristineArkmap = text;').length - 1));
+  ok(saveAs.indexOf('const saveRev = state.editRev || 0;') !== -1
+    && saveAs.indexOf('const saveRev = state.editRev || 0;') < saveAs.indexOf('await _serializeMapForSaveSigned()'),
+    'B6a: _performArkmapSaveAs — saveRev PRZED await serializacji (jak B4a)');
 
   const rest = extract(HTML, 'function restoreLastSave() {');
   ok(rest.includes('if (!state.pristineArkmap || !state.map) return;'),

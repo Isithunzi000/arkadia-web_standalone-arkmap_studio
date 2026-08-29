@@ -106,6 +106,7 @@
   <li><a href="#dat-roundtrip">Mudlet .dat Round-Trip</a></li>
   <li><a href="#arkmap-only">Extensions (.arkmap-only fields)</a></li>
   <li><a href="#example">Complete Example</a></li>
+  <li><a href="#signatures">Optional Signatures</a></li>
   <li><a href="#changelog">Format Changelog</a></li>
 </ol>
 </div>
@@ -141,7 +142,7 @@
 <table>
 <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
 <tr><td><code>format</code></td><td>string</td><td class="req">YES</td><td>Must be <code>"arkmap"</code>. Used to identify file type.</td></tr>
-<tr><td><code>format_version</code></td><td>integer</td><td class="req">YES</td><td>Format version. Currently <code>2</code>. Increment on breaking changes. Renamed from <code>version</code> (format version 1) — see <a href="#changelog">§22</a>.</td></tr>
+<tr><td><code>format_version</code></td><td>integer</td><td class="req">YES</td><td>Format version. Currently <code>2</code>. Increment on breaking changes. Renamed from <code>version</code> (format version 1) — see <a href="#changelog">§23</a>.</td></tr>
 <tr><td><code>meta</code></td><td>object</td><td class="req">YES</td><td>Map-level metadata. See <a href="#meta">§3</a>.</td></tr>
 <tr><td><code>colors</code></td><td>object</td><td class="req">YES</td><td>Environment color definitions. See <a href="#colors">§4</a>.</td></tr>
 <tr><td><code>areas</code></td><td>array</td><td class="req">YES</td><td>Array of Area objects. See <a href="#areas">§5</a>.</td></tr>
@@ -174,6 +175,10 @@
 <tr><td><code>room_id_hash</code></td><td>object (string → integer)</td><td class="opt">optional</td><td>Mudlet's <code>mRoomIdHash</code>: contributor name → starting room ID, used by multi-contributor map merging (crowdmap). Preserved through .dat round-trips. Omit if empty. Added in spec v1.1.</td></tr>
 <tr><td><code>user_data</code></td><td><a href="#user-data">UserData</a></td><td class="opt">optional</td><td>Map-level key-value metadata. May contain <code>version</code>, <code>revision</code>, <code>map_sync_version</code> etc.</td></tr>
 <tr><td><code>app_version</code></td><td>string</td><td class="opt">optional</td><td>Version of ArkMap Studio that wrote the file. Informational; ignored by validation. Mirrors the <code>.arkdelta</code> bookkeeping field. Covered by <code>checksums.meta</code> (see <a href="#checksums">§15</a>). Added in spec v2.0.</td></tr>
+<tr><td><code>author</code></td><td>string</td><td class="opt">optional</td><td>Author nickname (for humans). Canonical form: lowercase, characters <code>a-z</code> and <code>0-9</code> only (1–32 characters) — case is insignificant everywhere, including key derivation. Requires a signature — see <a href="#signatures">§22</a>. Additive extension: does not change the format version.</td></tr>
+<tr><td><code>author_id</code></td><td>string</td><td class="opt">optional</td><td>Author fingerprint (for machines): the first 16 lowercase hex characters of SHA-256 over the raw bytes of <code>author_pubkey</code>.</td></tr>
+<tr><td><code>author_pubkey</code></td><td>string</td><td class="opt">optional</td><td>Author's Ed25519 public key, 64 lowercase hex characters (32 bytes). Covered by <code>checksums.meta</code> and by the signature, so it cannot be swapped without invalidating both.</td></tr>
+<tr><td><code>created</code></td><td>string</td><td class="opt">optional</td><td>Creation timestamp, ISO 8601. Informational — self-declared by the producer.</td></tr>
 <tr><td><code>accepted_dir_issues</code></td><td>array of strings</td><td class="opt">optional</td><td><span style="color:#5570a0">.arkmap-only</span> — Acceptances for the direction validator (intentional <code>team_follow_link</code> / <code>dir_bind</code> mismatches marked as OK). Each entry is a key string <code>"type:roomId:value"</code>, parsed by splitting on the <strong>first two</strong> colons (the value may itself contain <code>:</code>). The key embeds the numeric room ID, so it becomes stale when room IDs are renumbered (e.g. crowdmap merge) — acceptable, because acceptances are soft UX state. Written only when the validator's acceptance store is set to "file". Serialized sorted lexicographically (see <a href="#serialization">§16</a>). Not preserved in .dat export. See <a href="#user-data">§14</a>.</td></tr>
 </table>
 
@@ -588,7 +593,8 @@
   <span class="k">"file"</span>:  <span class="s">"a1b2c3d4e5f60718"</span>,
   <span class="k">"meta"</span>:  <span class="s">"f0e1d2c3b4a59687"</span>,
   <span class="k">"areas"</span>: { <span class="s">"7"</span>: <span class="s">"e5f6a7b8c9d0e1f2"</span>, <span class="s">"12"</span>: <span class="s">"c9d0e1f2a3b4c5d6"</span> },
-  <span class="k">"rooms"</span>: { <span class="s">"12847"</span>: <span class="s">"1a2b3c4d5e6f7a8b"</span>, <span class="s">"12848"</span>: <span class="s">"5e6f7a8b9c0d1e2f"</span> }
+  <span class="k">"rooms"</span>: { <span class="s">"12847"</span>: <span class="s">"1a2b3c4d5e6f7a8b"</span>, <span class="s">"12848"</span>: <span class="s">"5e6f7a8b9c0d1e2f"</span> },
+  <span class="k">"sig"</span>:   <span class="s">"3f4a…"</span>  <span class="c">/* optional — author signature, 128 lowercase hex (see §22) */</span>
 }</pre>
 
 <h3>Computation algorithm (v4)</h3>
@@ -646,7 +652,7 @@
   <li><code>format_version</code> must be <code>2</code></li>
   <li><code>meta</code>, <code>colors</code>, <code>areas</code> must be present</li>
   <li><code>checksums</code>, if present, must be an object; <code>meta.checksums</code> is not a recognized location (format version 1 layout — rejected by rule 2)</li>
-  <li>Unknown keys anywhere in the document (top level, <code>meta</code>, areas, rooms, labels, <code>colors</code>) must not cause rejection — readers preserve them verbatim and writers re-emit them (see <a href="#overview">§1</a>); only the rules in this list may reject or warn</li>
+  <li>Unknown keys anywhere in the document (top level, <code>meta</code>, areas, rooms, labels, <code>colors</code>) must not cause rejection — readers preserve them verbatim and writers re-emit them (see <a href="#overview">§1</a>); only the rules in this list may reject or warn. Unknown <em>top-level</em> keys are additionally reported at load (an informational note listing them) and are covered by the optional signature (<a href="#signatures">§22</a>)</li>
   <li><code>meta.room_id_hash</code>, if present, must be an object mapping contributor names (strings) to starting room IDs (integers)</li>
   <li>All area IDs must be unique</li>
   <li>All room IDs must be globally unique (across all areas)</li>
@@ -821,7 +827,29 @@
 <div class="note">Note that top-level keys are sorted alphabetically (<code>areas</code>, <code>checksums</code>, <code>colors</code>, <code>format</code>, <code>format_version</code>, <code>meta</code>). Within each room, keys are also sorted. This is the deterministic serialization format. The checksum values above are the real v4 hashes of the example content — cross-verified against two independent implementations (the ArkMap Studio encoder and the reference Python oracle) and pinned by the test suite (tests/g6_crosscheck.js), so the example can never drift from the specification text.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="changelog">22. Format Changelog</h2>
+<h2 id="signatures">22. Optional Signatures</h2>
+
+<p>A map file exists in exactly one of two states: <strong>anonymous</strong> (no author fields, no signature) or <strong>signed</strong> (author fields plus a valid signature). There is no third state — see the anomaly rule below. The scheme mirrors the <code>.arkdelta</code> signature (§9 of the <code>.arkdelta</code> spec): the same field names, the same key type, the same payload construction — only the domain prefix differs (<code>arkmap-v2:</code> versus <code>arkdelta-v3:</code>).</p>
+
+<h3>What is signed</h3>
+<p>The signature is an <strong>Ed25519</strong> signature over the UTF-8 byte string <code>"arkmap-v2:" + canonicalSerialization(whole object minus checksums.sig)</code> — the domain prefix followed by the deterministic serialization (<a href="#serialization">§16</a>) of the entire envelope, with only the <code>sig</code> key excluded from <code>checksums</code>. The payload therefore binds the content (areas/rooms), the <code>colors</code> tables, the metadata (including the author fields), every checksum entry, and any unknown top-level keys preserved under the forward-compatibility rule (<a href="#validation">§17</a>). It is stored as <code>checksums.sig</code> — 128 lowercase hex characters (64 bytes). Storing the signature inside <code>checksums</code> keeps it outside every checksum input by construction — no circularity, and unsigned files are completely unaffected.</p>
+
+<h3>Producer rule</h3>
+<p>A producer that writes <em>any</em> author field (<code>author</code>, <code>author_id</code>, <code>author_pubkey</code>, <code>created</code>) MUST sign the file (write <code>checksums.sig</code>) and MUST recompute <code>checksums.meta</code> after writing the author fields, so the meta hash covers them. Author fields without a signature are an anomaly: readers report them as a <em>declaration without proof</em> and treat the authorship as unverified.</p>
+
+<h3>Reader policy</h3>
+<ul>
+  <li>The integrity signal remains the checksum hierarchy (<a href="#checksums">§15</a>) — unchanged, with or without a signature. A bad signature never substitutes for a checksum mismatch and never rescues one.</li>
+  <li>If <code>checksums.sig</code> is present, readers that support signatures SHOULD verify it against <code>meta.author_pubkey</code>. An invalid signature over an intact checksum hierarchy is a <strong>loud warning</strong>, not a refusal: the file loads, authorship is treated as unverified.</li>
+  <li>Signature states: <em>unsigned</em> (no author fields, no <code>sig</code>), <em>claimed</em> (author fields without <code>sig</code> — declaration without proof), <em>valid</em> (<code>sig</code> verifies; the reader additionally compares <code>author_id</code> against the fingerprint of <code>author_pubkey</code> and reports a mismatch), <em>invalid</em> (<code>sig</code> does not verify — loud warning).</li>
+  <li>Readers unaware of signatures load signed files normally — unknown keys in <code>checksums</code> and <code>meta</code> are ignored (<a href="#validation">§17</a>).</li>
+  <li>Signatures are additive: they do not bump <code>format_version</code>.</li>
+</ul>
+
+<div class="warn"><strong>What a signature proves:</strong> continuity of identity — the same key holder produced the file. It does not prove real-world identity (the fingerprint <code>author_id</code> is the arbiter; interfaces should always show nick <em>and</em> fingerprint, never the nick alone) and it does not vouch for content. Key generation and storage are implementation-defined (ArkMap Studio derives the key deterministically via PBKDF2-SHA256 from a user-held recovery code of 3–6 words — default 3 — from a frozen 2048-word list, salted with the canonical nick; see the user manual).</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="changelog">23. Format Changelog</h2>
 
 <table>
 <tr><th>Version</th><th>Date</th><th>Changes</th></tr>
@@ -834,12 +862,13 @@
 <tr><td><code>1</code></td><td>2026</td><td>Normative correction (ArkMap Studio v1.44.1): the v3 area encoding gained <code>user_data</code> (UTF-8 byte-ordered keys, key+value strings), restoring the v2 area scope. Files written by v1.44.0 (v3 without area <code>user_data</code> in scope) recompute under the corrected encoding — no v3 files existed outside the project mirror at the time of the correction (§15).</td></tr>
 <tr><td><code>1</code></td><td>2026</td><td>Additive normative (no format change; ArkMap Studio v1.45.0): checksum engine v4 — <code>meta.checksums</code> records <code>"alg": "v4"</code> (domain prefixes <code>r4</code>/<code>a4</code>/<code>f4</code>; label colors with all channels incl. alpha; area <code>grid_mode</code>/<code>is_zone</code>/<code>zone_area_ref</code>/<code>pos</code> in scope; room <code>hash</code> in scope; redundant global room rollup dropped). v3 retired — any non-v4 <code>alg</code> is a loudly reported mismatch, never a silent skip; verification never throws and reports missing/orphaned entries (§15).</td></tr>
 <tr><td><code>2</code></td><td>2026</td><td><strong>Breaking</strong> (ArkMap Studio v1.51.0): unified envelope with <code>.arkdelta</code> — <code>version</code> renamed to <code>format_version</code> (now <code>2</code>); <code>checksums</code> moved from <code>meta.checksums</code> to the top level; new <code>checksums.meta</code> entry (meta integrity, domain prefix <code>m4</code> — <code>checksums.file</code> remains the meta-independent identity hash); optional <code>meta.app_version</code>; <code>meta.accepted_dir_issues</code> parsing pinned (split on first two colons) and serialization pinned (sorted lexicographically); Unicode hashing pinned (raw UTF-8 bytes, producers SHOULD emit NFC); preserve-unknown-keys rule stated normatively (§17). Version 1 files are refused as an unsupported format version — there is no migration path.</td></tr>
+<tr><td><code>2</code></td><td>2026</td><td>Additive (no format change; ArkMap Studio v1.52.0): optional author signatures — <code>meta.author</code>/<code>author_id</code>/<code>author_pubkey</code>/<code>created</code> and <code>checksums.sig</code> (Ed25519 over <code>"arkmap-v2:"</code> + the canonical serialization of the whole object minus <code>checksums.sig</code>), mirroring the <code>.arkdelta</code> §9 scheme; unknown top-level keys are reported at load (§17); nick canonical form pinned (lowercase <code>a-z</code>/<code>0-9</code>) (§22).</td></tr>
 </table>
 
 <hr>
 
 <p style="text-align:center;color:var(--dim);font-size:11px;margin-top:40px">
-  .arkmap Format Specification v2 · ArkMap Studio · Isithunzi · MIT License · 2026
+  .arkmap Format Specification v2 · ArkMap Studio · Isithunzi · AGPL-3.0 License · 2026
 </p>
 
 </body>

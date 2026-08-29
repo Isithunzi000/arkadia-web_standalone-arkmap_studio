@@ -1,7 +1,8 @@
 // Harness — preserve_unknown: pin D3 (reguła forward-compatibility).
 // Nieznane klucze na KAŻDYM poziomie .arkmap MUSZĄ przetrwać round-trip
 // load → save dosłownie (verbatim) i MUSZĄ pozostać poza zakresem sum v4
-// (r4/a4/f4). Wyjątek normatywny: checksums.meta (D2) obejmuje CAŁE meta
+// (r4/a4/f4). Uwaga F5: SA natomiast objete podpisiem tozsamosci (P-LOCK-1:
+// payload = caly obiekt minus checksums.sig) — pin w T4. Wyjątek normatywny: checksums.meta (D2) obejmuje CAŁE meta
 // — nieznane klucze w meta są objęte integrity (edycja = metaOk:false),
 // ale NIE ruszają identity (checksums.file).
 // Uruchamianie z katalogu głównego repo: node tests/preserve_unknown.js
@@ -152,6 +153,17 @@ console.log('── T3: determinizm serializacji z unknown keys ──');
   ok(a === b, 'dwa zapisy → bajtowo identyczne (unknown keys w sortowaniu, stabilne)');
   ok(a.indexOf('z_unknown_top') > -1 && a.indexOf('"z_unknown_top"') < a.indexOf('"meta"') === false,
      'unknown top-level key serializowany w porządku sortowanym (po format_version, przed meta)');
+}
+
+// ═══ T4: pin P-LOCK-1 — podpis (F5) obejmuje unknown top-level keys ═══
+// Sumy v4 ich nie widza (T2), ale payload podpisu = caly obiekt minus checksums.sig
+// — wiec obcy klucz dolozony po podpisie uniewaznia go (pokrycie funkcjonalne:
+// tests/arkmap_sig.js T6).
+{
+  const i = HTML.indexOf('function _sigPayload(domain, obj) {');
+  ok(i >= 0, '_sigPayload istnieje (F5)');
+  const body = HTML.slice(i, i + 400);
+  ok(body.includes("k !== 'sig'"), 'payload podpisu wyklucza TYLKO checksums.sig → obce klucze top-level objete');
 }
 
 console.log('preserve_unknown: ' + pass + ' OK, ' + fail + ' FAIL');

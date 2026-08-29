@@ -3518,13 +3518,16 @@ scenario('E14.kalkaOlReset', async () => {
 scenario('E14.saveRace', async () => {
   await loadBase('dat');
   ex('startLocalEditMode()');
-  const setup = AEV('E14.race.s', ev('(function(){'
+  // F5: _performArkmapSave jest async (podpis D8) — saveWithDialog odpala sie
+  // po await serializacji, wiec na resolver czekamy poll'em zamiast synchronicznie.
+  const setup = AEV('E14.race.s', await eva('(async function(){'
    + ' window.__e14res = null; window.__e14orig = window.saveWithDialog;'
    + ' window.saveWithDialog = function(){ return new Promise(function(r){ window.__e14res = r; }); };'
    + ' _arkmapFileHandle = null;'
    + ' pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 a" });'
    + ' var d0 = state.dirty;'
    + ' _performArkmapSave();'
+   + ' for (var i = 0; i < 200 && !window.__e14res; i++) { await new Promise(function(r){ setTimeout(r, 10); }); }'
    + ' return { d0: d0, pending: !!window.__e14res };'
    + '})()'), 'kontrolowany saveWithDialog');
   if (!setup) return;
@@ -3537,10 +3540,14 @@ scenario('E14.saveRace', async () => {
    + '})()'), 'zapis bez wspolbieznej edycji');
   if (ok1) A('E14.race.clean', ok1.dirty === false && ok1.fix === true, 'bez edycji w trakcie: dirty=false, pristine=fixpoint ' + JSON.stringify(ok1));
   // wyscig: edycja W TRAKCIE pending zapisu → dirty NIE moze byc skasowane, pristine = zapisany tekst
-  ex('_arkmapFileHandle = null; pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 b" });'
+  // F5: saveRev jest czytany PRZED awaitem serializacji (w tym samym ex) — edycja
+  // "E14 c" z nastepnego ex zawsze laduje PO zrzucie rev, wiec dirty musi zostac.
+  ex('_arkmapFileHandle = null; window.__e14res = null; pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 b" });'
    + ' window.__e14tb = _serializeMapForSave(); _performArkmapSave();');  // F2.19: tekst zapisywany = serializacja kanoniczna
   ex('pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 c — edycja w trakcie zapisu" });');
   const race = AEV('E14.race.c2', await eva('(async function(){'
+   + ' for (var i = 0; i < 200 && !window.__e14res; i++) { await new Promise(function(r){ setTimeout(r, 10); }); }'
+   + ' if (!window.__e14res) return { noResolver: true };'
    + ' window.__e14res(true); await new Promise(function(r){ setTimeout(r, 0); });'
    + ' return { dirty: state.dirty, pris: state.pristineArkmap === window.__e14tb };'
    + '})()'), 'zapis z wspolbiezna edycja');
@@ -3565,9 +3572,12 @@ scenario('E14.saveFallback', async () => {
    + ' _updateSaveButtonText();'
    + ' pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 fallback" });'
    + ' _performArkmapSave();'
+   // F5: save async — gate otwiera sie dopiero po await serializacji; poll zamiast sync sondy.
+   + ' for (var i = 0; i < 200 && !document.getElementById("dlg-confirm-overwrite").classList.contains("open"); i++) { await new Promise(function(r2){ setTimeout(r2, 10); }); }'
    + ' var gateOpen = document.getElementById("dlg-confirm-overwrite").classList.contains("open");'
    + ' document.getElementById("cow-ok").click();'   // [Nadpisz] -> flaga=true -> re-entry -> write-error -> fallback
-   + ' await new Promise(function(r2){ setTimeout(r2, 0); });'
+   // F5: domkniecie calego lancucha (re-entry -> write-error -> fallback) tez jest async — poll na handle.
+   + ' for (var j = 0; j < 200 && _arkmapFileHandle !== fh2; j++) { await new Promise(function(r3){ setTimeout(r3, 10); }); }'
    + ' return { gate: gateOpen, isNew: _arkmapFileHandle === fh2, btn: document.getElementById("btn-save-arkmap").textContent, dirty: state.dirty };'
    + '})()'), 'fallback po write-error (sukces, przez gate UX-5A)');
   if (r) {
@@ -3585,7 +3595,8 @@ scenario('E14.saveFallback', async () => {
    + ' _updateSaveButtonText();'
    + ' pushUndo({ type: "PAINT_BATCH", changes: [], label: "E14 fallback-cancel" });'
    + ' _performArkmapSave();'
-   + ' await new Promise(function(r2){ setTimeout(r2, 0); });'
+   // F5: save async — sygnal domkniecia lancucha = przycisk z wielokropkiem (handle null po write-error + anulowany picker).
+   + ' for (var i = 0; i < 200 && document.getElementById("btn-save-arkmap").textContent !== "Zapisz .arkmap…"; i++) { await new Promise(function(r2){ setTimeout(r2, 10); }); }'
    + ' return { handle: _arkmapFileHandle, btn: document.getElementById("btn-save-arkmap").textContent, dirty: state.dirty };'
    + '})()'), 'fallback po write-error (anulowanie)');
   if (c) A('E14.fallback.cancel', c.handle === null && c.btn === 'Zapisz .arkmap…' && c.dirty === true,

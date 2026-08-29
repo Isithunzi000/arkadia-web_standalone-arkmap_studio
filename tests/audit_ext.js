@@ -1195,9 +1195,9 @@ console.log('— A2.19 (F2.19): zapis na klonie — live model bez mutacji, bajt
       'A2.19 (F2.19): kanoniczny klon do .dat (room.area out, checksums in — top-level, koperta v2), live nietkniety');
   }
   // Statyczne: call-site'y przelaczone na sciezke klonujaca
-  ok((HTML.match(/const text = _serializeMapForSave\(\);/g) || []).length === 2
+  ok((HTML.match(/const text = await _serializeMapForSaveSigned\(\);/g) || []).length === 2
     && /arkmapToDat\(_canonicalCloneForSave\(\)\)/.test(HTML),
-    'A2.19 (F2.19): call-site’y save×2 + eksport .dat na sciezce klonujacej (pre-fix: prepare na live)');
+    'A2.19 (F2.19): call-site’y save×2 + eksport .dat na sciezce klonujacej (F5: wariant z podpisem D8)');
 }
 
 console.log('— A2.20 (F2.20): skroty +/-/f nieaktywne w formularzach —');

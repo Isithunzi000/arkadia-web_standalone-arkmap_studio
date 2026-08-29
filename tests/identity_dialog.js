@@ -112,7 +112,7 @@ const el = (id) => reg(id);
 console.log('── T1: stan "brak tozsamosci" ──');
 {
   await tick();  // startowe _identityUiRefresh()
-  ok(el('identity-status').textContent === 'kalka będzie anonimowa', 'status: kalka anonimowa');
+  ok(el('identity-status').textContent === 'pliki będą anonimowe', 'status: pliki anonimowe');
   ok(el('identity-body')._html.includes('Utwórz tożsamość') && el('identity-body')._html.includes('Importuj tożsamość'),
      'dialog: formularze utworz/import');
   const segHtml = el('identity-body')._html;
@@ -162,11 +162,20 @@ console.log('── T4: pokaz kod / wyczysc ──');
   el('id-code-out')._html = '';
   await el('id-btn-show').onclick();
   ok(el('id-code-out')._html.includes(globalThis.__code), 'pokaz kod: ten sam kod co przy tworzeniu');
+  // F5: przelacznik podpisywania — persist localStorage, suffix w statusie.
+  const tg = el('id-sign-toggle');
+  ok(tg !== undefined && typeof tg.onchange === 'function', 'flip switch "Podpisuj pliki moją tożsamością" obecny w stanie aktywnym');
+  tg.checked = false; tg.onchange({ target: tg });
+  ok(_lsData.get('arkmap-sign-files') === '0', 'flip switch: wylaczenie trzymane w localStorage');
+  ok(el('identity-status').textContent.includes('· podpis wyłączony'), 'flip switch: status pokazuje wylaczone podpisywanie');
+  tg.checked = true; tg.onchange({ target: tg });
+  ok(_lsData.get('arkmap-sign-files') === '1' && !el('identity-status').textContent.includes('podpis wyłączony'),
+     'flip switch: ponowne wlaczenie (persist + status)');
   await el('id-btn-clear').onclick();  // pierwszy klik = uzbrojenie
   ok(el('id-btn-clear').textContent.includes('Na pewno') && (await _identityActiveStill(api)) !== null,
      'wyczysc: pierwszy klik pyta ponownie, tozsamosc nadal aktywna');
   await el('id-btn-clear').onclick();  // drugi klik = kasowanie
-  ok(el('identity-status').textContent === 'kalka będzie anonimowa' && _idbData.size === 0,
+  ok(el('identity-status').textContent === 'pliki będą anonimowe' && _idbData.size === 0,
      'wyczysc: drugi klik kasuje rekord z maszyny');
 }
 
@@ -191,7 +200,7 @@ console.log('── T6: charset / persistencja selektora ──');
   el('id-nick').value = '<img src=x>';
   await el('id-btn-create').onclick();
   ok(/litery a-z/.test(el('id-create-err').textContent), 'nick z HTML odrzucony przez charset (iniekcja niemozliwa)');
-  ok(el('identity-status').textContent === 'kalka będzie anonimowa', 'po odrzuceniu tozsamosc nie powstaje');
+  ok(el('identity-status').textContent === 'pliki będą anonimowe', 'po odrzuceniu tozsamosc nie powstaje');
   // Statyczny pin: nick w stanie aktywnym zawsze przez escHtml (gdyby charset zlagodzono).
   const srcUi = blockSlice('// ── UI: dialog tozsamosci', '// === ARKDELTA START ===');
   ok(srcUi.includes("Autor: <b>' + escHtml(id.nick)"),
