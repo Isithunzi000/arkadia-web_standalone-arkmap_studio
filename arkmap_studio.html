@@ -19921,64 +19921,86 @@ const _IDENTITY_NICK_MAX = 32;
 
 // ── Kod odzyskiwania: kodowanie/dekodowanie ──────────────────────────────────
 // 11 bitow na slowo: losowanie unbiased (u16 & 0x7FF, 2048 = 2^11 dokladnie).
-function _identityGenWords() {
-  const buf = new Uint16Array(6);
+// Liczba slow: 3 (wygodnie, DOMYSLNIE) .. 6 (paranoia) — wybiera uzytkownik.
+const _IDENTITY_WORDS_MIN = 3, _IDENTITY_WORDS_MAX = 6, _IDENTITY_WORDS_DEFAULT = 3;
+function _identityGenWords(n) {
+  const cnt = Number.isInteger(n) && n >= _IDENTITY_WORDS_MIN && n <= _IDENTITY_WORDS_MAX
+    ? n : _IDENTITY_WORDS_DEFAULT;
+  const buf = new Uint16Array(cnt);
   crypto.getRandomValues(buf);
   return [...buf].map(v => _IDENTITY_WORDLIST[v & 0x7FF]);
 }
 
-// Litery kontrolne: SHA-256("arkmap-code-v1:" + nickNFC + ":" + slowa-zlaczone)
+// Litery kontrolne: SHA-256("arkmap-code-v1:" + nickKanoniczny + ":" + slowa-zlaczone)
 // → 3 litery (bajty 0-2 mod 26). Tolerancyjne wejscie, deterministyczne.
 async function _identityChecksumLetters(nick, words) {
-  const msg = 'arkmap-code-v1:' + nick.normalize('NFC') + ':' + words.join('-');
+  const msg = 'arkmap-code-v1:' + _identityCanonNick(nick) + ':' + words.join('-');
   const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg)));
   return [0, 1, 2].map(i => String.fromCharCode(97 + (h[i] % 26))).join('');
 }
 
+// Kanonikalizacja nicku: trim + lowercase. Charset [a-z0-9] (bez polskich
+// znakow i znakow specjalnych); wielkosc liter bez znaczenia WSZEDZIE — takze
+// w soli PBKDF2 i literach kontrolnych ("Zbyszek" === "zbyszek" = ta sama tozsamosc).
+function _identityCanonNick(nick) {
+  return typeof nick === 'string' ? nick.trim().toLowerCase() : '';
+}
 function _identityValidateNick(nick) {
   if (typeof nick !== 'string') return 'Nick jest wymagany.';
-  const t = nick.trim();
+  const t = _identityCanonNick(nick);
   if (!t) return 'Nick jest wymagany.';
   if (t.length > _IDENTITY_NICK_MAX) return 'Nick za długi (maks. ' + _IDENTITY_NICK_MAX + ' znaków).';
-  if (t.includes(':')) return 'Nick nie może zawierać dwukropka.';
+  if (!/^[a-z0-9]+$/.test(t)) return 'Nick może zawierać tylko litery a-z (bez polskich znaków) i cyfry, bez spacji.';
   return null;
 }
 
-// Normalizacja wejscia: lowercase, trim, separatory (spacja/przecinek/srednik/
-// podloga) → '-', zwielokrotnione '-' sklejone. Podzial na PIERWSZYM dwukropku.
-// Zwraca { nick, words:[6], letters } albo rzuca Error z komunikatem po polsku.
+// Normalizacja wejscia: nick kanonikalizowany (trim+lowercase), slowa lowercase,
+// separatory (spacja/przecinek/srednik/podloga) → '-', zwielokrotnione '-' sklejone.
+// Podzial na PIERWSZYM dwukropku. Zwraca { nick, words:[3..6], letters } albo
+// rzuca Error z komunikatem po polsku.
 async function _identityParseCode(text) {
   if (typeof text !== 'string') throw new Error('Wpisz kod odzyskiwania.');
   if (text.length > 4096) throw new Error('Kod jest za długi — wklej sam kod odzyskiwania.');
   const idx = text.indexOf(':');
   if (idx < 0) throw new Error('Kod powinien mieć postać: nick:słowo-słowo-…-LLL');
-  const nick = text.slice(0, idx).trim();
+  const nick = _identityCanonNick(text.slice(0, idx));
   const nickErr = _identityValidateNick(nick);
   if (nickErr) throw new Error(nickErr);
   const toks = text.slice(idx + 1).toLowerCase().trim()
     .replace(/[\s,;_]+/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '')
     .split('-').filter(Boolean);
-  // Akceptowane obie formy zapisu liter: ...-słowo-LLL (7 tokenów) oraz
-  // ...-słowo-L-L-L (9 tokenów) — po złożeniu i tak dają 3 litery.
-  if (toks.length !== 7 && toks.length !== 9) throw new Error('Kod powinien mieć 6 słów i 3 litery kontrolne (nick:słowo-…-słowo-LLL).');
-  const words = toks.slice(0, 6), letters = toks.slice(6).join('');
-  if (!/^[a-z]{3}$/.test(letters)) throw new Error('Litery kontrolne powinny być 3 literami a-z.');
+  // Dwie formy zapisu liter: ...-słowo-LLL (N+1 tokenow) lub ...-słowo-L-L-L (N+3),
+  // N in 3..6. Dlugosci niejednoznaczne (np. 6 tokenow = 5+LLL albo 3+L-L-L)
+  // rozstrzyga weryfikacja liter kontrolnych; gdy pasuja OBYDWIE — odmowa (fail-closed).
+  const cands = [];
+  for (const n of [toks.length - 1, toks.length - 3]) {
+    if (n < _IDENTITY_WORDS_MIN || n > _IDENTITY_WORDS_MAX) continue;
+    const words = toks.slice(0, n), letters = toks.slice(n).join('');
+    if (!/^[a-z]{3}$/.test(letters)) continue;
+    cands.push({ words, letters });
+  }
+  if (!cands.length) throw new Error('Kod powinien mieć 3–6 słów z listy i 3 litery kontrolne (nick:słowo-…-słowo-LLL).');
   const wl = new Set(_IDENTITY_WORDLIST);
-  const bad = words.findIndex(w => !wl.has(w));
-  if (bad >= 0) throw new Error('Słowo ' + (bad + 1) + ' („' + words[bad] + '") nie pochodzi z listy słów.');
-  const expect = await _identityChecksumLetters(nick, words);
-  if (letters !== expect) throw new Error('Litery kontrolne nie pasują do nicku i słów — sprawdź literówki.');
-  return { nick: nick.normalize('NFC'), words, letters };
+  const good = [];
+  for (const c of cands) {
+    const bad = c.words.findIndex(w => !wl.has(w));
+    if (bad >= 0) { c.wordErr = 'Słowo ' + (bad + 1) + ' („' + c.words[bad] + '") nie pochodzi z listy słów.'; continue; }
+    if (c.letters === await _identityChecksumLetters(nick, c.words)) good.push(c);
+  }
+  if (good.length === 1) return { nick, words: good[0].words, letters: good[0].letters };
+  if (good.length > 1) throw new Error('Kod jest niejednoznaczny — wpisz litery kontrolne złączone (…-LLL).');
+  if (cands.length && cands.every(c => c.wordErr)) throw new Error(cands[0].wordErr);
+  throw new Error('Litery kontrolne nie pasują do nicku i słów — sprawdź literówki.');
 }
 
 // ── Derywacja klucza ─────────────────────────────────────────────────────────
-// PBKDF2-SHA256(haslo=slowa, sol="arkmap-identity-v1:"+nick NFC) → 32B seed.
+// PBKDF2-SHA256(haslo=slowa, sol="arkmap-identity-v1:"+nick kanoniczny) → 32B seed.
 async function _identityDeriveSeed(nick, words) {
   const te = new TextEncoder();
   try {
     const key = await crypto.subtle.importKey('raw', te.encode(words.join('-')), 'PBKDF2', false, ['deriveBits']);
     const bits = await crypto.subtle.deriveBits(
-      { name: 'PBKDF2', hash: 'SHA-256', salt: te.encode(_IDENTITY_SALT_PREFIX + nick.normalize('NFC')), iterations: _IDENTITY_PBKDF2_ITER },
+      { name: 'PBKDF2', hash: 'SHA-256', salt: te.encode(_IDENTITY_SALT_PREFIX + _identityCanonNick(nick)), iterations: _IDENTITY_PBKDF2_ITER },
       key, 256);
     return new Uint8Array(bits);
   } catch (e) {
@@ -20175,7 +20197,7 @@ async function _identityForSigning() {
 
 // Utworz/import: nick + slowa → rekord; zwraca { rec, code }.
 async function _identityCreate(nick, words) {
-  const n = nick.trim().normalize('NFC');
+  const n = _identityCanonNick(nick);
   const err = _identityValidateNick(nick);
   if (err) throw new Error(err);
   const seed = await _identityDeriveSeed(n, words);
@@ -20201,19 +20223,30 @@ async function _identityClear() {
 async function _identityShowCode() {
   const rec = await _identityLoad();
   if (!rec || !rec.words) return null;
-  return rec.nick + ':' + rec.words.join('-') + '-' + (await _identityChecksumLetters(rec.nick, rec.words));
+  return _identityCanonNick(rec.nick) + ':' + rec.words.join('-') + '-' + (await _identityChecksumLetters(rec.nick, rec.words));
 }
 // ====IDENTITY-V1-END====
 
 // ── UI: dialog tozsamosci (D8) ─────────────────────────────────────────────
 // Przycisk nad polem wczytywania ("Tożsamość autora…"), status pod spodem.
 // Derywacja PBKDF2 trwa ~1 s — przyciski na ten czas dostaja stan "czekaj".
+function _identityPlSlow(n) { return n === 1 ? 'słowo' : (n >= 2 && n <= 4 ? 'słowa' : 'słów'); }
 function _identityUiCodeBox(code) {
+  const nWords = code.slice(code.indexOf(':') + 1).split('-').length - 1;
   return '<div style="margin:8px 0;padding:8px;border:1px solid var(--ok);border-radius:6px;'
     + 'font-family:monospace;font-size:12px;word-break:break-all;user-select:all">' + escHtml(code) + '</div>'
-    + '<div style="font-size:11px;color:var(--dim)">Zapisz ten kod — to 6 słów i 3 litery kontrolne. '
+    + '<div style="font-size:11px;color:var(--dim)">Zapisz ten kod — to ' + nWords + ' ' + _identityPlSlow(nWords)
+    + ' i 3 litery kontrolne. '
     + 'Pozwala przenieść tożsamość na inne urządzenie (pole „Importuj tożsamość"). '
     + 'Nick jest na stałe związany z kluczem: ten sam nick z innymi słowami to inna tożsamość.</div>';
+}
+let _identityUiWordCount = 3;  // wybor w dialogu; persist localStorage
+function _identityLoadWordCount() {
+  try {
+    const v = Number(localStorage.getItem('arkmap-identity-words'));
+    if (Number.isInteger(v) && v >= _IDENTITY_WORDS_MIN && v <= _IDENTITY_WORDS_MAX) return v;
+  } catch (e) {}
+  return _IDENTITY_WORDS_DEFAULT;
 }
 let _identityCryptoCap;  // cache: undefined=niesprawdzone
 function _identityCryptoAvailable() {
@@ -20237,15 +20270,41 @@ async function _identityUiRefresh(showCode) {
     body.innerHTML =
       '<div style="font-size:12px;margin-bottom:8px">Brak tożsamości na tej maszynie — zapisana kalka będzie anonimowa.</div>'
       + '<label style="font-size:10px;color:var(--dim);letter-spacing:0.8px;text-transform:uppercase">Nick autora</label>'
-      + '<input class="ap-input" id="id-nick" type="text" maxlength="32" placeholder="np. Zbyszek">'
+      + '<input class="ap-input" id="id-nick" type="text" maxlength="32" placeholder="np. zbyszek">'
+      + '<div style="font-size:10px;color:var(--dim);margin-top:2px">Tylko litery a-z i cyfry (bez polskich znaków); wielkość liter bez znaczenia.</div>'
+      + '<label style="font-size:10px;color:var(--dim);letter-spacing:0.8px;text-transform:uppercase;display:block;margin-top:8px">Liczba słów w kodzie odzyskiwania</label>'
+      + '<div id="id-words-seg" style="display:flex;gap:4px;margin-top:4px">'
+      + '<button type="button" data-w="3">3 · wygodnie</button>'
+      + '<button type="button" data-w="4">4</button>'
+      + '<button type="button" data-w="5">5</button>'
+      + '<button type="button" data-w="6">6 · paranoia</button>'
+      + '</div>'
+      + '<div style="font-size:10px;color:var(--dim);margin-top:2px">Więcej słów = silniejszy kod, ale trudniejszy do przepisania. 3 wystarcza na lata.</div>'
       + '<button class="btn-primary" id="id-btn-create" style="margin-top:6px">Utwórz tożsamość</button>'
       + '<div id="id-create-out"></div>'
       + '<div id="id-create-err" style="display:none;font-size:11px;color:var(--err);margin-top:4px"></div>'
       + '<hr style="opacity:.3;margin:12px 0">'
       + '<label style="font-size:10px;color:var(--dim);letter-spacing:0.8px;text-transform:uppercase">Kod odzyskiwania</label>'
-      + '<input class="ap-input" id="id-import-in" type="text" placeholder="nick:słowo-słowo-słowo-słowo-słowo-słowo-LLL">'
+      + '<input class="ap-input" id="id-import-in" type="text" placeholder="nick:słowo-słowo-słowo-LLL">'
       + '<button id="id-btn-import" style="margin-top:6px">Importuj tożsamość</button>'
       + '<div id="id-import-err" style="display:none;font-size:11px;color:var(--err);margin-top:4px"></div>';
+    const seg = document.getElementById('id-words-seg');
+    _identityUiWordCount = _identityLoadWordCount();
+    const segPaint = () => {
+      if (!seg || !seg.querySelectorAll) return;
+      seg.querySelectorAll('button').forEach(b => {
+        const on = Number(b.dataset.w) === _identityUiWordCount;
+        b.style.border = on ? '1px solid var(--ok)' : '1px solid var(--dim)';
+        b.style.fontWeight = on ? 'bold' : 'normal';
+        b.style.opacity = on ? '1' : '0.75';
+      });
+    };
+    if (seg && seg.querySelectorAll) seg.querySelectorAll('button').forEach(b => { b.onclick = () => {
+      _identityUiWordCount = Number(b.dataset.w);
+      try { localStorage.setItem('arkmap-identity-words', String(_identityUiWordCount)); } catch (e) {}
+      segPaint();
+    }; });
+    segPaint();
     const btnC = document.getElementById('id-btn-create');
     btnC.onclick = async () => {
       const errEl = document.getElementById('id-create-err');
@@ -20256,7 +20315,7 @@ async function _identityUiRefresh(showCode) {
       if (verr) { errEl.textContent = verr; errEl.style.display = 'block'; return; }
       btnC.disabled = true; btnC.textContent = 'Derywuję klucz (ok. 1 s)…';
       try {
-        const r = await _identityCreate(nick, _identityGenWords());
+        const r = await _identityCreate(nick, _identityGenWords(_identityUiWordCount));
         toast('Tożsamość utworzona — kalka będzie podpisana');
         await _identityUiRefresh(true);  // kod od razu widoczny w stanie aktywnym
         outEl.innerHTML = '';

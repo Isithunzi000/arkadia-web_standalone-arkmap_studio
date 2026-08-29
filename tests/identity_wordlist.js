@@ -6,8 +6,11 @@
 //   podpisu WebCrypto fallbackiem;
 // - PBKDF2-SHA256 (600k iteracji, sol "arkmap-identity-v1:"+nick NFC) → seed
 //   → klucze → author_id → litery kontrolne: wektory zamrozone;
-// - kod odzyskiwania: round-trip, obie formy zapisu liter (LLL i L-L-L),
-//   tolerancja separatorow/wielkosci liter, NFC, bledy po polsku;
+// - kod odzyskiwania: 3..6 slow (domyslnie 3), round-trip, obie formy zapisu
+//   liter (LLL i L-L-L), rozstrzyganie niejednoznacznosci literami kontrolnymi,
+//   tolerancja separatorow/wielkosci liter, bledy po polsku;
+// - nick: kanonikalizacja trim+lowercase, charset [a-z0-9] (bez PL znakow),
+//   wielkosc liter bez znaczenia takze w soli PBKDF2 i literach kontrolnych;
 // - kontrakt _identityForSigning (null bez tozsamosci).
 // Uruchamianie z katalogu głównego repo: node tests/identity_wordlist.js
 const fs = require('fs');
@@ -24,7 +27,8 @@ const i1 = HTML.indexOf('// ====IDENTITY-V1-END====');
 if (i0 < 0 || i1 < 0 || i1 <= i0) throw new Error('brak markrow IDENTITY-V1 w arkmap_studio.html');
 const identCode = HTML.slice(i0, i1) +
   '\n;return { _IDENTITY_WORDLIST, _IDENTITY_PBKDF2_ITER, _IDENTITY_SALT_PREFIX, _IDENTITY_NICK_MAX,' +
-  ' _identityGenWords, _identityChecksumLetters, _identityValidateNick, _identityParseCode,' +
+  ' _IDENTITY_WORDS_MIN, _IDENTITY_WORDS_MAX, _IDENTITY_WORDS_DEFAULT,' +
+  ' _identityGenWords, _identityChecksumLetters, _identityValidateNick, _identityCanonNick, _identityParseCode,' +
   ' _identityDeriveSeed, _identityHex, _identityFromHex, _identityAuthorId,' +
   ' _edPubFromSeed, _edSign, _edVerify, _identityKeysFromSeed, _identityForSigning,' +
   ' _identityCreate, _identityImport, _identityShowCode };';
@@ -119,79 +123,104 @@ console.log('── T2: Ed25519 (fallback BigInt) — RFC 8032 ──');
 // ═══ T3: PBKDF2 → klucze → author_id → litery — wektory zamrozone ═══
 console.log('── T3: derywacja tozsamosci (piny) ──');
 {
-  const nick = 'Zbyszek';
+  const nick = 'Zbyszek';  // kanonicznie: 'zbyszek' (wielkosc liter bez znaczenia)
   const words = ['abecadlo', 'adept', 'adwokat', 'agawa', 'agrafka', 'agregat'];
   ok(M._IDENTITY_PBKDF2_ITER === 600000, 'PBKDF2: 600 000 iteracji (OWASP 2023)');
   ok(M._IDENTITY_SALT_PREFIX === 'arkmap-identity-v1:', 'sol PBKDF2: prefiks wersji + nick');
   ok(M._IDENTITY_NICK_MAX === 32, 'maks. dlugosc nicku = 32');
+  ok(M._IDENTITY_WORDS_MIN === 3 && M._IDENTITY_WORDS_MAX === 6 && M._IDENTITY_WORDS_DEFAULT === 3,
+     'liczba slow: 3..6, domyslnie 3 (wygodnie)');
   const seed = await M._identityDeriveSeed(nick, words);
-  ok(M._identityHex(seed) === '4082c8ed3be3682a4535af1f8cc18816d122becda905db771d9c2076435fa656',
-     'seed z PBKDF2 (nick+slowa) — zamrozony');
+  ok(M._identityHex(seed) === 'fe000ccf204fccbe1e379e5a14f0a01bc82cb95024bdf48e7096d5ee8067010b',
+     'seed z PBKDF2 (nick kanoniczny+slowa) — zamrozony');
   const keys = await M._identityKeysFromSeed(seed);
-  ok(M._identityHex(keys.pubBytes) === '744fa8498b3974b277f66112ea9a25a2c8a9774497e2a1934570bcc467e07c7d',
+  ok(M._identityHex(keys.pubBytes) === '3eb536ff778dab519cfb3e5b169912d64896f192c1987d070eef7f786da44c3c',
      'klucz publiczny — zamrozony');
-  ok((await M._identityAuthorId(keys.pubBytes)) === 'efb8e5c9678554c4',
+  ok((await M._identityAuthorId(keys.pubBytes)) === 'cb4b9b4a5514412d',
      'author_id = pierwsze 16 hex SHA-256(pub) — zamrozone');
-  ok((await M._identityChecksumLetters(nick, words)) === 'hwo', 'litery kontrolne kodu — zamrozone');
+  ok((await M._identityChecksumLetters(nick, words)) === 'qnt', 'litery kontrolne kodu (6 slow) — zamrozone');
+  ok((await M._identityChecksumLetters(nick, words.slice(0, 3))) === 'vdr',
+     'litery kontrolne kodu (3 slowa) — zamrozone');
   const sig = await keys.sign(new TextEncoder().encode('arkdelta-v3:' + 'a'.repeat(16)));
-  ok(M._identityHex(sig) === '38a86cc948dd61d44a45fc98a2fed1a73760fbccfe0f03ebfe4c7dff508646429a78542e412ca404d958114d0ce08ac3562912c9d64dce75c502a5dc4a042d02',
+  ok(M._identityHex(sig) === 'ef8d0c8966db8fc1c4a3df15619b606104c8f6a87406214decbbadcfe1c42ce8ea639da2f26ee5fe0a661b8da11ce4fd62032e1d256f02dcf56786a93894df02',
      'podpis "arkdelta-v3:<file>" — deterministyczny (Ed25519 jest deterministyczny)');
   // Cross: podpis sciezki aktywnej (w node: WebCrypto) weryfikowany fallbackiem.
   ok(await M._edVerify(keys.pubBytes, new TextEncoder().encode('arkdelta-v3:' + 'a'.repeat(16)), sig) === true,
      'cross-weryfikacja: podpis WebCrypto weryfikuje fallback BigInt');
-  // Ten sam nick, inne slowa → inny klucz; te same slowa, inny nick → inny klucz.
+  // Ten sam nick, inne slowa → inny klucz; wielkosc liter nicku BEZ ZNACZENIA
+  // (kanonikalizacja), ale inny nick → inny klucz.
   const s2 = await M._identityDeriveSeed(nick, words.slice().reverse());
   const s3 = await M._identityDeriveSeed('zbyszek', words);
-  ok(M._identityHex(s2) !== M._identityHex(seed) && M._identityHex(s3) !== M._identityHex(seed),
-     'nick i slowa oba wchodza do derywacji (zmiana dowolnego = inna tozsamosc)');
+  const s4 = await M._identityDeriveSeed('zbyszek2', words);
+  ok(M._identityHex(s2) !== M._identityHex(seed), 'inne slowa → inna tozsamosc');
+  ok(M._identityHex(s3) === M._identityHex(seed), 'wielkosc liter nicku bez znaczenia (ZBYSZEK === zbyszek)');
+  ok(M._identityHex(s4) !== M._identityHex(seed), 'inny nick → inna tozsamosc');
 }
 
 // ═══ T4: kod odzyskiwania — round-trip i tolerancja zapisu ═══
 console.log('── T4: kod odzyskiwania ──');
 {
   const gen = M._identityGenWords();
-  ok(gen.length === 6 && gen.every(w => M._IDENTITY_WORDLIST.includes(w)), 'generator: 6 slow z listy');
-  const letters = await M._identityChecksumLetters('Test Nick', gen);
-  ok(/^[a-z]{3}$/.test(letters), 'litery kontrolne: 3 znaki a-z');
-  const code7 = 'Test Nick:' + gen.join('-') + '-' + letters;
-  const code9 = 'Test Nick:' + gen.join('-') + '-' + letters.split('').join('-');
-  const p7 = await M._identityParseCode(code7);
-  const p9 = await M._identityParseCode(code9);
-  ok(p7.nick === 'Test Nick' && p7.words.join('-') === gen.join('-') && p7.letters === letters,
-     'round-trip: forma z ...-LLL (7 tokenow)');
-  ok(p9.words.join('-') === gen.join('-') && p9.letters === letters, 'round-trip: forma z ...-L-L-L (9 tokenow)');
-  const messy = await M._identityParseCode('  Test Nick:' + gen.map(w => w.toUpperCase()).join(' ; ') +
-    '  ,  ' + letters.toUpperCase().split('').join('_') + ' ');
-  ok(messy.nick === 'Test Nick' && messy.words.join('-') === gen.join('-'),
-     'tolerancja: wielkie litery, spacje, przecinki, sredniki, podlogi');
-  // Nick z diakrytykami: NFC/NFD rownowazne (normalizacja), spacje w nicku zachowane.
-  const nfc = 'Żaba Żółć';
-  const nfd = nfc.normalize('NFD');
-  const lettersNfc = await M._identityChecksumLetters(nfc, gen);
-  const pn = await M._identityParseCode(' ' + nfd + ' :' + gen.join('-') + '-' + lettersNfc);
-  ok(pn.nick === nfc, 'nick: diakrytyki i spacje zachowane, NFC/NFD zunifikowane');
+  ok(gen.length === 3 && gen.every(w => M._IDENTITY_WORDLIST.includes(w)), 'generator: domyslnie 3 slowa z listy');
+  ok(M._identityGenWords(6).length === 6 && M._identityGenWords(4).length === 4 &&
+     M._identityGenWords(5).length === 5, 'generator: parametr 4/5/6 slow');
+  ok(M._identityGenWords(2).length === 3 && M._identityGenWords(7).length === 3 &&
+     M._identityGenWords(undefined).length === 3,
+     'generator: wartosc spoza zakresu → domyslne 3 (fail-safe)');
+  // Round-trip dla kazdej liczby slow 3..6, obie formy zapisu liter.
+  for (const n of [3, 4, 5, 6]) {
+    const w = M._identityGenWords(n);
+    const L = await M._identityChecksumLetters('tester', w);
+    ok(/^[a-z]{3}$/.test(L), 'litery kontrolne: 3 znaki a-z (n=' + n + ')');
+    const pA = await M._identityParseCode('tester:' + w.join('-') + '-' + L);
+    const pB = await M._identityParseCode('tester:' + w.join('-') + '-' + L.split('').join('-'));
+    ok(pA.words.join('-') === w.join('-') && pA.letters === L, 'round-trip n=' + n + ': forma ...-LLL');
+    ok(pB.words.join('-') === w.join('-') && pB.letters === L, 'round-trip n=' + n + ': forma ...-L-L-L');
+  }
+  // Tolerancja zapisu: wielkie litery (takze w nicku), spacje, przecinki, sredniki, podlogi.
+  const w3 = M._identityGenWords(3);
+  const L3 = await M._identityChecksumLetters('testnick', w3);
+  const messy = await M._identityParseCode('  TestNick:' + w3.map(w => w.toUpperCase()).join(' ; ') +
+    '  ,  ' + L3.toUpperCase().split('').join('_') + ' ');
+  ok(messy.nick === 'testnick' && messy.words.join('-') === w3.join('-'),
+     'tolerancja: wielkie litery (nick+slowa), spacje, przecinki, sredniki, podlogi');
+  ok(M._identityCanonNick('  ZbYsZeK ') === 'zbyszek', 'kanonikalizacja nicku: trim + lowercase');
 }
 
 // ═══ T5: bledy kodu i walidacja nicku (komunikaty po polsku) ═══
 console.log('── T5: odmowy i walidacja ──');
 {
-  const gen = M._identityGenWords();
-  const letters = await M._identityChecksumLetters('N', gen);
+  const gen = M._identityGenWords(6);
+  const letters = await M._identityChecksumLetters('n', gen);
   const bad = async (c) => { try { await M._identityParseCode(c); return null; } catch (e) { return e.message; } };
-  const code = 'N:' + gen.join('-') + '-' + letters;
+  const code = 'n:' + gen.join('-') + '-' + letters;
   const tampered = code.slice(0, -1) + (letters.endsWith('a') ? 'b' : 'a');
   ok(/Litery kontrolne nie pasuj/.test(await bad(tampered) || ''), 'odmowa: przeklamana litera kontrolna');
-  ok(/nie pochodzi z listy/.test(await bad('N:nieznanezzz-' + gen.slice(1).join('-') + '-' + letters) || ''),
+  ok(/nie pochodzi z listy/.test(await bad('n:nieznanezzz-' + gen.slice(1).join('-') + '-' + letters) || ''),
      'odmowa: slowo spoza listy (z numerem slowa)');
-  ok(/6 słów i 3 litery/.test(await bad('N:' + gen.slice(0, 5).join('-') + '-' + letters) || ''),
-     'odmowa: zla liczba tokenow');
+  ok(/3–6 słów/.test(await bad('n:' + gen.slice(0, 2).join('-') + '-' + letters) || ''),
+     'odmowa: zla liczba tokenow (za malo slow)');
+  ok(/3–6 słów/.test(await bad('n:' + ['abecadlo','adept','adwokat','agawa','agrafka','agregat','agrotkanina'].join('-') + '-' + letters) || ''),
+     'odmowa: zla liczba tokenow (7 slow poza zakresem)');
   ok(/postać/.test(await bad(gen.join('-') + '-' + letters) || ''), 'odmowa: brak dwukropka/nicku');
-  ok(/za długi/.test(await bad('N:' + 'a'.repeat(5000)) || ''), 'odmowa: kod za dlugi (>4096 znakow)');
+  ok(/za długi/.test(await bad('n:' + 'a'.repeat(5000)) || ''), 'odmowa: kod za dlugi (>4096 znakow)');
   ok(/Nick jest wymagany/.test(await bad(':' + gen.join('-') + '-' + letters) || ''), 'odmowa: pusty nick');
   ok(M._identityValidateNick('x'.repeat(33)) !== null, 'odmowa: nick > 32 znaki');
-  ok(M._identityValidateNick('a:b') !== null, 'odmowa: dwukropek w nicku');
+  ok(M._identityValidateNick('a:b') !== null, 'odmowa: dwukropek w nicku (poza charset)');
   ok(M._identityValidateNick('   ') !== null, 'odmowa: sam whitespace');
-  ok(M._identityValidateNick('Kapitan Bomba') === null, 'akceptacja: nick ze spacja');
+  ok(/litery a-z/.test(M._identityValidateNick('Żaba') || ''), 'odmowa: polskie znaki w nicku');
+  ok(/litery a-z/.test(M._identityValidateNick('Kapitan Bomba') || ''), 'odmowa: spacja w nicku');
+  ok(/litery a-z/.test(M._identityValidateNick('x_y') || ''), 'odmowa: znak specjalny w nicku');
+  ok(M._identityValidateNick('kapitan123') === null, 'akceptacja: litery a-z + cyfry');
+  // Niejednoznacznosc (6 tokenow: 5+LLL albo 3+L-L-L): w praktyce litery
+  // kontrolne rozstrzygaja; gdyby pasowaly OBIE interpretacje — odmowa.
+  // Konstrukcja sztuczna nie jest trywialna, wiec pinujemy zachowanie fail-closed
+  // na kodzie, ktory ma 6 tokenow i nie pasuje w zadnej interpretacji:
+  // 6 tokenow bez liter: zadna interpretacja nie daje 3 liter a-z na koncu
+  // (tokeny to slowa >= 4 znakow) → komunikat o formacie.
+  const w6 = M._identityGenWords(6);
+  ok(/3–6 słów/.test(await bad('n:' + w6.join('-')) || ''),
+     'odmowa: 6 slow bez liter kontrolnych (zadna interpretacja)');
 }
 
 // ═══ T6: kontrakt podpisu + create/import ═══
@@ -200,18 +229,18 @@ console.log('── T6: kontrakt _identityForSigning + create/import ──');
   ok((await M._identityForSigning()) === null, 'brak tozsamosci (brak IndexedDB w node) → null → kalka anonimowa');
   const words = ['abecadlo', 'adept', 'adwokat', 'agawa', 'agrafka', 'agregat'];
   const c = await M._identityCreate('Zbyszek', words);
-  ok(c.code === 'Zbyszek:abecadlo-adept-adwokat-agawa-agrafka-agregat-hwo',
-     'utworzona tozsamosc: kod odzyskiwania w formacie nick:6 slow-LLL');
-  ok(c.rec.authorId === 'efb8e5c9678554c4' && c.rec.pubkeyHex === '744fa8498b3974b277f66112ea9a25a2c8a9774497e2a1934570bcc467e07c7d',
+  ok(c.code === 'zbyszek:abecadlo-adept-adwokat-agawa-agrafka-agregat-qnt',
+     'utworzona tozsamosc: kod w formacie nick(kanoniczny):6 slow-LLL');
+  ok(c.rec.authorId === 'cb4b9b4a5514412d' && c.rec.pubkeyHex === '3eb536ff778dab519cfb3e5b169912d64896f192c1987d070eef7f786da44c3c',
      'rekord: author_id i pubkey zgodne z pinami T3');
+  ok(c.rec.nick === 'zbyszek', 'rekord przechowuje nick kanoniczny (lowercase)');
   ok(c.rec.words.join('-') === words.join('-') && typeof c.rec.seedB64 === 'string',
      'rekord przechowuje slowa i seed (przyjeta decyzja D8: kod i tak odtwarza klucz)');
-  // Nick w kodzie jest case-sensitive: litery "hwo" licza sie dla "Zbyszek",
-  // wiec kod z "zbyszek" musi byc odrzucony (zmiana nicku = inna tozsamosc).
-  let threw = false;
-  try { await M._identityImport('zbyszek:ABECADLO adept;adwokat agawa,agrafka_agregat-HWO'); }
-  catch (e) { threw = /Litery kontrolne nie pasuj/.test(e.message); }
-  ok(threw, 'odmowa: kod z nickiem w innej wielkosci liter (nick case-sensitive)');
+  // Wielkosc liter nicku BEZ ZNACZENIA takze przy imporcie: kod z "ZBYSZEK"
+  // daje identyczna tozsamosc (litery kontrolne liczone dla nicku kanonicznego).
+  const impCase = await M._identityImport('ZBYSZEK:ABECADLO adept;adwokat agawa,agrafka_agregat-QNT');
+  ok(impCase.rec.authorId === c.rec.authorId && impCase.rec.pubkeyHex === c.rec.pubkeyHex,
+     'import: kod z nickiem w innej wielkosci liter → identyczna tozsamosc');
   const impSame = await M._identityImport(c.code);
   ok(impSame.rec.authorId === c.rec.authorId && impSame.rec.pubkeyHex === c.rec.pubkeyHex,
      'import tym samym kodem → identyczna tozsamosc (przenosnosc miedzy maszynami)');

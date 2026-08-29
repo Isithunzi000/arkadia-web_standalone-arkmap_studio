@@ -1,6 +1,7 @@
 // Harness — identity_dialog: pin UI tozsamosci (D8, faza 5c).
 // Przycisk nad polem wczytywania, dialog ze stanami brak/aktywna, akcje
-// Utworz/Importuj/Pokaz kod/Wyczysc (dwuklik), status w sidebarze, XSS-escape.
+// Utworz/Importuj/Pokaz kod/Wyczysc (dwuklik), status w sidebarze, selektor
+// liczby slow 3/4/5/6 (persist localStorage), charset nicku [a-z0-9].
 // DOM i IndexedDB stubowane; derywacja PBKDF2 realna (~1 s na probe).
 // Uruchamianie z katalogu głównego repo: node tests/identity_dialog.js
 const fs = require('fs');
@@ -31,11 +32,26 @@ console.log('── T0: statyczne UI ──');
 
 // ── mini-DOM + IndexedDB (in-memory) ─────────────────────────────
 const registry = new Map();
+const segBtnCache = new Map();  // stabilne obiekty przyciskow segmentu
 function makeEl(id) {
   const el = {
     id, textContent: '', value: '', disabled: false, dataset: {}, style: {},
     onclick: null, _html: '',
     addEventListener(ev, f) { el['on' + ev] = f; },
+    // Wystarcza dla segmentu liczby slow: <button ... data-w="N"> w HTML rodzica
+    // (stub nie buduje drzewa — skanujemy HTML calego body dialogu).
+    querySelectorAll(sel) {
+      if (sel !== 'button') return [];
+      const host = registry.get('identity-body');
+      const html = host ? host._html : el._html;
+      const out = [];
+      for (const m of String(html).matchAll(/<button[^>]*data-w="(\d)"[^>]*>/g)) {
+        const key = el.id + '#' + m[1];
+        if (!segBtnCache.has(key)) segBtnCache.set(key, { dataset: { w: m[1] }, style: {}, onclick: null, textContent: '' });
+        out.push(segBtnCache.get(key));
+      }
+      return out;
+    },
   };
   Object.defineProperty(el, 'innerHTML', {
     get() { return el._html; },
@@ -49,6 +65,12 @@ const toasts = [];
 const opened = [];
 const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+const _lsData = new Map();
+globalThis.localStorage = {
+  getItem: (k) => (_lsData.has(k) ? _lsData.get(k) : null),
+  setItem: (k, v) => _lsData.set(k, String(v)),
+  removeItem: (k) => _lsData.delete(k),
+};
 const _idbData = new Map();
 globalThis.indexedDB = {
   open() {
@@ -93,6 +115,11 @@ console.log('── T1: stan "brak tozsamosci" ──');
   ok(el('identity-status').textContent === 'kalka będzie anonimowa', 'status: kalka anonimowa');
   ok(el('identity-body')._html.includes('Utwórz tożsamość') && el('identity-body')._html.includes('Importuj tożsamość'),
      'dialog: formularze utworz/import');
+  const segHtml = el('identity-body')._html;
+  ok(segHtml.includes('data-w="3"') && segHtml.includes('data-w="4"') && segHtml.includes('data-w="5"') &&
+     segHtml.includes('data-w="6"') && segHtml.includes('3 · wygodnie') && segHtml.includes('6 · paranoia'),
+     'dialog: selektor liczby slow 3/4/5/6 z opisami skrajnych');
+  ok(segHtml.includes('Tylko litery a-z i cyfry'), 'dialog: hint charsetu nicku');
   el('btn-identity').onclick();
   await tick();
   ok(opened.includes('dlg-identity'), 'przycisk otwiera dialog');
@@ -110,16 +137,21 @@ console.log('── T2: walidacja nicku ──');
 // ── T3: utworzenie tozsamosci ──
 console.log('── T3: utworz tozsamosc ──');
 {
+  // Wybor liczby slow w segmencie: klik "4" → persist localStorage.
+  const segBtns = el('id-words-seg').querySelectorAll('button');
+  const b4 = segBtns.find(b => b.dataset.w === '4');
+  b4.onclick();
+  ok(_lsData.get('arkmap-identity-words') === '4', 'selektor: wybor 4 slow trzymany w localStorage');
   el('id-nick').value = 'Zbyszek';
   await el('id-btn-create').onclick();
   const stTxt = el('identity-status').textContent;
-  ok(/^🪪 Zbyszek · [0-9a-f]{16}$/.test(stTxt), 'status: nick + 16-hex identyfikatora');
+  ok(/^🪪 zbyszek · [0-9a-f]{16}$/.test(stTxt), 'status: nick kanoniczny (lowercase) + 16-hex identyfikatora');
   globalThis.__authorId = stTxt.slice(-16);
   ok(el('identity-body')._html.includes('Autor:') && el('identity-body')._html.includes('odcisk klucza'),
      'dialog: stan aktywny (autor + odcisk klucza)');
   const codeHtml = el('id-code-out')._html;
-  const m = codeHtml.match(/Zbyszek:([a-z]+-){5}[a-z]+-[a-z]{3}/);
-  ok(!!m, 'kod odzyskiwania pokazany od razu po utworzeniu (format nick:6 slow-LLL)');
+  const m = codeHtml.match(/zbyszek:([a-z]+-){3}[a-z]+-[a-z]{3}/);
+  ok(!!m, 'kod odzyskiwania: 4 slowa zgodnie z wyborem segmentu (format nick:4 slowa-LLL)');
   globalThis.__code = m && m[0];
   ok(toasts.some(t => /Tożsamość utworzona/.test(t)), 'toast potwierdzenia');
 }
@@ -146,21 +178,30 @@ console.log('── T5: import ──');
   ok(el('id-import-err').textContent.length > 3, 'import: blad parsowania widoczny w dialogu');
   el('id-import-in').value = globalThis.__code;
   await el('id-btn-import').onclick();
-  ok(el('identity-status').textContent === '🪪 Zbyszek · ' + globalThis.__authorId,
+  ok(el('identity-status').textContent === '🪪 zbyszek · ' + globalThis.__authorId,
      'import kodem odtwarza IDENTYCZNA tozsamosc (ten sam identyfikator)');
   ok(toasts.some(t => /zaimportowana/.test(t)), 'toast importu');
 }
 
-// ── T6: XSS-escape nicku ──
-console.log('── T6: XSS-escape ──');
+// ── T6: charset nicku odrzuca HTML; selektor zapamietany miedzy sesjami dialogu ──
+console.log('── T6: charset / persistencja selektora ──');
 {
   await el('id-btn-clear').onclick(); await el('id-btn-clear').onclick();
   await tick();
   el('id-nick').value = '<img src=x>';
   await el('id-btn-create').onclick();
-  const html = el('identity-body')._html;
-  ok(html.includes('&lt;img src=x&gt;') && !html.includes('<img src=x>'), 'nick z HTML escapowany w dialogu');
-  ok(el('identity-status').textContent.includes('<img src=x>'), 'status (textContent) bez parsowania HTML');
+  ok(/litery a-z/.test(el('id-create-err').textContent), 'nick z HTML odrzucony przez charset (iniekcja niemozliwa)');
+  ok(el('identity-status').textContent === 'kalka będzie anonimowa', 'po odrzuceniu tozsamosc nie powstaje');
+  // Statyczny pin: nick w stanie aktywnym zawsze przez escHtml (gdyby charset zlagodzono).
+  const srcUi = blockSlice('// ── UI: dialog tozsamosci', '// === ARKDELTA START ===');
+  ok(srcUi.includes("Autor: <b>' + escHtml(id.nick)"),
+     'pin statyczny: nick w dialogu zawsze escapowany');
+  // Persistencja selektora: nowa sesja dialogu (formularz po wyczyszczeniu)
+  // laduje zapisane "4" z localStorage — utworzona tozsamosc ma 4 slowa.
+  el('id-nick').value = 'ala';
+  await el('id-btn-create').onclick();
+  const m2 = el('id-code-out')._html.match(/ala:([a-z]+-){3}[a-z]+-[a-z]{3}/);
+  ok(!!m2, 'selektor zapamietany: nowa tozsamosc ma 4 slowa (z localStorage)');
   await el('id-btn-clear').onclick(); await el('id-btn-clear').onclick();
 }
 

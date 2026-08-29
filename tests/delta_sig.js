@@ -142,25 +142,25 @@ console.log('── T2: weryfikacja podpisu ──');
   const signedText = await api._deltaMaybeSign(mkDeltaText());
   ok(signedText !== mkDeltaText(), '_deltaMaybeSign podpisuje przy aktywnej tozsamosci');
   const sd = JSON.parse(signedText);
-  ok(sd.meta.author === 'Zbyszek' && sd.meta.author_id === 'efb8e5c9678554c4' && /^[0-9a-f]{64}$/.test(sd.meta.author_pubkey),
+  ok(sd.meta.author === 'zbyszek' && sd.meta.author_id === 'cb4b9b4a5514412d' && /^[0-9a-f]{64}$/.test(sd.meta.author_pubkey),
      'meta autora: nick + author_id (pin) + pubkey');
   ok(/^[0-9a-f]{128}$/.test(sd.checksums.sig), 'checksums.sig: 128 hex');
   ok(api.validateDeltaText(signedText).ok === true, 'podpisana kalka przechodzi walidacje (sig poza zakresem file)');
   const vOk = await api._deltaVerifySignature(sd);
-  ok(vOk.state === 'ok' && vOk.author === 'Zbyszek' && vOk.authorId === 'efb8e5c9678554c4' && vOk.idOk === true,
+  ok(vOk.state === 'ok' && vOk.author === 'zbyszek' && vOk.authorId === 'cb4b9b4a5514412d' && vOk.idOk === true,
      'weryfikacja: podpis zgodny, autor potwierdzony');
 
   const tamp = JSON.parse(signedText);
   tamp.checksums.sig = tamp.checksums.sig.slice(0, -1) + (tamp.checksums.sig.endsWith('a') ? 'b' : 'a');
   ok(api.validateDeltaText(api.stableStringify(tamp)).ok === true, 'przeklamany sig NADAL przechodzi walidacje (nie odmawiamy)');
   const vBad = await api._deltaVerifySignature(tamp);
-  ok(vBad.state === 'bad' && vBad.author === 'Zbyszek', 'przeklamany sig → bad (glosne ostrzezenie, nie odmowa)');
+  ok(vBad.state === 'bad' && vBad.author === 'zbyszek', 'przeklamany sig → bad (glosne ostrzezenie, nie odmowa)');
 
   const claimed = JSON.parse(signedText);
   delete claimed.checksums.sig;
   claimed.checksums = api._deltaChecksums(claimed.meta, claimed.ops);
   const vCl = await api._deltaVerifySignature(claimed);
-  ok(vCl.state === 'claimed' && vCl.author === 'Zbyszek', 'pola autora bez sig → claimed (deklaracja bez dowodu)');
+  ok(vCl.state === 'claimed' && vCl.author === 'zbyszek', 'pola autora bez sig → claimed (deklaracja bez dowodu)');
   ok(api.validateDeltaText(api.stableStringify(claimed)).ok === true, 'claimed przechodzi walidacje');
 
   const noPub = JSON.parse(signedText);
@@ -179,7 +179,7 @@ console.log('── T2: weryfikacja podpisu ──');
   const keys = await api._identityKeysFromSeed(seed);
   wrongId.checksums.sig = api._identityHex(await keys.sign(new TextEncoder().encode('arkdelta-v3:' + wrongId.checksums.file)));
   const vW = await api._deltaVerifySignature(wrongId);
-  ok(vW.state === 'ok' && vW.idOk === false && vW.authorId === 'efb8e5c9678554c4',
+  ok(vW.state === 'ok' && vW.idOk === false && vW.authorId === 'cb4b9b4a5514412d',
      'podpis zgodny, ale author_id nie pasuje do klucza → idOk=false');
   await api._identityClear();
 }
