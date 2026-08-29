@@ -20225,6 +20225,7 @@ function _identityDb() {
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
+    req.onblocked = () => resolve(null);  // v1.52.1: stara karta trzyma v1 → degradacja graceful zamiast wiecznej zawiechy (konsumenci obsługują null)
   });
 }
 async function _identityStore(rec) {

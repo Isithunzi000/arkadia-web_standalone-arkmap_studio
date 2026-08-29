@@ -74,6 +74,8 @@ const PUB_A = 'a'.repeat(64), PUB_B = 'b'.repeat(64);
   // ── T0: piny statyczne polityki ──
   console.log('── T0: piny ──');
   ok(HTML.includes("indexedDB.open('arkmap-identity', 2)"), "T0: baza tozsamosci w wersji 2 (store 'trust')");
+  ok(HTML.includes('req.onblocked = () => resolve(null);'),
+    'T0: onblocked → degradacja graceful (resolve null) — stara karta z v1 nie wiesza tozsamosci (v1.52.1)');
   ok(HTML.includes("db.createObjectStore('trust')") && HTML.includes("objectStoreNames.contains('trust')"),
     'T0: upgrade v1->v2 dotwarza store trust warunkowo (dane identity nietkniete)');
   const noteCalls = HTML.match(/await _trustNote\(/g) || [];
