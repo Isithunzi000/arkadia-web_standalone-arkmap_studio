@@ -72,5 +72,17 @@ console.log('— run.sh wskazowka docs —');
   ok(m && fs.existsSync(path.join(ROOT, m[1])), 'run.sh: wskazany plik dokumentacji istnieje w repo');
 }
 
+// ── Arc 43 (OP-1): sync-map.yml self-check czyta sumy z koperty v2 (top-level) ──
+// Regresja: self-check logowal m.meta.checksums.alg (uklad v1) — TypeError na
+// undefined i czerwony run mimo poprawnego pliku (run 33262514408, 2026-08-29).
+console.log('— sync-map self-check (koperta v2) —');
+{
+  const SM_PATH = path.join(ROOT, '.github', 'workflows', 'sync-map.yml');
+  ok(fs.existsSync(SM_PATH), 'sync-map.yml istnieje');
+  const SM = fs.existsSync(SM_PATH) ? fs.readFileSync(SM_PATH, 'utf8') : '';
+  ok(SM.includes('m.checksums.alg'), 'self-check: alg z top-level m.checksums.alg (koperta v2)');
+  ok(!SM.includes('m.meta.checksums'), 'self-check: zero odniesien do starego ukladu m.meta.checksums');
+}
+
 console.log(`\nci_workflow: ${pass} OK, ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

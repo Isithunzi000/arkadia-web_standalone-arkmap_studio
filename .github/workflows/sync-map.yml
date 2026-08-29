@@ -114,6 +114,8 @@ jobs:
       # Arc 16/19: opublikowany plik MUSI przechodzic wlasny verifyChecksums z main —
       # lustro z sumami v1 (sprzed v1.38.0) straszylo userow falszywym „plik uszkodzony".
       # v1.45.0: alg v4 (XXH3-64 + kodowanie kanoniczne v4) — ekstrakcja blokow markerowych.
+      # v1.51.0 (koperta v2, D1): sumy na TOP-LEVEL m.checksums — NIE wewnatrz meta
+      # (stara sciezka = TypeError na undefined, run 33262514408). Pin: tests/ci_workflow.js.
       - name: Self-check .arkmap wlasnym verifierem (fail-closed)
         if: steps.gate.outputs.changed == 'true'
         run: |
@@ -126,7 +128,7 @@ jobs:
             const m = JSON.parse(fs.readFileSync("map_master3.arkmap", "utf8"));
             const r = api.verifyChecksums(m);
             if (!r.ok) { console.error("SELF-CHECK FAIL:", JSON.stringify({ fileOk: r.fileOk, badAreas: r.badAreas.length, badRooms: r.badRooms.length })); process.exit(1); }
-            console.log("self-check OK: alg=" + m.meta.checksums.alg + ", verifyChecksums ok");
+            console.log("self-check OK: alg=" + m.checksums.alg + ", verifyChecksums ok");
           '
 
       - name: index.json
