@@ -386,34 +386,34 @@
 <p>A delta with three operations: a new area, a new room inside it, and an exit from an existing room (100) into the new room. (Whitespace abridged; real files use the canonical writer.)</p>
 
 <pre>{
+  <span class="k">"checksums"</span>: {
+    <span class="k">"file"</span>: <span class="s">"ae01c59324adaedf"</span>,
+    <span class="k">"ops"</span>: [ <span class="s">"37d3379e985f615d"</span>, <span class="s">"262f00d7717c507b"</span>, <span class="s">"037fd1e6593fac81"</span> ]
+  },
+  <span class="k">"format"</span>: <span class="s">"arkdelta"</span>,
+  <span class="k">"format_version"</span>: <span class="n">3</span>,
   <span class="k">"meta"</span>: {
-    <span class="k">"format"</span>: <span class="s">"arkdelta"</span>,
-    <span class="k">"format_version"</span>: <span class="n">2</span>,
-    <span class="k">"ops_count"</span>: <span class="n">3</span>,
-    <span class="k">"base"</span>: { <span class="k">"crc"</span>: <span class="s">"3f8a21c0b7d4e5f6"</span>, <span class="k">"version"</span>: <span class="s">"0.205.0"</span>, <span class="k">"revision"</span>: <span class="s">"0123456789abcdef…"</span> },
-    <span class="k">"app_version"</span>: <span class="s">"v1.45.0"</span>
+    <span class="k">"app_version"</span>: <span class="s">"v1.51.0"</span>,
+    <span class="k">"base"</span>: { <span class="k">"areas"</span>: { <span class="s">"1"</span>: <span class="s">"aaaabbbbccccdddd"</span> }, <span class="k">"crc"</span>: <span class="s">"3f8a21c0b7d4e5f6"</span>, <span class="k">"revision"</span>: <span class="s">"0123456789abcdef0123456789abcdef01234567"</span>, <span class="k">"version"</span>: <span class="s">"0.205.0"</span> },
+    <span class="k">"ops_count"</span>: <span class="n">3</span>
   },
   <span class="k">"ops"</span>: [
-    { <span class="k">"seq"</span>: <span class="n">1</span>, <span class="k">"type"</span>: <span class="s">"ADD_AREA"</span>,
-      <span class="k">"target"</span>: { <span class="k">"areaId"</span>: <span class="s">"d:1"</span> },
+    { <span class="k">"label"</span>: <span class="s">"Dodanie obszaru \"Nowy obszar\""</span>,
       <span class="k">"payload"</span>: { <span class="k">"area"</span>: { <span class="k">"id"</span>: <span class="s">"d:1"</span>, <span class="k">"name"</span>: <span class="s">"Nowy obszar"</span> } },
-      <span class="k">"label"</span>: <span class="s">"Dodanie obszaru \"Nowy obszar\""</span> },
-    { <span class="k">"seq"</span>: <span class="n">2</span>, <span class="k">"type"</span>: <span class="s">"ADD_ROOM"</span>,
-      <span class="k">"target"</span>: { <span class="k">"roomId"</span>: <span class="s">"d:2"</span>, <span class="k">"areaId"</span>: <span class="s">"d:1"</span> },
-      <span class="k">"payload"</span>: { <span class="k">"room"</span>: { <span class="k">"id"</span>: <span class="s">"d:2"</span>, <span class="k">"x"</span>: <span class="n">12</span>, <span class="k">"y"</span>: <span class="n">-4</span>, <span class="k">"z"</span>: <span class="n">0</span>, <span class="k">"name"</span>: <span class="s">"Polana"</span>, <span class="k">"env"</span>: <span class="n">262</span> } },
-      <span class="k">"label"</span>: <span class="s">"Dodanie pokoju \"Polana\""</span> },
-    { <span class="k">"seq"</span>: <span class="n">3</span>, <span class="k">"type"</span>: <span class="s">"ADD_EXIT"</span>,
-      <span class="k">"target"</span>: { <span class="k">"sourceId"</span>: <span class="n">100</span>, <span class="k">"dir"</span>: <span class="s">"n"</span> },
-      <span class="k">"payload"</span>: { <span class="k">"targetId"</span>: <span class="s">"d:2"</span>, <span class="k">"bidirectional"</span>: <span class="b">true</span> },
-      <span class="k">"label"</span>: <span class="s">"Dodanie wyjścia #100 n"</span> }
-  ],
-  <span class="k">"checksums"</span>: {
-    <span class="k">"file"</span>: <span class="s">"91c04d2e7a8b9c0d"</span>,
-    <span class="k">"ops"</span>: [ <span class="s">"0a1b2c3d4e5f6071"</span>, <span class="s">"4e5f60718293a4b5"</span>, <span class="s">"8293a4b5c6d7e8f9"</span> ]
-  }
+      <span class="k">"seq"</span>: <span class="n">1</span>, <span class="k">"type"</span>: <span class="s">"ADD_AREA"</span>,
+      <span class="k">"target"</span>: { <span class="k">"areaId"</span>: <span class="s">"d:1"</span> } },
+    { <span class="k">"label"</span>: <span class="s">"Dodanie pokoju \"Polana\""</span>,
+      <span class="k">"payload"</span>: { <span class="k">"room"</span>: { <span class="k">"env"</span>: <span class="n">262</span>, <span class="k">"id"</span>: <span class="s">"d:2"</span>, <span class="k">"name"</span>: <span class="s">"Polana"</span>, <span class="k">"x"</span>: <span class="n">12</span>, <span class="k">"y"</span>: <span class="n">-4</span>, <span class="k">"z"</span>: <span class="n">0</span> } },
+      <span class="k">"seq"</span>: <span class="n">2</span>, <span class="k">"type"</span>: <span class="s">"ADD_ROOM"</span>,
+      <span class="k">"target"</span>: { <span class="k">"areaId"</span>: <span class="s">"d:1"</span>, <span class="k">"roomId"</span>: <span class="s">"d:2"</span> } },
+    { <span class="k">"label"</span>: <span class="s">"Dodanie wyjścia #100 n"</span>,
+      <span class="k">"payload"</span>: { <span class="k">"bidirectional"</span>: <span class="b">true</span>, <span class="k">"targetId"</span>: <span class="s">"d:2"</span> },
+      <span class="k">"seq"</span>: <span class="n">3</span>, <span class="k">"type"</span>: <span class="s">"ADD_EXIT"</span>,
+      <span class="k">"target"</span>: { <span class="k">"dir"</span>: <span class="s">"n"</span>, <span class="k">"sourceId"</span>: <span class="n">100</span> } }
+  ]
 }</pre>
 
-<p>A signed variant of the same overlay would additionally carry <code>author</code>, <code>author_id</code>, <code>author_pubkey</code> and <code>created</code> in <code>meta</code>, and <code>sig</code> in <code>checksums</code> (see <a href="#signatures">§9</a>). The checksum values above are illustrative placeholders, not real hashes of the example content.</p>
+<p>A signed variant of the same overlay would additionally carry <code>author</code>, <code>author_id</code>, <code>author_pubkey</code> and <code>created</code> in <code>meta</code>, and <code>sig</code> in <code>checksums</code> (see <a href="#signatures">§9</a>). The checksum values above are the real hashes of the example content under the v3 checksum rule (§5), pinned by the test suite (tests/g6_crosscheck.js) so the example can never drift from the implementation.</p>
 
 <p>On apply onto a map whose highest room ID is 6400 and highest area ID is 120: the area becomes 121, the room becomes 6401, and room 100 gains exit <code>n → 6401</code> (with the reverse <code>s → 100</code> on the new room, because <code>bidirectional</code>).</p>
 

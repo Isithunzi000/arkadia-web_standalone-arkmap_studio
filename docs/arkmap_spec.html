@@ -751,7 +751,6 @@
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="example">21. Complete Example</h2>
 
-<!-- G6-CROSSCHECK: checksum values in this example must be recomputed against the v4 oracle and this note updated before release -->
 <p>A minimal but valid .arkmap file with one area containing two rooms:</p>
 
 <pre>{
@@ -788,10 +787,10 @@
   ],
   <span class="k">"checksums"</span>: {
     <span class="k">"alg"</span>: <span class="s">"v4"</span>,
-    <span class="k">"areas"</span>: { <span class="s">"1"</span>: <span class="s">"7b3f9a1c4e82d650"</span> },
-    <span class="k">"file"</span>: <span class="s">"c4d91e06a8f25b37"</span>,
-    <span class="k">"meta"</span>: <span class="s">"91af03d2e7c648b5"</span>,
-    <span class="k">"rooms"</span>: { <span class="s">"1"</span>: <span class="s">"2e8b47d3c901a6f4"</span>, <span class="s">"2"</span>: <span class="s">"a5d16c8e3b270f94"</span> }
+    <span class="k">"areas"</span>: { <span class="s">"1"</span>: <span class="s">"202da9297d3fa8c6"</span> },
+    <span class="k">"file"</span>: <span class="s">"5d03008d88f80d3c"</span>,
+    <span class="k">"meta"</span>: <span class="s">"81b665ced34bce7a"</span>,
+    <span class="k">"rooms"</span>: { <span class="s">"1"</span>: <span class="s">"8e006383da3c0aa8"</span>, <span class="s">"2"</span>: <span class="s">"fa11ba21960714e5"</span> }
   },
   <span class="k">"colors"</span>: {
     <span class="k">"custom_env_colors"</span>: {
@@ -819,7 +818,7 @@
   }
 }</pre>
 
-<div class="note">Note that top-level keys are sorted alphabetically (<code>areas</code>, <code>checksums</code>, <code>colors</code>, <code>format</code>, <code>format_version</code>, <code>meta</code>). Within each room, keys are also sorted. This is the deterministic serialization format. The checksum values above are illustrative placeholders, not real hashes of the example content.</div>
+<div class="note">Note that top-level keys are sorted alphabetically (<code>areas</code>, <code>checksums</code>, <code>colors</code>, <code>format</code>, <code>format_version</code>, <code>meta</code>). Within each room, keys are also sorted. This is the deterministic serialization format. The checksum values above are the real v4 hashes of the example content — cross-verified against two independent implementations (the ArkMap Studio encoder and the reference Python oracle) and pinned by the test suite (tests/g6_crosscheck.js), so the example can never drift from the specification text.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="changelog">22. Format Changelog</h2>

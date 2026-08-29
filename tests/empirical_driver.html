@@ -560,17 +560,18 @@ scenario('E1.roundtrip', async () => {
   loadBase('dat');
   const cls = classifyText(_e1Text);
   const notOk = (cls.items || []).filter(i => i.c !== 'ok');
-  // FIX F1: klasyfikator symuluje wczesniejsze opy kalki na cieniu stanu —
-  // EDIT_CL po ADD_CL, DELETE_SUPPRESSOR po ADD_SUPPRESSOR, EDIT_EXIT po EDIT_ROOM
-  // i DELETE_AREA na sid-area sa teraz 'ok' (dawniej impossible/hard).
-  A('E1.roundtrip.cls-ok27', cls.items && cls.items.length === 27 && notOk.length === 0,
-    'fix F1: wszystkie 27 opow ok' + (notOk.length ? ' [nie-ok: ' + notOk.map(i => i.t + ':' + i.c + (i.n ? '(' + i.n + ')' : '')).join(',') + ']' : ''));
+  // D5 (v1.51.0): buildDelta kompaktuje log (27 wpisow -> mniej opow: pary
+  // ADD+DELETE znikaja, lancuchy edycji skladaja sie). Liczba opow czytana
+  // dynamicznie z pliku; pin mowi o KLASACH (wszystkie ok na czystej bazie).
+  const opsN = (JSON.parse(_e1Text).ops || []).length;
+  A('E1.roundtrip.cls-allok', cls.items && cls.items.length === opsN && notOk.length === 0,
+    'fix F1: wszystkie ' + opsN + ' opy ok (po kompaktowaniu D5)' + (notOk.length ? ' [nie-ok: ' + notOk.map(i => i.t + ':' + i.c + (i.n ? '(' + i.n + ')' : '')).join(',') + ']' : ''));
   const PREV_SEQ = ['EDIT_CL', 'DELETE_SUPPRESSOR', 'EDIT_EXIT', 'DELETE_AREA'];
   EQ('E1.roundtrip.cls-knownseq', (cls.items || []).filter(i => PREV_SEQ.includes(i.t) && i.c !== 'ok').map(i => i.t + ':' + i.c), [],
     'fix F1: dawne degradacje sekwencyjne (EDIT_CL/DELETE_SUPPRESSOR/EDIT_EXIT/DELETE_AREA) sa ok');
   const r = W().applyDelta(_e1Delta, null, undefined);
-  A('E1.roundtrip.applied', r.applied === 27 && r.skipped.length === 0,
-    'applied=' + r.applied + ' skipped=' + r.skipped.length + (r.skipped.length ? ' ' + JSON.stringify(r.skipped) : ''));
+  A('E1.roundtrip.applied', r.applied === opsN && r.skipped.length === 0,
+    'applied=' + r.applied + '/' + opsN + ' skipped=' + r.skipped.length + (r.skipped.length ? ' ' + JSON.stringify(r.skipped) : ''));
   const crcApplied = ev('_computeBaseInfo().crc').val;
   EQ('E1.roundtrip.crc', crcApplied, _e1CrcEdited, 'stan po apply == stan po commitach (crc)');
 });
@@ -584,10 +585,11 @@ scenario('E1.idempotent', async () => {
   const items2 = W().classifyDelta(_e1Delta);
   const proj = items2.map(i => i.type + ':' + i.cls);
   const doneN = proj.filter(p => p.endsWith(':done')).length;
-  // Po F1: done 12/27. Klasyfikator z symulacja sekwencji (cien stanu) rozstrzyga
-  // pary add/delete jako ok/hard — re-apply to spojny replay (nie done), a delete-opsy
-  // na nieobecnych celach pozostaja impossible (= skip, bez mutacji).
-  A('E1.idempotent.done12', doneN === 12, 'watchdog F1: done ' + doneN + '/27 (replay sekwencyjny: pary add/delete CL/tlumika/area + labele ok; reszta done) [nie-done: '
+  // Po F1 + D5: done 12/16 (plik po kompaktowaniu). Klasyfikator z symulacja
+  // sekwencji (cien stanu) rozstrzyga pary add/delete jako ok/hard — re-apply
+  // to spojny replay (nie done), a delete-opsy na nieobecnych celach pozostaja
+  // impossible (= skip, bez mutacji).
+  A('E1.idempotent.done12', doneN === 12, 'watchdog F1: done ' + doneN + '/16 (po kompaktowaniu D5; replay sekwencyjny: pary add/delete CL/tlumika/area + labele ok; reszta done) [nie-done: '
     + proj.filter(p => !p.endsWith(':done')).join(', ') + ']');
   EQ('E1.idempotent.impossible-set', items2.filter(i => i.cls === 'impossible').map(i => i.type).sort(),
     ['DELETE_CL', 'DELETE_EXIT', 'DELETE_ROOM', 'DELETE_SPECIAL_EXIT'],
@@ -596,9 +598,9 @@ scenario('E1.idempotent', async () => {
   const checkedSeqs = new Set(items2.filter(i => i.checked).map(i => i.seq));
   const r3 = W().applyDelta(_e1Delta, checkedSeqs, undefined);
   const crc2 = ev('_computeBaseInfo().crc').val;
-  A('E1.idempotent.panel65', r3.applied === 6 && r3.skipped.length === 5,
-    'fix F1: drugi apply (panel) applied=' + r3.applied + ' skipped=' + r3.skipped.length
-    + ' (pary sekwencyjne ok/hard = replay; impossible = skip)');
+  A('E1.idempotent.panel00', r3.applied === 0 && r3.skipped.length === 0,
+    'F1+D5: drugi apply (panel) applied=' + r3.applied + ' skipped=' + r3.skipped.length
+    + ' (po kompaktowaniu wszystkie opy done/impossible → nic zaznaczone = no-op)');
   A('E1.idempotent.panel-converges', crc2 === crc1,
     'fix F1: drugi apply (panel) ZBIEGA do tego samego stanu — spojny replay [crc=' + crc1 + ' vs ' + crc2 + ']');
   // Surowy drugi apply — swiezy tor (zeby undoStack nie przekroczyl capa 50)
@@ -606,7 +608,7 @@ scenario('E1.idempotent', async () => {
   W().applyDelta(_e1Delta, null, undefined);
   const r4 = W().applyDelta(_e1Delta, null, undefined);
   const crc4 = ev('_computeBaseInfo().crc').val;
-  A('E1.idempotent.raw2-21', r4.applied === 21 && r4.skipped.length === 6,
+  A('E1.idempotent.raw2-16', r4.applied === 10 && r4.skipped.length === 6,
     'watchdog F2: surowy drugi apply applied=' + r4.applied + ' skipped=' + r4.skipped.length);
   A('E1.idempotent.raw2-diverges', crc4 !== crc1,
     'watchdog: surowy drugi apply ROZBIEGA stan (raw = force bez klasyfikacji — poza zakresem F1)');
@@ -725,11 +727,10 @@ function _e3CommitAddRoom(x, y) {
 // nie da sie wygenerowac jedno-opowo z czystej bazy fixture.
 function _e2Craft(opsArr) {
   const fmt = ev('({ f: ARKDELTA_FORMAT, v: ARKDELTA_FORMAT_VERSION })').val;
-  const meta = { format: fmt.f, format_version: fmt.v, ops_count: opsArr.length,
-                 base: ev('state.baseInfo').val, app_version: 'e2-craft' };
+  const meta = { ops_count: opsArr.length, base: ev('state.baseInfo').val, app_version: 'e2-craft' };
   const ops = opsArr.map((o, i) => ({ seq: i + 1, type: o.type, target: o.target, payload: o.payload, label: o.label || o.type }));
   const checksums = W()._deltaChecksums(meta, ops);
-  return W().stableStringify({ meta, ops, checksums });
+  return W().stableStringify({ format: fmt.f, format_version: fmt.v, meta, ops, checksums });
 }
 // Malowanie dwoch pokoi (PAINT_BATCH przez realny commit pociagniecia).
 function _e2Paint(P) {
@@ -1394,12 +1395,13 @@ scenario('E3.determinism', async () => {
 // Craft z pelna kontrola nad meta/seq/checksumami (checksumy funkcjami aplikacji).
 function _e4Craft(opsArr, opts){
   opts = opts || {};
-  const meta = Object.assign({ format: ev('ARKDELTA_FORMAT').val, format_version: ev('ARKDELTA_FORMAT_VERSION').val,
-    ops_count: opsArr.length, base: ev('state.baseInfo').val, app_version: 'e4-craft' }, opts.meta || {});
+  const meta = Object.assign({ ops_count: opsArr.length, base: ev('state.baseInfo').val, app_version: 'e4-craft' }, opts.meta || {});
   const ops = opsArr.map((o, i) => Object.assign({ seq: i + 1 }, o));
   const checksums = W()._deltaChecksums(meta, ops);
   if (opts.fileCrcStale) checksums.file = '0000000000000000';
-  return W().stableStringify({ meta, ops, checksums });
+  const env = { format: ev('ARKDELTA_FORMAT').val, format_version: ev('ARKDELTA_FORMAT_VERSION').val, meta, ops, checksums };
+  if (opts.meta && opts.meta.format_version !== undefined) env.format_version = opts.meta.format_version;  // adversarial: wersja na top-level (D1)
+  return W().stableStringify(env);
 }
 // Wczytanie przez prawdziwy handler change (DataTransfer + File), czekanie na async handler.
 async function _e4LoadExpr(expr){
@@ -1608,7 +1610,11 @@ scenario('E5.save-flow', async () => {
   // wymuszamy sciezke fallback helpera (<a download> → interceptor createObjectURL)
   ex('window.showSaveFilePicker = undefined;');
   ex("document.getElementById('btn-save-arkdelta').click()");
-  const txt = (await eva('(async()=>{ return window.__e5blob ? await window.__e5blob.text() : null; })()')).val;
+  // D8 (v1.51.0): saveDelta jest async (await _deltaMaybeSign → _identityForSigning → IDB)
+  // — blob powstaje po round-tripie IDB, wiec czekamy az sie pojawi (polling).
+  const txt = (await eva('(async()=>{ for (let i = 0; i < 240 && !window.__e5blob; i++)'
+    + ' await new Promise(r => setTimeout(r, 25));'
+    + ' return window.__e5blob ? await window.__e5blob.text() : null; })()')).val;
   A('E5.save-flow.captured', !!txt && txt.length > 100, 'klik przechwycony (Blob z trescia)');
   const v = JSON.parse(ev('(function(){ const v = validateDeltaText(' + JSON.stringify(txt || '') + ');'
     + ' return JSON.stringify({ ok: v.ok, n: v.ok ? v.delta.ops.length : 0 }); })()').val);
@@ -2086,7 +2092,7 @@ scenario('E9.exitreset', async () => {
 scenario('E9.crc-v4-export', async () => {
   await loadBase('dat');
   ex('_prepareArkmapForSave()');
-  EQ('E9.crc-v4-export.alg', ev('state.map.meta.checksums.alg').val, 'v4', 'eksport .arkmap zapisuje alg v4');
+  EQ('E9.crc-v4-export.alg', ev('state.map.checksums.alg').val, 'v4', 'eksport .arkmap zapisuje alg v4 (koperta v2: checksums na top-level)');
   A('E9.crc-v4-export.ok', ev('verifyChecksums(state.map).ok').val === true, 'verify swiezego eksportu: ok');
   const r = JSON.parse(ev('(function(){ const a = state.map.areas.find(a => (a.labels || []).length);'
     + ' if (!a) return JSON.stringify({ skip: true });'
@@ -2094,8 +2100,8 @@ scenario('E9.crc-v4-export', async () => {
     + ' const v = verifyChecksums(state.map); return JSON.stringify({ ok: v.ok, bad: v.badAreas.length }); })()').val);
   A('E9.crc-v4-export.label', r.skip || (r.ok === false && r.bad >= 1),
     'mutacja etykiety po zapisie sum → badAreas (W3 widzi etykiety)');
-  const r2 = JSON.parse(ev('(function(){ const ks = Object.keys(state.map.meta.checksums.rooms);'
-    + ' delete state.map.meta.checksums.rooms[ks[0]];'
+  const r2 = JSON.parse(ev('(function(){ const ks = Object.keys(state.map.checksums.rooms);'
+    + ' delete state.map.checksums.rooms[ks[0]];'
     + ' const v = verifyChecksums(state.map); return JSON.stringify({ ok: v.ok, miss: v.missingRooms.length }); })()').val);
   A('E9.crc-v4-export.missing', r2.ok === false && r2.miss >= 1, 'pokoj bez sumy → missingRooms + ok:false');
 });
@@ -2671,7 +2677,7 @@ scenario('E7.diff', async () => {
     + ' return gs[0] ? gs[0].kind : null; })()').val;
   A('E7.exit.op3', g3 === 'exit' || g3 === 'exit-stub', 'op3 (cel z kalki): geometria ducha istnieje [kind=' + g3 + ']');
   // stub: wyjscie do pokoju kalki w NOWYM obszarze (sid bez numerycznego rozwiazania)
-  ex('window.__e7s = { meta: { format: "arkdelta", format_version: 1, base: {} }, ops: ['
+  ex('window.__e7s = { format: "arkdelta", format_version: 3, meta: { base: {} }, ops: ['
    + '{ seq: 1, type: "ADD_AREA", target: { areaId: "d:1" }, payload: { area: { name: "E7 Stub Area" } }, label: "a" },'
    + '{ seq: 2, type: "ADD_ROOM", target: { areaId: "d:1", roomId: "d:2" }, payload: { room: { x: 9100, y: 9100, z: 0, env: 1 } }, label: "r" },'
    + '{ seq: 3, type: "ADD_EXIT", target: { dir: "n", sourceId: 1 }, payload: { targetId: "d:2", bidirectional: false }, label: "e" }'
@@ -2825,7 +2831,7 @@ scenario('E10.remainder-p2', async () => {
   await loadBase('dat');
   const ids = ev('Object.keys(state.roomById).slice(0, 2).map(Number)').val;
   A('E10.remainder-p2.pre', Array.isArray(ids) && ids.length === 2, 'dwa pokoje bazy: ' + JSON.stringify(ids));
-  const delta = { meta: { format: 'arkdelta', format_version: 1 }, ops: [
+  const delta = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'MOVE_ROOM', label: '', target: { roomId: ids[0] },
       payload: { fromX: 0, fromY: 0, fromZ: 0, toX: 5000, toY: 5000, toZ: 0 } },
     { seq: 2, type: 'MOVE_ROOM', label: '', target: { roomId: ids[1] },
@@ -3932,7 +3938,7 @@ scenario('E17.olSerialize', async () => {
 
 scenario('E18.universal', async () => {
   const FOREIGN = {
-    format: 'arkmap', version: 1,
+    format: 'arkmap', format_version: 2,   // koperta v2 (D1): v1 jest odrzucane (fatal) — load by czekal na dialog
     meta: {
       map_name: 'Obca Kraina',
       symbol_font: { family: 'Sans', point_size: 12, pixel_size: 12, style_hint: 0,
@@ -4018,7 +4024,7 @@ const _E22_META = {
   symbol_font_fudge_factor: 1, use_only_map_font: false
 };
 const _E22_SUP = {
-  format: 'arkmap', version: 1, meta: _E22_META,
+  format: 'arkmap', format_version: 2, meta: _E22_META,   // koperta v2 (D1) — v1 odrzucane jako fatal
   colors: { env_colors: {}, custom_env_colors: {} },
   areas: [{ id: 1, name: 'Obszar A', rooms: [
     { id: 1, x: 0, y: 0, z: 0, env: 1, weight: 1,
@@ -4031,7 +4037,7 @@ const _E22_SUP = {
   ] }]
 };
 const _E22_CLEAN = {
-  format: 'arkmap', version: 1, meta: _E22_META,
+  format: 'arkmap', format_version: 2, meta: _E22_META,   // koperta v2 (D1) — v1 odrzucane jako fatal
   colors: { env_colors: {}, custom_env_colors: {} },
   areas: [{ id: 1, name: 'Obszar A', rooms: [
     { id: 1, x: 0, y: 0, z: 0, env: 1, weight: 1,
@@ -4685,7 +4691,7 @@ scenario('E27.geometry', async () => {
       'zero naruszen geometrii @ ' + s + '% (' + o.viol.length + ')'
       + (o.viol.length ? ' — ' + o.viol.slice(0, 6).join(' | ') : ''));
   }
-  EQ('E27.count', total, 61, 'pokrycie: 61 kontenerow (42 dlg-bg + 7 wlasnych + 12 overlay; nowy kontener = decyzja w tym tescie)');
+  EQ('E27.count', total, 62, 'pokrycie: 62 kontenerow (43 dlg-bg [+1 dlg-identity, D8 v1.51.0] + 7 wlasnych + 12 overlay; nowy kontener = decyzja w tym tescie)');
   // restore: zoom do domyslnej, brak otwartych dialogow, stan pomocniczy czysty
   ex('if (typeof applyUiScale === "function") applyUiScale(100);');
   await eva('new Promise(function(res){ setTimeout(res, 180); })');
@@ -4733,7 +4739,7 @@ scenario('E28.deferred_dialog', async () => {
   A('E28.supp', W().checkSuppressorsInMap(ark).length === supp0 + 1,
     'checkSuppressorsInMap: baseline ' + supp0 + ' + 1 syntetyczna flaga');
   if (!ark.meta) ark.meta = {};
-  ark.meta.checksums = W()._computeV4Checksums(ark);  // sumy v4 → loadArkmap podepnie placeholder deferred
+  ark.checksums = W()._computeV4Checksums(ark);  // koperta v2 (D2): sumy na top-level → loadArkmap podepnie placeholder deferred
   W().__e28text = JSON.stringify(ark);
   ex('window.__e28err = null;'
    + ' window.addEventListener("unhandledrejection", function(e){ window.__e28err = String(e.reason && e.reason.message || e.reason); });');

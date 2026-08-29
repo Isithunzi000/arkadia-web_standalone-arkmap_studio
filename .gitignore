@@ -6,3 +6,6 @@ tests/megatest/apps/node_modules/
 
 # chrome-headless-shell pobierany lokalnie (tests/perf/README.md)
 .chrome-hs/
+
+# cache pythona z laboratorium checksums
+__pycache__/
