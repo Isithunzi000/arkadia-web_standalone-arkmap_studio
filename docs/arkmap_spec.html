@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>.arkmap Format Specification v1</title>
+<title>.arkmap Format Specification v2</title>
 <style>
   :root {
     --bg: #0d0f12; --panel: #141720; --border: #252b3a;
@@ -77,7 +77,7 @@
 
 <h1>.arkmap Format Specification</h1>
 <div class="subtitle">
-  Version 1.1 · ArkMap Studio · Isithunzi · 2026<br>
+  Version 2.0 · ArkMap Studio · Isithunzi · 2026<br>
   File extension: <code>.arkmap</code> · MIME type: <code>application/json</code> · Encoding: UTF-8
 </div>
 
@@ -120,7 +120,7 @@
   <li><strong>Lossless round-trip</strong> with Mudlet's binary <code>.dat</code> format (version 20) — converting .dat → .arkmap → .dat produces a byte-identical result for files already in the canonical Qt layout (i.e. written by ArkMap Studio); files written by external tools are preserved semantically but normalized on import (see <a href="#dat-roundtrip">§19</a>)</li>
   <li><strong>Human-readable</strong> — JSON with deterministic key ordering and compact inline arrays</li>
   <li><strong>Git-friendly</strong> — sorted keys and stable serialization produce clean, meaningful diffs</li>
-  <li><strong>Extensible</strong> — .arkmap-only fields (notes, tags) extend the Mudlet data model without breaking compatibility</li>
+  <li><strong>Extensible</strong> — .arkmap-only fields (notes, tags) extend the Mudlet data model without breaking compatibility; unknown keys at any level are preserved verbatim across load/save round-trips (forward compatibility — see <a href="#validation">§17</a>)</li>
   <li><strong>Self-validating</strong> — hierarchical XXH3-64 checksums for corruption detection</li>
 </ul>
 
@@ -130,21 +130,27 @@
 <h2 id="top-level">2. Top-Level Structure</h2>
 
 <pre>{
-  <span class="k">"format"</span>:  <span class="s">"arkmap"</span>,      <span class="c">// REQUIRED — magic string, must be exactly "arkmap"</span>
-  <span class="k">"version"</span>: <span class="n">1</span>,              <span class="c">// REQUIRED — integer, format version (currently 1)</span>
-  <span class="k">"meta"</span>:    { ... },         <span class="c">// REQUIRED — metadata object (see §3)</span>
-  <span class="k">"colors"</span>:  { ... },         <span class="c">// REQUIRED — color palette object (see §4)</span>
-  <span class="k">"areas"</span>:   [ ... ]          <span class="c">// REQUIRED — array of Area objects (see §5)</span>
+  <span class="k">"format"</span>:         <span class="s">"arkmap"</span>,      <span class="c">// REQUIRED — magic string, must be exactly "arkmap"</span>
+  <span class="k">"format_version"</span>: <span class="n">2</span>,              <span class="c">// REQUIRED — integer, format version (currently 2)</span>
+  <span class="k">"meta"</span>:          { ... },         <span class="c">// REQUIRED — metadata object (see §3)</span>
+  <span class="k">"colors"</span>:        { ... },         <span class="c">// REQUIRED — color palette object (see §4)</span>
+  <span class="k">"areas"</span>:         [ ... ],         <span class="c">// REQUIRED — array of Area objects (see §5)</span>
+  <span class="k">"checksums"</span>:     { ... }          <span class="c">// optional — XXH3-64 checksums, added by ArkMap Studio on save (see §15)</span>
 }</pre>
 
 <table>
 <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
 <tr><td><code>format</code></td><td>string</td><td class="req">YES</td><td>Must be <code>"arkmap"</code>. Used to identify file type.</td></tr>
-<tr><td><code>version</code></td><td>integer</td><td class="req">YES</td><td>Format version. Currently <code>1</code>. Increment on breaking changes.</td></tr>
+<tr><td><code>format_version</code></td><td>integer</td><td class="req">YES</td><td>Format version. Currently <code>2</code>. Increment on breaking changes. Renamed from <code>version</code> (format version 1) — see <a href="#changelog">§22</a>.</td></tr>
 <tr><td><code>meta</code></td><td>object</td><td class="req">YES</td><td>Map-level metadata. See <a href="#meta">§3</a>.</td></tr>
 <tr><td><code>colors</code></td><td>object</td><td class="req">YES</td><td>Environment color definitions. See <a href="#colors">§4</a>.</td></tr>
 <tr><td><code>areas</code></td><td>array</td><td class="req">YES</td><td>Array of Area objects. See <a href="#areas">§5</a>.</td></tr>
+<tr><td><code>checksums</code></td><td>object</td><td class="opt">optional</td><td>Hierarchical XXH3-64 checksums. Moved from <code>meta.checksums</code> (format version 1) to the top level in format version 2. See <a href="#checksums">§15</a>.</td></tr>
 </table>
+
+<div class="note">The envelope keys <code>format</code>, <code>format_version</code>, and <code>checksums</code> live at the top level in both formats (<code>.arkmap</code> and <code>.arkdelta</code>), so a generic dispatcher can identify file type and version without knowing the per-format <code>meta</code> layout. The <code>format_version</code> counters of <code>.arkmap</code> and <code>.arkdelta</code> are independent sequences; equal numbers carry no cross-format meaning.</div>
+
+<div class="note"><strong>Breaking change (format version 2):</strong> files written in format version 1 (key <code>version</code> instead of <code>format_version</code>, checksums under <code>meta.checksums</code>) are refused by conforming readers as an unsupported format version.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="meta">3. meta Object</h2>
@@ -155,7 +161,7 @@
   <span class="k">"symbol_font_fudge_factor"</span>: <span class="n">1.0</span>,
   <span class="k">"use_only_map_font"</span>:        <span class="b">false</span>,
   <span class="k">"user_data"</span>:                { <span class="c">/* optional string→string map (see §14) */</span> },
-  <span class="k">"checksums"</span>:               { <span class="c">/* optional, added by ArkMap Studio on save */</span> },
+  <span class="k">"app_version"</span>:              <span class="s">"v1.51.0"</span>,  <span class="c">/* optional, informational — writer's version */</span>
   <span class="k">"accepted_dir_issues"</span>:     [ <span class="c">/* optional, .arkmap-only — direction-validator acceptances */</span> ]
 }</pre>
 
@@ -167,8 +173,8 @@
 <tr><td><code>use_only_map_font</code></td><td>boolean</td><td class="req">YES</td><td>If true, only use symbol_font; false = allow fallback</td></tr>
 <tr><td><code>room_id_hash</code></td><td>object (string → integer)</td><td class="opt">optional</td><td>Mudlet's <code>mRoomIdHash</code>: contributor name → starting room ID, used by multi-contributor map merging (crowdmap). Preserved through .dat round-trips. Omit if empty. Added in spec v1.1.</td></tr>
 <tr><td><code>user_data</code></td><td><a href="#user-data">UserData</a></td><td class="opt">optional</td><td>Map-level key-value metadata. May contain <code>version</code>, <code>revision</code>, <code>map_sync_version</code> etc.</td></tr>
-<tr><td><code>checksums</code></td><td>object</td><td class="opt">optional</td><td>Hierarchical XXH3-64 checksums. See <a href="#checksums">§15</a>.</td></tr>
-<tr><td><code>accepted_dir_issues</code></td><td>array of strings</td><td class="opt">optional</td><td><span style="color:#5570a0">.arkmap-only</span> — Acceptances for the direction validator (intentional <code>team_follow_link</code> / <code>dir_bind</code> mismatches marked as OK). Each entry is a key string <code>"type:roomId:value"</code>. Written only when the validator's acceptance store is set to "file". Not preserved in .dat export. See <a href="#user-data">§14</a>.</td></tr>
+<tr><td><code>app_version</code></td><td>string</td><td class="opt">optional</td><td>Version of ArkMap Studio that wrote the file. Informational; ignored by validation. Mirrors the <code>.arkdelta</code> bookkeeping field. Covered by <code>checksums.meta</code> (see <a href="#checksums">§15</a>). Added in spec v2.0.</td></tr>
+<tr><td><code>accepted_dir_issues</code></td><td>array of strings</td><td class="opt">optional</td><td><span style="color:#5570a0">.arkmap-only</span> — Acceptances for the direction validator (intentional <code>team_follow_link</code> / <code>dir_bind</code> mismatches marked as OK). Each entry is a key string <code>"type:roomId:value"</code>, parsed by splitting on the <strong>first two</strong> colons (the value may itself contain <code>:</code>). The key embeds the numeric room ID, so it becomes stale when room IDs are renumbered (e.g. crowdmap merge) — acceptable, because acceptances are soft UX state. Written only when the validator's acceptance store is set to "file". Serialized sorted lexicographically (see <a href="#serialization">§16</a>). Not preserved in .dat export. See <a href="#user-data">§14</a>.</td></tr>
 </table>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -575,11 +581,12 @@
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="checksums">15. Checksums (XXH3-64)</h2>
 
-<p>ArkMap Studio computes hierarchical XXH3-64 checksums on save and stores them in <code>meta.checksums</code>. Every hashed value is first serialized with the <strong>canonical binary encoding</strong> — a deterministic, JSON-independent byte format whose normative reference is <code>tests/checksums/CANONICAL_V4.md</code> in the project repository. Checksums are optional — a file without checksums is valid.</p>
+<p>ArkMap Studio computes hierarchical XXH3-64 checksums on save and stores them in the top-level <code>checksums</code> object (moved out of <code>meta</code> in format version 2 — see <a href="#top-level">§2</a>). Every hashed value is first serialized with the <strong>canonical binary encoding</strong> — a deterministic, JSON-independent byte format whose normative reference is <code>tests/checksums/CANONICAL_V4.md</code> in the project repository. Checksums are optional — a file without checksums is valid.</p>
 
 <pre><span class="k">"checksums"</span>: {
   <span class="k">"alg"</span>:   <span class="s">"v4"</span>,
   <span class="k">"file"</span>:  <span class="s">"a1b2c3d4e5f60718"</span>,
+  <span class="k">"meta"</span>:  <span class="s">"f0e1d2c3b4a59687"</span>,
   <span class="k">"areas"</span>: { <span class="s">"7"</span>: <span class="s">"e5f6a7b8c9d0e1f2"</span>, <span class="s">"12"</span>: <span class="s">"c9d0e1f2a3b4c5d6"</span> },
   <span class="k">"rooms"</span>: { <span class="s">"12847"</span>: <span class="s">"1a2b3c4d5e6f7a8b"</span>, <span class="s">"12848"</span>: <span class="s">"5e6f7a8b9c0d1e2f"</span> }
 }</pre>
@@ -589,18 +596,21 @@
   <li><strong>Room hash</strong> = XXH3-64 (seed 0) of the canonical binary encoding of the room, domain prefix <code>"r4"</code>. Default values are omitted from the encoding (<code>weight: 1</code>, <code>locked: false</code>, <code>hidden: false</code>, empty strings and empty containers), internal fields (<code>area</code>) are excluded, and custom line defaults are normalized (<code>style: "solid"</code> → omit, <code>arrow: false</code> → omit). The upstream <code>hash</code> field (e.g. <code>"45:28:0:Wyzima"</code>) is covered when present. This ensures hash stability regardless of in-memory representation.</li>
   <li><strong>Area hash</strong> = XXH3-64 of <code>"a4"</code> + the canonical encoding of the area attributes (id, name, the optional <code>grid_mode</code>/<code>is_zone</code>/<code>zone_area_ref</code>/<code>pos</code> fields when present, labels sorted by <code>id</code> — with full label color channels including alpha, count-prefixed —, <code>user_data</code> with keys in UTF-8 byte order) + the rollup of raw 8-byte little-endian room hashes sorted by room ID. Because the area's own fields and its <code>id</code> are part of the input, two empty areas are distinguishable.</li>
   <li><strong>File hash</strong> = XXH3-64 of <code>"f4"</code> + the canonical encoding of the map-level <code>colors</code> tables (env_colors, custom_env_colors; numeric keys in ascending numeric order) + the rollup of raw 8-byte little-endian area hashes sorted by area ID.</li>
+  <li><strong>Meta hash</strong> (<code>checksums.meta</code>, added in format version 2) = XXH3-64 (seed 0) of the canonical binary encoding of the entire <code>meta</code> object, domain prefix <code>"m4"</code> (see the <em>Meta object encoding</em> section of <code>CANONICAL_V4.md</code> — keys in UTF-8 byte order, recursive). The two roles are deliberately separate: <code>checksums.file</code> is the map's <strong>identity</strong> — it excludes <code>meta</code> by design, so metadata edits (notes, acceptances, book-keeping) never change it; <code>checksums.meta</code> is the metadata's <strong>integrity</strong> — it detects external edits to <code>meta</code> without disturbing the identity hash. Keeping meta integrity separate is also what allows <code>.arkdelta</code> base matching (§4 of the <code>.arkdelta</code> spec) to rely on <code>checksums.file</code> alone.</li>
 </ol>
 
 <p>All hash values are stored as 16-character lowercase hexadecimal strings. The canonical encoding fixes every cross-platform ambiguity: integers are little-endian i32, floats are little-endian f64 with <code>-0</code> normalized to <code>+0</code> and every NaN (or non-number) normalized to the canonical quiet-NaN <code>7ff8000000000000</code>, strings are length-prefixed UTF-8, and map keys follow a fixed domain order (direction keys in <code>n,ne,e,se,s,sw,w,nw,up,down,in,out</code> order; other keys in UTF-8 byte order; numeric keys in ascending numeric order).</p>
+
+<p><strong>Unicode normalization:</strong> strings are hashed as their raw UTF-8 bytes exactly as they appear in the file — verifiers MUST NOT normalize before hashing. Producers SHOULD emit strings in Unicode Normalization Form C (NFC) so that semantically identical text hashes identically across tools.</p>
 
 <h3>Algorithm versioning (<code>alg</code>)</h3>
 <p><code>"v4"</code> is the only algorithm ArkMap Studio writes (since v1.45.0) and the only one it verifies. The retired generations — <em>legacy v1</em> (no <code>alg</code> field), <code>"v2"</code> (<code>"a2:"</code>/<code>"f2:"</code> prefixed rollups) and <code>"v3"</code> (canonical binary, v1.44.x) — are no longer produced or verified; the formulas are frozen history.</p>
 <p>Verifiers MUST dispatch on <code>alg</code>: <code>"v4"</code> → v4 formulas; any other value (including absent) → report an algorithm mismatch (loud, never a silent skip — a silently skipped stale file would be indistinguishable from a file without checksums). Re-saving the file upgrades its checksums to v4.</p>
 
 <h3>Verification</h3>
-<p>On load, recompute from bottom up — using the algorithm recorded in <code>alg</code> (see <em>Algorithm versioning</em> above) — and compare. Mismatches indicate the file was modified externally (hand-edited JSON, merge conflict resolution, etc.). Mismatches are warnings, not fatal errors. Verification never throws on malformed data (it reports a verification error and defers to structural validation), and it also reports dictionary inconsistencies: rooms or areas missing their checksum entry, and orphaned checksum entries without a matching object.</p>
+<p>On load, recompute from bottom up — using the algorithm recorded in <code>alg</code> (see <em>Algorithm versioning</em> above) — and compare. Mismatches indicate the file was modified externally (hand-edited JSON, merge conflict resolution, etc.). Mismatches are warnings, not fatal errors. Verification never throws on malformed data (it reports a verification error and defers to structural validation), and it also reports dictionary inconsistencies: rooms or areas missing their checksum entry, and orphaned checksum entries without a matching object. Dictionary-inconsistency reporting applies to the <code>areas</code> and <code>rooms</code> dictionaries only; unrecognized top-level keys inside the <code>checksums</code> object itself (e.g. keys introduced by a newer spec) are ignored, not reported — verifiers must remain forward-compatible with the envelope.</p>
 
-<div class="note"><strong>Scope (v4):</strong> room hashes cover room data (including the upstream <code>hash</code>); area hashes additionally cover the area's own in-scope attributes (id, name, user_data, labels with full color channels, and the optional <code>grid_mode</code>, <code>is_zone</code>, <code>zone_area_ref</code> and <code>pos</code> fields — inside the scope since v4); the file hash additionally covers the <code>colors</code> tables. Only <code>meta</code> itself stays outside the checksum scope. The <code>file</code> key is still a rollup (hash of area hashes + colors), not a hash of the entire document byte stream; v4 dropped the redundant global room rollup (rooms are already rolled up through their areas).</div>
+<div class="note"><strong>Scope (v4):</strong> room hashes cover room data (including the upstream <code>hash</code>); area hashes additionally cover the area's own in-scope attributes (id, name, user_data, labels with full color channels, and the optional <code>grid_mode</code>, <code>is_zone</code>, <code>zone_area_ref</code> and <code>pos</code> fields — inside the scope since v4); the file hash additionally covers the <code>colors</code> tables; the meta hash covers the entire <code>meta</code> object. The <code>file</code> key is still a rollup (hash of area hashes + colors), not a hash of the entire document byte stream; v4 dropped the redundant global room rollup (rooms are already rolled up through their areas).</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="serialization">16. Deterministic Serialization</h2>
@@ -619,6 +629,7 @@
       <li><code>rooms</code> within each area sorted by <code>id</code> ascending</li>
       <li><code>labels</code> within each area sorted by <code>id</code> ascending</li>
       <li><code>stubs</code>, <code>exit_locks</code>, <code>special_exit_locks</code> sorted alphabetically</li>
+      <li><code>meta.accepted_dir_issues</code> sorted lexicographically (UTF-8 byte order of the key strings)</li>
     </ul>
   </li>
 </ul>
@@ -632,8 +643,10 @@
 
 <ol>
   <li><code>format</code> must be <code>"arkmap"</code></li>
-  <li><code>version</code> must be <code>1</code></li>
+  <li><code>format_version</code> must be <code>2</code></li>
   <li><code>meta</code>, <code>colors</code>, <code>areas</code> must be present</li>
+  <li><code>checksums</code>, if present, must be an object; <code>meta.checksums</code> is not a recognized location (format version 1 layout — rejected by rule 2)</li>
+  <li>Unknown keys anywhere in the document (top level, <code>meta</code>, areas, rooms, labels, <code>colors</code>) must not cause rejection — readers preserve them verbatim and writers re-emit them (see <a href="#overview">§1</a>); only the rules in this list may reject or warn</li>
   <li><code>meta.room_id_hash</code>, if present, must be an object mapping contributor names (strings) to starting room IDs (integers)</li>
   <li>All area IDs must be unique</li>
   <li>All room IDs must be globally unique (across all areas)</li>
@@ -658,7 +671,7 @@
   <li><code>special_exit_locks</code> must be an array if present</li>
 </ol>
 
-<div class="warn"><strong>Permissive loading:</strong> Implementations should validate but still allow loading files with non-fatal warnings. Only missing <code>format</code> or wrong <code>version</code> are fatal errors.</div>
+<div class="warn"><strong>Permissive loading:</strong> Implementations should validate but still allow loading files with non-fatal warnings. Only a missing/wrong <code>format</code> or a missing/wrong <code>format_version</code> are fatal errors. There is no migration path and no backward compatibility: files written in format version 1 (with <code>version: 1</code> and <code>meta.checksums</code>) are refused as an unsupported format version.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="rendering">18. Rendering Behavior</h2>
@@ -728,7 +741,8 @@
 <tr><th>Field</th><th>Location</th><th>Description</th></tr>
 <tr><td><code>notes</code></td><td>Room object</td><td>Free-form text notes for a room.</td></tr>
 <tr><td><code>tags</code></td><td>Room object</td><td>Array of string tags for filtering/categorization.</td></tr>
-<tr><td><code>checksums</code></td><td>meta object</td><td>XXH3-64 integrity checksums (auto-generated by ArkMap Studio on save).</td></tr>
+<tr><td><code>checksums</code></td><td>top-level object</td><td>XXH3-64 integrity checksums (auto-generated by ArkMap Studio on save; top-level envelope key since format version 2 — see <a href="#checksums">§15</a>).</td></tr>
+<tr><td><code>app_version</code></td><td>meta object</td><td>Version of ArkMap Studio that wrote the file (informational).</td></tr>
 <tr><td><code>accepted_dir_issues</code></td><td>meta object</td><td>Direction-validator acceptances, written only when the validator's acceptance store is "file" (see <a href="#user-data">§14</a>).</td></tr>
 </table>
 
@@ -737,6 +751,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="example">21. Complete Example</h2>
 
+<!-- G6-CROSSCHECK: checksum values in this example must be recomputed against the v4 oracle and this note updated before release -->
 <p>A minimal but valid .arkmap file with one area containing two rooms:</p>
 
 <pre>{
@@ -771,6 +786,13 @@
       ]
     }
   ],
+  <span class="k">"checksums"</span>: {
+    <span class="k">"alg"</span>: <span class="s">"v4"</span>,
+    <span class="k">"areas"</span>: { <span class="s">"1"</span>: <span class="s">"7b3f9a1c4e82d650"</span> },
+    <span class="k">"file"</span>: <span class="s">"c4d91e06a8f25b37"</span>,
+    <span class="k">"meta"</span>: <span class="s">"91af03d2e7c648b5"</span>,
+    <span class="k">"rooms"</span>: { <span class="s">"1"</span>: <span class="s">"2e8b47d3c901a6f4"</span>, <span class="s">"2"</span>: <span class="s">"a5d16c8e3b270f94"</span> }
+  },
   <span class="k">"colors"</span>: {
     <span class="k">"custom_env_colors"</span>: {
       <span class="k">"258"</span>: [<span class="n">0</span>, <span class="n">179</span>, <span class="n">0</span>],
@@ -778,6 +800,7 @@
     }
   },
   <span class="k">"format"</span>: <span class="s">"arkmap"</span>,
+  <span class="k">"format_version"</span>: <span class="n">2</span>,
   <span class="k">"meta"</span>: {
     <span class="k">"map_name"</span>: <span class="s">"Test Map"</span>,
     <span class="k">"symbol_font"</span>: {
@@ -793,11 +816,10 @@
     },
     <span class="k">"symbol_font_fudge_factor"</span>: <span class="n">1.0</span>,
     <span class="k">"use_only_map_font"</span>: <span class="b">false</span>
-  },
-  <span class="k">"version"</span>: <span class="n">1</span>
+  }
 }</pre>
 
-<div class="note">Note that top-level keys are sorted alphabetically (<code>areas</code>, <code>colors</code>, <code>format</code>, <code>meta</code>, <code>version</code>). Within each room, keys are also sorted. This is the deterministic serialization format.</div>
+<div class="note">Note that top-level keys are sorted alphabetically (<code>areas</code>, <code>checksums</code>, <code>colors</code>, <code>format</code>, <code>format_version</code>, <code>meta</code>). Within each room, keys are also sorted. This is the deterministic serialization format. The checksum values above are illustrative placeholders, not real hashes of the example content.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="changelog">22. Format Changelog</h2>
@@ -812,12 +834,13 @@
 <tr><td><code>1</code></td><td>2026</td><td>Additive normative (no format change): checksum engine v3 — <code>meta.checksums</code> records <code>"alg": "v3"</code> (XXH3-64 over canonical binary encoding, 16-hex values); v1/v2 formulas retired — treated as unknown algorithms and skipped silently (§15).</td></tr>
 <tr><td><code>1</code></td><td>2026</td><td>Normative correction (ArkMap Studio v1.44.1): the v3 area encoding gained <code>user_data</code> (UTF-8 byte-ordered keys, key+value strings), restoring the v2 area scope. Files written by v1.44.0 (v3 without area <code>user_data</code> in scope) recompute under the corrected encoding — no v3 files existed outside the project mirror at the time of the correction (§15).</td></tr>
 <tr><td><code>1</code></td><td>2026</td><td>Additive normative (no format change; ArkMap Studio v1.45.0): checksum engine v4 — <code>meta.checksums</code> records <code>"alg": "v4"</code> (domain prefixes <code>r4</code>/<code>a4</code>/<code>f4</code>; label colors with all channels incl. alpha; area <code>grid_mode</code>/<code>is_zone</code>/<code>zone_area_ref</code>/<code>pos</code> in scope; room <code>hash</code> in scope; redundant global room rollup dropped). v3 retired — any non-v4 <code>alg</code> is a loudly reported mismatch, never a silent skip; verification never throws and reports missing/orphaned entries (§15).</td></tr>
+<tr><td><code>2</code></td><td>2026</td><td><strong>Breaking</strong> (ArkMap Studio v1.51.0): unified envelope with <code>.arkdelta</code> — <code>version</code> renamed to <code>format_version</code> (now <code>2</code>); <code>checksums</code> moved from <code>meta.checksums</code> to the top level; new <code>checksums.meta</code> entry (meta integrity, domain prefix <code>m4</code> — <code>checksums.file</code> remains the meta-independent identity hash); optional <code>meta.app_version</code>; <code>meta.accepted_dir_issues</code> parsing pinned (split on first two colons) and serialization pinned (sorted lexicographically); Unicode hashing pinned (raw UTF-8 bytes, producers SHOULD emit NFC); preserve-unknown-keys rule stated normatively (§17). Version 1 files are refused as an unsupported format version — there is no migration path.</td></tr>
 </table>
 
 <hr>
 
 <p style="text-align:center;color:var(--dim);font-size:11px;margin-top:40px">
-  .arkmap Format Specification v1 · ArkMap Studio · Isithunzi · MIT License · 2026
+  .arkmap Format Specification v2 · ArkMap Studio · Isithunzi · MIT License · 2026
 </p>
 
 </body>

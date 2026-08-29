@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>.arkdelta Format Specification v1</title>
+<title>.arkdelta Format Specification v3</title>
 <style>
   :root {
     --bg: #0d0f12; --panel: #141720; --border: #252b3a;
@@ -76,7 +76,7 @@
 
 <h1>.arkdelta Format Specification</h1>
 <div class="subtitle">
-  Version 1 · ArkMap Studio · Isithunzi · 2026<br>
+  Version 3.0 · ArkMap Studio · Isithunzi · 2026<br>
   File extension: <code>.arkdelta</code> · MIME type: <code>application/json</code> · Encoding: UTF-8
 </div>
 
@@ -91,6 +91,8 @@
   <li><a href="#serialization">Canonical Serialization &amp; Checksums</a></li>
   <li><a href="#sid">Symbolic IDs (sid)</a></li>
   <li><a href="#operations">Operations</a></li>
+  <li><a href="#compaction">Log Compaction</a></li>
+  <li><a href="#signatures">Optional Signatures</a></li>
   <li><a href="#validation">Validation Rules</a></li>
   <li><a href="#apply">Apply Semantics</a></li>
   <li><a href="#versioning">Versioning &amp; Compatibility</a></li>
@@ -115,16 +117,22 @@
   <li><strong>Self-describing base</strong> — the file records the identity (file checksum) of the map variant it was created from, plus optional version/revision metadata</li>
 </ul>
 
-<div class="note"><strong>Relationship to .arkmap:</strong> A delta never stores a full map — only operations. The base identity is the hierarchical file checksum of the <code>.arkmap</code> canonical form of the map that was loaded when the edits were made (including the reduced-information variant derived from a Mudlet <code>.dat</code> file, where base identity is the file checksum of that derived .arkmap form). The checksum algorithm is the one defined by the .arkmap spec (currently v4 — XXH3-64, 16-hex); deltas written against older map checksum generations (CRC-32 8-hex, or v3 16-hex from ArkMap Studio v1.44.x) never match re-saved maps, so the base gate always reports a mismatch for them (informational dialog — the user may continue; see §4 and §9).</div>
+<div class="note"><strong>Relationship to .arkmap:</strong> A delta never stores a full map — only operations. The base identity is the hierarchical file checksum of the <code>.arkmap</code> canonical form of the map that was loaded when the edits were made (including the reduced-information variant derived from a Mudlet <code>.dat</code> file, where base identity is the file checksum of that derived .arkmap form). The checksum algorithm is the one defined by the .arkmap spec (currently v4 — XXH3-64, 16-hex); deltas written against older map checksum generations (CRC-32 8-hex, or v3 16-hex from ArkMap Studio v1.44.x) never match re-saved maps, so the base gate always reports a mismatch for them (informational dialog — the user may continue; see §4 and §11).</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="top-level">2. Top-Level Structure</h2>
 
 <pre>{
-  <span class="k">"meta"</span>:      { ... },   <span class="c">// REQUIRED — format marker, base identity, bookkeeping (see §3)</span>
-  <span class="k">"ops"</span>:       [ ... ],   <span class="c">// REQUIRED — ordered array of operation objects (see §7)</span>
-  <span class="k">"checksums"</span>: { ... }    <span class="c">// REQUIRED — XXH3-64 checksums (see §5)</span>
+  <span class="k">"format"</span>:         <span class="s">"arkdelta"</span>,  <span class="c">// REQUIRED — magic string, must be exactly "arkdelta"</span>
+  <span class="k">"format_version"</span>: <span class="n">3</span>,            <span class="c">// REQUIRED — integer, format version (currently 3)</span>
+  <span class="k">"meta"</span>:          { ... },      <span class="c">// REQUIRED — base identity, provenance, bookkeeping (see §3)</span>
+  <span class="k">"ops"</span>:           [ ... ],      <span class="c">// REQUIRED — ordered array of operation objects (see §7)</span>
+  <span class="k">"checksums"</span>:     { ... }       <span class="c">// REQUIRED — XXH3-64 checksums, optional signature (see §5, §9)</span>
 }</pre>
+
+<div class="note"><strong>Unified envelope (format version 3):</strong> the envelope keys <code>format</code>, <code>format_version</code> and <code>checksums</code> live at the top level in both map formats (<code>.arkmap</code> and <code>.arkdelta</code>). The <code>format_version</code> counters are independent — each format bumps its own counter on its own breaking changes.</div>
+
+<div class="warn"><strong>Breaking change (format version 3):</strong> files written in format version 2 (magic and version inside <code>meta</code>) are refused by conforming readers as an unsupported format version. There is no migration path — re-create the overlay from the edit log.</div>
 
 <p>Keys at every level are serialized in sorted order (see <a href="#serialization">§5</a>). The file is produced by <code>buildDelta()</code> from the editor's full edit log and consumed by <code>validateDeltaText()</code> + <code>applyDelta()</code>.</p>
 
@@ -133,12 +141,20 @@
 
 <table>
   <tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr>
-  <tr><td><code>format</code></td><td>string</td><td class="req">REQ</td><td>Magic string, must be exactly <code>"arkdelta"</code></td></tr>
-  <tr><td><code>format_version</code></td><td>integer</td><td class="req">REQ</td><td>Format version, currently <code>2</code></td></tr>
   <tr><td><code>ops_count</code></td><td>integer</td><td class="req">REQ</td><td>Number of operations; must equal <code>ops.length</code></td></tr>
   <tr><td><code>base</code></td><td>object</td><td class="req">REQ</td><td>Base identity (see <a href="#base">§4</a>); may be empty if the base could not be identified</td></tr>
   <tr><td><code>app_version</code></td><td>string</td><td class="req">REQ</td><td>ArkMap Studio version that produced the file (informational)</td></tr>
+  <tr><td><code>author</code></td><td>string</td><td class="opt">OPT</td><td>Author nickname, chosen by the user (for humans). Added in format version 3. See the signature rules in <a href="#signatures">§9</a> — author fields require a signature.</td></tr>
+  <tr><td><code>author_id</code></td><td>string</td><td class="opt">OPT</td><td>Author fingerprint (for machines): the first 16 lowercase hex characters of SHA-256 over the raw bytes of <code>author_pubkey</code>. Added in format version 3.</td></tr>
+  <tr><td><code>author_pubkey</code></td><td>string</td><td class="opt">OPT</td><td>Author's Ed25519 public key, 64 lowercase hex characters (32 bytes). Covered by <code>checksums.file</code>, so it cannot be swapped without invalidating the file checksum. Added in format version 3.</td></tr>
+  <tr><td><code>created</code></td><td>string</td><td class="opt">OPT</td><td>Creation timestamp, ISO 8601. Informational. Added in format version 3.</td></tr>
 </table>
+
+<p>The magic string and format version moved to the top-level envelope in format version 3 (see <a href="#top-level">§2</a>); they no longer appear inside <code>meta</code>.</p>
+
+<div class="note"><strong>Open meta:</strong> <code>meta</code> is an open object — readers MUST ignore unknown <code>meta</code> keys (forward compatibility). Operations, in contrast, are strict (see <a href="#validation">§10</a>).</div>
+
+<div class="warn"><strong>Threat model:</strong> the author fields and the optional signature prove <strong>continuity of identity</strong> — that the same key holder (nick cryptographically bound to a key) produced several overlays. They do <em>not</em> prove any real-world identity: there is no nickname registry, and two users can pick the same nick — the fingerprint (<code>author_id</code>) is the arbiter. User interfaces should always show nick <em>and</em> fingerprint, never the nick alone. A signature also does not make the content safe: an overlay can carry executable commands in payloads regardless of who signed it — the "operations with commands" review category (<a href="#apply">§11</a>) remains the primary defense.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="base">4. Base Identity</h2>
@@ -150,7 +166,10 @@
   <tr><td><code>crc</code></td><td>string</td><td class="req">REQ</td><td>File checksum (hex) of the canonical .arkmap form of the base map — the hierarchical file checksum as defined by the .arkmap spec §15 (algorithm v4: XXH3-64, 16 lowercase hex characters)</td></tr>
   <tr><td><code>version</code></td><td>string</td><td class="opt">OPT</td><td>Map version, copied from <code>meta.user_data.version</code> when present</td></tr>
   <tr><td><code>revision</code></td><td>string</td><td class="opt">OPT</td><td>Source revision (commit SHA), copied from <code>meta.user_data.revision</code> when present</td></tr>
+  <tr><td><code>areas</code></td><td>object</td><td class="opt">OPT</td><td>Per-area base checksums: map of area ID (string key) → the v4 <em>area</em> checksum (16 lowercase hex) of that area in the base map, as defined by the .arkmap spec §15. Added in format version 3; recorded at map load time together with <code>crc</code>.</td></tr>
 </table>
+
+<p><code>base.areas</code> enables per-area risk classification when reviewing an overlay against a different base: an operation touching an area whose checksum still matches the base is <strong>green</strong> (applies onto unchanged ground), an area whose checksum differs is <strong>yellow</strong> (the area moved under the overlay — review advised), and an area absent from the current map (or a delta without <code>base.areas</code>) falls back to the binary whole-file comparison (<strong>red</strong> / unknown). Absent <code>base.areas</code>, behavior is exactly the binary base match of older files.</p>
 
 <p>The base checksum is computed <strong>once, at map load time</strong> — not at export time. The v4 engine computes it read-only (no cloning: the canonical encoding is independent of key order and in-memory ordering, and excludes the internal <code>room.area</code> field), reusing the checksums already computed during load verification — one computation per load.</p>
 
@@ -163,13 +182,16 @@
 
 <p>The file is serialized with the same canonical JSON writer as <code>.arkmap</code> (<code>stableStringify</code>): object keys sorted lexicographically at every level, no insignificant whitespace beyond the fixed pretty-print layout, UTF-8 encoding. The full canonical rules are those of the .arkmap specification (§16) — in particular, arrays of primitives with at most 8 elements are written inline on a single line (e.g. <code>[255, 0, 0]</code>), arrays of objects use the standard multi-line layout, and <code>undefined</code> values are omitted.</p>
 
-<p>Checksums use XXH3-64 (seed 0; 16 lowercase hex characters) over the UTF-8 bytes of the canonical serialization — the same hash family as the .arkmap checksum engine (format_version 2; format_version 1 used CRC-32, 8 hex):</p>
+<p>Checksums use XXH3-64 (seed 0; 16 lowercase hex characters) over the UTF-8 bytes of the canonical serialization — the same hash family as the .arkmap checksum engine (format_version 3; format_version 2 used XXH3-64 as well, format_version 1 used CRC-32, 8 hex):</p>
 
 <table>
   <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-  <tr><td><code>checksums.file</code></td><td>string</td><td>XXH3-64 of the canonical form of <code>{ meta, ops }</code> (the whole file minus the checksums object itself)</td></tr>
+  <tr><td><code>checksums.file</code></td><td>string</td><td>XXH3-64 of the canonical form of <code>{ format, format_version, meta, ops }</code> — the whole file minus the checksums object itself. Because the checksums object is by definition outside this input, extra keys inside it (e.g. <code>sig</code>, §9) never affect the checksum and require no exclusion rules.</td></tr>
   <tr><td><code>checksums.ops</code></td><td>array&lt;string&gt;</td><td>Per-operation XXH3-64 of the canonical form of each op, in order; used to localize corruption</td></tr>
+  <tr><td><code>checksums.sig</code></td><td>string</td><td>Optional Ed25519 signature over the file checksum — see <a href="#signatures">§9</a>. Readers unaware of signatures ignore it.</td></tr>
 </table>
+
+<p><strong>Unicode normalization:</strong> the checksum input is the raw UTF-8 byte stream of the canonical serialization — verifiers MUST NOT normalize before hashing. Producers SHOULD emit strings in Unicode Normalization Form C (NFC) so that semantically identical text hashes identically across tools.</p>
 
 <div class="critical"><strong>Tamper handling:</strong> if <code>checksums.file</code> does not match, the file is refused. The per-op checksums are then used to name the offending operations precisely (e.g. <em>„op #17, #23 nie zgadza się z sumą kontrolną"</em>). The per-op array is diagnostic only — it is not itself an integrity gate.</div>
 
@@ -264,26 +286,74 @@
 <div class="note"><strong>Waypoints:</strong> route waypoints are viewer state, not map data — they never appear in a delta.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="validation">8. Validation Rules</h2>
+<h2 id="compaction">8. Log Compaction</h2>
+
+<p>Producers MUST apply deterministic log compaction before serialization. The same edit log always produces the same file. Compaction rules (per object identity, order-preserving):</p>
+
+<ol>
+  <li>A chain of <code>EDIT_ROOM</code> / <code>EDIT_EXIT</code> operations on the same room collapses to one operation: the first <code>before</code>, the last <code>after</code>; if the collapsed <code>before</code> equals <code>after</code>, the operation vanishes.</li>
+  <li>An <code>ADD_ROOM</code> / <code>ADD_AREA</code> / <code>ADD_LABEL</code> followed by edits or moves of the same sid folds into a single ADD with the final state; likewise <code>ADD_CL</code> + <code>EDIT_CL</code>.</li>
+  <li>A chain of <code>MOVE_ROOM</code> operations keeps the first <code>from*</code> and the last <code>to*</code>.</li>
+  <li><code>EDIT_ENV_COLOR</code> operations per <code>envId</code> collapse to the first <code>oldColor</code> and the last <code>newColor</code>.</li>
+  <li>An ADD + DELETE pair on the same object vanishes.</li>
+  <li><code>PAINT_BATCH</code> entries per <code>roomId</code> collapse to the first <code>before</code> and the last <code>after</code>; batches may be merged.</li>
+</ol>
+
+<div class="critical"><strong>Reference-safety condition:</strong> a chain may be collapsed only if no intervening operation references the object (dependency graph over references in <code>target</code>/<code>payload</code>; the chain must be contiguous in the dependency sense, not necessarily in <code>seq</code> adjacency).</div>
+
+<p>After compaction, <code>seq</code> values are renumbered contiguously (validation already requires this), and the merged operation takes the label of its last component.</p>
+
+<p><strong>Compaction is a producer-side rule: validators MUST NOT reject uncompacted files.</strong> Two deliberate consequences, stated for the record: applied overlays enter the undo history at the compacted granularity, and intermediate-state guard refusals that would have occurred in the uncompacted log simply do not occur.</p>
+
+<div class="note"><strong>Determinism, precisely:</strong> byte-identical output holds for the same edit log compacted by the same producer version. The informational provenance fields (<code>meta.created</code> — a timestamp; signature material when signing is enabled) legitimately differ between two builds of the same log and are excluded from any byte-identity comparison.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="signatures">9. Optional Signatures</h2>
+
+<p>An overlay exists in exactly one of two states: <strong>anonymous</strong> (no author fields, no signature) or <strong>signed</strong> (author fields plus a valid signature). There is no third state — see the anomaly rule below.</p>
+
+<h3>What is signed</h3>
+<p>The signature is an <strong>Ed25519</strong> signature over the ASCII byte string <code>"arkdelta-v3:" + checksums.file</code> (domain prefix + the 16 lowercase hex characters of the file checksum). It is stored as <code>checksums.sig</code> — 128 lowercase hex characters (64 bytes). Signing the checksum rather than the byte stream keeps the scheme independent of serialization details, and storing the signature inside the <code>checksums</code> object keeps it outside the checksum input by construction — no circularity, no exclusion rules, and unsigned files are completely unaffected.</p>
+
+<h3>Keys and fingerprint</h3>
+<p>The signer's public key is stored in <code>meta.author_pubkey</code> (Ed25519, 32 bytes, lowercase hex). Because <code>meta</code> is covered by <code>checksums.file</code>, the key cannot be swapped without invalidating the file checksum. The fingerprint <code>meta.author_id</code> is the first 16 lowercase hex characters of SHA-256 over the raw public-key bytes. How the key pair is generated or stored is implementation-defined (ArkMap Studio derives it deterministically from a user-held recovery code — see the user manual); the format defines only the field semantics.</p>
+
+<h3>Producer rule</h3>
+<p>A producer that writes <em>any</em> author field (<code>author</code>, <code>author_id</code>, <code>author_pubkey</code>) MUST sign the file (write <code>checksums.sig</code>). Author fields without a signature are an anomaly: a reader reports them as a <em>declaration without proof</em> and treats the authorship as unverified.</p>
+
+<h3>Reader policy</h3>
+<ul>
+  <li>The fail-closed integrity gate is <code>checksums.file</code> — unchanged, with or without a signature. A bad signature never substitutes for a checksum mismatch and never rescues one.</li>
+  <li>If <code>checksums.sig</code> is present, readers that support signatures SHOULD verify it against <code>meta.author_pubkey</code>. An invalid signature over an intact checksum is a <strong>loud warning</strong>, not a refusal: the file loads, authorship is treated as unverified.</li>
+  <li>Readers unaware of signatures (including older format-version-3 readers) load signed overlays normally — unknown keys in <code>checksums</code> and <code>meta</code> are ignored.</li>
+  <li>Signatures are additive: they do not bump <code>format_version</code>.</li>
+</ul>
+
+<div class="warn"><strong>What a signature proves:</strong> continuity of identity — the same key holder produced the overlay. It does not prove real-world identity (no nickname registry; the fingerprint is the arbiter) and it does not vouch for content safety (see the threat model in <a href="#meta">§3</a>).</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="validation">10. Validation Rules</h2>
 
 <p>Validation is <strong>fail-closed</strong>: any violation refuses the whole file with a list of diagnostics; nothing is loaded. Checks run in this order:</p>
 
 <ol>
   <li><strong>Size limit</strong> — file larger than 8&nbsp;MiB is refused.</li>
   <li><strong>JSON</strong> — the file must parse as a single JSON object.</li>
-  <li><strong>Magic</strong> — <code>meta.format</code> must be <code>"arkdelta"</code>.</li>
-  <li><strong>Version</strong> — <code>meta.format_version</code> must equal <code>2</code> (an unknown or older version — including 1 — is refused loudly and advises updating ArkMap Studio).</li>
-  <li><strong>File checksum</strong> — <code>checksums.file</code> must match the canonical form of <code>{ meta, ops }</code>; on mismatch, per-op checksums localize the corrupted operations by <code>seq</code>.</li>
+  <li><strong>Magic</strong> — top-level <code>format</code> must be <code>"arkdelta"</code>.</li>
+  <li><strong>Version</strong> — top-level <code>format_version</code> must equal <code>3</code> (an unknown or older version — including 1 and 2 — is refused loudly and advises updating ArkMap Studio).</li>
+  <li><strong>Nesting depth</strong> — <code>meta</code> and every operation are scanned before any checksum computation; a structure nested deeper than 60 levels is refused. (Checksum computation serializes recursively — the guard turns a potential stack overflow into a controlled, precise refusal.)</li>
+  <li><strong>File checksum</strong> — <code>checksums.file</code> must match the canonical form of <code>{ format, format_version, meta, ops }</code>; on mismatch, per-op checksums localize the corrupted operations by <code>seq</code>.</li>
   <li><strong>Operation count</strong> — at most 5000 operations; <code>meta.ops_count</code> must equal <code>ops.length</code>.</li>
-  <li><strong>Sequence</strong> — <code>seq</code> values must be 1-based and contiguous.</li>
-  <li><strong>Schema</strong> — <code>type</code> must be one of the 25 known types; <code>target</code>/<code>payload</code> must be objects carrying the required fields per type (§7).</li>
+  <li><strong>Sequence</strong> — <code>seq</code> values must be 1-based and contiguous. Uncompacted logs are legal — compaction (<a href="#compaction">§8</a>) is a producer-side rule only.</li>
+  <li><strong>Schema</strong> — <code>type</code> must be one of the 25 known types; <code>target</code>/<code>payload</code> must be objects carrying the required fields per type (<a href="#operations">§7</a>). Operations are strict: unknown keys inside an operation are refused. (<code>meta</code>, in contrast, is open — unknown <code>meta</code> keys are ignored.)</li>
   <li><strong>Directions</strong> — any <code>target.dir</code> must be a valid direction (<code>n, ne, e, se, s, sw, w, nw, up, down, in, out</code>).</li>
   <li><strong>Key sanitization</strong> — the keys <code>__proto__</code>, <code>constructor</code>, <code>prototype</code> are forbidden anywhere in an operation.</li>
-  <li><strong>sid integrity</strong> — define-before-use and no duplicate definitions (§6).</li>
+  <li><strong>sid integrity</strong> — define-before-use and no duplicate definitions (<a href="#sid">§6</a>).</li>
+  <li><strong>Signature consistency</strong> — not a refusal gate: author fields without <code>checksums.sig</code> are reported as a <em>declaration without proof</em>; an invalid <code>checksums.sig</code> over an intact <code>checksums.file</code> is a loud warning, and the file still loads (see <a href="#signatures">§9</a>).</li>
 </ol>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="apply">9. Apply Semantics</h2>
+<h2 id="apply">11. Apply Semantics</h2>
 
 <p>Applying a delta replays the operations in <code>seq</code> order onto the currently loaded map:</p>
 
@@ -300,16 +370,18 @@
 <div class="warn"><strong>Base mismatch:</strong> applying onto a different map version is supported by design — operations whose targets no longer exist are skipped with reasons, everything else applies. Geometry review tooling (review window, ghost preview, collision autopositioning) is layered on top of this clean apply path.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="versioning">10. Versioning &amp; Compatibility</h2>
+<h2 id="versioning">12. Versioning &amp; Compatibility</h2>
 
 <ul>
-  <li><code>format_version</code> is bumped only on incompatible changes to the envelope or operation schemas.</li>
+  <li><code>format_version</code> is bumped only on incompatible changes to the envelope or operation schemas. The counter is independent of the <code>.arkmap</code> counter (each format bumps its own).</li>
   <li>A reader refuses files with an unknown <code>format_version</code> (fail-closed) rather than guessing.</li>
   <li>New operation types may be introduced within a format version only if old readers refuse them cleanly — which they do, via the schema check (unknown type ⇒ file refused). Producers must therefore treat adding an op type as effectively requiring a version bump for interoperability.</li>
+  <li><strong>Unknown keys:</strong> <code>meta</code> is extensible — unknown informational keys in <code>meta</code> MUST be ignored by readers (and preserved by tools that round-trip the file). Operation <code>target</code>/<code>payload</code> objects remain strict — an unknown key or unknown operation type refuses the file (fail-closed). This asymmetry is deliberate: <code>meta</code> is annotation, <code>ops</code> is executable.</li>
+  <li>Additive features that live entirely inside open objects (e.g. signatures, <a href="#signatures">§9</a>) do not bump <code>format_version</code>; older readers ignore them.</li>
 </ul>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="example">11. Complete Example</h2>
+<h2 id="example">13. Complete Example</h2>
 
 <p>A delta with three operations: a new area, a new room inside it, and an exit from an existing room (100) into the new room. (Whitespace abridged; real files use the canonical writer.)</p>
 
@@ -341,15 +413,18 @@
   }
 }</pre>
 
+<p>A signed variant of the same overlay would additionally carry <code>author</code>, <code>author_id</code>, <code>author_pubkey</code> and <code>created</code> in <code>meta</code>, and <code>sig</code> in <code>checksums</code> (see <a href="#signatures">§9</a>). The checksum values above are illustrative placeholders, not real hashes of the example content.</p>
+
 <p>On apply onto a map whose highest room ID is 6400 and highest area ID is 120: the area becomes 121, the room becomes 6401, and room 100 gains exit <code>n → 6401</code> (with the reverse <code>s → 100</code> on the new room, because <code>bidirectional</code>).</p>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="changelog">12. Format Changelog</h2>
+<h2 id="changelog">14. Format Changelog</h2>
 
 <table>
   <tr><th>Version</th><th>Date</th><th>Changes</th></tr>
   <tr><td>1</td><td>2026-08</td><td>Initial format — ArkMap Studio v1.6.0</td></tr>
   <tr><td>2</td><td>2026-08</td><td>Checksums migrated from CRC-32 (8 hex) to XXH3-64 (16 hex) over the same canonical serialization — unified with the .arkmap checksum engine; base identity follows .arkmap alg v4 (ArkMap Studio v1.45.0). Version 1 files are refused loudly (no migration path — re-create the delta).</td></tr>
+  <tr><td>3</td><td>2026-08</td><td><strong>Breaking</strong> (ArkMap Studio v1.51.0): unified envelope with <code>.arkmap</code> — <code>format</code> and <code>format_version</code> moved from <code>meta</code> to the top level; <code>checksums.file</code> now covers <code>{ format, format_version, meta, ops }</code>. New: per-area base checksums <code>meta.base.areas</code> (§4) with green/yellow/red risk classification; normative producer-side log compaction (§8); optional provenance fields <code>author</code>/<code>author_id</code>/<code>author_pubkey</code>/<code>created</code> (§3) with optional Ed25519 signatures <code>checksums.sig</code> (§9) — author fields require a signature; validation documents the nesting-depth guard (§10) and the open-meta / strict-ops asymmetry (§12); Unicode hashing pinned (raw UTF-8 bytes, producers SHOULD emit NFC). Version 2 files are refused as an unsupported format version — no migration path (re-create the overlay).</td></tr>
 </table>
 
 </body>
