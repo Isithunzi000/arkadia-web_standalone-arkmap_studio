@@ -96,6 +96,7 @@ console.log('── T1: slownik 2048 slow ──');
      'SHA-256 listy zamrozone (zmiana listy = zmiana kodu odzyskiwania = nowa wersja formatu)');
   const wordHashes = new Set(W.map(sha256));
   ok(!BANNED_SHA256.some(h => wordHashes.has(h)), 'straznik: zadne zakazane slowo nie wchodzi do listy');
+  ok(Object.isFrozen(M._IDENTITY_WORDLIST), 'lista slow zamrozona w runtime (Object.freeze)');
 }
 
 // ═══ T2: Ed25519 fallback BigInt — wektory RFC 8032 ═══
@@ -185,6 +186,7 @@ console.log('── T5: odmowy i walidacja ──');
   ok(/6 słów i 3 litery/.test(await bad('N:' + gen.slice(0, 5).join('-') + '-' + letters) || ''),
      'odmowa: zla liczba tokenow');
   ok(/postać/.test(await bad(gen.join('-') + '-' + letters) || ''), 'odmowa: brak dwukropka/nicku');
+  ok(/za długi/.test(await bad('N:' + 'a'.repeat(5000)) || ''), 'odmowa: kod za dlugi (>4096 znakow)');
   ok(/Nick jest wymagany/.test(await bad(':' + gen.join('-') + '-' + letters) || ''), 'odmowa: pusty nick');
   ok(M._identityValidateNick('x'.repeat(33)) !== null, 'odmowa: nick > 32 znaki');
   ok(M._identityValidateNick('a:b') !== null, 'odmowa: dwukropek w nicku');

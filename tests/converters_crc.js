@@ -141,6 +141,20 @@ console.log('— T4: czułość CRC na zmianę mapy —');
   ok(crcBefore !== crcAfter, 'zmiana nazwy pokoju → inne checksums.file (delta odróżni bazę)');
 }
 
+// ── T5: checksums.meta po konwersji i round-tripie ─────────────────────────
+console.log('— T5: checksums.meta po konwersji i round-tripie —');
+{
+  const parsed = JSON.parse(fs.readFileSync(out1, 'utf8'));
+  ok(typeof parsed.checksums.meta === 'string' && /^[0-9a-f]{16}$/.test(parsed.checksums.meta),
+    'konwerter: checksums.meta obecne (16 hex, top-level)');
+  const { state, api } = makeCtx();
+  api.applyMap(JSON.parse(fs.readFileSync(out1, 'utf8')));
+  api._prepareArkmapForSave();
+  const round = JSON.parse(api._serializeMap());
+  const v = api.verifyChecksums(round);
+  ok(v.metaOk === true, 'verifyChecksums: metaOk === true po round-tripie');
+}
+
 console.log('');
 console.log('converters_crc: ' + pass + ' OK, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

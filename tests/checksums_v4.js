@@ -304,6 +304,17 @@ console.log('── T5c: checksums.meta — metaOk informacyjny; identity (file)
   const mApp = freshMap(); api.addChecksums(mApp);
   ok(mApp.meta.app_version === undefined,
      'kontekst harnessu (bez APP_VERSION) → bez stempla app_version');
+
+  // Nieznane klucze meta sa objete checksums.meta; obce klucze TOP-LEVEL — nie
+  // (zakres v4 = colors+areas+meta; top-level obejmie podpis — P-LOCK-1).
+  const mExtra = freshMap(); api.addChecksums(mExtra);
+  mExtra.meta.niestandardowy_klucz = 'x';
+  const r3 = api.verifyChecksums(mExtra);
+  ok(r3.metaOk === false && r3.ok === true, 'nieznany klucz meta → metaOk:false (objety suma)');
+  const mTop = freshMap(); api.addChecksums(mTop);
+  mTop.obcy_top = { a: 1 };
+  const r4 = api.verifyChecksums(mTop);
+  ok(r4.fileOk === true && r4.ok === true, 'obcy klucz TOP-LEVEL poza zakresem sum (pin zakresu v4)');
 }
 
 // ═══ T5b: verifyChecksums NIGDY nie rzuca (biegnie przed dialogiem walidacji) ═══
