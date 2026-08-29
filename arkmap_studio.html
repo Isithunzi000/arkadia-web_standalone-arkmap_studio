@@ -19882,17 +19882,19 @@ function submitPullRequest() {
 // determinizm przez stableStringify + XXH3-64, anonimowe adds przez sid "d:N".
 
 const ARKDELTA_FORMAT = 'arkdelta';
-const ARKDELTA_FORMAT_VERSION = 2;
+const ARKDELTA_FORMAT_VERSION = 3;  // koperta v3 (D1): format/format_version/checksums na top-level
 const ARKDELTA_MAX_OPS = 5000;
 const ARKDELTA_MAX_BYTES = 8 * 1024 * 1024;
 const _DELTA_SID_RE = /^d:[1-9][0-9]*$/;
 
 // _deltaChecksums(meta, ops) — sumy integralności kalki: XXH3-64 po kanonizacji stableStringify (UTF-8).
-// format_version 2: algorytm zunifikowany z .arkmap (jeden silnik sum w projekcie).
+// Koperta v3 (D1/D2): checksums.file obejmuje { format, format_version, meta, ops } — cały plik
+// minus obiekt checksums (wiec checksums.sig lezy poza wejsciem z konstrukcji, bez reguł wykluczen).
+// checksums.ops: sumy per op — wylacznie diagnostyczne (lokalizacja korupcji), nie sa bramka.
 // Jeden wspólny punkt dla obu builderów (buildDelta, _deltaSerializeOps) i weryfikacji importu.
 function _deltaChecksums(meta, ops) {
   const h = o => xxh3_64hex(_canonTe.encode(stableStringify(o)));
-  return { file: h({ meta, ops }), ops: ops.map(h) };
+  return { file: h({ format: ARKDELTA_FORMAT, format_version: ARKDELTA_FORMAT_VERSION, meta, ops }), ops: ops.map(h) };
 }
 
 // ── baseInfo: tożsamość bazy (crc liczone RAZ, przy wczytaniu mapy) ─────────
@@ -19908,6 +19910,9 @@ function _computeBaseInfo(map, precomputed) {
   const info = { crc: cs.file };
   if (ud.version)  info.version  = ud.version;
   if (ud.revision) info.revision = ud.revision;
+  // D4 (koperta v3): sumy per-obszar bazy — klasyfikacja ryzyka zielony/zolty/czerwony
+  // przy review kalki na innej bazie (spec .arkdelta §4).
+  info.areas = Object.assign({}, cs.areas);
   return info;
 }
 
@@ -20492,9 +20497,199 @@ function kalkaCreate() {
   saveBtn.style.display = '';
 }
 
-function kalkaSave() {
+async function kalkaSave() {
   if (!_kalka.text) return;
-  saveWithDialog(_kalka.fname, 'application/json', () => _kalka.text);  // toast w helperze
+  const text = await _deltaMaybeSign(_kalka.text);  // D8: podpis gdy tozsamosc aktywna
+  saveWithDialog(_kalka.fname, 'application/json', () => text);  // toast w helperze
+}
+
+// ── D5: kompaktowanie logu (producer-side, deterministyczne; spec .arkdelta §8) ──
+// Czyste funkcje na tablicy opow {seq,type,target,payload,label} — wspolne dla
+// buildDelta (log sesji / generator z diffu) i _deltaSerializeOps (reszta kalki).
+// Warunek referencyjny: lancuch skladamy tylko gdy ZADEN posredni op nie
+// referencjuje obiektu (graf zaleznosci po referencjach w target/payload,
+// NIE sasiedztwo seq). Scalony op bierze etykiete ostatniego skladnika,
+// a seq sa przenumerowywane do ciaglych 1..N.
+
+// Referencje opu: wszystkie identyfikatory obiektow, do ktorych op sie odwoluje
+// (cele wyjsc/special exits w before/after/room tez — tresc pokoju referencjuje sasiadow).
+function _deltaOpRefs(op) {
+  const refs = new Set();
+  const room = id => { if (id !== undefined && id !== null) refs.add('room:' + id); };
+  const area = id => { if (id !== undefined && id !== null) refs.add('area:' + id); };
+  const roomObj = r => {
+    if (!r || typeof r !== 'object') return;
+    room(r.id);
+    if (r.exits)         for (const k of Object.keys(r.exits))         room(r.exits[k]);
+    if (r.special_exits) for (const k of Object.keys(r.special_exits)) room(r.special_exits[k]);
+  };
+  const T = op.target || {}, P = op.payload || {};
+  switch (op.type) {
+    case 'ADD_ROOM': case 'DELETE_ROOM': room(T.roomId); area(T.areaId); roomObj(P.room); break;
+    case 'EDIT_ROOM': case 'EDIT_EXIT':  room(T.roomId); roomObj(P.before); roomObj(P.after); break;
+    case 'MOVE_ROOM': room(T.roomId); break;
+    case 'MOVE_ROOM_TO_AREA': room(T.roomId); area(P.fromAreaId); area(P.toAreaId); break;
+    case 'ADD_EXIT': room(T.sourceId); room(P.targetId); break;
+    case 'DELETE_EXIT': room(T.roomId); room(P.exitId); break;
+    case 'DELETE_SPECIAL_EXIT': room(T.roomId); room(P.targetId); break;
+    case 'ADD_AREA': case 'DELETE_AREA': case 'EDIT_AREA': area(T.areaId); break;
+    case 'ADD_CL': case 'EDIT_CL': case 'DELETE_CL':
+    case 'ADD_SUPPRESSOR': case 'DELETE_SUPPRESSOR': room(T.roomId); break;
+    case 'AUTO_FIX_SUPPRESSORS':
+      (P.added || []).forEach(x => room(x.roomId));
+      (P.removed || []).forEach(x => room(x.roomId)); break;
+    case 'PAINT_BATCH': (P.changes || []).forEach(ch => room(ch.roomId)); break;
+    case 'ADD_LABEL': case 'DELETE_LABEL':
+      area(T.areaId);
+      if (P.label && P.label.id !== undefined) refs.add('label:' + T.areaId + ':' + P.label.id);
+      break;
+    case 'EDIT_LABEL': case 'MOVE_LABEL': case 'RESIZE_LABEL':
+      area(T.areaId);
+      if (T.labelId !== undefined) refs.add('label:' + T.areaId + ':' + T.labelId);
+      break;
+    case 'EDIT_ENV_COLOR': refs.add('env:' + T.envId); break;
+  }
+  return refs;
+}
+
+// Klucz lancucha kompaktowania (tozsamosc obiektu per regula; null = op nieklikalny).
+function _deltaChainKey(op) {
+  const T = op.target || {};
+  switch (op.type) {
+    case 'ADD_ROOM': case 'DELETE_ROOM': case 'EDIT_ROOM': case 'EDIT_EXIT': case 'MOVE_ROOM':
+      return T.roomId !== undefined ? 'room:' + T.roomId : null;
+    case 'ADD_AREA': case 'DELETE_AREA': case 'EDIT_AREA':
+      return T.areaId !== undefined ? 'area:' + T.areaId : null;
+    case 'ADD_LABEL': {
+      const id = op.payload && op.payload.label ? op.payload.label.id : undefined;
+      return id !== undefined ? 'label:' + T.areaId + ':' + id : null;
+    }
+    case 'DELETE_LABEL': case 'EDIT_LABEL': case 'MOVE_LABEL': case 'RESIZE_LABEL':
+      return T.labelId !== undefined ? 'label:' + T.areaId + ':' + T.labelId : null;
+    case 'ADD_CL': case 'EDIT_CL': case 'DELETE_CL':
+      return 'cl:' + T.roomId + ':' + T.dir;
+    case 'ADD_SUPPRESSOR': case 'DELETE_SUPPRESSOR':
+      return 'sup:' + T.roomId + ':' + T.dir;
+    case 'EDIT_ENV_COLOR': return 'env:' + T.envId;
+    case 'PAINT_BATCH': return 'paint';
+  }
+  return null;
+}
+
+// Proba wchloniecia opu do glowy lancucha (mutuje head). Zwraca:
+// 'folded' (wchloniety), 'vanish' (para znika — usunac glowe) albo null (nieskladalne).
+function _deltaTryFold(head, op) {
+  const eq = (a, b) => stableStringify(a) === stableStringify(b);
+  switch (head.type + '|' + op.type) {
+    // Regula 1: lancuch EDIT_ROOM/EDIT_EXIT — pierwszy before, ostatni after; znika gdy rowne.
+    case 'EDIT_ROOM|EDIT_ROOM': case 'EDIT_ROOM|EDIT_EXIT':
+    case 'EDIT_EXIT|EDIT_ROOM': case 'EDIT_EXIT|EDIT_EXIT':
+      head.payload.after = op.payload.after; head.label = op.label;
+      return eq(head.payload.before, head.payload.after) ? 'vanish' : 'folded';
+    // Regula 2: ADD + pozniejsze edycje/przesuniecia tego sid → pojedynczy ADD ze stanem koncowym.
+    case 'ADD_ROOM|EDIT_ROOM': case 'ADD_ROOM|EDIT_EXIT':
+      head.payload.room = op.payload.after; head.label = op.label; return 'folded';
+    case 'ADD_ROOM|MOVE_ROOM':
+      head.payload.room.x = op.payload.toX; head.payload.room.y = op.payload.toY; head.payload.room.z = op.payload.toZ;
+      head.label = op.label; return 'folded';
+    case 'ADD_ROOM|MOVE_ROOM_TO_AREA':
+      head.target.areaId = op.payload.toAreaId; head.label = op.label; return 'folded';
+    case 'ADD_AREA|EDIT_AREA':
+      head.payload.area.name = op.payload.name;
+      head.payload.area.user_data = op.payload.user_data;
+      head.label = op.label; return 'folded';
+    case 'ADD_LABEL|EDIT_LABEL':
+      head.payload.label = op.payload.after; head.label = op.label; return 'folded';
+    case 'ADD_LABEL|MOVE_LABEL':
+      head.payload.label.x = op.payload.toX; head.payload.label.y = op.payload.toY;
+      head.label = op.label; return 'folded';
+    case 'ADD_LABEL|RESIZE_LABEL':
+      head.payload.label.x = op.payload.toX; head.payload.label.y = op.payload.toY;
+      head.payload.label.width = op.payload.toW; head.payload.label.height = op.payload.toH;
+      head.label = op.label; return 'folded';
+    case 'ADD_CL|EDIT_CL':
+      head.payload.cl = op.payload.after; head.label = op.label; return 'folded';
+    // Regula 3: lancuch MOVE_ROOM — pierwszy from*, ostatni to*.
+    case 'MOVE_ROOM|MOVE_ROOM':
+      head.payload.toX = op.payload.toX; head.payload.toY = op.payload.toY; head.payload.toZ = op.payload.toZ;
+      head.label = op.label; return 'folded';
+    // Regula 4: EDIT_ENV_COLOR per envId — pierwszy oldColor, ostatni newColor.
+    case 'EDIT_ENV_COLOR|EDIT_ENV_COLOR':
+      head.payload.newColor = op.payload.newColor; head.label = op.label; return 'folded';
+    // Regula 5: para ADD + DELETE tego samego obiektu znika.
+    case 'ADD_ROOM|DELETE_ROOM': case 'ADD_AREA|DELETE_AREA': case 'ADD_LABEL|DELETE_LABEL':
+    case 'ADD_CL|DELETE_CL': case 'ADD_SUPPRESSOR|DELETE_SUPPRESSOR':
+      return 'vanish';
+    // Regula 6: scalanie batchy malowania + kolaps per roomId (pierwszy before, ostatni after).
+    case 'PAINT_BATCH|PAINT_BATCH': {
+      const byRoom = new Map();
+      for (const ch of [...(head.payload.changes || []), ...(op.payload.changes || [])]) {
+        const k = String(ch.roomId);
+        if (byRoom.has(k)) { const c = byRoom.get(k); c.afterEnv = ch.afterEnv; c.afterSymbol = ch.afterSymbol; }
+        else byRoom.set(k, Object.assign({}, ch));
+      }
+      head.payload.changes = [...byRoom.values()];
+      head.label = op.label; return 'folded';
+    }
+  }
+  return null;
+}
+
+// Zamknij lancuchy zablokowane przez referencje nadchodzacego opu (warunek §8).
+// Konserwatywnie: ref pokoju zamyka tez lancuchy cl:/sup: tego pokoju,
+// ref obszaru — lancuchy label: tego obszaru, dowolny ref room: — lancuch 'paint'.
+function _deltaBlockChains(open, refs, exceptKey) {
+  for (const k of [...open.keys()]) {
+    if (k === exceptKey) continue;
+    let hit = false;
+    for (const r of refs) {
+      if (r === k) { hit = true; break; }
+      if (r.startsWith('room:') &&
+          (k.startsWith('cl:' + r.slice(5) + ':') || k.startsWith('sup:' + r.slice(5) + ':'))) { hit = true; break; }
+      if (r.startsWith('area:') && k.startsWith('label:' + r.slice(5) + ':')) { hit = true; break; }
+      if (k === 'paint' && r.startsWith('room:')) { hit = true; break; }
+    }
+    if (hit) open.delete(k);
+  }
+}
+
+// Wejscie nietkniete; wyjscie: nowa tablica, seq przenumerowane 1..N.
+function _compactDeltaOps(ops) {
+  const out = [];            // scalone opy (null = dziura po vanish)
+  const open = new Map();    // klucz lancucha -> indeks glowy w out
+  for (const src of ops) {
+    const op = { seq: 0, type: src.type,
+                 target: JSON.parse(JSON.stringify(src.target || {})),
+                 payload: JSON.parse(JSON.stringify(src.payload || {})),
+                 label: src.label || '' };
+    if (op.type === 'PAINT_BATCH') {
+      // regula 6 w obrebie jednego batcha: kolaps per roomId (pierwszy before, ostatni after)
+      const byRoom = new Map();
+      for (const ch of (op.payload.changes || [])) {
+        const k = String(ch.roomId);
+        if (byRoom.has(k)) { const c = byRoom.get(k); c.afterEnv = ch.afterEnv; c.afterSymbol = ch.afterSymbol; }
+        else byRoom.set(k, ch);
+      }
+      op.payload.changes = [...byRoom.values()];
+    }
+    const key = _deltaChainKey(op);
+    const refs = _deltaOpRefs(op);
+    let foldedInto = null, appended = false;
+    if (key !== null && open.has(key)) {
+      const hi = open.get(key);
+      const r = _deltaTryFold(out[hi], op);
+      if (r === 'folded') foldedInto = key;
+      else if (r === 'vanish') { out[hi] = null; open.delete(key); foldedInto = key; }
+    }
+    _deltaBlockChains(open, refs, foldedInto);
+    if (!foldedInto) {
+      // Op niechloniety: wchodzi do pliku; glowe lancucha otwieraja tylko typy
+      // majace kontynuacje (DELETE_* nigdy — ich jedyna rola to vanish-para wyzej).
+      if (key !== null && !/^DELETE_/.test(op.type)) { open.set(key, out.length); }
+      out.push(op); appended = true;
+    }
+  }
+  return out.filter(Boolean).map((o, i) => { o.seq = i + 1; return o; });
 }
 
 // Budowa pliku delty z state.deltaLog (netto). Zwraca tekst kanoniczny.
@@ -20662,15 +20857,16 @@ function buildDelta(log, base) {
     ops.push({ seq: ++seq, type: e.type, target, payload, label: e.label || '' });
   }
 
+  // D5: kompaktowanie logu przed serializacja (spec §8) — deterministyczne, seq 1..N.
+  const cps = _compactDeltaOps(ops);
+  // Koperta v3 (D1): format/format_version/checksums na top-level; meta = baza + proweniencja + bookkeeping.
   const meta = {
-    format: ARKDELTA_FORMAT,
-    format_version: ARKDELTA_FORMAT_VERSION,
-    ops_count: ops.length,
+    ops_count: cps.length,
     base: base,
     app_version: APP_VERSION,
   };
-  const checksums = _deltaChecksums(meta, ops);
-  return stableStringify({ meta, ops, checksums });
+  const checksums = _deltaChecksums(meta, cps);
+  return stableStringify({ format: ARKDELTA_FORMAT, format_version: ARKDELTA_FORMAT_VERSION, meta, ops: cps, checksums });
 }
 
 function _arkdeltaSuggestedName() {
@@ -20692,28 +20888,47 @@ const _DELTA_EXPORTABLE = new Set([
   'EDIT_ENV_COLOR',
 ]);
 
-function saveDelta() {
+async function saveDelta() {
   if (state._verifyPending) { toast('Trwa weryfikacja sum kontrolnych mapy…', true); return; }  // P3b: kalka potrzebuje gotowego baseInfo
   if (!state.deltaLog || state.deltaLog.length === 0) { toast('Brak zmian do zapisania', true); return; }
   // Arc 34: log niepusty, ale zero eksportowalnych opow (np. same akceptacje walidatora)
   if (!state.deltaLog.some(e => _DELTA_EXPORTABLE.has(e.type))) { toast('Brak zmian do zapisania', true); return; }
-  const text = buildDelta();
+  const text = await _deltaMaybeSign(buildDelta());  // D8: podpis gdy tozsamosc aktywna
   saveWithDialog(_arkdeltaSuggestedName(), 'application/json', () => text);  // toast w helperze
 }
 
 // Serializacja kalki z zadanych opow (meta + checksumy liczone na nowo).
-// Opy sa przenumerowywane do ciaglych seq 1..N (kopie — oryginaly bez zmian).
+// Koperta v3: kompaktowanie D5 (idempotentne na juz skompaktowanych) + seq 1..N
+// (kopie — oryginaly bez zmian).
 function _deltaSerializeOps(ops, base) {
-  ops = ops.map((o, i) => Object.assign({}, o, { seq: i + 1 }));
+  ops = _compactDeltaOps(ops);
   const meta = {
-    format: ARKDELTA_FORMAT,
-    format_version: ARKDELTA_FORMAT_VERSION,
     ops_count: ops.length,
     base: base || {},
     app_version: APP_VERSION,
   };
   const checksums = _deltaChecksums(meta, ops);
-  return stableStringify({ meta, ops, checksums });
+  return stableStringify({ format: ARKDELTA_FORMAT, format_version: ARKDELTA_FORMAT_VERSION, meta, ops, checksums });
+}
+
+// D8: opcjonalny podpis kalki (spec .arkdelta §9). Nakladka na gotowy tekst:
+// przy aktywnej tozsamosci dopisuje proweniencje do meta (author/author_id/
+// author_pubkey/created — objete checksums.file), przelicza checksumy i podpisuje
+// ASCII "arkdelta-v3:" + checksums.file → checksums.sig (128 hex).
+// Bez tozsamosci zwraca tekst bez zmian (stan anonimowy — zero pol autora).
+// _identityForSigning dostarcza Faza 5 (modul tozsamosci); typeof-guard utrzymuje
+// harnessy node (ekstrakcja bez modulu tozsamosci = sciezka anonimowa).
+async function _deltaMaybeSign(text) {
+  const id = (typeof _identityForSigning === 'function') ? await _identityForSigning() : null;
+  if (!id) return text;
+  const d = JSON.parse(text);
+  d.meta.author = id.nick;
+  d.meta.author_id = id.authorId;
+  d.meta.author_pubkey = id.pubkeyHex;
+  d.meta.created = new Date().toISOString();
+  d.checksums = _deltaChecksums(d.meta, d.ops);
+  d.checksums.sig = await id.sign('arkdelta-v3:' + d.checksums.file);
+  return stableStringify(d);
 }
 
 // Opy kalki jeszcze NIE naniesione w tej sesji: konflikty, niewykonalne,
@@ -20732,12 +20947,13 @@ function _deltaRemainderOps() {
   return _deltaApplyOverridesToOps((R.originalOps || R.delta.ops).filter(o => rest.has(o.seq)), manual);
 }
 
-function saveDeltaRemainder() {
+async function saveDeltaRemainder() {
   const ops = _deltaRemainderOps();
   if (!ops.length) { toast('Brak reszty — cała kalka naniesiona.', true); return; }
   const base = (_deltaReview.delta.meta && _deltaReview.delta.meta.base) || state.baseInfo || {};
+  const text = await _deltaMaybeSign(_deltaSerializeOps(ops, base));  // D8: podpis gdy tozsamosc aktywna
   saveWithDialog(_arkdeltaSuggestedName().replace(/\.arkdelta$/, '-reszta.arkdelta'), 'application/json',
-    () => _deltaSerializeOps(ops, base));  // toast w helperze
+    () => text);  // toast w helperze
 }
 
 // ── Walidacja pliku (fail-closed, strict refuse z diagnostyką) ───────────────
@@ -20912,9 +21128,10 @@ function validateDeltaText(text) {
   catch (e) { return { ok: false, errors: ['Nie można odczytać pliku — uszkodzony lub to nie jest plik kalki.'] }; }
   if (!delta || typeof delta !== 'object' || Array.isArray(delta)) return { ok: false, errors: ['To nie jest plik .arkdelta.'] };
   const meta = delta.meta || {};
-  if (meta.format !== ARKDELTA_FORMAT) return { ok: false, errors: ['To nie jest plik .arkdelta.'] };
-  if (meta.format_version !== ARKDELTA_FORMAT_VERSION)
-    return { ok: false, errors: ['Nieobsługiwana wersja formatu kalki: ' + (meta.format_version ?? 'brak') + ' (ta wersja ArkMap Studio obsługuje: ' + ARKDELTA_FORMAT_VERSION + '). Plik nie został wczytany.'] };
+  // Koperta v3 (D1): magic i wersja na top-level; stare uklady (meta.format/meta.format_version) odrzucane.
+  if (delta.format !== ARKDELTA_FORMAT) return { ok: false, errors: ['To nie jest plik .arkdelta.'] };
+  if (delta.format_version !== ARKDELTA_FORMAT_VERSION)
+    return { ok: false, errors: ['Nieobsługiwana wersja formatu kalki: ' + (delta.format_version ?? 'brak') + ' (ta wersja ArkMap Studio obsługuje: ' + ARKDELTA_FORMAT_VERSION + '). Kalki w starym formacie nie są wczytywane — zapisz kalkę ponownie z logu zmian albo zaktualizuj ArkMap Studio. Plik nie został wczytany.'] };
 
   // audyt ext F1.2: straznik glebokosci PRZED checksumami — stableStringify jest
   // rekurencyjne; bez guarda glebokie ops wywalaja RangeError poza walidator.

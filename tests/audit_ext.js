@@ -113,9 +113,9 @@ function makeKalkaCtx(map) {
 }
 
 function kalkaText(api, ops) {
-  const meta = { format: 'arkdelta', format_version: 2, ops_count: ops.length };
+  const meta = { ops_count: ops.length };
   const checksums = api._deltaChecksums(meta, ops);
-  return JSON.stringify({ meta, ops, checksums });
+  return JSON.stringify({ format: 'arkdelta', format_version: 3, meta, ops, checksums });
 }
 const clone = o => JSON.parse(JSON.stringify(o));
 
@@ -213,7 +213,7 @@ console.log('— A1.2 (F1.2): validateDeltaText — glebokie JSON bez RangeError
 {
   const c = makeKalkaCtx({ meta: {}, areas: [{ id: 1, name: 'A', rooms: [] }], colors: {} });
   const DEEP = '{"a":'.repeat(10000) + '1' + '}'.repeat(10000);
-  const text = '{"meta":{"format":"arkdelta","format_version":2,"ops_count":1},'
+  const text = '{"format":"arkdelta","format_version":3,"meta":{"ops_count":1},'
     + '"ops":[{"seq":1,"type":"EDIT_ENV_COLOR","target":{"envId":1},"payload":{"newColor":' + DEEP + '}}],'
     + '"checksums":{"file":"0","ops":["0"]}}';
   let threw = null, val = null;
@@ -320,7 +320,7 @@ console.log('— A1.6 (F1.6): PAINT_BATCH / AUTO_FIX_SUPPRESSORS — walidacja e
   ok(v1.ok === false, 'A1.6 (F1.6): changes:[null] odrzucone przez walidator (pre-fix: przechodzi)');
   let threw = null;
   try {
-    c.api.classifyDelta({ meta: { format: 'arkdelta', format_version: 2, ops_count: 1 },
+    c.api.classifyDelta({ format: 'arkdelta', format_version: 3, meta: { ops_count: 1 },
       ops: [{ seq: 1, type: 'PAINT_BATCH', target: {}, payload: { changes: [null] } }] });
   } catch (e) { threw = e; }
   ok(threw === null, 'A1.6 (F1.6): classifyDelta nie rzuca na changes:[null] (pre-fix: TypeError)');
@@ -329,7 +329,7 @@ console.log('— A1.6 (F1.6): PAINT_BATCH / AUTO_FIX_SUPPRESSORS — walidacja e
   ok(v2.ok === false, 'A1.6 (F1.6): added:[null] odrzucone przez walidator (pre-fix: przechodzi)');
   let threw2 = null;
   try {
-    c.api.classifyDelta({ meta: { format: 'arkdelta', format_version: 2, ops_count: 1 },
+    c.api.classifyDelta({ format: 'arkdelta', format_version: 3, meta: { ops_count: 1 },
       ops: [{ seq: 1, type: 'AUTO_FIX_SUPPRESSORS', target: {}, payload: { added: [null], removed: [] } }] });
   } catch (e) { threw2 = e; }
   ok(threw2 === null, 'A1.6 (F1.6): classifyDelta nie rzuca na added:[null] (pre-fix: TypeError)');

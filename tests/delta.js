@@ -266,10 +266,16 @@ console.log('— T2: buildDelta — determinizm i kształt pliku —');
   c2.state.deltaLog = sampleDeltaLog(c2.state);
   ok(t1 === c2.api.buildDelta(), 'buildDelta: świeży kontekst, ten sam log → identyczne bajty (determinizm)');
   const d = JSON.parse(t1);
-  ok(d.meta.format === 'arkdelta' && d.meta.format_version === 2, 'meta: format + format_version 2 (v1.50.3)');
+  ok(d.format === 'arkdelta' && d.format_version === 3, 'koperta v3: format + format_version na top-level (v1.51.0)');
+  ok(d.meta.format === undefined && d.meta.format_version === undefined,
+    'koperta v3: meta NIE nosi juz format/format_version');
   ok(d.meta.ops_count === d.ops.length && d.ops.length === 10, 'meta.ops_count == liczba opów');
   ok(d.meta.base && d.meta.base.crc === c1.state.baseInfo.crc && d.meta.base.version === '9.9.9',
     'meta.base: crc + version z baseInfo');
+  ok(d.meta.base.areas && typeof d.meta.base.areas === 'object'
+    && Object.keys(d.meta.base.areas).length > 0
+    && Object.values(d.meta.base.areas).every(v => /^[0-9a-f]{16}$/.test(v)),
+    'D4: meta.base.areas — sumy per-obszar bazy (hex16)');
   ok(d.meta.app_version === 'v1.6.0-test', 'meta.app_version z APP_VERSION');
   const dcs = c1.api._deltaChecksums(d.meta, d.ops);
   ok(d.checksums.file === dcs.file,
@@ -341,10 +347,15 @@ console.log('— T3: validateDeltaText — round-trip eksportu —');
   const res = c.api.validateDeltaText(text);
   ok(res.ok === true, 'reuse id po DELETE: eksport przechodzi walidację' + (res.ok ? '' : ': ' + res.errors.join(' | ')));
   const d = JSON.parse(text);
-  ok(d.ops[0].payload.label.id !== d.ops[2].payload.label.id, 'reuse label id: dwa ADD_LABEL → różne sid');
-  ok(d.ops[1].payload.label.id === d.ops[0].payload.label.id, 'DELETE_LABEL referencuje pierwszy sid');
-  ok(d.ops[3].target.roomId !== d.ops[5].target.roomId, 'reuse room id: dwa ADD_ROOM → różne sid');
-  ok(d.ops[4].payload.room.id === d.ops[3].target.roomId, 'DELETE_ROOM snapshot z sid pierwszego wystąpienia');
+  // D5 (kompaktowanie): pary ADD+DELETE znikaja, zostaja dwa ostatnie ADD
+  // z sid KOLEJNYCH wystapien (d:2, d:4 — luki po zniknietych d:1/d:3 sa legalne).
+  ok(d.ops.length === 2, 'kompaktowanie D5: pary ADD+DELETE zniknely (z 6 opow zostaly 2)');
+  ok(d.ops[0].type === 'ADD_LABEL' && d.ops[0].payload.label.id === 'd:2' && d.ops[0].label === 'a2',
+    'reuse label id: drugi ADD_LABEL ma sid nowego wystapienia (d:2) i etykiete ostatniego skladnika');
+  ok(d.ops[1].type === 'ADD_ROOM' && d.ops[1].target.roomId === 'd:4' && d.ops[1].payload.room.id === 'd:4'
+    && d.ops[1].payload.room.name === 'Q2',
+    'reuse room id: drugi ADD_ROOM ma sid nowego wystapienia (d:4) i stan koncowy');
+  ok(d.ops[0].payload.label.id !== d.ops[1].target.roomId, 'sid per wystapienie: d:2 ≠ d:4 (brak kolizji po reuse id)');
 }
 
 console.log('— T4: validateDeltaText — strict refuse —');
@@ -364,13 +375,16 @@ console.log('— T4: validateDeltaText — strict refuse —');
   };
   refuse('', 'Pusty plik', 'odmowa: pusty plik');
   refuse('{nie-json', 'Nie można odczytać pliku', 'odmowa: nieczytelny plik kalki');
-  refuse('{}', 'nie jest plik .arkdelta', 'odmowa: JSON bez meta.format');
-  { const d = JSON.parse(validText); d.meta.format = 'arkmap';
+  refuse('{}', 'nie jest plik .arkdelta', 'odmowa: JSON bez top-level format');
+  { const d = JSON.parse(validText); d.format = 'arkmap';
     refuse(api.stableStringify(d), 'nie jest plik .arkdelta', 'odmowa: zły znacznik formatu'); }
-  { const d = JSON.parse(validText); d.meta.format_version = 99;
+  { const d = JSON.parse(validText); d.format_version = 99;
     refuse(api.stableStringify(d), 'Nieobsługiwana wersja formatu', 'odmowa: nieobsługiwana wersja formatu'); }
-  { const d = JSON.parse(validText); d.meta.format_version = 1;
-    refuse(api.stableStringify(d), 'Nieobsługiwana wersja formatu', 'odmowa: stara kalka v1 (CRC-32) głośno odrzucona'); }
+  { const d = JSON.parse(validText); d.format_version = 2;
+    refuse(api.stableStringify(d), 'Nieobsługiwana wersja formatu', 'odmowa: stara kalka v2 głośno odrzucona (D1, zero migracji)'); }
+  { const d = JSON.parse(validText); delete d.format; delete d.format_version;
+    d.meta.format = 'arkdelta'; d.meta.format_version = 2;
+    refuse(api.stableStringify(d), 'nie jest plik .arkdelta', 'odmowa: stary uklad koperty (magic w meta) odrzucony'); }
   { const d = JSON.parse(validText); d.ops[1].payload.room.name = 'SZKODA';
     refuse(api.stableStringify(d), 'uszkodzony', 'odmowa: suma zbiorcza po ingerencji w treść'); }
   { const d = JSON.parse(validText); d.ops[1].payload.room.name = 'SZKODA';
@@ -394,7 +408,7 @@ console.log('— T4: validateDeltaText — strict refuse —');
   { const d = JSON.parse(validText); d.meta.ops_count = 999;
     refuse(reseal(d), 'w nagłówku', 'odmowa: liczba operacji z nagłówka nie zgadza się z listą'); }
   refuse('x'.repeat(8 * 1024 * 1024 + 1), 'za duży', 'odmowa: plik ponad limit 8 MB');
-  { const d = { meta: { format: 'arkdelta', format_version: 2, ops_count: 5001, base: {} },
+  { const d = { format: 'arkdelta', format_version: 3, meta: { ops_count: 5001, base: {} },
       ops: Array.from({ length: 5001 }, (_, i) => ({ seq: i + 1, type: 'EDIT_ENV_COLOR', target: { envId: 1 }, payload: { newColor: [1, 2, 3] } })) };
     refuse(reseal(d), 'Za dużo operacji', 'odmowa: ponad 5000 opów'); }
 }
@@ -430,7 +444,7 @@ console.log('— T6: applyDelta — pomijanie z powodami —');
 {
   const c = makeDeltaCtx();
   const { state, api } = c;
-  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const delta = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'DELETE_ROOM', target: { roomId: 999, areaId: 1 }, payload: { room: { id: 999 } }, label: '' },
     { seq: 2, type: 'ADD_EXIT', target: { sourceId: 10, dir: 'e' }, payload: { targetId: 12, bidirectional: false }, label: '' },
     { seq: 3, type: 'EDIT_ROOM', target: { roomId: 999 }, payload: { before: {}, after: { id: 999 } }, label: '' },
@@ -527,7 +541,7 @@ console.log('— T8: classifyDelta + recenzja (M2) —');
   const c = makeDeltaCtx();
   const { state, api } = c;
   const op = (seq, type, target, payload) => ({ seq, type, target, payload, label: 'op ' + seq });
-  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const delta = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
     op(1,  'ADD_ROOM',  { roomId: 'd:1', areaId: 1 }, { room: { id: 'd:1', x: 5, y: 5, z: 0, name: 'Nowy', env: 262 } }),
     op(2,  'ADD_ROOM',  { roomId: 'd:2', areaId: 1 }, { room: { id: 'd:2', x: 1, y: 0, z: 0, name: 'Inny', env: 262 } }),
     op(3,  'ADD_ROOM',  { roomId: 'd:3', areaId: 1 }, { room: { id: 'd:3', x: 1, y: 0, z: 0, name: 'R11', env: 258, exits: { w: 10 } } }),
@@ -579,7 +593,7 @@ console.log('— T8: classifyDelta + recenzja (M2) —');
     const after10 = Object.assign(JSON.parse(JSON.stringify(orig10)), { name: 'R10X' });
     c2.state.roomById[10].name = 'R10X';
     c2.state.roomById[10].exits = Object.assign({}, c2.state.roomById[10].exits, { n: 11 });
-    const d2 = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+    const d2 = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
       { seq: 1, type: 'EDIT_ROOM', target: { roomId: 10 }, payload: { before: orig10, after: after10 }, label: '' } ] };
     ok(c2.api.classifyDelta(d2)[0].cls === 'done', 'classify EDIT_ROOM (F2): zmieniane pole zgodne z after → done mimo rozjazdu na innych polach');
     c2.state.roomById[10].name = 'INNA';
@@ -615,7 +629,7 @@ console.log('— T8: classifyDelta + recenzja (M2) —');
   // onlySeq: nanosi tylko zaznaczone
   const c = makeDeltaCtx();
   const { state, api } = c;
-  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const delta = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'ADD_ROOM', target: { roomId: 'd:1', areaId: 2 }, payload: { room: { id: 'd:1', x: 8, y: 8, z: 0, name: 'Nowy', env: 262 } }, label: 'r' },
     { seq: 2, type: 'EDIT_ROOM', target: { roomId: 10 }, payload: { before: {}, after: { id: 10, x: 0, y: 0, z: 0, name: 'R10X', env: 258, exits: { e: 11 } } }, label: 'e' },
   ] };
@@ -629,7 +643,7 @@ console.log('— T8: classifyDelta + recenzja (M2) —');
   // re-klasyfikacja po apply: ok → done (idempotentność przez klasyfikator)
   const c = makeDeltaCtx();
   const { state, api } = c;
-  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const delta = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'ADD_ROOM', target: { roomId: 'd:1', areaId: 2 }, payload: { room: { id: 'd:1', x: 8, y: 8, z: 0, name: 'Nowy', env: 262 } }, label: 'r' },
   ] };
   const before = api.classifyDelta(delta);
@@ -665,7 +679,8 @@ ok(HTML.includes("const ownSid = (op.type === 'ADD_ROOM'"), 'walidator: definicj
 function collisionDelta() {
   const room = (x, y, name) => ({ x, y, z: 0, name, env: 262 });
   return {
-    meta: { format: 'arkdelta', format_version: 2, ops_count: 9, base: { crc: 'x' } },
+    format: 'arkdelta', format_version: 3,
+    meta: { ops_count: 9, base: { crc: 'x' } },
     ops: [
       { seq: 1, type: 'ADD_ROOM', target: { roomId: 'd:1', areaId: 1 }, payload: { room: room(0, 0, 'N1') }, label: 'A1' },
       { seq: 2, type: 'ADD_ROOM', target: { roomId: 'd:2', areaId: 1 }, payload: { room: room(0, 0, 'N2') }, label: 'A2' },
@@ -918,7 +933,7 @@ console.log('— T11: audyt T1 — klasyfikator ≡ apply —');
   // W13: done-SID — zalezny op tlumaczy sie na zywe id przez seed z klasyfikacji
   const c = makeDeltaCtx();
   const { state, api } = c;
-  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const delta = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'ADD_AREA', target: { areaId: 'd:1' }, payload: { area: { id: 'd:1', name: 'Area Two' } }, label: 'a' },
     { seq: 2, type: 'ADD_ROOM', target: { roomId: 'd:2', areaId: 'd:1' }, payload: { room: { id: 'd:2', x: 7, y: 7, z: 0, name: 'Seedowy', env: 262 } }, label: 'r' },
   ] };
@@ -943,7 +958,7 @@ console.log('— T11: audyt T1 — klasyfikator ≡ apply —');
   const { state, api } = c;
   const defArea = { id: -1, name: 'Default Area', rooms: [], labels: [] };
   state.map.areas.push(defArea); state.areas.set(-1, defArea);
-  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const delta = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'DELETE_AREA', target: { areaId: -1 }, payload: {}, label: 'x' },
   ] };
   const items = api.classifyDelta(delta);
@@ -952,7 +967,7 @@ console.log('— T11: audyt T1 — klasyfikator ≡ apply —');
   ok(res.applied === 0 && res.skipped.length === 1 && res.skipped[0].reason.includes('obszar domyślny'),
     'W15: apply DELETE_AREA -1 → skip, zero mutacji');
   ok(!!state.areas.get(-1), 'W15: Default Area nadal istnieje po apply');
-  const res2 = api.applyDelta({ meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const res2 = api.applyDelta({ format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'DELETE_AREA', target: { areaId: 2 }, payload: {}, label: 'x' } ] });
   ok(res2.applied === 1 && !state.areas.get(2), 'W15: DELETE_AREA zwykłego obszaru → applied (regresja guardu)');
 }
@@ -960,7 +975,7 @@ console.log('— T11: audyt T1 — klasyfikator ≡ apply —');
   // W16: bidirectional ADD_EXIT — guard przeciwnego kierunku + symetria done
   const c = makeDeltaCtx();
   const { state, api } = c;
-  const mkDelta = (ops) => ({ meta: { format: 'arkdelta', format_version: 2 }, ops });
+  const mkDelta = (ops) => ({ format: 'arkdelta', format_version: 3, meta: {}, ops });
   let items = api.classifyDelta(mkDelta([
     { seq: 1, type: 'ADD_EXIT', target: { sourceId: 12, dir: 'e' }, payload: { targetId: 11, bidirectional: true }, label: 'x' } ]));
   ok(items[0].cls === 'hard' && items[0].note.includes('kierunek przeciwny'), 'W16: bidirectional, przeciwny zajęty → hard (nie ok)');
@@ -976,7 +991,7 @@ console.log('— T11: audyt T1 — klasyfikator ≡ apply —');
   // W14: PAINT_BATCH / AUTO_FIX_SUPPRESSORS z sid z tej samej kalki → nie impossible
   const c = makeDeltaCtx();
   const { api } = c;
-  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const delta = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'ADD_ROOM', target: { roomId: 'd:1', areaId: 1 }, payload: { room: { id: 'd:1', x: 6, y: 6, z: 0, name: 'Malowany', env: 258 } }, label: 'r' },
     { seq: 2, type: 'PAINT_BATCH', target: {}, payload: { changes: [{ roomId: 'd:1', beforeEnv: 258, afterEnv: 262, afterSymbol: '*' }] }, label: 'p' },
     { seq: 3, type: 'AUTO_FIX_SUPPRESSORS', target: {}, payload: { added: [{ roomId: 'd:1', dir: 'e', cl: { points: [], color: [255, 0, 0] } }], removed: [] }, label: 's' },
@@ -1034,7 +1049,7 @@ console.log('— T13: seedSids — pusta mapa, luki, pusty seed, egzekucja > see
   const c = makeDeltaCtx();
   const { state, api } = c;
   state.map.areas = []; state.areas.clear(); state.roomById = {}; state.roomArea = {};
-  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const delta = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'ADD_AREA', target: { areaId: 'd:1' }, payload: { area: { id: 'd:1', name: 'Pusta' } }, label: 'a' },
     { seq: 2, type: 'ADD_ROOM', target: { roomId: 'd:2', areaId: 'd:1' }, payload: { room: { id: 'd:2', x: 0, y: 0, z: 0, name: 'E13A', env: 262 } }, label: 'r' },
     { seq: 3, type: 'ADD_ROOM', target: { roomId: 'd:3', areaId: 'd:1' }, payload: { room: { id: 'd:3', x: 1, y: 0, z: 0, name: 'E13B', env: 262 } }, label: 'r' },
@@ -1056,7 +1071,7 @@ console.log('— T13: seedSids — pusta mapa, luki, pusty seed, egzekucja > see
   // S2: seed wskazuje LUKE (zywe id nie istnieje) — kontrolowany skip, zero mutacji
   const c = makeDeltaCtx();
   const { state, api } = c;
-  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const delta = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'ADD_EXIT', target: { sourceId: 10, dir: 's' }, payload: { targetId: 'd:9' }, label: 'x' },
   ] };
   const res = api.applyDelta(delta, undefined, undefined, new Map([['d:9', 777]]));
@@ -1068,7 +1083,7 @@ console.log('— T13: seedSids — pusta mapa, luki, pusty seed, egzekucja > see
   // S3: seed NIE nadpisuje sid definiowanego przez sama delte (egzekucja wygrywa)
   const c = makeDeltaCtx();
   const { state, api } = c;
-  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const delta = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'ADD_ROOM', target: { roomId: 'd:1', areaId: 1 }, payload: { room: { id: 'd:1', x: 9, y: 9, z: 0, name: 'E13Fresh', env: 262 } }, label: 'r' },
     { seq: 2, type: 'EDIT_ROOM', target: { roomId: 'd:1' }, payload: { before: {}, after: { id: 'd:1', x: 9, y: 9, z: 0, name: 'E13Renamed', env: 262 } }, label: 'e' },
   ] };
@@ -1081,7 +1096,7 @@ console.log('— T13: seedSids — pusta mapa, luki, pusty seed, egzekucja > see
 }
 {
   // S4: pusty seed (new Map()) zachowuje sie jak brak seed
-  const mk = () => ({ meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const mk = () => ({ format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'ADD_AREA', target: { areaId: 'd:1' }, payload: { area: { id: 'd:1', name: 'Area Two' } }, label: 'a' },
     { seq: 2, type: 'ADD_ROOM', target: { roomId: 'd:2', areaId: 'd:1' }, payload: { room: { id: 'd:2', x: 7, y: 7, z: 0, name: 'Dep', env: 262 } }, label: 'r' },
   ] });
@@ -1096,7 +1111,7 @@ console.log('— T13: seedSids — pusta mapa, luki, pusty seed, egzekucja > see
   // S5: osierocony sid w TARGET (nie payload) — defensywny skip
   const c = makeDeltaCtx();
   const { api } = c;
-  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const delta = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'EDIT_ROOM', target: { roomId: 'd:7' }, payload: { before: {}, after: { id: 'd:7' } }, label: 'e' },
   ] };
   const res = api.applyDelta(delta);
@@ -1110,10 +1125,10 @@ console.log('— A3.4 (DI-4): glebokie meta kalki — kontrolowane ok:false, nie
   // w _deltaChecksums — glebokie meta wywalaloby RangeError poza walidatorem
   // (kontrakt: validateDeltaText nigdy nie rzuca).
   const c = makeDeltaCtx();
-  const meta = { format: 'arkdelta', format_version: 2, ops_count: 0 };
+  const meta = { ops_count: 0 };
   let cur = meta; for (let i = 0; i < 200; i++) { cur.n = {}; cur = cur.n; }  // limit skanera: 60
   const checksums = c.api._deltaChecksums(meta, []);
-  const text = JSON.stringify({ meta, ops: [], checksums });
+  const text = JSON.stringify({ format: 'arkdelta', format_version: 3, meta, ops: [], checksums });
   let res = null, threw = null;
   try { res = c.api.validateDeltaText(text); } catch (e) { threw = e; }
   ok(threw === null && res && res.ok === false && /głęboko/.test((res.errors || []).join(' ')),
@@ -1240,8 +1255,8 @@ console.log('— A3.6 (DI-9): konflikty kalki — normalizacja kaskad, korpus 76
         payload: { before: { x: 9, y: 9, z: 0, name: 'Nowy', env: 1, area: 1 },
                    after:  { x: 9, y: 9, z: 0, name: 'Nowy2', env: 1, area: 1 } } },
     ];
-    const meta = { format: 'arkdelta', format_version: 2, ops_count: ops.length };
-    const delta = { meta, ops, checksums: c.api._deltaChecksums(meta, ops) };
+    const meta = { ops_count: ops.length };
+    const delta = { format: 'arkdelta', format_version: 3, meta, ops, checksums: c.api._deltaChecksums(meta, ops) };
     const h = histOf(c.api.classifyDelta(delta));
     ok((h.hard || 0) === 0 && (h.impossible || 0) === 0 && (h.ok || 0) === 2,
       'A3.6d (DI-9): ADD_ROOM(sid)->EDIT_ROOM(sid) -> ok, bez falszywego konfliktu (fallback na cien)');
@@ -1277,8 +1292,8 @@ console.log('— A3.6 (DI-9): konflikty kalki — normalizacja kaskad, korpus 76
         payload: { before: { id: 10, x: 0, y: 0, z: 0, name: 'R10', env: 258 },
                    after:  { id: 10, x: 0, y: 0, z: 0, name: 'R10x', env: 258 } } },
     ];
-    const meta = { format: 'arkdelta', format_version: 2, ops_count: ops.length };
-    const delta = { meta, ops, checksums: c.api._deltaChecksums(meta, ops) };
+    const meta = { ops_count: ops.length };
+    const delta = { format: 'arkdelta', format_version: 3, meta, ops, checksums: c.api._deltaChecksums(meta, ops) };
     const h = histOf(c.api.classifyDelta(delta));
     ok((h.hard || 0) === 0 && (h.ok || 0) === 2,
       'A3.6f (DI-9): kalka sekwencyjna (before = stan posredni po kaskadzie, z doors) -> ok, bez hard (regresja E1)');
@@ -1288,8 +1303,8 @@ console.log('— A3.6 (DI-9): konflikty kalki — normalizacja kaskad, korpus 76
 console.log('— A3.8 (N3): roomId wymagane w PAINT_BATCH.changes i AUTO_FIX added/removed —');
 {
   const mkKalka = (c, ops) => {
-    const meta = { format: 'arkdelta', format_version: 2, ops_count: ops.length };
-    return JSON.stringify({ meta, ops, checksums: c.api._deltaChecksums(meta, ops) });
+    const meta = { ops_count: ops.length };
+    return JSON.stringify({ format: 'arkdelta', format_version: 3, meta, ops, checksums: c.api._deltaChecksums(meta, ops) });
   };
   // PAINT_BATCH: element bez roomId (pre-fix: przechodzil walidacje, cicho pomijany przy apply)
   {
@@ -1349,7 +1364,7 @@ console.log('— A3.11 (N1): cleanup effect-checku —');
   // Regresja: MOVE_ROOM_TO_AREA nadal aplikuje sie data-only (pokoj realnie w nowym obszarze)
   const c = makeDeltaCtx();
   const { state, api } = c;
-  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const delta = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'MOVE_ROOM_TO_AREA', target: { roomId: 10 }, payload: { toAreaId: 2 }, label: '' } ] };
   const res = api.applyDelta(delta);
   ok(res.applied === 1 && state.roomArea[10] === 2
@@ -1365,7 +1380,7 @@ console.log('— A3.12 (N2): shRoomAt z fallbackiem z pokoju —');
   const { state, api } = c;
   state.roomById[10].z = 5; state.roomById[11].z = 5;  // oba pokoje na z=5; 11 stoi na (1,0,5)
   // Op BEZ toZ w payloadzie (obejscie walidatora — _DELTA_SCHEMA wymusza toZ, tu celowo bez)
-  const delta = { meta: { format: 'arkdelta', format_version: 2 }, ops: [
+  const delta = { format: 'arkdelta', format_version: 3, meta: {}, ops: [
     { seq: 1, type: 'MOVE_ROOM', target: { roomId: 10 },
       payload: { fromX: 0, fromY: 0, fromZ: 5, toX: 1, toY: 0 }, label: '' } ] };
   const items = api.classifyDelta(delta);

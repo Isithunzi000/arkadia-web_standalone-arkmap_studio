@@ -1,6 +1,6 @@
 {
   "checksums": {
-    "file": "44b680bea574791b",
+    "file": "bb914262b6a1f91b",
     "ops": [
       "e4b7d40716f99ecc",
       "454df9d0269de554",
@@ -40,6 +40,8 @@
       "c63f8d91e47953cb"
     ]
   },
+  "format": "arkdelta",
+  "format_version": 3,
   "meta": {
     "app_version": "v1.45.0",
     "base": {
@@ -47,8 +49,6 @@
       "revision": "5ed22affd9f1f27886199437c20d527971e9af53",
       "version": "0.205.0"
     },
-    "format": "arkdelta",
-    "format_version": 2,
     "ops_count": 36
   },
   "ops": [

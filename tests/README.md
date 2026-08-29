@@ -51,6 +51,7 @@ node tests/fix_batch_v1445.js # fixy v1.44.5: R1 clRoom w startClDrawingExisting
 node tests/suppressors_load.js # podwojne linie (v1.45.2): checkSuppressorsInMap przy loadzie, paritet z rdzeniem, raport, wiring po id
 node tests/changelog_tags.js  # straznik tagow arcow w CHANGELOGU: pary wersja->arc, unikalnosc, monotonicznosc, synchron z APP_VERSION
 node tests/preserve_unknown.js # D3 (v1.51.0): unknown keys przetrwuja round-trip load->save na kazdym poziomie, poza zakresem r4/a4/f4; unknown w meta objete checksums.meta (metaOk)
+node tests/delta_compact.js   # D5 (v1.51.0): kompaktowanie logu kalki — 6 regul, warunek referencyjny, etykieta ostatniego skladnika, seq 1..N, idempotentnosc; koperta v3 builderow (D1/D4/D8-writer)
 ```
 
 ### tests/checksums/ — laboratorium sum kontrolnych v4

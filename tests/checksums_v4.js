@@ -343,8 +343,8 @@ console.log('── T6: piny strukturalne ──');
      'crc32str/CRC32_TABLE usunięte z calego HTML (.arkdelta na XXH3-64 od v1.45.0)');
   ok(/function _deltaChecksums\(meta, ops\)/.test(HTML),
      '.arkdelta liczy checksums przez _deltaChecksums (XXH3-64 + stableStringify)');
-  ok(/const ARKDELTA_FORMAT_VERSION = 2;/.test(HTML),
-     'ARKDELTA_FORMAT_VERSION = 2 (stare wersje kalki glosno odrzucane)');
+  ok(/const ARKDELTA_FORMAT_VERSION = 3;/.test(HTML),
+     'ARKDELTA_FORMAT_VERSION = 3 (koperta v3; stare wersje kalki glosno odrzucane)');
   const dd = HTML.match(/const _DIFF_DIR_ORDER = \[([^\]]*)\];/);
   ok(!!dd, 'znaleziono _DIFF_DIR_ORDER');
   if (dd) {

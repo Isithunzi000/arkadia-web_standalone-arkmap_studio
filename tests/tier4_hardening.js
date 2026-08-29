@@ -89,11 +89,11 @@ function makeDeltaCtx() {
 // pomocnicza kalka z poprawnymi sumami (jak _deltaSerializeOps)
 function mkDelta(ctx, ops) {
   ops = ops.map((o, i) => Object.assign({}, o, { seq: i + 1 }));
-  const meta = { format: 'arkdelta', format_version: 2, ops_count: ops.length, base: {}, app_version: 'test' };
+  const meta = { ops_count: ops.length, base: {}, app_version: 'test' };
   const checksums = {
     ...ctx.api._deltaChecksums(meta, ops),
   };
-  return JSON.stringify({ meta, ops, checksums });
+  return JSON.stringify({ format: 'arkdelta', format_version: 3, meta, ops, checksums });
 }
 
 // ═══ T1: walidator kalki — typy (K6), sid (K7), glebokosc (S8) ═══
@@ -456,7 +456,7 @@ console.log('── T9: piny ──');
   // piny wersji
   ok(NEW.includes("const APP_VERSION = 'v1.50.3';"), 'pin: APP_VERSION v1.50.3');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok(deltaSrc.split('v1.50.3').length - 1 === 9, 'pin: delta.js 9x v1.50.3 (fala 3: adnotacja integracji P3b bez numeru wersji)');
+  ok(deltaSrc.split('v1.50.3').length - 1 === 8, 'pin: delta.js 8x v1.50.3 (piny APP_VERSION; koperta v3: adnotacja formatu przeszla na v1.51.0)');
   const t2 = fs.readFileSync(path.join(ROOT, 'tests', 'tier2_state.js'), 'utf8');
   ok(t2.includes("wersja: v1.50.3"), 'pin: tier2_state.js v1.50.3');
   const t3 = fs.readFileSync(path.join(ROOT, 'tests', 'tier3_format.js'), 'utf8');
