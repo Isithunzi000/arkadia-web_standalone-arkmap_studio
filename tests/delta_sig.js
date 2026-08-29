@@ -48,6 +48,7 @@ globalThis.indexedDB = {
     const req = {};
     setTimeout(() => {
       req.result = {
+        objectStoreNames: { contains: () => false },  // F7: v2 zawsze tworzy brakujace store'y
         createObjectStore() {},
         transaction() {
           const tx = { objectStore() { return {

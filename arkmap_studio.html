@@ -16055,6 +16055,15 @@ function _postLoadVerifyDeferred(mapRef) {
         catch (e) { sigInfo.registry = 'offline'; }
         if (state.map !== mapRef) return;  // w trakcie enrich wszedl nowy load
       }
+      // F7: wymiar TOFU — zapis tylko przy zgodnym podpisie; konflikt = podszywanie (tez offline)
+      if (typeof _trustCheck === 'function' && (sigInfo.state === 'ok' || sigInfo.state === 'claimed')) {
+        try {
+          sigInfo.trust = await _trustCheck(sigInfo.author, sigInfo.pubkeyHex);
+          if (sigInfo.state === 'ok' && sigInfo.idOk !== false)
+            await _trustNote(sigInfo.author, sigInfo.pubkeyHex, sigInfo.authorId);
+        } catch (e) {}
+        if (state.map !== mapRef) return;
+      }
       const reg = sigInfo.registry || 'na';
       if (sigInfo.state === 'ok' && sigInfo.idOk !== false) {
         if (reg === 'match')
@@ -16080,6 +16089,9 @@ function _postLoadVerifyDeferred(mapRef) {
         else
           toast('ℹ Plik deklaruje autora ' + (sigInfo.author || '?') + ', ale nie niesie podpisu — deklaracja bez dowodu' + (reg === 'offline' ? ' · rejestr niedostępny (offline)' : ''), false);
       }
+      // F7: konflikt TOFU — osobny, glosny sygnal (niezalezny od rejestru)
+      if (sigInfo.trust === 'conflict')
+        toast('⚠ Nick ' + (sigInfo.author || '?') + ' był na tej maszynie widziany z INNYM kluczem — jedna z tych tożsamości to podszywka', true);
     }).catch(e => console.warn('[ArkMap] weryfikacja podpisu:', e));
   }
 }
@@ -20205,8 +20217,12 @@ async function _identityKeysFromSeed(seed) {
 function _identityDb() {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') { resolve(null); return; }
-    const req = indexedDB.open('arkmap-identity', 1);
-    req.onupgradeneeded = () => req.result.createObjectStore('identity');
+    const req = indexedDB.open('arkmap-identity', 2);  // F7: v2 = + store 'trust' (TOFU)
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('identity')) db.createObjectStore('identity');
+      if (!db.objectStoreNames.contains('trust')) db.createObjectStore('trust');
+    };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
@@ -20491,6 +20507,60 @@ async function _identityRevokeOnline() {
   return true;
 }
 // ====REGISTRY-CLIENT-END====
+
+// ====TRUST-STORE-BEGIN====
+// ── F7: lokalny trust store (TOFU) ──────────────────────────────────────────
+// Pierwszy ZWERYFIKOWANY klucz dla nicku zapamietywany lokalnie (IndexedDB
+// 'arkmap-identity' v2, store 'trust', klucz = nick kanoniczny). Konflikt
+// (ten sam nick, inny klucz) = sygnal podszywania — dziala tez OFFLINE, gdy
+// rejestr jest niedostepny. Zapisu dokonuja wylacznie pliki ze ZGODNYM
+// podpisem (deklaracje bez podpisu nigdy nie zasilaja trustu); konflikt
+// nigdy nie nadpisuje zapamietanego klucza.
+
+// Odczyt (bez zapisu): 'new' | 'same' | 'conflict'. Nie rzuca.
+async function _trustCheck(author, pubkeyHex) {
+  const nick = _identityCanonNick(author || '');
+  if (!nick || typeof pubkeyHex !== 'string' || !/^[0-9a-f]{64}$/.test(pubkeyHex)) return 'new';
+  try {
+    const db = await _identityDb();
+    if (!db) return 'new';
+    const rec = await new Promise((resolve) => {
+      const req = db.transaction('trust', 'readonly').objectStore('trust').get(nick);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+    if (!rec) return 'new';
+    return rec.pubkeyHex === pubkeyHex ? 'same' : 'conflict';
+  } catch (e) { return 'new'; }
+}
+
+// Zapis/aktualizacja (wolane wylacznie po zgodnym podpisie — pin: tests/trust_store.js).
+// Nie rzuca. Konflikt: odmowa nadpisania (zapamietany klucz zostaje).
+async function _trustNote(author, pubkeyHex, authorId) {
+  const nick = _identityCanonNick(author || '');
+  if (!nick || typeof pubkeyHex !== 'string' || !/^[0-9a-f]{64}$/.test(pubkeyHex)) return;
+  try {
+    const db = await _identityDb();
+    if (!db) return;
+    const existing = await new Promise((resolve) => {
+      const req = db.transaction('trust', 'readonly').objectStore('trust').get(nick);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+    if (existing && existing.pubkeyHex !== pubkeyHex) return;
+    const now = new Date().toISOString();
+    const rec = existing
+      ? Object.assign({}, existing, { lastSeen: now, count: (existing.count || 1) + 1 })
+      : { nick, pubkeyHex, authorId: authorId || null, firstSeen: now, lastSeen: now, count: 1 };
+    await new Promise((resolve) => {
+      const tx = db.transaction('trust', 'readwrite');
+      tx.objectStore('trust').put(rec, nick);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch (e) {}
+}
+// ====TRUST-STORE-END====
 
 // ====ARKMAP-SIG-BEGIN====
 // ── Podpis .arkmap (F5) — lustro kontraktu .arkdelta (P-LOCK-4: te same nazwy ──
@@ -24168,6 +24238,13 @@ function _deltaRenderSig(delta) {
     el.style.color = 'var(--err)';
     el.title = 'Suma kontrolna pliku jest zgodna, ale podpis cyfrowy nie pochodzi od deklarowanego klucza — traktuj autora jako niepotwierdzonego';
   }
+  // F7: konflikt TOFU — eskalacja do czerwieni niezaleznie od stanu rejestru
+  if (si.trust === 'conflict') {
+    el.textContent += ' · ⚠ nick widziany tu wcześniej z innym kluczem';
+    el.style.color = 'var(--err)';
+    el.title = (el.title ? el.title + ' ' : '')
+      + 'Lokalny rejestr zaufania: ten nick był wcześniej widziany z INNYM kluczem na tej maszynie — jedna z tożsamości to podszywka';
+  }
 }
 
 // D4: chipy ryzyka per-obszar w naglowku panelu recenzji.
@@ -24713,6 +24790,15 @@ fiArkdelta.addEventListener('change', async e => {
       && (res.delta._sigInfo.state === 'ok' || res.delta._sigInfo.state === 'claimed')) {
     try { res.delta._sigInfo.registry = await _registryEnrich(res.delta._sigInfo.author, res.delta._sigInfo.pubkeyHex); }
     catch (e) { res.delta._sigInfo.registry = 'offline'; }
+  }
+  // F7: wymiar TOFU — zapis tylko przy zgodnym podpisie; konflikt = podszywanie (tez offline)
+  if (typeof _trustCheck === 'function'
+      && (res.delta._sigInfo.state === 'ok' || res.delta._sigInfo.state === 'claimed')) {
+    try {
+      res.delta._sigInfo.trust = await _trustCheck(res.delta._sigInfo.author, res.delta._sigInfo.pubkeyHex);
+      if (res.delta._sigInfo.state === 'ok' && res.delta._sigInfo.idOk !== false)
+        await _trustNote(res.delta._sigInfo.author, res.delta._sigInfo.pubkeyHex, res.delta._sigInfo.authorId);
+    } catch (e) {}
   }
   const chk = _deltaBaseCheck(res.delta.meta.base);  // M4
   if (chk) _openDeltaMismatch(res.delta, chk);
