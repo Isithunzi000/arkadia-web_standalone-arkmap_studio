@@ -1940,6 +1940,8 @@
     <!-- WCZYTAJ -->
     <div class="sb-section">
       <div class="sb-section-title">Wczytaj</div>
+      <button id="btn-identity" style="margin-bottom:4px">🪪 Tożsamość autora&hellip;</button>
+      <div id="identity-status" style="font-size:10px;color:var(--dim);text-align:center;margin-bottom:6px">kalka będzie anonimowa</div>
       <div id="drop-zone">
         <strong>Upuść plik .arkmap / .dat</strong>
         <p>lub użyj przycisków poniżej</p>
@@ -3443,6 +3445,23 @@
     <div class="dlg-ftr">
       <button class="dlg-cancel" id="arkdelta-mismatch-cancel">Anuluj</button>
       <button class="btn-primary" id="arkdelta-mismatch-ok">Kontynuuj recenzję</button>
+    </div>
+  </div>
+</div>
+
+<!-- ✎ DIALOG: TOŻSAMOŚĆ AUTORA (D8) -->
+<div id="dlg-identity" class="dlg-bg">
+  <div class="dlg-box narrow">
+    <div class="dlg-hdr">
+      <div class="dlg-icon">🪪</div>
+      <div class="dlg-hdr-text">
+        <div class="dlg-title">Tożsamość autora</div>
+        <div class="dlg-sub">Opcjonalny podpis cyfrowy kalki</div>
+      </div>
+    </div>
+    <div class="dlg-body" id="identity-body"></div>
+    <div class="dlg-ftr">
+      <button class="dlg-cancel" onclick="closeDialog('dlg-identity')">Zamknij</button>
     </div>
   </div>
 </div>
@@ -20175,6 +20194,98 @@ async function _identityShowCode() {
   return rec.nick + ':' + rec.words.join('-') + '-' + (await _identityChecksumLetters(rec.nick, rec.words));
 }
 // ====IDENTITY-V1-END====
+
+// ── UI: dialog tozsamosci (D8) ─────────────────────────────────────────────
+// Przycisk nad polem wczytywania ("Tożsamość autora…"), status pod spodem.
+// Derywacja PBKDF2 trwa ~1 s — przyciski na ten czas dostaja stan "czekaj".
+function _identityUiCodeBox(code) {
+  return '<div style="margin:8px 0;padding:8px;border:1px solid var(--ok);border-radius:6px;'
+    + 'font-family:monospace;font-size:12px;word-break:break-all;user-select:all">' + escHtml(code) + '</div>'
+    + '<div style="font-size:11px;color:var(--dim)">Zapisz ten kod — to 6 słów i 3 litery kontrolne. '
+    + 'Pozwala przenieść tożsamość na inne urządzenie (pole „Importuj tożsamość"). '
+    + 'Nick jest na stałe związany z kluczem: ten sam nick z innymi słowami to inna tożsamość.</div>';
+}
+async function _identityUiRefresh(showCode) {
+  const id = await _identityActive();
+  const st = document.getElementById('identity-status');
+  if (st) st.textContent = id ? ('🪪 ' + id.nick + ' · ' + id.authorId) : 'kalka będzie anonimowa';
+  const body = document.getElementById('identity-body');
+  if (!body) return;
+  if (!id) {
+    body.innerHTML =
+      '<div style="font-size:12px;margin-bottom:8px">Brak tożsamości na tej maszynie — zapisana kalka będzie anonimowa.</div>'
+      + '<label style="font-size:10px;color:var(--dim);letter-spacing:0.8px;text-transform:uppercase">Nick autora</label>'
+      + '<input class="ap-input" id="id-nick" type="text" maxlength="32" placeholder="np. Zbyszek">'
+      + '<button class="btn-primary" id="id-btn-create" style="margin-top:6px">Utwórz tożsamość</button>'
+      + '<div id="id-create-out"></div>'
+      + '<div id="id-create-err" style="display:none;font-size:11px;color:var(--err);margin-top:4px"></div>'
+      + '<hr style="opacity:.3;margin:12px 0">'
+      + '<label style="font-size:10px;color:var(--dim);letter-spacing:0.8px;text-transform:uppercase">Kod odzyskiwania</label>'
+      + '<input class="ap-input" id="id-import-in" type="text" placeholder="nick:słowo-słowo-słowo-słowo-słowo-słowo-LLL">'
+      + '<button id="id-btn-import" style="margin-top:6px">Importuj tożsamość</button>'
+      + '<div id="id-import-err" style="display:none;font-size:11px;color:var(--err);margin-top:4px"></div>';
+    const btnC = document.getElementById('id-btn-create');
+    btnC.onclick = async () => {
+      const errEl = document.getElementById('id-create-err');
+      const outEl = document.getElementById('id-create-out');
+      errEl.style.display = 'none'; outEl.innerHTML = '';
+      const nick = document.getElementById('id-nick').value;
+      const verr = _identityValidateNick(nick);
+      if (verr) { errEl.textContent = verr; errEl.style.display = 'block'; return; }
+      btnC.disabled = true; btnC.textContent = 'Derywuję klucz (ok. 1 s)…';
+      try {
+        const r = await _identityCreate(nick, _identityGenWords());
+        toast('Tożsamość utworzona — kalka będzie podpisana');
+        await _identityUiRefresh(true);  // kod od razu widoczny w stanie aktywnym
+        outEl.innerHTML = '';
+      } catch (e) {
+        errEl.textContent = e.message; errEl.style.display = 'block';
+        btnC.disabled = false; btnC.textContent = 'Utwórz tożsamość';
+      }
+    };
+    const btnI = document.getElementById('id-btn-import');
+    btnI.onclick = async () => {
+      const errEl = document.getElementById('id-import-err');
+      errEl.style.display = 'none';
+      btnI.disabled = true; btnI.textContent = 'Sprawdzam kod (ok. 1 s)…';
+      try {
+        await _identityImport(document.getElementById('id-import-in').value);
+        toast('Tożsamość zaimportowana — kalka będzie podpisana');
+        await _identityUiRefresh(false);
+      } catch (e) {
+        errEl.textContent = e.message; errEl.style.display = 'block';
+        btnI.disabled = false; btnI.textContent = 'Importuj tożsamość';
+      }
+    };
+  } else {
+    body.innerHTML =
+      '<div style="font-size:12px;margin-bottom:6px">Tożsamość aktywna — zapisana kalka będzie podpisana cyfrowo.</div>'
+      + '<div style="font-size:12px">Autor: <b>' + escHtml(id.nick) + '</b></div>'
+      + '<div style="font-size:11px;color:var(--dim)">identyfikator: ' + escHtml(id.authorId) + '</div>'
+      + '<div style="font-size:11px;color:var(--dim);word-break:break-all">odcisk klucza: ' + escHtml(id.pubkeyHex) + '</div>'
+      + '<div id="id-code-out"></div>'
+      + '<button id="id-btn-show" style="margin-top:8px">Pokaż kod odzyskiwania</button>'
+      + '<button id="id-btn-clear" class="btn-err" style="margin-top:6px;margin-left:6px">Wyczyść z tej maszyny</button>';
+    document.getElementById('id-btn-show').onclick = async () => {
+      const code = await _identityShowCode();
+      if (code) document.getElementById('id-code-out').innerHTML = _identityUiCodeBox(code);
+    };
+    const btnX = document.getElementById('id-btn-clear');
+    btnX.onclick = async () => {
+      if (btnX.dataset.arm !== '1') { btnX.dataset.arm = '1'; btnX.textContent = 'Na pewno? Kliknij ponownie'; return; }
+      await _identityClear();
+      toast('Tożsamość wyczyszczona z tej maszyny — kalka znów będzie anonimowa');
+      await _identityUiRefresh(false);
+    };
+    if (showCode) {
+      const code = await _identityShowCode();
+      if (code) document.getElementById('id-code-out').innerHTML = _identityUiCodeBox(code);
+    }
+  }
+}
+const _btnIdentity = document.getElementById('btn-identity');
+if (_btnIdentity) _btnIdentity.addEventListener('click', () => { _identityUiRefresh(false); openDialog('dlg-identity'); });
+_identityUiRefresh(false);
 
 // === ARKDELTA START ===
 // Format .arkdelta — delta edycyjna mapy: eksport logu operacji (state.deltaLog),
