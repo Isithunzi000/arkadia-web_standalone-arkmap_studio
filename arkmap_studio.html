@@ -19875,6 +19875,307 @@ function submitPullRequest() {
   openDialog('dlg-pr-progress');
 }
 
+// ====IDENTITY-V1-BEGIN====
+// ════════════════════════════════════════════════════════════════════════════
+// D8: TOZSAMOSC AUTORA KALKI (spec .arkdelta §9) — przenosna, deterministyczna.
+// Kod odzyskiwania: "nick:slowo-slowo-slowo-slowo-slowo-slowo-LLL"
+// (6 slow x 11 bitow = 66 bitow entropii + 3 litery sumy kontrolnej ~14 bitow).
+// Nick kryptograficznie zwiazany z kluczem: sol PBKDF2 = "arkmap-identity-v1:"+nick
+// (NFC), haslo = slowa. Wynik: 32B seed → Ed25519. author_id = pierwsze 16 hex
+// SHA-256 klucza publicznego. Nick jest NIEZMIENNY (case/spacje/diakrytyki maja
+// znaczenie); rotacja = nowa tozsamosc. Model zagrozen: ciaglosc tozsamosci,
+// NIE tozsamosc realna (brak rejestru nickow; fingerprint jest arbitrem).
+// Przechowywanie: IndexedDB "arkmap-identity" — seed jest czytelny (przyjeta
+// decyzja: kod odzyskiwania i tak pozwala odtworzyc klucz; "Wyczysc" usuwa
+// tozsamosc z maszyny).
+// ════════════════════════════════════════════════════════════════════════════
+
+// Lista 2048 slow (maszynowo: charset a-z, dlugosc >= 4, unikalne prefiksy
+// 4-literowe, typowe rzeczowniki; generator: tools/build_identity_wordlist.py).
+// ZAMROZONA — pin SHA-256: tests/identity_wordlist.js.
+const _IDENTITY_WORDLIST = "abecadlo adept adwokat agawa agrafka agregat agrotkanina akapit akcent akord akrobata aksamit aktor akumulator alabaster alarm albatros album aleja alfabet alians almanach aloes altana aluminium ambasador ambona americano ametyst amfora amper amplituda ampulka anakonda analityk ananas anchois andrut animacja ankieta antagonista antena antracyt antyk anulowanie aparat apatyt apel aplikacja apteka arabeska arbuz archipelag argon aria arkada arkusz artefakt artykul arystokratka astma astr atlas atleta atol atom attyka audiencja auto awangarda awokado azot azyl azymut babcia babeczka babka badacz badyl bagaznik bajgel bajka bakier balans baldach balet balia balkon ballada balon bambus bananowiec bandaz baniek bank baran barek barka barometr barszcz barwa barylka basen basn bastion batalia bateria baza bazylia beben beczka begonia bejca bekon belka benzyna berberys berdysz bergamotka bermudy beton beza bezy bibliografia bicz biedronka bieg bielenie biesiada bigl bigos bilet bilon binokle biograf biolog biret biskup biszkopt bitwa biurko bizon bizuteria blanki blask blat blender blichtr blok bluszcz bluza bobas boberek bochen bocian bock boczek bogini bohater boisko boja bojler bojowka boks bolec bomba bongo bonsai bonus booking borowina borsuk bosman botanik braciszek brama bransoletka brat braz breja brie brioszka broda brokul brona browar brudnopis bruzda bryczka brydz brygada bryka brylant brynza brystol bryza brzeg brzoskwinia brzuch bubel budka budulec budzik bufet bufon bujak bukiet bukszpan bula buldog bulion bulka bulwa bumerang bundz bunkier burak burger burmistrz bursa burta burza busik busola busz butelka butik butla buzdygan buzia bydle bylica bystrzak bytnosc bzina cacko calosc camembert cappuccino cava cebula cechy cedzak cegla cela celebracja celofan cena centaur ceramika ceremonia cerkiew cesarstwo cewka chaber charakteryzacja cheddar chemia chili chipsy chleb chmiel chmura chodnik choinka chomik choroba chrabaszcz chrzan chwast chwila ciag ciastko ciecierzyca ciemne cien cieplarnia cierpliwosc ciesla ciocia cisnienie cisza confetti corka croissant cukier cwiek cyborium cydr cyfra cykada cyna cynk cypl cyrk cytadela cytryna czajka czapka czar czas czcz czekolada czeladnik czeremcha czesc czolno czop czosnek czub czujnik czwartek czworka czyn czyszczenie czytelnik dach daktyl dalia dama dandys danie dealer debiutant decybel defilada degustacja deka dekoracja dekret delegat delicje demagog dendryt depesza deptaczek derby derka deser deska deszcz dewiza dewon diadem diagram dialekt diament diariusz diecezja dingi dioda dlonia dlug dobro doki doktor dokument dolar dolina domek domino donica doradca dorsz doskonalosc dostawa doswiadczenie dotyk doyen drabina dramat dres drewno drganie drobiazg droga dron drop drozd drukarka drut druzyna dryf drzewko drzwi duet duma duszenie dycha dynastia dynia dyplom dyrektywa dyrygent dysk dywan dzban dzem dziadek dzida dzieciol dzik dzis dziurawiec dzwig dzwonek echo edykt egzamin ekipa ekler ekran ekskursja ekspert ekwipunek elegancja elektron elita elokwencja emalia ementaler emir emisariusz encyklopedia energia epigramat epika epilog epizod epoka epos erem esej esencja eskalop espresso estakada esteta estrada etap etos ewenement ewolucja facet fach fagot fajans fajerwerk fajrant faks faktura fala fama faraon farba farma farsa fartuch fascynat fasola faul faworki febra federacja felczer felga felieton fermata festival feta fiakier fibula figa figiel figowiec figurka filar filc filet filharmonia filigran film filodendron filut final finisz fiord firma fistaszki fiszbin fitness fizyk flak flamaster flaszka flauta flecistka flet flisak flora foka fokus folder folia folwark fontanna forint forma fort fosa fosfor fotel fotka fradzel frajda frak framuga frappe fraza fresk frez front frytki fryz fuksja fundacja funkcja funt fura furgon furmanka furtka futro gabaryt gablota gadzet gafa gajowy gala galeon galka galon gandola ganek garamond garb garderoba gargulec garnek garus gaska gatunek gaweda gawra gaza gazeta geba gejsza gejzer gekon gelato gemma geniusz geodeta geografia geolog gestosc getry gibon gielda giermek gildia gilek gimnastyka gipiura gips gitara glanka glazura gleba glejt glif glina globus glos glowa gmina gniazdko gniew gnochi gnom godzina gofr gogle golab golen gondola gong gonitwa gont gora gosc gospoda gotowanie gotyk gouda grab graczosc grad graf gram granat grawitacja grejpfrut gremium gres grill grisini groch grog grom grono grosz grota grubosz gruda grunt grupa gruszka gryf gryka grymas grypa grzalka grzbiet grzebien grzywa gulasz guma gumka guru gust guziczek gwara gwiazda gwizdek gwozdz gzyms habit hacjenda haczyk hafn haft hajduk hala halka halny hamulec handel hantel harcerz harfa harmider harpun haslo hebel heca hegemon hektar helikopter helm herb herc hetman hiacynt hibernacja hiena hieroglif hindus hipoteza historia hobby hodowca hokej hologram homar homilia hospicjum host hotdog hotel hrabia huba hufiec hulajnoga humor humus huragan hurma hurtownia husarz husky hybryda hydra hymn ibis idea idol idylla igielka igloo iguana ikona iloczyn iloraz ilosc iluzja imbir imidz immunitet impala imperium implant impost impregnat inauguracja indeks indyk inercja informator inicjal inkrustacja inspekt instalacja insygnia intarsja intencja intruz inzynier irga ironia irys iskra istnienie istota izba izolacja jablko jacht jadeit jagla jagoda jajecznica jajko jalapeno jama jamnik jantar jard jarmark jarzab jaskinia jasne jaspis jastrzab jaszczurka jazda jazz jeczmien jedwab jedzenie jesien jezdnia jezioro jezowka jezyk jodla jogurt jota jubileuszowy juhas jukka junak jurta jury jutro kabaczek kabel kaczka kadra kafelek kajak kajdany kajet kajman kajuta kakao kaki kaktus kalafior kalendarz kaligrafia kalmar kalosz kamera kamien kamyczek kana kancelaria kanister kanonik kaos kapar kapel kapitan kapliczka kapsulka kaptur kapusta karabin karbon kardamon karkas karmel karnet karp karta kasa kasjer kaskada kasza katalog kawa kawiarnia kawka kawowy kazamat kebab kefir keks kelner kemping ketchup kibice kielich kierowca kilogram kino kiosk kisiel kiszenie kitel kiwi klajster klakson klamka klan klapa klarnet klasa klatka klauzula klawiatura klej klif klin klips klomb klon klub klucz kluska knajpa knedel knot koala kociol kocur kogut kojec kokarda kokon koktajl kolacja kolczan koldra kolega kolo kolumna komar kombajn komedia komik komoda kompas komunijny koncept kondensator konewka konfederacja kongres koniec konklawe konserwacja kontakt konwalia kopa koperek kopyto koralik korba korkociag kormoran kornet korona korpus korsarz korytarz korzenny kosa kosc kosmita kostium kosz kotek kotlecik kotwica koza koziol krab kraj krakersy krasnal krata krawat kreda krem kret krojenie krok krolik kromka kronika kropla krowa krucyfiks kruk kruszec krwawnik krykiet krynicza krysztal krzaczek krzeslo krzyzowka ksiadz ksiega ksywka kubeczek kucharz kucyk kufer kukulka kula kulisa kulka kulminacja kult kuna kupa kupon kura kurczak kurier kurkuma kurnik kurort kurs kurtka kurz kusza kuznia kuzyn kwadra kwarta kwas kwiat kwiczol kwiecien labedz labirynt ladowarka ladunek laguna lakier lakowka lalka lama lampa lanca landrynka lania laptop lasagne lasek laska latarnia lateks lato latte lawa lawenda lawka lazienka legenda legionista lekarz lekcja leksykon lektor leming lemko lemoniada lesnik leszcz lewarek licencja liczba liga likier lilie limonka limuzyna lina linia linka lipiec lisica list litera litosfera litr lizak lodka lodowiec lody logarytm loggia logika logo lojalnosc lokiec lokomotywa lopata lord lornetka losos loteria lotka lotnia lozko lozysko lubczyk lucznik lukier luks lumen lunch luneta lusterko lutnia lutownica luty lydka lyzeczka machina macica maczuga madrosc mafia magiel magnes maharadza majeranek majolika makaron makieta makowiec malakoff malina malowanie malwa malzonek mamut mandarynka manekin mango manierka mankiet mapa marakuja marchew margaryna marina marka marmolada marsz marynarka marzec masa masc maska maslanka mastodont maszkara mate matka mazurka meander mecenas mech mecz medal medycyna meldunek melisa melodia memo menazeria mentor menu mesa metafora meteor metr mewka mgielka mgla miano miara miasto miecz miedz mielenie miesiac migdal mikrofala mikser mila milhoja milosc minister mintaj minus miod miraz misja miska mistrz miting mitra mizeria mleczarnia mleko mlodzik mlotek mnich mocca moda modernizacja modrzew modul moher moment monarcha moneta monit monografia monstrancja mopek morela mors morze most moszcz motel motor motyczka mozaika mrok mrowisko msza mucha muffin muflon mulcz mumia mundur murarz muszka muzeum muzyk mycie mydelniczka mydlo mysl mysz nadanie nadgarstek nadruk nadzieja nafta nagietek naglowek nagroda najemnik nakaz nakretka nalesnik namiestnik napar naperstek napiecie napoleonka naprawa narada narcyz narrator narty narzuta nasada nasionko natura nauczyciel naukowiec nawa nawigacja nektar neofita neon nerka nerw neseser nestor niedziela niespodzianka nietoperz niezapominajka nikiel nisza niwa nocka noga nomada norma nota nowela nowicjusz noworoczny nozyczki nugget numer nurt nuta nylon oaza obcengi obelisk obiad obiektyw objaw objetosc oboj obora obowiazek oboz obrady obronca obuch obudowa obwod obyczaj ocean ocena ocet ochota oczyszczanie odbicie odcien odezwa odkrycie odkurzam odnosnik odpad odpoczynek odpychanie odrost odtwarzacz odwaga odznaka oficer ogie ogniobrzeg ogon ogorek ogrod ojciec okablowanie okap okno okon okrag okres okular olbrzym olej olimp oliwa olow omega omen omlet opakowanie oparcie opat opera opinia opona opor opowiadanie opryskiwacz oracle orbita organista orientacja orka orkiestra ortografia orzech osad oscypek oset osiedle osika oskar ostroga oszczep otchlan otoczak otoskop otwarcie owal owca owczarek owies owoc ozdoba pacholek paciorek paczka pagaj pagorek pakt pakunek palac palec palik pallad palm paluch pamietnik pancerny panda panele pani pantofel papaja papier paproc papuga para park parlament parmezan partytura pasieka pasja pasta pasy paszport patelnia patio patriarcha patyk pawilon pazdziernik paziok pazur pekan peklowanie pelargonia pelikan penne pens pergola perkoz perliczka peruka perz pestka petarda petunia petycja pianino piasek piatek piccolo piec piekarnia pielegniarz pieniadz pieprz piernik piesek pieta pikieta piknik pila pilka pilot pingwin pion pioro piosenka pirat piruet pisarz pismo pistacja pita pitbull piwko piwnica piwo pizza plac plafon plakat plan plaster platforma plaza plecak plewa plik plocek plomba plot pluca pluskwa plytka pociag poczatek podanie podest podium podjazd podkladka podlewaczka podmuch podparcie podroz podszewka podtytul poduszka podwieczorek podzbior poeta poezja poglos pogoda pojecie pokoj pokretlo polana pole policjant polka polnoc polowa poludnie polwysep pomidor pomnik pomoc pompa pomysl ponczocha poniedzialek ponton popcorn popielica pora porcelana porost port pory porzeczka posadka poselstwo potega potok potrawa potwor powiat poziom pozwolenie praca prad pralka prasowanie prawda precel predkosc premia preria presja prezbiter proba procarz produkt profesje program projektor proklamacja prolog prom propolis prosecco protokol prowiant proza prysznic pryzmat przebudowa przychodnia pstrag pszczelarz pszenica ptak publika puch pudelko pudlo pufa puls punch punkt pustelnia puszcza puzon puzzle pysk pytanie pyton pyza quiche quiz rabat rabus raca rachunek racica racja radar radca radio radny radosc rafa rajtuzy rakieta rama ramie rampa rano rapier raport ratownik ratusz raut reakcja rebus recenzja recznik redaktor reduta refektarz reflektor regal regent region reja rejestr reka reklama relacja relikwia remiza renowacja reperacja republika reskrypt restauracja reszta revolucja rewia rewolucja rezerwacja rezyser ricotta riksza ring rocznik rodzina rogal rokitnik rokowanie rola roleta rolnik romans romb rondel ropa ropucha rosa rosol rotacja rower rownia rozbitek rozdzial rozgrywka rozmaryn roznica rozpoczecie rozsada rozwiazanie rubin ruda rudbekia rukola rumba runo runy rura rusztowanie ryba rybitwa rycerz rycina ryjowka rynek rynna rysia rysunek rytm ryzotto ryzyko rzecz rzeka rzepa rzezba rzodkiew rzut sadzawka sakiewka sakrament saksofon salamandra saldo salon samochod sanatorium sandacz sanie sanki sarna sasiad satelita satyna sawanna scena schabowy schemat schody schronisko sciana sciegno scythe scyzoryk sedes sedzia segregator sejf sejm sekator sekret sekunda selekcja senat sentencja serce serial serniczek serpentyna serwetka sesja sezamki sfera shake siatka siec siedzenie sieja siekanie sielawa sierpien sila silikon silnik silos siolo siostra skafander skala skaner skarb sklep skok skora skowronek skrobak skrytka skrzat skuter skwer slad slaka sledziony sliwka slodycze sloik slonce slowik slusarz smak smalec smar smiech smok smoothie smutek snack sniezyca snop sobota socha soczewica soda sofa sojusz sokol solista solowka sonar sonet sopel sople sorbet sosna sowa spacja spadochron spaghetti specjalista spektakl spichlerz spieki spinacz spirala spis splatka spodnica spokoj sport sprawdzian sprzedawca srebro sroda sroka sruba stacja stadion stajnia stal starosta statek staw step ster stetoskop stewardesa stokrotka stol stonka stop storczyk stozek strach strogonow strucla strych strzalka stuczka student stworzenie styczen stypendium sudoku sufit sukces sukienka suknia sukulent suma sumienie surfinia suszarka suteryna suweren suwmiarka swat sweter swiadek swieca swinia swit sygnal sylwestrowy symbol symfonia synod sypialnia syrena syrop system szabla szachy szafa szal szampan szaniec szarancza szatkowanie szczelina szef szereg szescian szew szkic szklanka szkola szkutnik szlachcianka szmaragd sznur sznycel szopa szorowanie szot szpachla szpikulec szron sztab sztorm szuflada szyba szyfr szyjka szynka tabaka tabela tablet taboret taca taczka tajemnica tajfun takt talent tamburyn tampon tango taniec tankowiec tapczan tapetowanie taran tarcza targ tarta tasak tchorz teatr tecza tektura telefon temp teoria terakota tercja terminal test thriller tiul tlen tlok tlumacz toczek toffi tona tonfa topaz topiony topola torba torebka torf tort tost towar traba tradycja traf trajekt traktat tramwaj transformacja trasa tratwa trawa trener trofeum trojka trol tron trop truskawka tryb tryptyk trzecia trzmiel tuba tubka tulipan tundra tunel turbina turkus turniej tusz twarog twierdza tyczka tydzien tymianek tynk tytul tzatziki ubijanie ubranie ucho ucieranie ucisk uczciwosc uczen uczta uczucia ulamek ulica ultimatum umiejetnosc umowa umysl umywalka uncja unia uniwersytet uran uroczystosc urodzinowy urok urwisko urzad urzednik usmiech usta uszczelka utwor uwertura uzda uziemienie vademecum verdict wachlarz wafel waga wagon wajcha walc walec waliza waluta wanilia wanna wapien warcaby warsztat wartosc wasal wata watek watroba waza wazik wczoraj wedka wedrowka wegiel weksel wektor welwet wentylator weranda werbel wesolosc".split(' ');
+const _IDENTITY_PBKDF2_ITER = 600000;  // OWASP 2023 (PBKDF2-SHA256) ~1s na typowym sprzecie
+const _IDENTITY_SALT_PREFIX = 'arkmap-identity-v1:';
+const _IDENTITY_NICK_MAX = 32;
+
+// ── Kod odzyskiwania: kodowanie/dekodowanie ──────────────────────────────────
+// 11 bitow na slowo: losowanie unbiased (u16 & 0x7FF, 2048 = 2^11 dokladnie).
+function _identityGenWords() {
+  const buf = new Uint16Array(6);
+  crypto.getRandomValues(buf);
+  return [...buf].map(v => _IDENTITY_WORDLIST[v & 0x7FF]);
+}
+
+// Litery kontrolne: SHA-256("arkmap-code-v1:" + nickNFC + ":" + slowa-zlaczone)
+// → 3 litery (bajty 0-2 mod 26). Tolerancyjne wejscie, deterministyczne.
+async function _identityChecksumLetters(nick, words) {
+  const msg = 'arkmap-code-v1:' + nick.normalize('NFC') + ':' + words.join('-');
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg)));
+  return [0, 1, 2].map(i => String.fromCharCode(97 + (h[i] % 26))).join('');
+}
+
+function _identityValidateNick(nick) {
+  if (typeof nick !== 'string') return 'Nick jest wymagany.';
+  const t = nick.trim();
+  if (!t) return 'Nick jest wymagany.';
+  if (t.length > _IDENTITY_NICK_MAX) return 'Nick za długi (maks. ' + _IDENTITY_NICK_MAX + ' znaków).';
+  if (t.includes(':')) return 'Nick nie może zawierać dwukropka.';
+  return null;
+}
+
+// Normalizacja wejscia: lowercase, trim, separatory (spacja/przecinek/srednik/
+// podloga) → '-', zwielokrotnione '-' sklejone. Podzial na PIERWSZYM dwukropku.
+// Zwraca { nick, words:[6], letters } albo rzuca Error z komunikatem po polsku.
+async function _identityParseCode(text) {
+  if (typeof text !== 'string') throw new Error('Wpisz kod odzyskiwania.');
+  const idx = text.indexOf(':');
+  if (idx < 0) throw new Error('Kod powinien mieć postać: nick:słowo-słowo-…-LLL');
+  const nick = text.slice(0, idx).trim();
+  const nickErr = _identityValidateNick(nick);
+  if (nickErr) throw new Error(nickErr);
+  const toks = text.slice(idx + 1).toLowerCase().trim()
+    .replace(/[\s,;_]+/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '')
+    .split('-').filter(Boolean);
+  // Akceptowane obie formy zapisu liter: ...-słowo-LLL (7 tokenów) oraz
+  // ...-słowo-L-L-L (9 tokenów) — po złożeniu i tak dają 3 litery.
+  if (toks.length !== 7 && toks.length !== 9) throw new Error('Kod powinien mieć 6 słów i 3 litery kontrolne (nick:słowo-…-słowo-LLL).');
+  const words = toks.slice(0, 6), letters = toks.slice(6).join('');
+  if (!/^[a-z]{3}$/.test(letters)) throw new Error('Litery kontrolne powinny być 3 literami a-z.');
+  const wl = new Set(_IDENTITY_WORDLIST);
+  const bad = words.findIndex(w => !wl.has(w));
+  if (bad >= 0) throw new Error('Słowo ' + (bad + 1) + ' („' + words[bad] + '") nie pochodzi z listy słów.');
+  const expect = await _identityChecksumLetters(nick, words);
+  if (letters !== expect) throw new Error('Litery kontrolne nie pasują do nicku i słów — sprawdź literówki.');
+  return { nick: nick.normalize('NFC'), words, letters };
+}
+
+// ── Derywacja klucza ─────────────────────────────────────────────────────────
+// PBKDF2-SHA256(haslo=slowa, sol="arkmap-identity-v1:"+nick NFC) → 32B seed.
+async function _identityDeriveSeed(nick, words) {
+  const te = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', te.encode(words.join('-')), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: te.encode(_IDENTITY_SALT_PREFIX + nick.normalize('NFC')), iterations: _IDENTITY_PBKDF2_ITER },
+    key, 256);
+  return new Uint8Array(bits);
+}
+
+function _identityHex(bytes) { return [...bytes].map(b => b.toString(16).padStart(2, '0')).join(''); }
+function _identityFromHex(hex) {
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(2 * i, 2 * i + 2), 16);
+  return out;
+}
+
+// author_id: pierwsze 16 hex SHA-256 surowych bajtow klucza publicznego.
+async function _identityAuthorId(pubBytes) {
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', pubBytes));
+  return _identityHex(h.slice(0, 8));
+}
+
+// ── Ed25519: WebCrypto, a gdy brak wsparcia — vendored fallback (BigInt) ─────
+// Fallback NIE jest constant-time; model zagrozen D8 (lokalna tozsamosc
+// dowodzaca ciaglosci, nie tozsamosci realnej) to akceptuje. Wektory RFC 8032
+// pinuje tests/identity_wordlist.js (dziala tez w node).
+const _ED_Q = (1n << 255n) - 19n;
+const _ED_L = (1n << 252n) + 27742317777372353535851937790883648493n;
+function _edPow(b, e) { let r = 1n; b = ((b % _ED_Q) + _ED_Q) % _ED_Q;
+  while (e > 0n) { if (e & 1n) r = (r * b) % _ED_Q; b = (b * b) % _ED_Q; e >>= 1n; } return r; }
+function _edInv(x) { return _edPow(x, _ED_Q - 2n); }
+const _ED_D = ((-121665n * _edInv(121666n)) % _ED_Q + _ED_Q) % _ED_Q;
+const _ED_I = _edPow(2n, (_ED_Q - 1n) / 4n);
+function _edXRecover(y) {
+  const xx = ((y * y - 1n) * _edInv((_ED_D * y * y + 1n) % _ED_Q)) % _ED_Q;
+  let x = _edPow(xx, (_ED_Q + 3n) / 8n);
+  if (((x * x - xx) % _ED_Q + _ED_Q) % _ED_Q !== 0n) x = (x * _ED_I) % _ED_Q;
+  if (x & 1n) x = _ED_Q - x;
+  return x;
+}
+const _ED_BY = (4n * _edInv(5n)) % _ED_Q;
+const _ED_B = [_edXRecover(_ED_BY), _ED_BY];
+function _edAdd(P, Q) {
+  const [x1, y1] = P, [x2, y2] = Q;
+  const x1x2 = (x1 * x2) % _ED_Q, y1y2 = (y1 * y2) % _ED_Q;
+  const dxxyy = (_ED_D * x1x2 % _ED_Q) * y1y2 % _ED_Q;
+  const x3 = (((x1 * y2 + x2 * y1) % _ED_Q) * _edInv((1n + dxxyy) % _ED_Q)) % _ED_Q;
+  const y3 = (((y1y2 + x1x2) % _ED_Q) * _edInv((1n - dxxyy) % _ED_Q)) % _ED_Q;
+  return [((x3 % _ED_Q) + _ED_Q) % _ED_Q, ((y3 % _ED_Q) + _ED_Q) % _ED_Q];
+}
+function _edMul(P, e) {
+  let R = [0n, 1n];
+  while (e > 0n) { if (e & 1n) R = _edAdd(R, P); P = _edAdd(P, P); e >>= 1n; }
+  return R;
+}
+function _edEncode(P) {
+  const [x, y] = P;
+  const out = new Uint8Array(32);
+  let v = y | ((x & 1n) << 255n);
+  for (let i = 0; i < 32; i++) { out[i] = Number(v & 0xFFn); v >>= 8n; }
+  return out;
+}
+function _edDecode(bytes) {
+  let y = 0n;
+  for (let i = 31; i >= 0; i--) y = (y << 8n) | BigInt(bytes[i]);
+  const sign = (y >> 255n) & 1n;
+  y &= (1n << 255n) - 1n;
+  if (y >= _ED_Q) throw new Error('ed25519: punkt poza zakresem');
+  const x = _edXRecover(y);
+  if ((x & 1n) !== sign) return [_ED_Q - x, y];
+  return [x, y];
+}
+async function _edSha512(bytes) { return new Uint8Array(await crypto.subtle.digest('SHA-512', bytes)); }
+function _edHashInt(bytes) {
+  let r = 0n;
+  for (let i = bytes.length - 1; i >= 0; i--) r = (r << 8n) | BigInt(bytes[i]);
+  return r;
+}
+function _edClamp(h) {
+  const a = h.slice(0, 32);
+  a[0] &= 248; a[31] &= 63; a[31] |= 64;
+  return _edHashInt(a);
+}
+async function _edPubFromSeed(seed) {
+  const h = await _edSha512(seed);
+  return _edEncode(_edMul(_ED_B, _edClamp(h) % _ED_L));
+}
+async function _edSign(seed, pub, msg) {
+  const h = await _edSha512(seed);
+  const a = _edClamp(h) % _ED_L;
+  const prefix = h.slice(32);
+  const r = _edHashInt(await _edSha512(new Uint8Array([...prefix, ...msg]))) % _ED_L;
+  const R = _edEncode(_edMul(_ED_B, r));
+  const k = _edHashInt(await _edSha512(new Uint8Array([...R, ...pub, ...msg]))) % _ED_L;
+  const S = (r + k * a) % _ED_L;
+  const out = new Uint8Array(64);
+  out.set(R);
+  let v = S;
+  for (let i = 32; i < 64; i++) { out[i] = Number(v & 0xFFn); v >>= 8n; }
+  return out;
+}
+async function _edVerify(pub, msg, sig) {
+  try {
+    if (sig.length !== 64 || pub.length !== 32) return false;
+    const A = _edDecode(pub), R = _edDecode(sig.slice(0, 32));
+    let S = 0n;
+    for (let i = 63; i >= 32; i--) S = (S << 8n) | BigInt(sig[i]);
+    if (S >= _ED_L) return false;
+    const k = _edHashInt(await _edSha512(new Uint8Array([...sig.slice(0, 32), ...pub, ...msg]))) % _ED_L;
+    const left = _edMul(_ED_B, S);
+    const right = _edAdd(R, _edMul(A, k));
+    return left[0] === right[0] && left[1] === right[1];
+  } catch (e) { return false; }
+}
+
+// WebCrypto Ed25519 (Chromium 137+): import seed jako JWK, eksport pub z JWK.x.
+// Zwraca null gdy niewspierane — wtedy fallback BigInt.
+async function _identityWebCryptoKeys(seed) {
+  try {
+    const b64u = b => btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const probe = await crypto.subtle.importKey('jwk',
+      { kty: 'OKP', crv: 'Ed25519', d: b64u(seed), key_ops: ['sign'] }, { name: 'Ed25519' }, true, ['sign']);
+    const jwk = await crypto.subtle.exportKey('jwk', probe);
+    const pubBytes = Uint8Array.from(atob(jwk.x.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    return { pubBytes, sign: async (msg) => new Uint8Array(await crypto.subtle.sign('Ed25519', probe, msg)) };
+  } catch (e) { return null; }
+}
+
+// Klucze do podpisu: { pubBytes, sign(msgBytes)->sigBytes }.
+async function _identityKeysFromSeed(seed) {
+  const wc = await _identityWebCryptoKeys(seed);
+  if (wc) return wc;
+  const pub = await _edPubFromSeed(seed);
+  return { pubBytes: pub, sign: (msg) => _edSign(seed, pub, msg) };
+}
+
+// ── Przechowywanie (IndexedDB "arkmap-identity") ─────────────────────────────
+// Rekord: { nick, pubkeyHex, authorId, seedB64 } pod kluczem "current".
+// Seed czytelny — przyjeta decyzja (kod odzyskiwania i tak odtwarza klucz).
+function _identityDb() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') { resolve(null); return; }
+    const req = indexedDB.open('arkmap-identity', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('identity');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function _identityStore(rec) {
+  const db = await _identityDb();
+  if (!db) return;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('identity', 'readwrite');
+    if (rec === null) tx.objectStore('identity').delete('current');
+    else tx.objectStore('identity').put(rec, 'current');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function _identityLoad() {
+  try {
+    const db = await _identityDb();
+    if (!db) return null;
+    return await new Promise((resolve) => {
+      const req = db.transaction('identity', 'readonly').objectStore('identity').get('current');
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch (e) { return null; }
+}
+
+// Cache sesji — derywacja PBKDF2 (~1s) raz na sesje.
+let _identitySession = undefined;  // undefined=nie ladowano, null=brak, obiekt=aktywna
+async function _identityActive() {
+  if (_identitySession !== undefined) return _identitySession;
+  const rec = await _identityLoad();
+  if (!rec || !rec.seedB64) { _identitySession = null; return null; }
+  const seed = Uint8Array.from(atob(rec.seedB64), c => c.charCodeAt(0));
+  const keys = await _identityKeysFromSeed(seed);
+  _identitySession = { nick: rec.nick, authorId: rec.authorId, pubkeyHex: rec.pubkeyHex,
+    seed, sign: keys.sign, pubBytes: keys.pubBytes };
+  return _identitySession;
+}
+
+// Kontrakt dla _deltaMaybeSign: null gdy brak tozsamosci; inaczej
+// { nick, authorId, pubkeyHex, sign(msgAscii)->hex }.
+async function _identityForSigning() {
+  const id = await _identityActive();
+  if (!id) return null;
+  return { nick: id.nick, authorId: id.authorId, pubkeyHex: id.pubkeyHex,
+    sign: async (msg) => _identityHex(await id.sign(new TextEncoder().encode(msg))) };
+}
+
+// Utworz/import: nick + slowa → rekord; zwraca { rec, code }.
+async function _identityCreate(nick, words) {
+  const n = nick.trim().normalize('NFC');
+  const err = _identityValidateNick(nick);
+  if (err) throw new Error(err);
+  const seed = await _identityDeriveSeed(n, words);
+  const keys = await _identityKeysFromSeed(seed);
+  const pubHex = _identityHex(keys.pubBytes);
+  const rec = { nick: n, pubkeyHex: pubHex, authorId: await _identityAuthorId(keys.pubBytes),
+    seedB64: btoa(String.fromCharCode(...seed)), words: words.slice() };
+  await _identityStore(rec);
+  _identitySession = undefined;  // wymus ponowne zaladowanie
+  const code = n + ':' + words.join('-') + '-' + (await _identityChecksumLetters(n, words));
+  return { rec, code };
+}
+async function _identityImport(codeText) {
+  const { nick, words } = await _identityParseCode(codeText);
+  return _identityCreate(nick, words);
+}
+async function _identityClear() {
+  await _identityStore(null);
+  _identitySession = null;
+}
+// Kod odzyskiwania do wyswietlenia (zawsze widoczny na zyczenie — decyzja D8).
+// Slowa trzymane w rekordzie (czytelne — przyjeta decyzja, jak wyzej).
+async function _identityShowCode() {
+  const rec = await _identityLoad();
+  if (!rec || !rec.words) return null;
+  return rec.nick + ':' + rec.words.join('-') + '-' + (await _identityChecksumLetters(rec.nick, rec.words));
+}
+// ====IDENTITY-V1-END====
+
 // === ARKDELTA START ===
 // Format .arkdelta — delta edycyjna mapy: eksport logu operacji (state.deltaLog),
 // walidacja fail-closed, czyste apply. Spec: docs/arkdelta_spec.html.

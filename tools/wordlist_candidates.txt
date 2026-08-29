@@ -1,0 +1,731 @@
+# ── zwierzęta ──
+borsuk dzik sarna zajac wilk rysia niedzwied wiewiorka kret jezowka wydra boberek tchorz kuna
+popielica ryjowka nietoperz szczur myszka krolik jamnik owczarek chart golab
+wrobel wrona sowa sokol jastrzab jaskolka skowronek slowik drozd kos kwiczol gilek
+szpak szczygiel dzieciol kawka gawron czajka mewka rybitwa
+bocian zuraw czapla perkoz kaczka gaska labedz pelikan kormoran
+kogut kurczak indyk paw perliczka strus emu wilga
+pstrag suma losos dorsz szczupak okon karas karp leszcz plocek sandacz
+mintaj sielawa sieja lipien glowacica
+zaba ropucha traszka salamandra gekon jaszczurka zolwik wazik pyton
+motyl biedronka pszczola osa trzmiel mrowka termit komar mucha
+chrabaszcz stonka swierszcz konik cykada ważka zrebiak źrebie konik
+kucyk muł osioł koza owca baran swinia krowa byk koziol
+kotek piesek chomik szynszyla koszatniczka papuga kanarek
+# ── przyroda, krajobraz, pogoda ──
+gora wzgorze dolina jar rownia wyzyna pustynia step preria sawanna
+las bór puszcza zagajnik lasek gajówka roślinność posadka
+polana łąka lakowka ugór niwa rola zagroda
+rzeka strumien potok bystrze kaskada wodospad zrodlo krynicza
+jezioro staw morze ocean zatoka zalew laguna fiord cieśnina
+wyspa polwysep cypl archipelag atol rafa
+brzeg wydma plaza klif urwisko skala głaz otoczak kamyk zwir
+piasek ziemia gleba mul glina torf glanka
+góra szczyt wierch grzbiet hala połonina
+jaskinia grota pieczara szczelina otchlan przepasc
+wulkan krater gejzer goracezrodlo
+lodowiec sroka lód sopel zmarzlina
+chmura mgla zamiec burza grad deszcz mżawka słota
+tecza błyskawica grom wichura traba huragan tajfun monsun
+śnieg sniezyca zawieja zadymka osad szron
+slonce ksiezyc gwiazda kometa meteor planeta galaktyka mgławica
+wschod zachod zmierzch swit polnoc poludnie
+wiosna lato jesien zima pora
+las sosna swierk jodla modrzew deb grab buk brzoza osika wierzba topola
+klon kasztan jarzab czeremcha leszczyna kalina
+mech porost paproc trawa ziele zboze owies pszenica jeczmien zyto proso gryka
+# ── owoce, warzywa, jedzenie ──
+jablko gruszka sliwka wisnia czeresnia morela brzoskwinia nektarynka
+malina jezyna truskawka jagoda borowka zurawina porzeczka agrest
+orzech laskowy migdal pistacja wloski pekan nerki
+arbuz melon dynia cukinia kabaczek ogorek pomidor papryka
+marchew pietruszka seler burak rzodkiew kalarepa rzepa
+kapusta kalafior brokul szpinak jarmuz salata rukola
+cebula czosnek por szalotka szczypiorek koperek lubczyk majeranek tymianek rozmaryn
+ziemniak batat fasola groch soczewica ciecierzyca bob
+chleb bulka bajgel precel rogalik pita tost
+ser maslo mleko smietana jogurt kefir twarog
+miod cukier sól pieprz ocet olej oliwa
+zupa rosol barszcz krem polewka przystawka
+kluska pierog nalesnik placek pyza knedel
+ryz kasza makaron gnochi lasagne
+ciasto tort szarlotka sernik makowiec babka beza
+kawa herbata kakao sok nektar kompot lemoniada
+# ── dom i przedmioty ──
+dom mieszkanie pokoj kuchnia lazienka sypialnia salon piwnica strych
+sciana podloga sufit dach komin okno drzwi framuga parapet
+schody klatka korytarz przedpokoj balkon taras weranda
+stol krzeslo lawka kanapa sofa fotel pufa taboret
+lozko materac poduszka koc narzuta koldra
+szafa szafka komoda regal polka szuflada
+lampa latarnia zarowka swieca lampion reflektor
+stol biurko ksiazka zeszyt notatnik dlugopis olowek pioro gumka linijka
+gazeta czasopismo powiesc wiersz bajka basn legenda
+obraz obrazek rysunek szkic grafika rzezba figurka statuetka
+talerz miska kubek szklanka kieliszek filizanka czajnik dzbanek
+lyzeczka widelec nóż deska patelnia garnek rondel pokrywka
+lodowka zamrazarka kuchenka piekarnik mikrofala toster blender
+pralka suszarka odkurzam miotła szczotka wiadro mopek
+lazienka wanna prysznic umywalka sedes lustro recznik mydlo szampon
+szczoteczka pasta grzebien golarka
+zegar zegarek budzik kalendarz termometr barometr
+klucz zamek kłódka łańcuch sejf skrytka
+portfel portmonetka sakiewka torebka plecak waliza torba
+parasol parasolka kaptur szal szalik rekawiczka czapka kapelusz
+ubranie koszula bluza sweter kurtka plaszcz marynarka kamizelka
+spodnie sukienka spodnica fartuch krawat muszka
+but trzewik kozak kalosz pantofel klapki sandały
+skarpetka ponczocha rajtuzy
+# ── narzędzia, warsztat ──
+mlotek srubokret wkretarka kombinerki szczypce obcengi
+wiertarka wiertlo pila brzeszczot tasak dłuto
+poziomica miarka suwmiarka kątownik cyrkiel
+gwozdz sruba wkret nakretka podkladka nit
+klej taśma silikon uszczelka zaprawa
+wiadro kubel beczka kanister butla
+drabina rusztowanie podest wozek taczka
+szpadel lopata grabie motyka widly kos
+siekiera topór scythe kosa
+pędzel wałek szpachla skrobak
+# ── pojazdy, transport ──
+auto samochod autobus tramwaj trolejbus pociag wagon lokomotywa
+metro kolejka prom statek lodka kajak czolno jacht żaglowiec
+rower motor skuter hulajnoga wózek
+ciężarówka furgon przyczepa traktor kombajn
+samolot helikopter szybowiec balon sterowiec rakieta
+taksówka bryczka dorożka sanie narty sanki
+# ── ciało, zdrowie ──
+glowa wlosy oko ucho nos usta zeby policzek broda czolo
+reka dlonia palec nadgarstek przedramie lokiec ramie
+noga stopa kolano udo lydka pieta
+serce pluca watroba nerka sledziony zoladek
+kosc miesien sciegno skora nerw
+zdrowie choroba lek lekarz doktor medyk pielegniarz
+apteka szpital klinika przychodnia
+bandaz plaster gaza strzykawka termometr witamina
+# ── czas i pojęcia ──
+rok miesiac tydzien dzien godzina minuta sekunda
+styczen luty marzec kwiecien maj czerwiec lipiec sierpien wrzesien pazdziernik listopad grudzien
+poniedzialek wtorek sroda czwartek piatek sobota niedziela
+rano wieczor noc dzien dzis jutro wczoraj
+chwila moment okres epoka era wiek
+poczatek koniec srodek krawedz brzeg srodek
+prawda klamstwo wiara nadzieja milosc przyjazn wrogosc
+radosc smutek gniew strach spokoj zdziwienie wstyd
+mysl pomysl plan cel marzenie zyczenie
+pytanie odpowiedz problem rozwiazanie decyzja wybor
+praca odpoczynek zabawa gra zadanie obowiazek
+sukces porazka wygrana przegrana proba szansa ryzyko
+poczatek historia opowiesc relacja raport wiadomosc
+liczba cyfra  ilosc miara waga rozmiar
+kolor barwa odcien cien swiatlo blask mrok
+dźwięk glos ton melodia rytm takt cisza
+zapach won smak dotyk faktura
+# ── szkoła, nauka, biuro ──
+szkola klasa lekcja przerwa korytarz boisko
+uczen nauczyciel profesor wykladowca student
+przedmiot matematyka fizyka chemia biologia geografia historia
+jezyk literatura gramatyka ortografia slownik encyklopedia
+eksperyment doswiadczenie hipoteza teoria wniosek
+egzamin test sprawdzian kartkowka odpowiedz ocena
+biuro urzad kancelaria sekretariat archiwum
+dokument formularz wniosek podanie umowa protokol
+pieczatka podpis paragraf klauzula zalacznik
+komputer laptop monitor klawiatura mysz drukarka skaner
+program aplikacja system plik folder katalog
+ekran kursor ikona okno menu przycisk
+# ── sklepy, pieniądze, usługi ──
+sklep market kiosk bazar targ jarmark stragan
+towar produkt artykul rzecz przedmiot
+cena koszt wartosc rachunek faktura paragon
+pieniadz moneta banknot grosz złotówka waluta
+portfel konto bank karta kredyt dlug oszczędność
+restauracja kawiarnia cukiernia piekarnia cukiernia bar
+kelner kucharz piekarz cukiernik sprzedawca kasjer
+hotel pensjonat schronisko kemping hostel
+poczta list paczka przesylka znaczek koperta
+urzad gmina miasto wies wioska dzielnica osiedle
+# ── rozrywka, kultura, sport ──
+teatr kino opera filharmonia muzeum galeria wystawa
+aktor aktorka rezyser scenarzysta piosenkarz spiewak
+piosenka utwor album koncert przedstawienie spektakl
+film serial komedia dramat thriller bajka animacja
+mecz meczet gra rozgrywka turniej zawody
+pilka paletka rakietka kij kosz bramka
+pilkarz bramkarz obronca napastnik trener sedzia
+bieg skok rzut pływanie jazda wyscigi
+medal puchar nagroda trofeum dyplom
+kibice widownia trybuny stadion tor basen
+zabawa impreza przyjecie uroczystosc festival
+taniec walc tango polka mazurka
+# ── profesje ──
+lekarz nauczyciel inzynier programista architekt prawnik
+kucharz piekarz cukiernik rzeznik sprzedawca
+policjant strazak zolnierz ratownik felczer
+murarz ciesla stolarz slusarz hydraulik elektryk
+malarz tynkarz dekarz glazurnik
+rolnik ogrodnik lesnik hodowca rybak pszczelarz
+kierowca maszynista pilot stewardesa kapitan
+artysta malarz rzezbiarz muzyk kompozytor poeta pisarz
+dziennikarz redaktor wydawca drukarz bibliotekarz
+naukowiec badacz chemik fizyk biolog geolog
+# ── uczucia i cechy ──
+usmiech smiech zart humor wesolosc
+dobro laska pomoc wsparcie
+madrosc wiedza umiejetnosc talent zdolnosc
+odwaga sila wytrwalosc cierpliwosc
+uczciwosc szczerosc wiernosc lojalnosc
+graczosc elegancja urok czar piekno
+# ── zabudowa ──
+ulica uliczka aleja bulwar deptak promenada
+rynek plac skwer park ogrod
+most wiadukt tunel estakada przejscie
+latarnia sygnalizacja skrzyzowanie rondo
+ kamienica wiezowiec blok willa
+ratusz kosciol swiatynia klasztor kapliczka
+pomnik fontanna rzezba studnia
+zamek palac fort bastion wieza mur
+# ── rozmaitości ──
+obraz dźwięk smak zapach kształt wzor
+linia punkt plaszczyzna przestrzen kierunek
+kolo kwadrat trojkat prostokat romb owal
+kula szescian walec stozek ostroslup
+strzalka znak symbol ikona logo herb
+mapa plan schemat diagram wykres tabela
+lista rejestr spis katalog indeks
+grupa zbior zespol ekipa druzyna gromada
+rodzina matka ojciec syn corka brat siostra
+dziadek babcia wnuk wnuczka wuj ciocia
+kuzyn kuzynka malzonek zona maz
+sasiad znajomy kolega kolezanka towarzysz
+gosc host gospodarz wlasciciel mieszkaniec
+tłum grupka para trojka czworka
+poczatek rozpoczecie start otwarcie
+koniec zakonczenie finisz zamkniecie
+podroz wycieczka wyprawa wedrowka marsz
+cel trasa sciezka droga szlak
+bagaż ekwipunek prowiant zapasy
+przygoda odkrycie znalezisko skarb
+tajemnica zagadka sekret zagadka rebus
+wskazowka trop slad podpowiedz
+wiadomosc nowina plotka echo
+obietnica przysięga umowa pakt
+prezent podarunek niespodzianka bonus
+wyplata wygrana premia stypendium
+zwrot wymiana reklamacja gwarancja
+dostawa wysylka odbior nadanie
+zamowienie rezerwacja booking anulowanie
+opinia recenzja ocena komentarz
+glosowanie wybor ankieta referendum
+konkurs quiz zagadka łamiglowka
+krzyzowka rebus sudoku puzzle
+szachy warcaby karty domino kosci
+loteria losowanie szansa fortuna
+hobby pasja zainteresowanie zajawka
+kolekcja zbior gablota album
+znaczek moneta odznaka medalik
+figurka maskotka zabawka pluszak
+lalka mis berło kredka
+balon baniek confetti serpentyna
+fajerwerk petarda raca swiatelko
+choinka ozdoba bombka lancuch gwiazdka
+prezent wiazanka kokarda wstazka
+ciastko cukierek lizak landrynka czekoladka
+gofr lody deser slodycze
+puchar kielich czara waza amfora
+dzban butelka flaszka sloik puszka
+pokretlo wajcha dzwignia guzik
+kabel przewod wtyczka gniazdko ladowarka
+bateria akumulator zasilacz agregat
+silnik motor turbina wentylator pompa
+sprzeglo skrzynia przekladnia lozysko
+opona felga rama siodełko kierownica
+lusterko swiatlo reflektor kierunkowskaz
+hamulec sprzeglo gaz przyspieszenie
+dach okno klapa maska bagaznik
+pasy fotelik siedzenie oparcie zaglowek
+radio glosnik antena odtwarzacz
+telefon komorka smartfon tablet
+aparat kamera obiektyw statyw
+zeszyt blok kajet segregator teczka
+spinacz zszywacz dziurkacz nozyczki
+kartka stronica arkusz karton
+tektura papier bibuła folia
+pudelko karton pudlo skrzynka kufer
+walizka neseser aktowka teczka
+klamka korbka zawias futryna
+kafelek plytka terakota gres
+cegla kamien beton zaprawa tynk
+farba lakier bejca impregnat
+siatka plecionka sznurek linka lina
+wezel supeł splatka fradzel
+koralik paciorek perełka kamyczek
+krysztal diament rubin szafir szmaragd
+zloto srebro miedz braz zelazo stal
+aluminium olow cyna cynk nikiel
+wegiel kokas grafit antracyt
+ropa gaz benzyna olej smar
+popiol zuzel slaka spieki
+dym para mgielka kurz pyl
+ogien plomien zar iskra
+woda kropla strużka fala bąbel
+powietrze wiatr podmuch powiew halny
+tlen wodór azot hel neon argon
+pierwiastek atom czastka jon molekuła
+obwod rezystor kondensator cewka dioda
+tranzystor mikrouklad plytka lutownica
+hektar metr kilometr cal stopa jard
+gram kilogram tona uncja funt
+litr galon kwarta barylka
+wat kilowat amper wolt om
+herc decybel lumen luks
+procent promil ulamek czesc calosc
+polowa cwierc trzecia reszta
+suma roznica iloczyn iloraz
+pierwiastek potega logarytm funkcja
+zbior podzbior ciag szereg
+punkt prosta odcinek promien wektor
+kat wierzcholek bok przekatna
+obwod pole objetosc masa gestosc
+predkosc przyspieszenie sila energia moc
+praca cieplo temperatura cisnienie
+ladunek prad napiecie opor
+fala czestotliwosc amplituda dlugosc
+swiatlo dźwięk echo poglos
+odbicie zalamanie rozszczepienie cien
+orbita rotacja obrot revolucja
+grawitacja przyciaganie odpychanie
+magnes biegun pole magnetyzm
+kompas busola mapa orientacja
+polnoc poludnie wschod zachod
+kierunek azymut kurs nawigacja
+gps satelita radar sonar
+teleskop mikroskop lornetka luneta
+okular soczewka pryzmat zwierciadlo
+ekran monitor wyswietlacz projektor
+klawiatura przycisk klawisz spacja
+litera znak cyfra symbol glif
+wyraz slowo zdanie akapit rozdzial
+strona tom ksiega biblioteka
+autor czytelnik redaktor tlumacz
+jezyk gwara dialekt akcent
+alfabet abecadlo pismo kaligrafia
+hieroglif runy klinowy znak
+kod szyfr klucz haslo
+wiadomosc telegram depesza meldunek
+sygnal alarm dzwonek syrena
+trąbka klakson gwizdek beben
+gitara skrzypce wiolonczela kontrabas
+fortepian pianino organy akordeon
+flet klarnet oboj fagot
+saksofon trabka puzon róg
+perkusja beben talerze kotly
+orkiestra zespol chór kapel
+dyrygent muzyk wirtuoz solista
+aria sonata symfonia koncert uwertura
+ballada hymn pieśń kołysanka
+melodia harmonia akord tercja
+rytm temp puls metrum
+partytura nuta klucz takt
+scena podium estrada widownia
+kurtyna opona dekoracja kulisa
+kostium maska peruka charakteryzacja
+rola postać bohater antagonista
+fabuła watek epizod scena
+dialog monolog komentarz narrator
+prolog epilog wstep zakonczenie
+tytul podtytul naglowek stopka
+spis rozdzial paragraf punkt
+cytat przypis odnosnik zrodlo
+bibliografia literatura lektura
+poezja proza dramat epika
+sonet oda elegia epigramat
+powiesc nowela opowiadanie felieton
+esej szkic traktat monografia
+album atlas leksykon poradnik
+przewodnik informator vademecum
+kalendarz almanach rocznik
+diariusz pamietnik kronika archiwum
+list odezwa apel manifest
+proklamacja dekret edykt reskrypt
+rokowanie narada obrady sesja
+zebranie wiec miting konferencja
+kongres synod konklawe kapitula
+trybunal sad jury lawa
+swiadek oskarzony oskarzyciel adwokat
+sedzia prokurator notariusz mecenas
+wyrok verdict sentencja orzeczenie
+apteka aptekarz farmaceuta
+zioła mikstura odwar napar
+syrop krople masc galka
+tabletka kapsulka pigułka drażetka
+opatrunek bandaz tampon kompres
+szew klips agrafka zszywka
+krokomierz stetoskop otoskop
+analityk konsultant doradca ekspert
+specjalista fachowiec rzemieślnik
+uczen czeladnik mistrz guru
+adept nowicjusz neofita debiutant
+weteran starzec nestor doyen
+mlodzik junak szczeniak pisklę
+ptak zwierze stworzenie istota
+potwor olbrzym karzeł krasnal
+elf gnom skrzat wrozka
+czarodziej magik wieszcz oracle
+rycerz wojownik wojak legionista
+husarz pancerny ułan kozak
+pikinier lucznik kusznik procarz
+tarcza zbroja pancerz kolczuga
+helm przyłbica naskórnik
+miecz szabla rapier pallad
+włócznia oszczep harpun dzida
+luk kusza strzała bełt
+kolczan kołdun sadło cięciwa
+topór berdysz tasak sejmik
+maczuga buzdygan kiścień obuch
+katapulta balista taran ogniobrzeg
+zamek twierdza cytadela forteca
+fosa wał reduta szaniec
+brama furtka wieżyczka blanki
+most zwodzony kratownica
+rycerz giermek paziok pacholek
+król krolowa książę księżna
+hrabia baron wicehrabia lord
+dama dwórka szlachcianka arystokratka
+tron korona berło insygnia
+majestat suweren monarcha władca
+regent namiestnik starosta wojewoda
+burmistrz prezydent marszalek przewodniczący
+radny radca senator poseł
+minister kanclerz premier sekretarz
+ambasador konsul poseł wysłannik
+delegat emisariusz kurier gołębnik
+traktat konwencja porozumienie układ
+alians przymierze sojusz konfederacja
+unia wspólnota liga federacja
+kraj państwo królestwo cesarstwo
+republika księstwo hrabstwo prowincja
+region ziemia okręg powiat
+gmina parafia dekanat diecezja
+stolica metropolia głównemiasto
+port przystań doki marina
+kotwica bója boja cum
+stery kormidło maszt reja
+żagiel fok grota spinaker
+pokład ładownia luk kajuta
+kajak tratwa ponton barka
+holownik tankowiec kontenerowiec
+prom trajekt łódź szalupa
+wioseł wioslo pagaj ster
+ekipaż załoga marynarz bosman
+szkutnik sternik nawigator
+latarnia sygnalizacja boja
+przybrzeże mielizna płycizna
+prąd fala przypływ odpływ
+sztorm cisza flauta bryza
+monarchia parlament izba senat
+konstytucja ustawa prawo przepis
+norma reguła zasada dyrektywa
+rozporządzenie zarządzenie nakaz zakaz
+zgoda pozwolenie licencja koncesja
+patent przywilej immunitet
+ewolucja rozwój postęp zmiana
+rewolucja przewrót transformacja
+tradycja zwyczaj obyczaj rytuał
+ceremonia uroczystość celebracja
+obrzęd sakrament msza nabożeństwo
+kazanie homilia przewodnik
+ołtarz ambona chrzcielnica konfesjonał
+kielich monstrancja cyborium
+relikwia świętość kult czcz
+pielgrzym pątnik wędrowiec
+klasztor monaster erem pustelnia
+cela refektarz kapitularz
+opat przeor kanonik zakrystian
+ministrant lektor organista
+dziakon prezbiter biskup kardynał
+papież patriarcha metropolita
+ikonostas fresk poliptyk tryptyk
+witraż rożeta portyk arkada
+kolumna filar pilaster kapitel
+fryz gzyms attyka parapet
+kopuła sklepienie łuk filigran
+spirala labirynt meander arabeska
+mozaika intarsja inkrustacja
+emalia lakier pozłota
+brąz spiż miedź patyna
+marmur granit bazalt piaskowiec
+wapien łupek gips alabaster
+porcelana fajans ceramika glina
+terakota majolika kamionka
+szkło kryształ witraż lustro
+jedwab atłas aksamit welwet
+wełna len bawełna płótno
+sukno filc wełniany kaszmir
+koronka tiul gipiura haft
+guzik guziczek zamek haftka
+kieszeń podszewka podszycie
+manelekt kołnierzyk rąbek
+szew przeszycie wypustka
+skóra futro wełna puch
+pióro puch piórko
+łuska skorupa pancerzyk
+sierść grzywa ogon pysk
+pazur kopyto racica kieł
+dziób skrzydło lotka sterówka
+płetwa wypustka szpikulec
+miód nektar pyłek kwiatowy
+ul plaster gniazdo
+barć pasieka wosk propolis
+motyl ćma gąsienica poczwarka
+kokon liść płatek szyjka
+korona kubeczek słupek pręcik
+kwiatostan grono wiecha baldach
+owoc pestka ziarno nasiono
+kłos źdźbło słoma plewa
+sad winnica szkółka nasada
+drzewko krzew krzaczek bylica
+pnącze bluszcz winorośl chmiel
+chwast perz skrzyp oset
+pokrzywa krwawnik dziurawiec macierzanka
+melisa mięta szałwia tymianek
+lawenda wrzos bez bzina
+róża tulipan narcyz hiacynt
+konwalia fiołek bratek niezapominajka
+stokrotka chaber kosaćce lilie
+goździk groszek astr rudbekia
+nagietek aksamitka petunia begonia
+fuksja pelargonia surfinia werbena
+storczyk paprotka filodendron
+kaktus sukulent agawa aloes
+palm bananowiec figowiec cytryna
+pomarańcza grejpfrut limonka mandarynka
+kiwi ananas mango papaja
+granat daktyl figa kaki
+awokado kokos orzeszek
+kasztan żołądź orzeszek laskowy
+chleb pieczywo wypiek
+ziarno mąka otręby
+drożdże proszek soda
+ciasto masa nadzienie farsz
+krem lukier polewa glazura
+marmolada dzem konfitura powidła
+kisiel budyń galaretka
+wanilia cynamon goździk anyż
+kardamon gałka kurkuma imbir
+chili papryczka pieprz ziele
+sałatka surówka mizeria
+bigos gulasz potrawka strogonow
+kotlet schabowy mielony pieczeń
+sznycel eskalop medalion
+nugget grill rożen szaszłyk
+wędlina szynka boczek kiełbasa
+salami parówka pasztet smalec
+ryba filet kotlecik
+zupa krem przecier bulion
+wywar odwar esencja
+sos majonez ketchup musztarda
+chrzan chrzanik tzatziki
+ocet marynata zalewa
+salami oliwka kapar anchois
+ser żółty pleśniowy topiony
+mozarella feta camembert brie
+gouda ementaler cheddar parmezan
+mascarpone ricotta oscypek bundz
+śmietanka śmietana maslanka
+jajko żółtko białko skorupka
+omlet jajecznica sadzone
+bekon szynkarka pasztetowa
+kanapka sandwicz tost croissant
+naleśnik omlet tortila
+pizza makaron spaghetti penne
+ryzotto polenta kuszkus
+burger hotdog kebab zapiekanka
+frytki chipsy krakersy paluszki
+orzeszki migdały fistaszki
+popcorn przekąska poczęstunek
+herbata kawa espresso cappuccino
+latte mocca americano
+kakao czekolada karmel toffi
+lizak cukierek guma dropsy
+chałwa sezamki piernik
+wafel andrut opłatek
+drożdżówka pączek faworki chruściki
+kołacz mazurka strucla
+rogal croissant brioszka
+chałka bula bułeczka
+precelek paluch grisini
+tarta quiche babeczka
+muffin brownie serniczek
+ekler ptyś karpatka
+napoleonka milhoja malakoff
+tort bezy biszkopt
+owocowy czekoladowy waniliowy
+truskawkowy malinowy cytrynowy
+kawowy orzechowy migdałowy
+karmelowy miodowy korzenny
+piernikowy imbirowy anyżkowy
+świąteczny okolicznościowy jubileuszowy
+urodzinowy komunijny
+wigilijny wielkanocny karnawałowy
+noworoczny sylwestrowy kiełbasa
+grzaniec punch grog
+likier nalewka wódcz
+wino winiak musujące
+szampan prosecco cava
+piwo piwko jasne ciemne
+pszeniczne marcowe bock
+cydr jabłecznik winobranie
+kompot moszcz sokowirówka
+nektar smoothie koktajl
+shake frappe granita
+sorbet lody gelato
+polewka krem zupka
+przystawka zakąska snack
+danie potrawa specjał
+menu karta degustacja
+pory posiłek śniadanie
+lunch obiad podwieczorek
+kolacja wieczerza biesiada
+uczta bankiet raut
+piknik grilowanie ognisko
+szaszłykowanie pieczenie smażenie
+gotowanie duszenie pieczenie
+mielenie krojenie siekanie
+szatkowanie łuskanie obieranie
+mieszanie ubijanie ucieranie
+wyrabianie formowanie wałkowanie
+krojenie plastrowanie
+marynowanie peklowanie wędzenie
+suszenie mrożenie pasteryzacja
+konserwowanie kiszenie
+oczyszczanie płukanie szorowanie
+zmywanie wycieranie polerowanie
+prasowanie składanie wieszanie
+sprzątanie porządkowanie odkurzanie
+ścieranie mycie czyszczenie
+naprawa reperacja serwis
+konserwacja restauracja renowacja
+modernizacja przebudowa rozbudowa
+montaż demontaż instalacja
+podłączenie okablowanie uziemienie
+izolacja uszczelnienie wypełnienie
+wzmocnienie podparcie podwieszenie
+malowanie bielenie szpachlowanie
+tapetowanie glazurowanie
+podłoga wykładzina parkiet deska
+panele listwa przypodłogowa
+dywan chodnik kafelki
+okładzina obudowa zabudowa
+wnęka wnętro nisza
+antresola balkonik loggia
+patio weranda ganek
+altana pergola wiat
+garaż wiata szopa
+drewutnia komórka schowek
+piwniczka suteryna
+stajnia obora kurnik
+chlew zagroda wybieg
+szopa stodoła spichlerz
+suszka wozownia
+studnia pompa hydrant
+ogrodzenie płot furtka
+słupek palik żerdź
+siatka linka drut
+brama wjazd podjazd
+chodnik alejka dróżka
+ścieżeczka deptaczek
+trawnik rabat klomb
+grządka grządeczka
+szklarnia cieplarnia inspekt
+kompostownik mulczownia
+konewka podlewaczka
+wężyk zraszacz
+sekator nożyce widły
+szpadel łopatka grabki
+motyczka pielnik opryskiwacz
+sadzonka rozsada nasionko
+bulwa kłącze cebulka
+kiełek pęd latorośl
+odrost odrośl zrazik
+szczepka przesadzonka
+podkładka zaszczep
+nawóz obornik kompost
+ściółka mulcz agrotkanina
+podpora tyczka kratka
+pergola szpalerek krata
+doniczka donica skrzynka
+# ── uzupełnienia ──
+akrobata akrobatka albatros ametyst ampulka anakonda antyk antykwariat apatyt arteria artefakt
+astma atleta atletka audiencja awans awangarda azyl azylant
+badyl bakier balast balans baletnica balet balia bambus bandera bankier barek batalion batalia
+baza bazarek bazylia bazyliszek beczulka belka berberys bergamotka bermudy betoniarka bicz
+bielizna bigl bilet bilon binokle biograf biografia biret bizon bitwa bizuteria
+blankiet blaszka blat blichtr blokada blokowisko bluzka bobas bocznik bochen bogini bojowka bojler
+boks bokser bolec bomba bongo bonsai borowina botanik botanika bractwo braciszek bransoletka
+bratanek breja brona browar brudnopis bruzda brydz brygada brygadzista bryka brykiet brylant
+brynza brystol brzeskwinia brzuszek brzuch bubel budka budulec bufet bufon bujak
+bujawka bukiet bukszpan buldog bulion bumerang bunkier bursztyn bursa burta busik busz butik
+buzia bydle bystrzak bytnosc
+cacko cedzak celofan celownik centaur centrum cerkiew cieciwa ciastolina cyrk cyrkiel cytara
+czapla czarownica czarownik czas czernina czop czub czujnik czyn czynnik cma cwiek
+dachowka dalia dandys dealer defilada deka delicje demagog dendryt derby derka dewiza
+dewon diabeł diadem dingi dioda dolina dolar domena domek doskonalosc drabinka dramaturg
+dres drewno drganie drobiazg drobina dron drop drukarnia dryf duet duma dycha dynastia
+dysk dyskusja dzial dzialka dziecko dzielo dzwig
+ekskursja elektron elita elokwencja emir epos esteta estetyka etap etos ewenement
+facet fach fajrant faks fama fan faraon farma farsa fascynat faul faworyt febra ferment
+fermata festyn festiwal fiakier fibula figiel filut final firma fiszka fiszbin fitness flak
+flakon flaming flamaster flecistka flisak flora floret foka fokus folwark forint forma formula
+fosfor fotka frajda frak fraza frazes frez frezja front fryzjer fryzura fundacja fura furmanka
+futrzak
+gabaryt gadzet gafa gajowy gala galanteria galeon gandola garamond garb garbus gardlo
+garderoba gargulec garnitur garniec garus gatunek gaweda gawra geba gejsza gemma gen geniusz
+geodeta getry gibon gielda gildia gimnastyka glejt globus gloska gogle gol golen gonitwa gondola
+gong gont gospoda gotyk grabarz graf gremium grill grubosz gruda grunt gryf grypa grymas grzalka
+ gust
+habit habitat hacjenda haczyk hafn hajduk halka handel hantel harcerz harfa harmider haslo hebel
+heca hegemon herbata hetman hibernacja hiena hindus hokej hologram homar hospicjum hostessa
+huba hufiec huk humus hurma hurtownia husky hybryda hydra
+ibis idea ideal idol idylla igielka igloo iguana iks iluzja imidz impala imperium implant impost
+inauguracja inercja inicjal inicjatywa instynkt instrukcja intencja internet intruz irga ironia
+irys istnienie izba
+jadeit jagla jalapeno jama jantar jarzmo jarzyna jaspis jazz jezdnia jezdziec jota juhas jukka
+jurta
+kadra kajdany kajman kalenica kalmar kana kaos kapitan kaptur karabin karbon karkas karnet karpatka
+kasa katar kawaler kazamat keks kitel klan klajster klamra klin klub knajpa knot koala kociol
+kocur kojec kolej kolczyk komik komiks koncept kondor kontakt kontekst kopa kopara korba korkociag
+kornet korpus korsarz korset kosmos kosmita kotwica krab krata kreda kremowka krok krokodyl kromka
+krucyfiks kruk kruszec krykiet ksiadz ksywka kubek kukulka kukurydza kulminacja kulka kupa kupon
+kura kurort kuznia kwadra kwas kwiat
+labirynt lama lanca lania laser lateks lawa lemko leming lew lewarek liceum limuzyna lisica
+litosfera lob logika lotnia lotnisko lubczyk lutnia luz
+machina macica mafia magiel maharadza mak makieta malwa mamut manekin manetka manierka mankiet
+marakuja maraton margaryna marka marker maszkara mastodont mate medycyna memo menazeria mentor
+mesa metafora metal miano mikron mikser miedza mila minus miraz misja mis mitra mleczarnia mnich
+moda modul moher mol monit mors motel motyw mrowisko muflon mumia mundur mydelniczka myszolow
+nadruk nadzorca nafta nagroda najemnik namiot naperstek natura nawa nektar nerka nomada nocka
+nota numer nurt nylon
+oaza obelisk objaw oboz ochota odpad oficer oficyna ogie ogród okap okrag okulary olimp omen
+omega opakowanie operator orka osada oskar ostrze ostroga 
+pagorek pakunek palestra palma panda pandemia pani panicz parka pas paszport patyk pawilon pedał
+pens petycja piccolo piec pikieta pilota pingwin pion pionier pirat piruet pitbull plac plakat
+platforma plafon plecy plomba plot pluskwa pocisk podloze podwozie pojecie pojemnik pokoj polisa
+portal poselstwo potega powiat poziom presja prestiz profil promyk proton proton przekora publika
+pustynia pyton
+rabat rabus racja radio rampa raj rak reakcja reaktor reklama remiza rewia rewia riksza ring
+rokitnik roleta romans rosa rowerzysta rozbitek ruda rum rumba runo rura rycina ryj
+rynna
+sadzawka saldo samorzad sanatorium satyr satyna scena scyzoryk sejm sen selekcja senat
+serwetka sfera siatkarz siec silos siolo skafander skalpel skarga sklepik smok snop socha solowka
+sople spadochron spichlerz spinner stacja step stop strus stuczka suknia sumienie supeł swat
+sygnatura sypialnia syrop szałas szarancza szef szkielet szmatka sznur szot szpilka sztab sztanga
+szyba
+tabaka tabakera taca tamburyn tapczan tektura terminal termos test tik tlok toczek tonfa topaz
+torf traf trol tryb tuba tubka tundra turkus tusz tyczka
+ucisk uczta ultimatum umysl uniwersytet uran urzednik uzda
+wachlarz wasal wata weksel werbel western wedka wiaderko wielblad wigwam winda wir wirus wiza
+wizjer wojt woliera worek wrota wybrzeze wydawnictwo wyklad wyspa
+xero yeti yoga yukka
+zachwyt zakatek zaklad zaleta zapora zarost zasieg zaslona zawod zebra zel zero zgielk zielnik
+zlot zmrok zodiak zygzak zyrandol zyrafa zywica
