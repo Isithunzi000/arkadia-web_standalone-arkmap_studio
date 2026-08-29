@@ -50,13 +50,15 @@ node tests/save_dialogs.js   # dialogi zapisu (v1.44.4): 7 sciezek przez saveWit
 node tests/fix_batch_v1445.js # fixy v1.44.5: R1 clRoom w startClDrawingExisting, K1 guard toBlob-null w saveWithDialog, K2 rejection file.text(), K3 czyszczenie _activeSpecialExit
 node tests/suppressors_load.js # podwojne linie (v1.45.2): checkSuppressorsInMap przy loadzie, paritet z rdzeniem, raport, wiring po id
 node tests/changelog_tags.js  # straznik tagow arcow w CHANGELOGU: pary wersja->arc, unikalnosc, monotonicznosc, synchron z APP_VERSION
+node tests/preserve_unknown.js # D3 (v1.51.0): unknown keys przetrwuja round-trip load->save na kazdym poziomie, poza zakresem r4/a4/f4; unknown w meta objete checksums.meta (metaOk)
 ```
 
 ### tests/checksums/ — laboratorium sum kontrolnych v4
 
 - `CANONICAL_V4.md` — spec normatywny kanonicznego kodowania binarnego (layout bajtowy),
 - `oracle_v4.py` — referencyjny enkoder (Python + modul `xxhash`), generuje wektory,
-- `vectors_v4.json` — wektory: sanity XXH3-64 + golden fixture + kotwice bajtowe,
+- `vectors_v4.json` — wektory: sanity XXH3-64 + golden fixture + kotwice bajtowe (zamrozone bajtowo, R1),
+- `vectors_v4_meta.json` — wektory kodowania meta (m4, D2): golden + przypadki brzegowe typow,
 - `golden_fixture.arkmap` — fixture 2 obszary / 12 pokoi pokrywajacy wszystkie pola,
 - `xxh3.js` — dev-kopia implementacji JS (produkcyjna: blok `====XXH3-64====` w arkmap_studio.html).
 

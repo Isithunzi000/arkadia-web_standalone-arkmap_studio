@@ -14101,6 +14101,15 @@ function _valReportSections(valRes, chkRes, suppMissing) {
         const sec = document.createElement('div');
         const t = document.createElement('div'); t.className = 'val-section-title';
         const isCritical = valRes.errors.some(e => e.path === 'format' || e.path === 'format_version');
+        // Koperta v2 (D1): fatalna niezgodność wersji — laicki komunikat ZAMIAST surowej listy pól
+        if (isFatal && valRes.errors.some(e => e.path === 'format_version')) {
+          const vnote = document.createElement('div');
+          vnote.className = 'val-warn-list';
+          vnote.textContent = 'Plik zapisany w nieobsługiwanej wersji formatu .arkmap (ta wersja ArkMap Studio obsługuje: '
+            + FORMAT_VERSION + '). Pliki w starym formacie nie są wczytywane — wyeksportuj mapę ponownie ze źródła '
+            + 'albo zaktualizuj ArkMap Studio.';
+          body.appendChild(vnote);
+        }
         t.textContent = 'WALIDACJA — ' + valRes.errors.length + ' błąd(ów)' + (isCritical ? ' [KRYTYCZNE]' : '');
         sec.appendChild(t);
         const list = document.createElement('div'); list.className = 'val-error-list';
