@@ -11,8 +11,9 @@ Samowystarczalna aplikacja przeglądarkowa do podglądu i edycji map gry MUD **A
 - **Podgląd i edycja mapy Arkadii** — pokoje, wyjścia, etykiety, poziomy, kolory, wyszukiwanie, drag & drop, undo/redo.
 - **Uniwersalność** — otwiera też mapy Mudlet (v17–22) z dowolnego MUD-a: Arkadia jest rozpoznawana automatycznie, mapy obce renderują się z domyślnej palety ANSI i kolorów zapisanych w pliku (1:1 z oficjalnym rendererem Mudleta).
 - **Import i eksport Mudlet `.dat`** — binarna zgodność z formatem map Mudleta w obie strony.
-- **Własny format `.arkmap`** — czytelny JSON przyjazny gitowi (stabilna serializacja, sumy kontrolne XXH3-64).
-- **Kalka zmian `.arkdelta`** — zapisuj same swoje edycje (z sesji albo z różnicy dwóch map) i nanieś je na nowszą wersję mapy upstream przez recenzję z wykrywaniem konfliktów — bez wysyłania całej mapy.
+- **Własny format `.arkmap`** — czytelny JSON przyjazny gitowi (stabilna serializacja, sumy kontrolne XXH3-64, opcjonalny podpis autora Ed25519).
+- **Kalka zmian `.arkdelta`** — zapisuj same swoje edycje (z sesji albo z różnicy dwóch map) i nanieś je na nowszą wersję mapy upstream przez recenzję z wykrywaniem konfliktów — bez wysyłania całej mapy. Kalka może być anonimowa albo podpisana tożsamością autora.
+- **Tożsamość autora (opcjonalna)** — podpisy Ed25519 map i kalek: nick kryptograficznie związany z kluczem, kod przeniesienia z 3–6 słów, publiczny rejestr nicków (jeden nick = jeden klucz, trwałe unieważnienie przez właściciela) i lokalny pinning kluczy z alarmem podszywki działającym także offline. Klucz prywatny nigdy nie opuszcza przeglądarki.
 - **Działa offline** — mapa trzymana lokalnie w przeglądarce, zapis do pliku na dysku. **Instalowalna jako aplikacja (PWA)** — ikona na pulpicie/ekranie telefonu, zero cache'owania (no-op service worker).
 - **Mapa online** — przycisk „🌐 Pobierz mapę online…" pobiera z gałęzi `mapa` tego repo automatycznie synchronizowane lustro mapy z Delwing/arkadia-mapa (workflow `sync-map.yml`, 2× dziennie), jako `.arkmap` lub `.dat`.
 

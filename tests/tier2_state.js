@@ -195,7 +195,7 @@ console.log('── T4: strażniki strukturalne (zrodlo) ──');
   ok(NEW.includes('const explicitTo = state.pendingSERenames'), 'Q4: jawny rename w commitRoomEdit przed heurystyka');
   ok(NEW.includes('if (room.doors[newCmd] === undefined)'), 'Q4: target wygrywa per-pole (doors)');
   ok((NEW.match(/state\.pendingSERenames\s+= null;/g) || []).length === 2, 'Q4: clear ×2 (zmiana pokoju + po commicie)');
-  ok(NEW.includes("const APP_VERSION = 'v1.51.0';"), 'wersja: v1.51.0');
+  ok(NEW.includes("const APP_VERSION = 'v1.52.0';"), 'wersja: v1.52.0');
 }
 
 // ── T5 (Arc 37, F-EDIT-4): commitRoomEdit — toast o zmianie płaszczyzny Z ────

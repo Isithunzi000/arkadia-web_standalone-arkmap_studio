@@ -56,6 +56,9 @@ node tests/identity_wordlist.js # D8 (v1.51.0): slownik 2048 slow (SHA-256 zamro
 node tests/identity_dialog.js   # D8 (v1.51.0): dialog tozsamosci — przycisk nad drop-zone, stany brak/aktywna, Utworz/Importuj/Pokaz kod/Wyczysc (dwuklik), XSS-escape, stub DOM+IDB
 node tests/delta_sig.js         # D8/D4 (v1.51.0): ops-strict reader, weryfikacja podpisu Ed25519 (ok/bad/claimed/unsigned, idOk), ryzyko per-obszar green/yellow/red, kategoria "z komendami"
 node tests/g6_crosscheck.js     # G6 (v1.51.0): przyklady w docs/arkmap_spec.html §21 i docs/arkdelta_spec.html §13 niosa PRAWDZIWE sumy — przeliczane silnikiem aplikacji, spec nigdy sie nie rozjedzie z kodem
+node tests/arkmap_sig.js        # F5 (v1.52.0): podpisy .arkmap — payload = caly obiekt minus checksums.sig (P-LOCK-1), stany unsigned/claimed/ok(+idOk)/bad, przelacznik podpisow, failsafe zapisu bez podpisu
+node tests/registry_client.js   # F6 (v1.52.0): klient rejestru tozsamosci — fetchEntry (mapowanie 200/404/siec, cache sesji), register/revoke z PoP, macierz enrich (match/missing/mismatch/revoked/offline), createOnline/importOnline/revokeOnline fail-closed
+node tests/trust_store.js       # F7 (v1.52.0): lokalny TOFU w IDB v2 (store 'trust') — upgrade v1->v2 z zachowaniem danych, pin pierwszego zweryfikowanego klucza, konflikt nigdy nie nadpisuje, claimed tylko czyta
 ```
 
 ### tests/checksums/ — laboratorium sum kontrolnych v4
