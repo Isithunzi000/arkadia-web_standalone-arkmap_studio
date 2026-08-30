@@ -1,8 +1,8 @@
 # Maszyna pomiarowa (mega-test 2026-08-28)
 
-- CPU: AMD Athlon Silver 3050U with Radeon Graphics (2C/2T)
-- RAM: 29995 MB (heap Node w teście: 6144 MB)
-- OS: Ubuntu 24.04.4 LTS (jądro 7.0.0-30-generic)
+- CPU: laptop low-end, 2C/2T (x86_64)
+- RAM: ok. 30 GB (heap Node w teście: 6144 MB)
+- OS: Ubuntu 24.04 LTS
 - Node: v20.20.1
 - Mudlet desktop: mudlet 4.22.0  
 - Aplikacja: v1.49.7

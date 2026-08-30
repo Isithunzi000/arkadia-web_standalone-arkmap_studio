@@ -1,8 +1,8 @@
 # Maszyna pomiarowa (przebieg 2026-08-21)
 
-- CPU: AMD Athlon Silver 3050U with Radeon Graphics (2C/2T — klasa low-end laptop)
-- RAM: 29995 MB (heap Node w teście: 6144 MB)
-- OS: Ubuntu 24.04 (bare metal, jądro generic)
+- CPU: laptop low-end, 2C/2T (x86_64)
+- RAM: ok. 30 GB (heap Node w teście: 6144 MB)
+- OS: Ubuntu 24.04 LTS
 - Node: v20.20.1
 - Aplikacja: przed v1.44.0 (silnik sum kontrolnych v2)
 - Przeglądarka: chrome-headless-shell 152.0.7977.54 (oficjalny binarny build Google, software rendering)

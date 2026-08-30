@@ -4,7 +4,7 @@ Narzędzia pomiarowe ArkMap Studio: porównanie formatów `.dat` vs `.arkmap` or
 drabinka stress testu (limit skalowania). **Nie są częścią regresji** (`run-all.sh`
 ich nie odpala — to pomiar czasochłonny, do uruchomienia ręcznie).
 
-Zacommitowane przebiegi (ta sama maszyna: AMD Athlon Silver 3050U 2C/2T, 30 GB RAM,
+Zacommitowane przebiegi (ta sama maszyna: laptop low-end 2C/2T (x86_64), 30 GB RAM,
 Node v20.20.1, chrome-headless-shell 152):
 
 - **2026-08-21** (referencyjny, aplikacja przed v1.44.0, silnik sum v2):

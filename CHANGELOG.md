@@ -619,7 +619,7 @@ sztywne nazwy kalek krzyzowych → przegladarkowe dopiski „(1)(2)" i zgubiony 
 ## v1.44.3 — perf lab: przebieg v3 + raporty, konwencja .json, generator data-driven, fix lepkiej flagi minimapki
 
 Drugi przebieg laboratorium wydajnosci (2026-08-22, ta sama maszyna co
-referencja: Athlon Silver 3050U, Node v20.20.1, chrome-headless-shell 152,
+referencja: laptop low-end 2C/2T, Node v20.20.1, chrome-headless-shell 152,
 bez obciazenia w tle) — pierwszy pomiar aplikacji z silnikiem sum v3.
 
 - Aplikacja: kasowanie lepkiej flagi _mmDragging przy ruchu z puszczonym
@@ -786,7 +786,7 @@ alg i liczyl zawsze formulami v2 — obszary i plik „niezgodne", pokoje OK
   (54k-864k pokoi, deterministyczny, sumy v2 funkcjami aplikacji),
   benchmark parse Node, driver przegladarki na CDP (realny zegar),
   orkiestrator run.sh, generator raportu. Wynik referencyjny
-  (Athlon Silver 3050U 2C/2T): .arkmap laduje sie 1,6-2,6x wolniej niz
+  (laptop low-end 2C/2T): .arkmap laduje sie 1,6-2,6x wolniej niz
   .dat — ale wylacznie przez weryfikacje CRC (sam JSON.parse jest ~3,4x
   SZYBSZY niz parser binarny); renderer plaski do 108k pokoi (draw
   21-25 ms, kamera p95 14-37 ms); oba formaty OK do 4x realnej mapy.

@@ -444,7 +444,7 @@ własny przebieg: <code>bash tests/perf/run.sh</code> (README w <code>tests/perf
 
 <h2>7. Zastrzeżenia</h2>
 <ul>
-<li>Maszyna pomiarowa to <b>celowo low-end</b> (Athlon Silver 3050U, 2C/2T) — reprezentuje dolny koniec sprzętu
+<li>Maszyna pomiarowa to <b>celowo low-end</b> (laptop low-end, 2C/2T) — reprezentuje dolny koniec sprzętu
 użytkowników; na współczesnym desktopie wszystkie czasy będą niższe. Relacje formatów i kształt skalowania
 przenoszą się na szybszy sprzęt.</li>
 ${bgBullet}

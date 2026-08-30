@@ -22,7 +22,7 @@ samej maszynie**. Cel: twarde dane (czas, RAM, limity) pod propozycje formatu
    z pojedyncza linia (podmien sciezke na swoja kopie repo):
 
    ```lua
-   dofile("/home/rzuf/repo/tests/megatest/desktop/workload.lua")
+   dofile("/sciezka/do/repo/tests/megatest/desktop/workload.lua")
    ```
 
    To cala "instalacja" — cala logika testu zyje w repo i jest wersjonowana.

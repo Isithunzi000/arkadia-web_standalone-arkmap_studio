@@ -5,7 +5,7 @@
     "warmup": 3,
     "node": "v20.20.1",
     "date": "2026-08-21T20:33:08.863Z",
-    "machine": "AMD Athlon Silver 3050U with Radeon Graphics / 29 GB RAM"
+    "machine": "laptop low-end, 2C/2T (x86_64) / ok. 30 GB RAM"
   },
   "sets": {
     "real_27k": {

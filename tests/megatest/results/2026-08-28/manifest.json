@@ -7,8 +7,8 @@
  "ladder": [
   {
    "name": "real_27k",
-   "dat": "/home/rzuf/Pobrane/arkadia-web_standalone-arkmap_studio/map_master3.dat",
-   "arkmap": "/home/rzuf/Pobrane/arkadia-web_standalone-arkmap_studio/tests/perf/out/base.arkmap",
+   "dat": "<REPO>/map_master3.dat",
+   "arkmap": "<REPO>/tests/perf/out/base.arkmap",
    "rooms": 26988,
    "pairs": [
     [
@@ -415,8 +415,8 @@
   },
   {
    "name": "stress_2x",
-   "dat": "/home/rzuf/Pobrane/arkadia-web_standalone-arkmap_studio/tests/perf/out/stress_2k.dat",
-   "arkmap": "/home/rzuf/Pobrane/arkadia-web_standalone-arkmap_studio/tests/perf/out/stress_2k.arkmap",
+   "dat": "<REPO>/tests/perf/out/stress_2k.dat",
+   "arkmap": "<REPO>/tests/perf/out/stress_2k.arkmap",
    "rooms": 53976,
    "pairs": [
     [
@@ -823,8 +823,8 @@
   },
   {
    "name": "stress_4x",
-   "dat": "/home/rzuf/Pobrane/arkadia-web_standalone-arkmap_studio/tests/perf/out/stress_4k.dat",
-   "arkmap": "/home/rzuf/Pobrane/arkadia-web_standalone-arkmap_studio/tests/perf/out/stress_4k.arkmap",
+   "dat": "<REPO>/tests/perf/out/stress_4k.dat",
+   "arkmap": "<REPO>/tests/perf/out/stress_4k.arkmap",
    "rooms": 107952,
    "pairs": [
     [
@@ -1231,8 +1231,8 @@
   },
   {
    "name": "stress_8x",
-   "dat": "/home/rzuf/Pobrane/arkadia-web_standalone-arkmap_studio/tests/perf/out/stress_8k.dat",
-   "arkmap": "/home/rzuf/Pobrane/arkadia-web_standalone-arkmap_studio/tests/perf/out/stress_8k.arkmap",
+   "dat": "<REPO>/tests/perf/out/stress_8k.dat",
+   "arkmap": "<REPO>/tests/perf/out/stress_8k.arkmap",
    "rooms": 215904,
    "pairs": [
     [
@@ -1639,8 +1639,8 @@
   },
   {
    "name": "stress_16x",
-   "dat": "/home/rzuf/Pobrane/arkadia-web_standalone-arkmap_studio/tests/perf/out/stress_16k.dat",
-   "arkmap": "/home/rzuf/Pobrane/arkadia-web_standalone-arkmap_studio/tests/perf/out/stress_16k.arkmap",
+   "dat": "<REPO>/tests/perf/out/stress_16k.dat",
+   "arkmap": "<REPO>/tests/perf/out/stress_16k.arkmap",
    "rooms": 431808,
    "pairs": [
     [
