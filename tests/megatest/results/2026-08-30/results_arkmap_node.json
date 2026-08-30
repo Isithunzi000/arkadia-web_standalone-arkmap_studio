@@ -1,0 +1,482 @@
+{
+  "meta": {
+    "tool": "bench_parse.js",
+    "n_runs": 5,
+    "warmup": 3,
+    "node": "v20.20.1",
+    "date": "2026-08-30T21:05:24.655Z",
+    "machine": "laptop low-end, 2C/2T (x86_64) / ok. 30 GB RAM"
+  },
+  "sets": {
+    "real_27k": {
+      "rooms": 26988,
+      "size_mb": {
+        "dat": 7.5,
+        "arkmap": 13.2
+      },
+      "dat": {
+        "parse": {
+          "n": 5,
+          "min": 335.6,
+          "med": 554.6,
+          "p95": 598.5,
+          "max": 598.5
+        },
+        "validate": {
+          "n": 5,
+          "min": 62.1,
+          "med": 76.1,
+          "p95": 231.1,
+          "max": 231.1
+        },
+        "total": {
+          "n": 5,
+          "min": 411.7,
+          "med": 665.3,
+          "p95": 785.7,
+          "max": 785.7
+        },
+        "heap_delta_mb": 41
+      },
+      "arkmap": {
+        "json": {
+          "n": 5,
+          "min": 76.5,
+          "med": 78.5,
+          "p95": 79.9,
+          "max": 79.9
+        },
+        "validate": {
+          "n": 5,
+          "min": 52.9,
+          "med": 56,
+          "p95": 61.2,
+          "max": 61.2
+        },
+        "crc": {
+          "n": 5,
+          "min": 160.3,
+          "med": 166.4,
+          "p95": 184.3,
+          "max": 184.3
+        },
+        "total": {
+          "n": 5,
+          "min": 295.8,
+          "med": 299.9,
+          "p95": 323.5,
+          "max": 323.5
+        },
+        "heap_delta_mb": 21,
+        "checksums_ok": true,
+        "workloads": {
+          "graph_build_ms": 75.1,
+          "path_ms": {
+            "n": 5,
+            "min": 762.4,
+            "med": 799.7,
+            "p95": 992.6,
+            "max": 992.6
+          },
+          "path_found": 42,
+          "search_ms": {
+            "n": 5,
+            "min": 6.5,
+            "med": 7.5,
+            "p95": 23.6,
+            "max": 23.6
+          },
+          "search_hits": 3,
+          "search_rooms": 3,
+          "search_names": 3,
+          "search_exact": 3,
+          "iter_ms": {
+            "n": 5,
+            "min": 5.2,
+            "med": 5.5,
+            "p95": 23.4,
+            "max": 23.4
+          },
+          "rooms_iter": 26988
+        }
+      },
+      "ratio_total": 0.45
+    },
+    "stress_2x": {
+      "rooms": 53976,
+      "size_mb": {
+        "dat": 14.7,
+        "arkmap": 26.8
+      },
+      "dat": {
+        "parse": {
+          "n": 5,
+          "min": 788.3,
+          "med": 940.4,
+          "p95": 1075.4,
+          "max": 1075.4
+        },
+        "validate": {
+          "n": 5,
+          "min": 107.2,
+          "med": 204,
+          "p95": 254.1,
+          "max": 254.1
+        },
+        "total": {
+          "n": 5,
+          "min": 1042.4,
+          "med": 1125.6,
+          "p95": 1274.3,
+          "max": 1274.3
+        },
+        "heap_delta_mb": 101
+      },
+      "arkmap": {
+        "json": {
+          "n": 5,
+          "min": 202,
+          "med": 212.8,
+          "p95": 235.3,
+          "max": 235.3
+        },
+        "validate": {
+          "n": 5,
+          "min": 100,
+          "med": 105.2,
+          "p95": 106.9,
+          "max": 106.9
+        },
+        "crc": {
+          "n": 5,
+          "min": 403.9,
+          "med": 422.1,
+          "p95": 438,
+          "max": 438
+        },
+        "total": {
+          "n": 5,
+          "min": 736.7,
+          "med": 741.2,
+          "p95": 746.5,
+          "max": 746.5
+        },
+        "heap_delta_mb": 47,
+        "checksums_ok": true,
+        "workloads": {
+          "graph_build_ms": 108.3,
+          "path_ms": {
+            "n": 5,
+            "min": 1304.7,
+            "med": 1429,
+            "p95": 1615.1,
+            "max": 1615.1
+          },
+          "path_found": 28,
+          "search_ms": {
+            "n": 5,
+            "min": 17.3,
+            "med": 33.6,
+            "p95": 71.3,
+            "max": 71.3
+          },
+          "search_hits": 6,
+          "search_rooms": 6,
+          "search_names": 3,
+          "search_exact": 6,
+          "iter_ms": {
+            "n": 5,
+            "min": 43,
+            "med": 51.7,
+            "p95": 124.6,
+            "max": 124.6
+          },
+          "rooms_iter": 53976
+        }
+      },
+      "ratio_total": 0.66
+    },
+    "stress_4x": {
+      "rooms": 107952,
+      "size_mb": {
+        "dat": 29,
+        "arkmap": 54.1
+      },
+      "dat": {
+        "parse": {
+          "n": 5,
+          "min": 1864.7,
+          "med": 1895,
+          "p95": 2061.6,
+          "max": 2061.6
+        },
+        "validate": {
+          "n": 5,
+          "min": 227,
+          "med": 252.1,
+          "p95": 339.7,
+          "max": 339.7
+        },
+        "total": {
+          "n": 5,
+          "min": 2122,
+          "med": 2148.8,
+          "p95": 2313.7,
+          "max": 2313.7
+        },
+        "heap_delta_mb": 185
+      },
+      "arkmap": {
+        "json": {
+          "n": 5,
+          "min": 443.3,
+          "med": 483,
+          "p95": 515.9,
+          "max": 515.9
+        },
+        "validate": {
+          "n": 5,
+          "min": 234.3,
+          "med": 243,
+          "p95": 355.9,
+          "max": 355.9
+        },
+        "crc": {
+          "n": 5,
+          "min": 895.1,
+          "med": 948.7,
+          "p95": 1007.9,
+          "max": 1007.9
+        },
+        "total": {
+          "n": 5,
+          "min": 1586.8,
+          "med": 1664,
+          "p95": 1820.5,
+          "max": 1820.5
+        },
+        "heap_delta_mb": 81,
+        "checksums_ok": true,
+        "workloads": {
+          "graph_build_ms": 162.4,
+          "path_ms": {
+            "n": 5,
+            "min": 1634.6,
+            "med": 1863.6,
+            "p95": 1910.4,
+            "max": 1910.4
+          },
+          "path_found": 18,
+          "search_ms": {
+            "n": 5,
+            "min": 51.3,
+            "med": 60.6,
+            "p95": 65.4,
+            "max": 65.4
+          },
+          "search_hits": 12,
+          "search_rooms": 12,
+          "search_names": 3,
+          "search_exact": 12,
+          "iter_ms": {
+            "n": 5,
+            "min": 98.2,
+            "med": 109.5,
+            "p95": 116.5,
+            "max": 116.5
+          },
+          "rooms_iter": 107952
+        }
+      },
+      "ratio_total": 0.77
+    },
+    "stress_8x": {
+      "rooms": 215904,
+      "size_mb": {
+        "dat": 57.8,
+        "arkmap": 108.8
+      },
+      "dat": {
+        "parse": {
+          "n": 5,
+          "min": 3185.2,
+          "med": 3613.5,
+          "p95": 4060.8,
+          "max": 4060.8
+        },
+        "validate": {
+          "n": 5,
+          "min": 418.9,
+          "med": 442.8,
+          "p95": 562.3,
+          "max": 562.3
+        },
+        "total": {
+          "n": 5,
+          "min": 3616.3,
+          "med": 4142.8,
+          "p95": 4479.8,
+          "max": 4479.8
+        },
+        "heap_delta_mb": 378
+      },
+      "arkmap": {
+        "json": {
+          "n": 5,
+          "min": 899.8,
+          "med": 956.6,
+          "p95": 991.7,
+          "max": 991.7
+        },
+        "validate": {
+          "n": 5,
+          "min": 482.8,
+          "med": 509.8,
+          "p95": 552.5,
+          "max": 552.5
+        },
+        "crc": {
+          "n": 5,
+          "min": 2052.8,
+          "med": 2073.5,
+          "p95": 2146.1,
+          "max": 2146.1
+        },
+        "total": {
+          "n": 5,
+          "min": 3469.2,
+          "med": 3580.3,
+          "p95": 3605.1,
+          "max": 3605.1
+        },
+        "heap_delta_mb": 165,
+        "checksums_ok": true,
+        "workloads": {
+          "graph_build_ms": 393.4,
+          "path_ms": {
+            "n": 5,
+            "min": 2258,
+            "med": 2350.4,
+            "p95": 2432.3,
+            "max": 2432.3
+          },
+          "path_found": 8,
+          "search_ms": {
+            "n": 5,
+            "min": 147.8,
+            "med": 161.2,
+            "p95": 385.1,
+            "max": 385.1
+          },
+          "search_hits": 24,
+          "search_rooms": 24,
+          "search_names": 3,
+          "search_exact": 24,
+          "iter_ms": {
+            "n": 5,
+            "min": 251.6,
+            "med": 281.3,
+            "p95": 439.9,
+            "max": 439.9
+          },
+          "rooms_iter": 215904
+        }
+      },
+      "ratio_total": 0.86
+    },
+    "stress_16x": {
+      "rooms": 431808,
+      "size_mb": {
+        "dat": 115.2,
+        "arkmap": 219.1
+      },
+      "dat": {
+        "parse": {
+          "n": 5,
+          "min": 8840,
+          "med": 8977.6,
+          "p95": 9128.6,
+          "max": 9128.6
+        },
+        "validate": {
+          "n": 5,
+          "min": 1035,
+          "med": 1113.5,
+          "p95": 1268.7,
+          "max": 1268.7
+        },
+        "total": {
+          "n": 5,
+          "min": 9982.8,
+          "med": 10036.5,
+          "p95": 10397.3,
+          "max": 10397.3
+        },
+        "heap_delta_mb": 686
+      },
+      "arkmap": {
+        "json": {
+          "n": 5,
+          "min": 1759.8,
+          "med": 1940.4,
+          "p95": 2039.9,
+          "max": 2039.9
+        },
+        "validate": {
+          "n": 5,
+          "min": 845.6,
+          "med": 1028.7,
+          "p95": 1123.1,
+          "max": 1123.1
+        },
+        "crc": {
+          "n": 5,
+          "min": 3885.9,
+          "med": 4284,
+          "p95": 4340.9,
+          "max": 4340.9
+        },
+        "total": {
+          "n": 5,
+          "min": 6491.3,
+          "med": 7280.6,
+          "p95": 7385.5,
+          "max": 7385.5
+        },
+        "heap_delta_mb": 336,
+        "checksums_ok": true,
+        "workloads": {
+          "graph_build_ms": 702.5,
+          "path_ms": {
+            "n": 5,
+            "min": 2609.7,
+            "med": 2733.4,
+            "p95": 2929.6,
+            "max": 2929.6
+          },
+          "path_found": 5,
+          "search_ms": {
+            "n": 5,
+            "min": 329.4,
+            "med": 371,
+            "p95": 725.9,
+            "max": 725.9
+          },
+          "search_hits": 48,
+          "search_rooms": 48,
+          "search_names": 3,
+          "search_exact": 48,
+          "iter_ms": {
+            "n": 5,
+            "min": 510.6,
+            "med": 563.2,
+            "p95": 897.9,
+            "max": 897.9
+          },
+          "rooms_iter": 431808
+        }
+      },
+      "ratio_total": 0.73
+    }
+  }
+}

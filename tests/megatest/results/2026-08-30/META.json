@@ -1,0 +1,10 @@
+{
+ "app_version": "v1.52.5",
+ "mudlet_desktop": "mudlet 5.0.0  ",
+ "mudlet_map_binary_reader": "2.0.0",
+ "node": "v20.20.1",
+ "checksum_alg": "v4",
+ "runs": 5,
+ "seed_manifestu": 20260827,
+ "note": "W1 desktop = loadMap (restore+audit+init2D, pelna cena uzytkownika); W1 web/arkmap = czysty parse Node; pary i frazy deterministyczne (manifest)."
+}

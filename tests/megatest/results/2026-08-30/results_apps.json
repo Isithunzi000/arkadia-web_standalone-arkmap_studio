@@ -1,0 +1,1182 @@
+{
+ "meta": {
+  "tool": "apps (natywne silniki w headless Chromium)",
+  "n_runs": 5,
+  "date": "2026-08-30T21:15:12.970Z",
+  "chrome": "Google Chrome for Testing 152.0.7977.64",
+  "node": "v20.20.1",
+  "packages": {
+   "mudlet-map-renderer": "2.6.1",
+   "mudlet-map-binary-reader": "1.3.0"
+  },
+  "note": "arkmap: prawdziwe UI (findPath/wpDoSearch, wpState neutralny). web-real: ich reader+MapReader+PathFinder; W3 N/A (brak natywnego API); PathFinder cache neutralizowany swieza instancja per run. web-real ignoruje locki pokoi (kod) — rozbieznosci found przez locked pokoje sa OCZEKIWANE. Powyzej 50k pokoi natywny auto-mode przechodzi w skeleton: SkeletonMapReader.getRooms()=[] (kod), wiec PathFinder/iteracja sa natywnie N/A — wowczas mierzymy wymuszony plain jako wiersz informacyjny (plain_forced)."
+ },
+ "sets": {
+  "real_27k": {
+   "rooms": 26988,
+   "arkmap": {
+    "arkmap_file": {
+     "load_ms": {
+      "n": 5,
+      "min": 1121.9,
+      "med": 1150,
+      "p95": 1157,
+      "max": 1285
+     },
+     "apply_ms": {
+      "n": 5,
+      "min": 613.1,
+      "med": 671.3,
+      "p95": 672.3,
+      "max": 769.1
+     },
+     "verified_ms": {
+      "n": 5,
+      "min": 1116.1,
+      "med": 1148.3,
+      "p95": 1150,
+      "max": 1282.5
+     },
+     "verified_miss": 0,
+     "frames_ok": 5,
+     "heap_mb": {
+      "n": 5,
+      "min": 7.1,
+      "med": 7.1,
+      "p95": 7.1,
+      "max": 7.2
+     }
+    },
+    "dat_file": {
+     "load_ms": {
+      "n": 5,
+      "min": 1836.1,
+      "med": 1970.9,
+      "p95": 1997.8,
+      "max": 2011.5
+     },
+     "apply_ms": {
+      "n": 5,
+      "min": 1386.9,
+      "med": 1463,
+      "p95": 1471.1,
+      "max": 1501.9
+     },
+     "verified_ms": {
+      "n": 5,
+      "min": 1832.6,
+      "med": 1968.5,
+      "p95": 1990.3,
+      "max": 2009
+     },
+     "verified_miss": 0,
+     "frames_ok": 5,
+     "heap_mb": {
+      "n": 5,
+      "min": 31.6,
+      "med": 31.6,
+      "p95": 31.7,
+      "max": 31.7
+     }
+    }
+   },
+   "arkmap_wl": {
+    "arkmap": {
+     "w2": {
+      "dijkstra": {
+       "ms": {
+        "n": 5,
+        "min": 748.1,
+        "med": 832.1,
+        "p95": 846.7,
+        "max": 948
+       },
+       "found": 42
+      },
+      "astar": {
+       "ms": {
+        "n": 5,
+        "min": 783.1,
+        "med": 856.9,
+        "p95": 868.2,
+        "max": 890
+       },
+       "found": 42
+      }
+     },
+     "w3": {
+      "ms": {
+       "n": 5,
+       "min": 17.9,
+       "med": 23.1,
+       "p95": 28.1,
+       "max": 107.4
+      },
+      "hits": 3
+     },
+     "w3b": {
+      "ms": {
+       "n": 5,
+       "min": 4.9,
+       "med": 6.8,
+       "p95": 9.5,
+       "max": 10.5
+      },
+      "keys": 26988
+     }
+    }
+   },
+   "webreal": {
+    "w1": {
+     "parse_ms": {
+      "n": 5,
+      "min": 745,
+      "med": 777.5,
+      "p95": 787.9,
+      "max": 905.5
+     },
+     "materialize_ms": {
+      "n": 5,
+      "min": 353.2,
+      "med": 360.2,
+      "p95": 370.9,
+      "max": 379.9
+     },
+     "graph_ms": {
+      "n": 5,
+      "min": 153,
+      "med": 166.8,
+      "p95": 169.7,
+      "max": 190.9
+     },
+     "total_ms": {
+      "n": 5,
+      "min": 1272,
+      "med": 1321.7,
+      "p95": 1324.1,
+      "max": 1431.9
+     },
+     "mode": "plain",
+     "rooms_reader": 26988
+    },
+    "heap_mb": {
+     "n": 5,
+     "min": 29.6,
+     "med": 29.6,
+     "p95": 29.6,
+     "max": 29.6
+    },
+    "w2": {
+     "dijkstra": {
+      "ms": {
+       "n": 5,
+       "min": 2633.6,
+       "med": 2695.7,
+       "p95": 2714.4,
+       "max": 3950
+      },
+      "found": 42
+     },
+     "astar": {
+      "ms": {
+       "n": 5,
+       "min": 617.5,
+       "med": 634.5,
+       "p95": 635.7,
+       "max": 653.2
+      },
+      "found": 42
+     }
+    },
+    "w3b": {
+     "ms": {
+      "n": 5,
+      "min": 2.3,
+      "med": 4.4,
+      "p95": 4.4,
+      "max": 5.4
+     },
+     "keys": 26988
+    }
+   },
+   "gate": {
+    "problems": 0,
+    "desk_found": 42,
+    "arkmap_found": 42,
+    "webreal_found": 42,
+    "webplain_found": null,
+    "cost_checked": 42,
+    "cost_expected_locks": 3,
+    "cost_flags": []
+   }
+  },
+  "stress_2x": {
+   "rooms": 53976,
+   "arkmap": {
+    "arkmap_file": {
+     "load_ms": {
+      "n": 5,
+      "min": 1882.9,
+      "med": 1974,
+      "p95": 1990.3,
+      "max": 2046.5
+     },
+     "apply_ms": {
+      "n": 5,
+      "min": 1037.4,
+      "med": 1090.5,
+      "p95": 1135.9,
+      "max": 1185.3
+     },
+     "verified_ms": {
+      "n": 5,
+      "min": 1881.3,
+      "med": 1971,
+      "p95": 1987.1,
+      "max": 2044.2
+     },
+     "verified_miss": 0,
+     "frames_ok": 5,
+     "heap_mb": {
+      "n": 5,
+      "min": 16.6,
+      "med": 16.6,
+      "p95": 16.6,
+      "max": 16.6
+     }
+    },
+    "dat_file": {
+     "load_ms": {
+      "n": 5,
+      "min": 3346.5,
+      "med": 3511.9,
+      "p95": 3548.4,
+      "max": 3722.5
+     },
+     "apply_ms": {
+      "n": 5,
+      "min": 2566.1,
+      "med": 2667.9,
+      "p95": 2811.4,
+      "max": 2906.2
+     },
+     "verified_ms": {
+      "n": 5,
+      "min": 3344.8,
+      "med": 3510.3,
+      "p95": 3546.8,
+      "max": 3720.4
+     },
+     "verified_miss": 0,
+     "frames_ok": 5,
+     "heap_mb": {
+      "n": 5,
+      "min": 63.1,
+      "med": 63.1,
+      "p95": 63.1,
+      "max": 63.2
+     }
+    }
+   },
+   "arkmap_wl": {
+    "arkmap": {
+     "w2": {
+      "dijkstra": {
+       "ms": {
+        "n": 5,
+        "min": 1181.7,
+        "med": 1280,
+        "p95": 1329.2,
+        "max": 1700.8
+       },
+       "found": 28
+      },
+      "astar": {
+       "ms": {
+        "n": 5,
+        "min": 946.9,
+        "med": 1016.1,
+        "p95": 1134.1,
+        "max": 1168.1
+       },
+       "found": 28
+      }
+     },
+     "w3": {
+      "ms": {
+       "n": 5,
+       "min": 9.8,
+       "med": 31.8,
+       "p95": 54.4,
+       "max": 371.1
+      },
+      "hits": 6
+     },
+     "w3b": {
+      "ms": {
+       "n": 5,
+       "min": 32.4,
+       "med": 34.7,
+       "p95": 35.8,
+       "max": 47
+      },
+      "keys": 53976
+     }
+    }
+   },
+   "webreal": {
+    "w1": {
+     "parse_ms": {
+      "n": 5,
+      "min": 862.1,
+      "med": 896,
+      "p95": 912.9,
+      "max": 1179.3
+     },
+     "materialize_ms": {
+      "n": 5,
+      "min": 23.9,
+      "med": 32.5,
+      "p95": 38.5,
+      "max": 49.2
+     },
+     "graph_ms": {
+      "n": 5,
+      "min": 0.3,
+      "med": 0.3,
+      "p95": 0.3,
+      "max": 2.9
+     },
+     "total_ms": {
+      "n": 5,
+      "min": 900.9,
+      "med": 928.8,
+      "p95": 937.1,
+      "max": 1231.4
+     },
+     "mode": "skeleton",
+     "rooms_reader": 0
+    },
+    "heap_mb": {
+     "n": 5,
+     "min": 40.5,
+     "med": 40.5,
+     "p95": 40.5,
+     "max": 40.5
+    },
+    "sanity_found": 0,
+    "w2": null,
+    "w3b": null,
+    "plain_forced": {
+     "w1": {
+      "parse_ms": {
+       "n": 5,
+       "min": 1378.9,
+       "med": 1452.6,
+       "p95": 1634.1,
+       "max": 2198.4
+      },
+      "materialize_ms": {
+       "n": 5,
+       "min": 691.2,
+       "med": 740.9,
+       "p95": 749.9,
+       "max": 861.4
+      },
+      "graph_ms": {
+       "n": 5,
+       "min": 380.1,
+       "med": 414.8,
+       "p95": 426.8,
+       "max": 449.7
+      },
+      "total_ms": {
+       "n": 5,
+       "min": 2506,
+       "med": 2569.3,
+       "p95": 2752.1,
+       "max": 3509.5
+      },
+      "mode": "plain",
+      "rooms_reader": 53976
+     },
+     "heap_mb": {
+      "n": 5,
+      "min": 59.9,
+      "med": 59.9,
+      "p95": 59.9,
+      "max": 59.9
+     },
+     "w2": {
+      "dijkstra": {
+       "ms": {
+        "n": 5,
+        "min": 4029.8,
+        "med": 4085.4,
+        "p95": 4163.2,
+        "max": 4439
+       },
+       "found": 28
+      },
+      "astar": {
+       "ms": {
+        "n": 5,
+        "min": 1049.4,
+        "med": 1094.7,
+        "p95": 1163.5,
+        "max": 1173
+       },
+       "found": 28
+      }
+     },
+     "w3b": {
+      "ms": {
+       "n": 5,
+       "min": 32.5,
+       "med": 40.9,
+       "p95": 42.2,
+       "max": 180.3
+      },
+      "keys": 53976
+     }
+    }
+   },
+   "gate": {
+    "problems": 0,
+    "desk_found": 28,
+    "arkmap_found": 28,
+    "webreal_found": 0,
+    "webplain_found": 28,
+    "cost_checked": 28,
+    "cost_expected_locks": 1,
+    "cost_flags": []
+   }
+  },
+  "stress_4x": {
+   "rooms": 107952,
+   "arkmap": {
+    "arkmap_file": {
+     "load_ms": {
+      "n": 5,
+      "min": 3396.1,
+      "med": 3541.8,
+      "p95": 4177.8,
+      "max": 4681.5
+     },
+     "apply_ms": {
+      "n": 5,
+      "min": 1894.4,
+      "med": 1937.3,
+      "p95": 2354.8,
+      "max": 2685.7
+     },
+     "verified_ms": {
+      "n": 5,
+      "min": 3394.2,
+      "med": 3539.9,
+      "p95": 4176.2,
+      "max": 4679.7
+     },
+     "verified_miss": 0,
+     "frames_ok": 5,
+     "heap_mb": {
+      "n": 5,
+      "min": 32,
+      "med": 32,
+      "p95": 32,
+      "max": 32
+     }
+    },
+    "dat_file": {
+     "load_ms": {
+      "n": 5,
+      "min": 5810.5,
+      "med": 7004.2,
+      "p95": 7106.1,
+      "max": 7121.2
+     },
+     "apply_ms": {
+      "n": 5,
+      "min": 4521.8,
+      "med": 4745.5,
+      "p95": 5271.2,
+      "max": 5797.3
+     },
+     "verified_ms": {
+      "n": 5,
+      "min": 5809,
+      "med": 7002.3,
+      "p95": 7104.1,
+      "max": 7119
+     },
+     "verified_miss": 0,
+     "frames_ok": 5,
+     "heap_mb": {
+      "n": 5,
+      "min": 123.6,
+      "med": 123.7,
+      "p95": 123.7,
+      "max": 123.7
+     }
+    }
+   },
+   "arkmap_wl": {
+    "arkmap": {
+     "w2": {
+      "dijkstra": {
+       "ms": {
+        "n": 5,
+        "min": 1715.4,
+        "med": 1925.4,
+        "p95": 1982.2,
+        "max": 2701.7
+       },
+       "found": 18
+      },
+      "astar": {
+       "ms": {
+        "n": 5,
+        "min": 691.7,
+        "med": 718.2,
+        "p95": 747.1,
+        "max": 886.9
+       },
+       "found": 18
+      }
+     },
+     "w3": {
+      "ms": {
+       "n": 5,
+       "min": 6.7,
+       "med": 25.8,
+       "p95": 26.9,
+       "max": 316.4
+      },
+      "hits": 12
+     },
+     "w3b": {
+      "ms": {
+       "n": 5,
+       "min": 67.4,
+       "med": 76.2,
+       "p95": 86.8,
+       "max": 97.2
+      },
+      "keys": 107952
+     }
+    }
+   },
+   "webreal": {
+    "w1": {
+     "parse_ms": {
+      "n": 5,
+      "min": 1448.3,
+      "med": 1553.8,
+      "p95": 1638,
+      "max": 2142
+     },
+     "materialize_ms": {
+      "n": 5,
+      "min": 37.8,
+      "med": 124.7,
+      "p95": 232.1,
+      "max": 246.7
+     },
+     "graph_ms": {
+      "n": 5,
+      "min": 0.2,
+      "med": 0.3,
+      "p95": 0.3,
+      "max": 0.4
+     },
+     "total_ms": {
+      "n": 5,
+      "min": 1533,
+      "med": 1680.7,
+      "p95": 1800.8,
+      "max": 2267.1
+     },
+     "mode": "skeleton",
+     "rooms_reader": 0
+    },
+    "heap_mb": {
+     "n": 5,
+     "min": 79.7,
+     "med": 79.7,
+     "p95": 79.7,
+     "max": 79.7
+    },
+    "sanity_found": 0,
+    "w2": null,
+    "w3b": null,
+    "plain_forced": {
+     "w1": {
+      "parse_ms": {
+       "n": 5,
+       "min": 2743.9,
+       "med": 2900.1,
+       "p95": 2969.2,
+       "max": 3036.6
+      },
+      "materialize_ms": {
+       "n": 5,
+       "min": 1488.6,
+       "med": 1726.7,
+       "p95": 1808.3,
+       "max": 2505.4
+      },
+      "graph_ms": {
+       "n": 5,
+       "min": 781,
+       "med": 837.9,
+       "p95": 883.2,
+       "max": 1065.5
+      },
+      "total_ms": {
+       "n": 5,
+       "min": 5115.7,
+       "med": 5601.2,
+       "p95": 5631.4,
+       "max": 6307.3
+      },
+      "mode": "plain",
+      "rooms_reader": 107952
+     },
+     "heap_mb": {
+      "n": 5,
+      "min": 119.2,
+      "med": 119.2,
+      "p95": 119.2,
+      "max": 119.2
+     },
+     "w2": {
+      "dijkstra": {
+       "ms": {
+        "n": 5,
+        "min": 4815,
+        "med": 5076.3,
+        "p95": 5734.2,
+        "max": 5988.9
+       },
+       "found": 20
+      },
+      "astar": {
+       "ms": {
+        "n": 5,
+        "min": 1397,
+        "med": 1500.8,
+        "p95": 1508.7,
+        "max": 1542.3
+       },
+       "found": 20
+      }
+     },
+     "w3b": {
+      "ms": {
+       "n": 5,
+       "min": 96.4,
+       "med": 107.5,
+       "p95": 111.1,
+       "max": 115.3
+      },
+      "keys": 107952
+     }
+    }
+   },
+   "gate": {
+    "problems": 0,
+    "desk_found": 18,
+    "arkmap_found": 18,
+    "webreal_found": 0,
+    "webplain_found": 20,
+    "cost_checked": 18,
+    "cost_expected_locks": 2,
+    "cost_flags": []
+   }
+  },
+  "stress_8x": {
+   "rooms": 215904,
+   "arkmap": {
+    "arkmap_file": {
+     "load_ms": {
+      "n": 5,
+      "min": 6698.5,
+      "med": 6928.5,
+      "p95": 6948.2,
+      "max": 7614.7
+     },
+     "apply_ms": {
+      "n": 5,
+      "min": 3916.1,
+      "med": 3969.8,
+      "p95": 4085.3,
+      "max": 4451.5
+     },
+     "verified_ms": {
+      "n": 5,
+      "min": 6696.9,
+      "med": 6927,
+      "p95": 6946.4,
+      "max": 7613.1
+     },
+     "verified_miss": 0,
+     "frames_ok": 5,
+     "heap_mb": {
+      "n": 5,
+      "min": 62.7,
+      "med": 62.7,
+      "p95": 62.8,
+      "max": 62.8
+     }
+    },
+    "dat_file": {
+     "load_ms": {
+      "n": 5,
+      "min": 12670.5,
+      "med": 13476.4,
+      "p95": 14032.3,
+      "max": 14723.7
+     },
+     "apply_ms": {
+      "n": 5,
+      "min": 9795.3,
+      "med": 10123.3,
+      "p95": 10309.5,
+      "max": 11355.6
+     },
+     "verified_ms": {
+      "n": 5,
+      "min": 12667.3,
+      "med": 13474.5,
+      "p95": 14030,
+      "max": 14721.9
+     },
+     "verified_miss": 0,
+     "frames_ok": 5,
+     "heap_mb": {
+      "n": 5,
+      "min": 244.8,
+      "med": 244.9,
+      "p95": 244.9,
+      "max": 244.9
+     }
+    }
+   },
+   "arkmap_wl": {
+    "arkmap": {
+     "w2": {
+      "dijkstra": {
+       "ms": {
+        "n": 5,
+        "min": 2143.4,
+        "med": 2436.2,
+        "p95": 2480.6,
+        "max": 4440.4
+       },
+       "found": 8
+      },
+      "astar": {
+       "ms": {
+        "n": 5,
+        "min": 492.9,
+        "med": 525.5,
+        "p95": 527.2,
+        "max": 783
+       },
+       "found": 8
+      }
+     },
+     "w3": {
+      "ms": {
+       "n": 5,
+       "min": 17.5,
+       "med": 58.2,
+       "p95": 76.8,
+       "max": 681.1
+      },
+      "hits": 24
+     },
+     "w3b": {
+      "ms": {
+       "n": 5,
+       "min": 173.7,
+       "med": 189.8,
+       "p95": 244.7,
+       "max": 250.2
+      },
+      "keys": 215904
+     }
+    }
+   },
+   "webreal": {
+    "w1": {
+     "parse_ms": {
+      "n": 5,
+      "min": 2397,
+      "med": 3271,
+      "p95": 3331.9,
+      "max": 3702
+     },
+     "materialize_ms": {
+      "n": 5,
+      "min": 88.1,
+      "med": 116,
+      "p95": 118.1,
+      "max": 119.3
+     },
+     "graph_ms": {
+      "n": 5,
+      "min": 0.3,
+      "med": 0.3,
+      "p95": 0.4,
+      "max": 0.4
+     },
+     "total_ms": {
+      "n": 5,
+      "min": 2485.4,
+      "med": 3389.4,
+      "p95": 3431.7,
+      "max": 3821.7
+     },
+     "mode": "skeleton",
+     "rooms_reader": 0
+    },
+    "heap_mb": {
+     "n": 5,
+     "min": 158.3,
+     "med": 158.3,
+     "p95": 158.3,
+     "max": 158.4
+    },
+    "sanity_found": 0,
+    "w2": null,
+    "w3b": null,
+    "plain_forced": {
+     "w1": {
+      "parse_ms": {
+       "n": 5,
+       "min": 4706.2,
+       "med": 5376.6,
+       "p95": 5427.2,
+       "max": 5883.2
+      },
+      "materialize_ms": {
+       "n": 5,
+       "min": 2555.7,
+       "med": 2876.3,
+       "p95": 2935.2,
+       "max": 3057
+      },
+      "graph_ms": {
+       "n": 5,
+       "min": 1505.8,
+       "med": 1573.1,
+       "p95": 1726,
+       "max": 1966
+      },
+      "total_ms": {
+       "n": 5,
+       "min": 8987.9,
+       "med": 9968.2,
+       "p95": 10245.5,
+       "max": 10269.5
+      },
+      "mode": "plain",
+      "rooms_reader": 215904
+     },
+     "heap_mb": {
+      "n": 5,
+      "min": 237.9,
+      "med": 237.9,
+      "p95": 237.9,
+      "max": 237.9
+     },
+     "w2": {
+      "dijkstra": {
+       "ms": {
+        "n": 5,
+        "min": 5862.6,
+        "med": 5983.5,
+        "p95": 6403.3,
+        "max": 6416.7
+       },
+       "found": 8
+      },
+      "astar": {
+       "ms": {
+        "n": 5,
+        "min": 1658.6,
+        "med": 1685.4,
+        "p95": 1721,
+        "max": 1789.6
+       },
+       "found": 8
+      }
+     },
+     "w3b": {
+      "ms": {
+       "n": 5,
+       "min": 176.2,
+       "med": 186.5,
+       "p95": 187.4,
+       "max": 201.4
+      },
+      "keys": 215904
+     }
+    }
+   },
+   "gate": {
+    "problems": 0,
+    "desk_found": 8,
+    "arkmap_found": 8,
+    "webreal_found": 0,
+    "webplain_found": 8,
+    "cost_checked": 8,
+    "cost_expected_locks": 3,
+    "cost_flags": []
+   }
+  },
+  "stress_16x": {
+   "rooms": 431808,
+   "arkmap": {
+    "arkmap_file": {
+     "load_ms": {
+      "n": 5,
+      "min": 11941.6,
+      "med": 12928.6,
+      "p95": 14217,
+      "max": 15509.6
+     },
+     "apply_ms": {
+      "n": 5,
+      "min": 7075.3,
+      "med": 7272.2,
+      "p95": 7739.4,
+      "max": 8601.3
+     },
+     "verified_ms": {
+      "n": 5,
+      "min": 11939.7,
+      "med": 12926.8,
+      "p95": 14214.9,
+      "max": 15507.5
+     },
+     "verified_miss": 0,
+     "frames_ok": 5,
+     "heap_mb": {
+      "n": 5,
+      "min": 124.2,
+      "med": 124.2,
+      "p95": 124.2,
+      "max": 124.3
+     }
+    },
+    "dat_file": {
+     "load_ms": {
+      "n": 5,
+      "min": 20483.3,
+      "med": 23286.2,
+      "p95": 23993.4,
+      "max": 25118.6
+     },
+     "apply_ms": {
+      "n": 5,
+      "min": 15751.9,
+      "med": 18503.4,
+      "p95": 19228.6,
+      "max": 19328.4
+     },
+     "verified_ms": {
+      "n": 5,
+      "min": 20481.3,
+      "med": 23283.2,
+      "p95": 23991.9,
+      "max": 25116.5
+     },
+     "verified_miss": 0,
+     "frames_ok": 5,
+     "heap_mb": {
+      "n": 5,
+      "min": 488.9,
+      "med": 488.9,
+      "p95": 488.9,
+      "max": 488.9
+     }
+    }
+   },
+   "arkmap_wl": {
+    "arkmap": {
+     "w2": {
+      "dijkstra": {
+       "ms": {
+        "n": 5,
+        "min": 2293.1,
+        "med": 2484.4,
+        "p95": 2566.8,
+        "max": 3773.7
+       },
+       "found": 5
+      },
+      "astar": {
+       "ms": {
+        "n": 5,
+        "min": 253.4,
+        "med": 295.7,
+        "p95": 311.5,
+        "max": 389.2
+       },
+       "found": 5
+      }
+     },
+     "w3": {
+      "ms": {
+       "n": 5,
+       "min": 23.3,
+       "med": 33.6,
+       "p95": 36.8,
+       "max": 1201.4
+      },
+      "hits": 48
+     },
+     "w3b": {
+      "ms": {
+       "n": 5,
+       "min": 475.6,
+       "med": 493.4,
+       "p95": 498.4,
+       "max": 521.7
+      },
+      "keys": 431808
+     }
+    }
+   },
+   "webreal": {
+    "w1": {
+     "parse_ms": {
+      "n": 5,
+      "min": 6017.8,
+      "med": 6445.2,
+      "p95": 6576.9,
+      "max": 7219.7
+     },
+     "materialize_ms": {
+      "n": 5,
+      "min": 176.1,
+      "med": 196.7,
+      "p95": 198.7,
+      "max": 215.2
+     },
+     "graph_ms": {
+      "n": 5,
+      "min": 0.3,
+      "med": 0.4,
+      "p95": 0.4,
+      "max": 0.5
+     },
+     "total_ms": {
+      "n": 5,
+      "min": 6233.4,
+      "med": 6644.2,
+      "p95": 6773.9,
+      "max": 7396.3
+     },
+     "mode": "skeleton",
+     "rooms_reader": 0
+    },
+    "heap_mb": {
+     "n": 5,
+     "min": 315.9,
+     "med": 315.9,
+     "p95": 315.9,
+     "max": 315.9
+    },
+    "sanity_found": 0,
+    "w2": null,
+    "w3b": null,
+    "plain_forced": {
+     "w1": {
+      "parse_ms": {
+       "n": 5,
+       "min": 10336.5,
+       "med": 10749.8,
+       "p95": 10770.6,
+       "max": 10842.9
+      },
+      "materialize_ms": {
+       "n": 5,
+       "min": 6606.6,
+       "med": 7144.7,
+       "p95": 7496.3,
+       "max": 9343.1
+      },
+      "graph_ms": {
+       "n": 5,
+       "min": 3595.2,
+       "med": 3681.9,
+       "p95": 3721.8,
+       "max": 3795.1
+      },
+      "total_ms": {
+       "n": 5,
+       "min": 20809.8,
+       "med": 21652.1,
+       "p95": 21841.3,
+       "max": 23795.6
+      },
+      "mode": "plain",
+      "rooms_reader": 431808
+     },
+     "heap_mb": {
+      "n": 5,
+      "min": 475.9,
+      "med": 475.9,
+      "p95": 475.9,
+      "max": 475.9
+     },
+     "w2": {
+      "dijkstra": {
+       "ms": {
+        "n": 5,
+        "min": 6741.3,
+        "med": 6798.4,
+        "p95": 6943.7,
+        "max": 7041.3
+       },
+       "found": 5
+      },
+      "astar": {
+       "ms": {
+        "n": 5,
+        "min": 1837.7,
+        "med": 1951.8,
+        "p95": 2018.9,
+        "max": 2092
+       },
+       "found": 5
+      }
+     },
+     "w3b": {
+      "ms": {
+       "n": 5,
+       "min": 432.5,
+       "med": 449.4,
+       "p95": 455,
+       "max": 470.7
+      },
+      "keys": 431808
+     }
+    }
+   },
+   "gate": {
+    "problems": 0,
+    "desk_found": 5,
+    "arkmap_found": 5,
+    "webreal_found": 0,
+    "webplain_found": 5,
+    "cost_checked": 5,
+    "cost_expected_locks": 0,
+    "cost_flags": []
+   }
+  }
+ }
+}
