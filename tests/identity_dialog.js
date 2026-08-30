@@ -324,6 +324,18 @@ console.log('── T7: uniewaznienie tozsamosci ──');
 
 async function _identityActiveStill(api2) { return api2._identityActive(); }
 
+// ── C3 (v1.52.4): resetAllDefaults odswieza status tozsamosci + wymienia podpisywanie ──
+{
+  const rd = HTML.slice(HTML.indexOf('function resetAllDefaults() {'));
+  const rdEnd = rd.indexOf("toast('✓ Przywrócono ustawień domyślne')") >= 0 ? rd.indexOf("toast('✓ Przywrócono ustawień domyślne')") : rd.length;
+  ok(rd.includes('_identityUiRefresh'),
+    'C3: resetAllDefaults odswieza status tozsamosci po wyczyszczeniu arkmap-sign-files');
+  ok(rd.indexOf('_identityUiRefresh') < rdEnd,
+    'C3: odswiezenie przed tostem koncowym');
+  ok(rd.includes('podpisywanie plików'),
+    'C3: dialog potwierdzenia resetu wymienia podpisywanie plikow');
+}
+
 console.log('');
 console.log('WYNIK: ' + pass + ' OK, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

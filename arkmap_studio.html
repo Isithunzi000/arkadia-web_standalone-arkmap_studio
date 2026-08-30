@@ -13873,7 +13873,7 @@ _uiScaleSlider.addEventListener('change', function() {
 
 // ── resetAllDefaults() — reset ALL settings, positions, localStorage ──────────
 function resetAllDefaults() {
-  if (!confirm('Przywrócić ustawienia domyślne?\n\nResetuje: pozycje i rozmiary okien, siatka, minimapa, puste custom lines, preferencje edytora, przełączniki planera (algorytm, kierunki, transporty, prędkość, omijanie zablokowanych).\n\nMapa i dane NIE zostaną usunięte.')) return;
+  if (!confirm('Przywrócić ustawienia domyślne?\n\nResetuje: pozycje i rozmiary okien, siatka, minimapa, puste custom lines, preferencje edytora, podpisywanie plików, przełączniki planera (algorytm, kierunki, transporty, prędkość, omijanie zablokowanych).\n\nMapa i dane NIE zostaną usunięte.')) return;
   // Clear ALL arkmap localStorage keys (Arc 34: wyjatek dla akceptacji walidatora
   // usuniety — akceptacje zyja wylacznie w meta mapy, legacy klucz to zwykly smiec)
   const keysToRemove = [];
@@ -13948,6 +13948,8 @@ function resetAllDefaults() {
   // jesli panel walidatora jest otwarty — odswiez, by lista sie przebudowala
   const _vdPanelReset = document.getElementById('validate-panel');
   if (_vdPanelReset && _vdPanelReset.classList.contains('visible') && typeof _renderVdPanel === 'function') { try { _renderVdPanel(); } catch (_) {} }
+  // v1.52.4: reset kasuje tez arkmap-sign-files — status tozsamosci w sidebarze musi sie odswiezyc od razu
+  if (typeof _identityUiRefresh === 'function') { try { _identityUiRefresh(); } catch (_) {} }
   toast('✓ Przywrócono ustawienia domyślne');
 }
 
