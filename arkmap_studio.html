@@ -20,6 +20,7 @@
     --accent2: #ff9f4a;
     --ok:      #4aff8a;
     --err:     #ff4a4a;
+    --warn:    #e8a020;
     --text:    #e8eef8;
     --dim:     #d2dce8;
     --fg:      #e0e8f4;
@@ -1939,9 +1940,8 @@
 
     <!-- WCZYTAJ -->
     <div class="sb-section">
-      <div class="sb-section-title">Wczytaj</div>
       <button id="btn-identity" style="margin-bottom:4px">🪪 Tożsamość autora&hellip;</button>
-      <div id="identity-status" style="font-size:10px;color:var(--dim);text-align:center;margin-bottom:6px">pliki będą anonimowe</div>
+      <div id="identity-status" style="font-size:11px;color:var(--dim);text-align:center;margin-bottom:6px;line-height:1.5">pliki będą anonimowe</div>
       <div id="drop-zone">
         <strong>Upuść plik .arkmap / .dat</strong>
         <p>lub użyj przycisków poniżej</p>
@@ -20626,9 +20626,13 @@ function _identityLoadWordCount() {
   } catch (e) {}
   return _IDENTITY_WORDS_DEFAULT;
 }
-function _identityStatusText(id) {
+// v1.52.1: status jako HTML — nick/identyfikator zielone (--ok, jak przyciski Wczytaj/Zapisz),
+// „podpis wyłączony" wyeksponowane na --warn. Tekst po stripie tagów identyczny jak dawniej (piny).
+function _identityStatusHtml(id) {
   if (!id) return 'pliki będą anonimowe';
-  return '🪪 ' + id.nick + ' · ' + id.authorId + (_identitySignEnabled() ? '' : ' · podpis wyłączony');
+  return '🪪 <b style="color:var(--ok)">' + escHtml(id.nick) + '</b>'
+    + ' · <span style="color:var(--ok)">' + escHtml(id.authorId) + '</span>'
+    + (_identitySignEnabled() ? '' : ' · <b style="color:var(--warn)">podpis wyłączony</b>');
 }
 let _identityCryptoCap;  // cache: undefined=niesprawdzone
 function _identityCryptoAvailable() {
@@ -20640,7 +20644,7 @@ function _identityCryptoAvailable() {
 async function _identityUiRefresh(showCode) {
   const id = await _identityActive();
   const st = document.getElementById('identity-status');
-  if (st) st.textContent = _identityStatusText(id);
+  if (st) st.innerHTML = _identityStatusHtml(id);
   const body = document.getElementById('identity-body');
   if (!body) return;
   if (!_identityCryptoAvailable()) {
@@ -20768,7 +20772,7 @@ async function _identityUiRefresh(showCode) {
     if (signTg) signTg.onchange = (ev) => {
       try { localStorage.setItem('arkmap-sign-files', ev.target.checked ? '1' : '0'); } catch (e) {}
       const st2 = document.getElementById('identity-status');
-      if (st2) st2.textContent = _identityStatusText(id);
+      if (st2) st2.innerHTML = _identityStatusHtml(id);
       toast(ev.target.checked ? 'Podpisywanie plików włączone' : 'Podpisywanie plików wyłączone — zapis będzie anonimowy', false);
     };
     document.getElementById('id-btn-show').onclick = async () => {

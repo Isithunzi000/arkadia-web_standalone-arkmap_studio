@@ -21,12 +21,14 @@ function blockSlice(a, b) {
 // ── T0: statyczny HTML — przycisk nad polem wczytywania + dialog ──
 console.log('── T0: statyczne UI ──');
 {
-  const iTitle = HTML.indexOf('<div class="sb-section-title">Wczytaj</div>');
+  // v1.52.1: tytul sekcji "Wczytaj" usuniety (wisiał nad przyciskiem tozsamosci, ktora nic nie wczytuje)
+  ok(!HTML.includes('<div class="sb-section-title">Wczytaj</div>'), 'naglowek sekcji "Wczytaj" usuniety (mylil nad przyciskiem tozsamosci)');
   const iBtn = HTML.indexOf('id="btn-identity"');
   const iStatus = HTML.indexOf('id="identity-status"');
   const iDrop = HTML.indexOf('id="drop-zone"');
-  ok(iTitle >= 0 && iBtn > iTitle && iStatus > iBtn && iDrop > iStatus,
-     'przycisk "Tożsamość autora" + status nad polem wczytywania (drop-zone)');
+  const iLoad = HTML.indexOf('id="btn-load-arkmap"');
+  ok(iBtn >= 0 && iStatus > iBtn && iDrop > iStatus && iLoad > iDrop,
+     'przycisk "Tożsamość autora" + status nad polem wczytywania (drop-zone), przed Wczytaj .arkmap');
   ok(HTML.includes('id="dlg-identity"') && HTML.includes('id="identity-body"'), 'dialog dlg-identity z body');
 }
 
@@ -55,7 +57,9 @@ function makeEl(id) {
   };
   Object.defineProperty(el, 'innerHTML', {
     get() { return el._html; },
-    set(v) { el._html = v; for (const m of String(v).matchAll(/id="([\w-]+)"/g)) reg(m[1]); },
+    // v1.52.1: sync textContent (strip tagow) — status tozsamosci zszedl na innerHTML (kolory),
+    // a piny czytaja textContent; strip zachowuje dokladny tekst (bez encji w statusie).
+    set(v) { el._html = v; el.textContent = String(v).replace(/<[^>]*>/g, ''); for (const m of String(v).matchAll(/id="([\w-]+)"/g)) reg(m[1]); },
   });
   return el;
 }
