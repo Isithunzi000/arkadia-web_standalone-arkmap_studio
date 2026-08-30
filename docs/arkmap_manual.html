@@ -209,7 +209,7 @@
 <p>Przyciski zapisu (aktywne po wczytaniu mapy):</p>
 <ul>
   <li><strong>Zapisz .arkmap</strong> / <strong>Zapisz .arkmap…</strong> — eksportuje mapę do formatu JSON .arkmap (po pierwszym zapisie przez File System Access API tekst zmienia się na „Zapisz .arkmap" bez „…")</li>
-  <li><strong>Zapisz jako…</strong> — widoczny tylko w trybie edycji; zapisuje do nowego pliku</li>
+  <li><strong>Zapisz jako…</strong> — zapisuje mapę do nowego pliku (zawsze widoczny, aktywny po wczytaniu mapy)</li>
   <li><strong>Eksportuj Mudlet .dat</strong> — konwertuje mapę z powrotem do binarnego formatu Mudlet</li>
   <li><strong>Wczytaj .arkdelta…</strong> — wczytuje kalkę zmian do przejrzenia i naniesienia na bieżącą mapę (rozdział <a href="#arkdelta">Kalka zmian .arkdelta</a>)</li>
   <li><strong>⇄ Stwórz kalkę mapy…</strong> — porównuje dwie mapy i generuje z różnicy gotową kalkę .arkdelta do pobrania (rozdział <a href="#arkdelta">Kalka zmian .arkdelta</a>)</li>
@@ -700,7 +700,7 @@
 <h3>Zapisz .arkmap</h3>
 <p>Skrót: <kbd>Ctrl+S</kbd> (ignorowany, gdy otwarty jest jakikolwiek dialog albo trwa przeciąganie pokoju). Eksportuje pełną mapę do formatu .arkmap (JSON). Przy pierwszym zapisie pojawia się dialog wyboru pliku. Przy kolejnych zapisach (jeśli przeglądarka obsługuje File System Access API) zapis odbywa się do tego samego pliku bez dialogu.</p>
 
-<p>W trybie edycji dostępny jest dodatkowy przycisk <strong>Zapisz jako…</strong> — pozwala zapisać mapę do nowego pliku niezależnie od ustawionego uchwytu File System Access.</p>
+<p>Przycisk <strong>Zapisz jako…</strong> pozwala zapisać mapę do nowego pliku niezależnie od ustawionego uchwytu File System Access — dostępny zawsze (nie tylko w trybie edycji), gdy mapa jest wczytana.</p>
 
 <div class="note">Przed zapisem obliczane są <strong>hierarchiczne checksums XXH3-64</strong> (pokoje → obszary → plik). Tablice sortowane są deterministycznie (ID rosnąco) aby plik był przyjazny dla systemów kontroli wersji (git diff).</div>
 <div class="note">Pliki zapisane starszą wersją aplikacji mają starszy algorytm sum (pole <code>alg</code> inne niż <code>v4</code>) — przy wczytaniu zobaczysz komunikat o nieobsługiwanym algorytmie (sumy nie są wtedy weryfikowane); przy najbliższym zapisie sumy przeliczą się do obecnego formatu (v4).</div>

@@ -227,6 +227,13 @@ console.log('— Sekcja B: piny strukturalne —');
     'B13 zero golych download(/downloadBinary( poza helperem');
 
   ok(HTML.indexOf('triggerDownload') === -1, 'B14 brak triggerDownload w zrodle');
+
+  // v1.52.2: „Zapisz jako…" zawsze widoczny — zero inline display:none na przycisku
+  // i zero reguly CSS odblokowujacej go tylko w trybie edycji.
+  ok(!HTML.includes('id="btn-save-arkmap-as" disabled style="display:none"'),
+     'B15 btn-save-arkmap-as bez inline display:none (zawsze widoczny)');
+  ok(!HTML.includes('#app.edit-mode #btn-save-arkmap-as'),
+     'B16 brak reguly CSS #app.edit-mode #btn-save-arkmap-as (relikt trybu edycji)');
 }
 
 // ═══ Sekcja C — pin wersji ═══

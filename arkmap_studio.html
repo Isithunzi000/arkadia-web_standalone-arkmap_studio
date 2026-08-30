@@ -1795,7 +1795,7 @@
   .cs-desc { font-size: 11px; color: var(--dim); }
 
   /* 4. Sidebar edit mode */
-  #app.edit-mode #btn-save-arkmap-as { display: block !important; }
+  /* v1.52.2: dawna regula edit-mode odblokowujaca „Zapisz jako" usunieta — przycisk zawsze widoczny */
   #btn-save-arkmap:not(:disabled),
   #btn-save-arkmap-as:not(:disabled) { border-color: var(--ok); color: var(--ok); }
   #sb-pr-btn { display: none; }
@@ -1962,7 +1962,7 @@
     <div class="sb-section" id="sb-save-section">
       <div class="sb-section-title">Zapisz</div>
       <button id="btn-save-arkmap" disabled>Zapisz .arkmap&hellip;</button>
-      <button id="btn-save-arkmap-as" disabled style="display:none">Zapisz jako…</button>
+      <button id="btn-save-arkmap-as" disabled>Zapisz jako…</button>  <!-- v1.52.2: zawsze widoczny (nie tylko w trybie edycji); disabled pilnuje zaladowania mapy -->
       <button id="btn-save-dat" disabled>Eksportuj Mudlet .dat</button>
       <button id="btn-backups" style="margin-top:6px">🕓 Kopie zapasowe&hellip;</button>
       <input type="file" id="fi-arkdelta" accept=".arkdelta">
