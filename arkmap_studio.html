@@ -10376,8 +10376,9 @@ function populateEditForm(r) {
     envIn.value = curEnv;
   }
 
-  // Switch to last active tab or Podstawowe
-  const lastTab = state.lastRoomTab || 'Podstawowe';
+  // v1.52.4: klik w pokoj zawsze otwiera zakladke Podstawowe (obie tryby);
+  // sciezka kontekstu wyjsc i tak wymusza swoja zakladke PO tym wywolaniu.
+  const lastTab = 'Podstawowe';
   const tabBtn = document.querySelector(`#rp-tabs .rp-tab[data-tab="${lastTab}"]`);
   if (tabBtn) switchRpTab(tabBtn);
   else {
@@ -15083,7 +15084,6 @@ Object.assign(state, {
   editDragCurrentY:   0,
   // ── Room panel (Pass 42, 44) ──
   editSnapshot:       null,
-  lastRoomTab:        'Podstawowe',
   // ── Area panel (Pass 40) ──
   areaSnapshot:       null,
   // ── Exit adding (Pass 36, 42) ──
@@ -16359,7 +16359,6 @@ function editExitFromCtx() {
 
   // 2. Force-switch do odpowiedniego taba
   const tabName = _ctxExitIsSpecial ? 'Specjalne' : 'Wyjścia';
-  state.lastRoomTab = tabName;
   const tabBtn = document.querySelector(`#rp-tabs .rp-tab[data-tab="${tabName}"]`);
   if (tabBtn) switchRpTab(tabBtn);
 
@@ -16478,7 +16477,6 @@ function switchRpTab(btn) {
   if (content) content.style.display = 'block';
   // Aktualizuj tab po przełączeniu jeśli pokój zaznaczony
   const tab = btn.dataset.tab;
-  state.lastRoomTab = tab;
   // Wyczyść highlight wyjść na mapie przy zmianie taba
   state._activeExitDir = null;
   state._activeSpecialExit = null;

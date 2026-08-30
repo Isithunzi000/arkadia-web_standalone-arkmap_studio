@@ -453,6 +453,15 @@ console.log('— B24 (Arc 35): stack fontu mono + baza 13px —');
     'C1: updateEditUI przelacza otwarty panel obszaru miedzy wariantami');
 }
 
+// ── C2 (v1.52.4): klik w pokoj zawsze otwiera zakladke Podstawowe ──
+{
+  const sri = HTML.slice(HTML.indexOf('function showRoomInfo(r) {'), HTML.indexOf('function hideRoomPanel') >= 0 ? HTML.indexOf('function hideRoomPanel') : HTML.indexOf('function switchRpTab'));
+  ok(sri.includes("const lastTab = 'Podstawowe';"),
+    'C2: showRoomInfo startuje zawsze od zakladki Podstawowe');
+  ok(!HTML.includes('lastRoomTab'),
+    'C2: state.lastRoomTab calkowicie usuniete (odczyt + init + 2 zapisy)');
+}
+
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);
 process.exit(fail ? 1 : 0);
