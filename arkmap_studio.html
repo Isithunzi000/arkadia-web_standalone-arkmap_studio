@@ -7426,7 +7426,7 @@ function buildAreaList() {
     const el = document.createElement('div');
     el.className = 'area-item';
     el.dataset.id = area.id;
-    el.title = area.name + '\nPPM: szczegóły obszaru';  // v1.52.4: podpowiedz uniwersalna dla obu trybow
+    el.title = (area.name || 'Obszar bez nazwy') + '\nPPM: szczegóły obszaru';  // v1.52.5: obszar bez nazwy dostaje pelna nazwe zastepcza w tooltipie
     el.innerHTML = `${escHtml(area.name || `Obszar ${area.id}`)} <span>(${area.rooms.length})</span>`;
     el.addEventListener('click', () => selectArea(area.id, true));
     el.addEventListener('contextmenu', (e) => {

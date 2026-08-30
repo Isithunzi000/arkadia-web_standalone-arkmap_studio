@@ -446,8 +446,8 @@ console.log('— B24 (Arc 35): stack fontu mono + baza 13px —');
     'C1: CSS — akcje edycyjne ukryte w wariancie RO');
   ok((HTML.match(/class="ap-add-lbl"/g) || []).length === 2,
     'C1: przycisk dodawania etykiety ma klase ap-add-lbl w obu szablonach refreshLabelList');
-  ok(HTML.includes("el.title = area.name + '\\nPPM: szczegóły obszaru'"),
-    'C1: tooltip obszaru — nazwa + uniwersalna podpowiedz PPM');
+  ok(HTML.includes("el.title = (area.name || 'Obszar bez nazwy') + '\\nPPM: szczegóły obszaru'"),
+    'C1: tooltip obszaru — nazwa (lub fallback dla bez nazwy) + uniwersalna podpowiedz PPM');
   const ueu = HTML.slice(HTML.indexOf('function updateEditUI() {'));
   ok(ueu.includes("apOpen.classList.contains('visible')") && ueu.includes('openAreaPanel()'),
     'C1: updateEditUI przelacza otwarty panel obszaru miedzy wariantami');
