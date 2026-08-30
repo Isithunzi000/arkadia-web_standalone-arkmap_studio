@@ -2,6 +2,13 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.52.4 — Karta obszaru poza edycją, zawsze zakładka Podstawowe, odświeżanie statusu podpisu, naprawa podpisów .arkmap (Arc 48)
+
+- **Karta obszaru także poza trybem edycji:** prawy przycisk myszy na obszarze na liście otwiera panel obszaru — poza edycją w wariancie tylko do odczytu (tytuł „👁 Obszar", pola i listy bez możliwości zmian, bez przycisków akcji). W trybie edycji bez zmian. Obszar na liście ma teraz podpowiedź: nazwa + „PPM: szczegóły obszaru" (wcześniej sama nazwa — funkcja była nieodkrywalna). Panel przełącza wariant automatycznie przy wejściu/wyjściu z trybu edycji.
+- **Panel pokoju zawsze od zakładki Podstawowe:** kliknięcie pokoju otwiera panel od pierwszej zakładki niezależnie od trybu (wcześniej panel wracał do ostatnio używanej zakładki w sesji). Wymuszone przełączenia zakładek ze ścieżek kontekstowych (wyjścia/specjalne) działają bez zmian.
+- **Reset ustawień odświeża status tożsamości:** „↺ Przywróć ustawienia domyślne" przywraca domyślne podpisywanie plików i od razu odświeża status w sidebarze (wcześniej status aktualizował się dopiero po otwarciu dialogu tożsamości). Dialog potwierdzenia resetu wymienia teraz podpisywanie plików na liście resetowanych ustawień.
+- **Naprawa podpisów .arkmap po edycjach:** mapa zapisywana z podpisem po edycjach lub cofnięciach mogła otrzymać podpis niezgodny z treścią (podpis był liczony przed usunięciem z pokoi kluczy o wartościach domyślnych, które edycja/undo zostawiają w pamięci; sumy kontrolne były na to obojętne, więc treść i sumy tych plików są poprawne — wadliwy jest wyłącznie podpis). Dotyczy plików z v1.52.0–v1.52.3; kalka .arkdelta nie była dotknięta. Zapisz mapę ponownie, aby przepisać podpis. Regresja objęta testem funkcjonalnym (pokój z wartościami domyślnymi w pamięci → podpis musi zweryfikować się poprawnie).
+
 ## v1.52.3 — Podgląd błędów nicku na żywo + diagnostyka timeoutów sync-map (Arc 46)
 
 - **Dialog tożsamości:** błędny nick (niedozwolone znaki, za długi) jest zgłaszany od razu w podpowiedzi pod polem, z rzeczowym komunikatem, co poprawić — wcześniej podpowiedź cicho znikała i użytkownik nie wiedział, dlaczego nic się nie dzieje. Walidacja błędu działa bez sieci i bez opóźnienia; sprawdzanie dostępności (debounce) rusza dopiero dla poprawnego nicku.

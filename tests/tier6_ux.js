@@ -320,7 +320,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.52.3';"), 'V1: pin APP_VERSION v1.52.3');
+ok(HTML.includes("const APP_VERSION = 'v1.52.4';"), 'V1: pin APP_VERSION v1.52.4');
 
 // ═══ A3.10 (DI-7): touchstart — reset flag na starcie KAZDEGO gestu ═══
 console.log('— A3.10 (DI-7): touchstart — reset na starcie kazdego gestu —');

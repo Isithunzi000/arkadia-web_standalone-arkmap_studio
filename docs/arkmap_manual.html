@@ -274,7 +274,7 @@
 <tr><td>Oryginalne pixmapy</td><td>ON</td><td>Etykiety jako obrazki (pixmap) z pliku Mudlet — pokazywane gdy „Etykiety Mudleta" są wyłączone</td></tr>
 </table>
 
-<div class="note">Wszystkie ustawienia są zapamiętywane w localStorage przeglądarki. Przycisk <strong>↺ Przywróć ustawienia domyślne</strong> na dole panelu resetuje pozycje i rozmiary okien, ustawienia wyświetlania, preferencje edytora oraz przełączniki planera (algorytm, filtr kierunków, transporty, prędkość) — czyści cały localStorage ArkMap.</div>
+<div class="note">Wszystkie ustawienia są zapamiętywane w localStorage przeglądarki. Przycisk <strong>↺ Przywróć ustawienia domyślne</strong> na dole panelu resetuje pozycje i rozmiary okien, ustawienia wyświetlania, preferencje edytora, podpisywanie plików oraz przełączniki planera (algorytm, filtr kierunków, transporty, prędkość) — czyści cały localStorage ArkMap.</div>
 
 <h3>Sekcja Edytor</h3>
 <p>Ustawienia związane z trybem edycji, w tym domyślny czas locka dla sesji GitHub (obecnie nieaktywne — wymaga akceptacji Delwinga).</p>
@@ -460,7 +460,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="edit-room">15. Edycja pokoju <span class="badge badge-edit">EDYTOR</span></h2>
 
-<p>W trybie edycji panel pokoju przełącza się na widok edycji z <strong>siedmioma zakładkami</strong> (Podstawowe, Wyjścia, Specjalne, CL, Dane, Skrypty, Paleta):</p>
+<p>W trybie edycji panel pokoju przełącza się na widok edycji z <strong>siedmioma zakładkami</strong> (Podstawowe, Wyjścia, Specjalne, CL, Dane, Skrypty, Paleta). Każde kliknięcie pokoju otwiera panel od zakładki <strong>Podstawowe</strong> (od v1.52.4 — wcześniej panel wracał do ostatnio używanej zakładki):</p>
 
 <h3>Zakładka: Podstawowe</h3>
 <ul>
@@ -561,7 +561,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="edit-area">16. Edycja obszaru <span class="badge badge-edit">EDYTOR</span></h2>
 
-<p>W trybie edycji panel obszaru otwiera się po dwukrotnym kliknięciu na nagłówek obszaru w sidebarze lub przez menu kontekstowe.</p>
+<p>W trybie edycji panel obszaru otwiera się po dwukrotnym kliknięciu na nagłówek obszaru w sidebarze lub przez menu kontekstowe (prawy przycisk myszy na obszarze na liście). Poza trybem edycji prawy przycisk na obszarze na liście otwiera ten sam panel w wariancie <strong>tylko do odczytu</strong> (od v1.52.4); nazwa obszaru na liście ma też podpowiedź z tą informacją.</p>
 
 <h3>Panel obszaru zawiera:</h3>
 <ul>
@@ -768,7 +768,7 @@
 </ul>
 <p>Przy aktywnej tożsamości każdy zapisywany plik (mapa i kalka) dostaje proweniencję (nick, identyfikator autora, klucz publiczny, czas utworzenia) oraz <strong>podpis Ed25519</strong> całej treści. Nick jest kryptograficznie związany z kluczem — tożsamości nie da się podrobić bez kodu. Klucz prywatny nie opuszcza Twojego urządzenia (IndexedDB); do rejestru publicznego trafia wyłącznie nick, klucz publiczny i identyfikator autora. Podpisywanie wyłączysz przełącznikiem w dialogu tożsamości — pliki zapisują się wtedy anonimowo. Gdyby podpis nie powiódł się technicznie, plik i tak się zapisze (bez podpisu), a aplikacja pokaże ostrzeżenie.</p>
 <p>Przy wczytywaniu pliku z deklaracją autora aplikacja pokazuje wynik weryfikacji: <strong>zielony</strong> — podpis poprawny, a nick zgodny z rejestrem („zweryfikowany w rejestrze"); <strong>pomarańczowy</strong> — podpis poprawny, ale nick spoza rejestru (tożsamość niezarejestrowana); <strong>bursztynowy</strong> — plik anonimowy albo deklarujący autora bez podpisu (deklaracja bez dowodu); <strong>czerwony</strong> — podpis niezgodny z treścią, nick przypisany w rejestrze do innej tożsamości albo tożsamość unieważniona; <strong>szary</strong> dopisek — brak sieci, rejestru nie sprawdzono (podpis i tak jest weryfikowany lokalnie). Rejestr nigdy nie blokuje wczytania, a zły podpis to głośne ostrzeżenie, nie odmowa — decyzja zawsze należy do Ciebie. Niezależnie aplikacja pamięta lokalnie pierwszy zweryfikowany klucz każdego nicka (TOFU): gdy ten sam nick pojawi się z <strong>innym</strong> kluczem, zobaczysz wyraźne ostrzeżenie o możliwym podszywaniu — działa to także offline. Panel recenzji kalki pokazuje ponadto <strong>ryzyko obszarów</strong> (zielony/żółty/czerwony — zgodność obszaru z sumą zapisanej bazy) i wyróżnia operacje niosące komendy (⚡).</p>
-<div class="note">Podpisy zapisane przez wersję v1.51.0 nie weryfikują się od v1.52.0 (ładunek podpisu obejmuje teraz całą treść pliku, nie tylko sumę) — zapisz plik ponownie, aby go przepisać. To świadoma zmiana łamiąca, bez ścieżki legacy.</div>
+<div class="note">Podpisy zapisane przez wersję v1.51.0 nie weryfikują się od v1.52.0 (ładunek podpisu obejmuje teraz całą treść pliku, nie tylko sumę) — zapisz plik ponownie, aby go przepisać. To świadoma zmiana łamiąca, bez ścieżki legacy. Dodatkowo mapy <code>.arkmap</code> podpisane przez v1.52.0–v1.52.3 <strong>po edycjach lub cofnięciach</strong> mogły otrzymać podpis niezgodny z treścią (błąd kolejności przy zapisie, naprawiony w v1.52.4 — treść i sumy kontrolne tych plików są poprawne, wadliwy jest wyłącznie sam podpis). Jeśli przy wczytaniu zobaczysz czerwone ostrzeżenie o podpisie własnego pliku — zapisz go ponownie, aby przepisać podpis.</div>
 <div class="note">Kalki w starym układzie pliku (sprzed v1.51.0) nie są wczytywane — zapisz kalkę ponownie z logu zmian albo zaktualizuj ArkMap Studio. To świadoma zmiana łamiąca (koperta <strong>.arkdelta v3</strong>), bez migracji.</div>
 
 <h3>Bezpieczeństwo</h3>
