@@ -1551,6 +1551,9 @@
     box-shadow: 0 16px 64px rgba(0,0,0,.85); overflow: hidden; }
   .dlg-box.narrow { width: 360px; }
   .dlg-box.wide   { width: 500px; }
+  /* v1.52.2: wartosci w dialogu tozsamosci jako chipy kodu (styl inline-code) */
+  .id-chip { background: rgba(255,255,255,.06); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 5px; color: var(--text); }
   .dlg-hdr  { padding: 14px 16px 12px; border-bottom: 1px solid var(--border);
     display: flex; align-items: flex-start; gap: 10px; }
   .dlg-icon { font-size: 18px; line-height: 1; flex-shrink: 0; margin-top: 1px; }
@@ -3453,7 +3456,8 @@
 
 <!-- ✎ DIALOG: TOŻSAMOŚĆ AUTORA (D8) -->
 <div id="dlg-identity" class="dlg-bg">
-  <div class="dlg-box narrow">
+  <!-- v1.52.2: 600px (wzorzec Arc 15) — kod odzyskiwania w 1 linii; klasowe max-width:90vw chroni male ekrany -->
+  <div class="dlg-box narrow" style="width:600px">
     <div class="dlg-hdr">
       <div class="dlg-icon">🪪</div>
       <div class="dlg-hdr-text">
@@ -16090,7 +16094,7 @@ function _postLoadVerifyDeferred(mapRef) {
       }
       // F7: konflikt TOFU — osobny, glosny sygnal (niezalezny od rejestru)
       if (sigInfo.trust === 'conflict')
-        toast('⚠ Nick ' + (sigInfo.author || '?') + ' był na tej maszynie widziany z INNYM kluczem — jedna z tych tożsamości to podszywka', true);
+        toast('⚠ Nick ' + (sigInfo.author || '?') + ' był lokalnie widziany z INNYM kluczem — jedna z tych tożsamości to podszywka', true);
     }).catch(e => console.warn('[ArkMap] weryfikacja podpisu:', e));
   }
 }
@@ -20633,14 +20637,16 @@ function _identityWireCopy(btnId, text) {
 }
 function _identityUiCodeBox(code) {
   const nWords = code.slice(code.indexOf(':') + 1).split('-').length - 1;
+  // v1.52.2: kod zawsze w 1 linii — nowrap + poziomy scroll dla ekstremalnie dlugich nickow
+  // (min-width:0 konieczne: flex-item bez tego ignoruje overflow i rozpiera wiersz).
   return '<div style="display:flex;gap:6px;align-items:flex-start;margin:8px 0">'
-    + '<div style="flex:1;padding:8px;border:1px solid var(--ok);border-radius:6px;'
-    + 'font-family:monospace;font-size:12px;word-break:break-all;user-select:all">' + escHtml(code) + '</div>'
+    + '<div style="flex:1;min-width:0;padding:8px;border:1px solid var(--ok);border-radius:6px;'
+    + 'font-family:monospace;font-size:11px;white-space:nowrap;overflow-x:auto;user-select:all">' + escHtml(code) + '</div>'
     + '<button id="id-copy-code" title="Kopiuj kod do schowka" style="flex:none;padding:6px 8px">⧉</button></div>'
     + '<div style="font-size:11px;color:var(--dim)">Zapisz ten kod — to ' + nWords + ' ' + _identityPlSlow(nWords)
     + ' i 3 litery kontrolne. '
     + 'Pozwala przenieść tożsamość na inne urządzenie (pole „Importuj tożsamość"). '
-    + 'Nick jest na stałe związany z kluczem: ten sam nick z innymi słowami to inna tożsamość.</div>';
+    + 'Nick jest na stałe związany z kluczem, a dany nick można zarejestrować tylko raz — niezależnie od liczby słów w kodzie.</div>';
 }
 let _identityUiWordCount = 3;  // wybor w dialogu; persist localStorage
 function _identityLoadWordCount() {
@@ -20680,7 +20686,7 @@ async function _identityUiRefresh(showCode) {
   }
   if (!id) {
     body.innerHTML =
-      '<div style="font-size:12px;margin-bottom:8px">Brak tożsamości na tej maszynie — zapisywane pliki będą anonimowe.</div>'
+      '<div style="font-size:12px;margin-bottom:8px">Brak tożsamości zapisanej lokalnie — zapisywane pliki będą anonimowe.</div>'
       + '<label style="font-size:10px;color:var(--dim);letter-spacing:0.8px;text-transform:uppercase">Nick autora</label>'
       + '<input class="ap-input" id="id-nick" type="text" maxlength="32" placeholder="np. zbyszek">'
       + '<div style="font-size:10px;color:var(--dim);margin-top:2px">Tylko litery a-z i cyfry (bez polskich znaków); wielkość liter bez znaczenia.</div>'
@@ -20749,7 +20755,7 @@ async function _identityUiRefresh(showCode) {
       try {
         await _identityCreateOnline(nick, _identityGenWords(_identityUiWordCount),
           (st) => { btnC.textContent = stageTxt[st] || '…'; });
-        toast('Tożsamość utworzona i zarejestrowana — kalka będzie podpisana');
+        toast('Tożsamość utworzona — nick zarejestrowany');
         await _identityUiRefresh(true);  // kod od razu widoczny w stanie aktywnym
         outEl.innerHTML = '';
       } catch (e) {
@@ -20775,15 +20781,15 @@ async function _identityUiRefresh(showCode) {
     const signOn = _identitySignEnabled();
     body.innerHTML =
       '<div style="font-size:12px;margin-bottom:6px">Tożsamość aktywna</div>'
-      + '<div style="font-size:12px"><b>Autor:</b> ' + escHtml(id.nick)
+      + '<div style="font-size:12px"><b>Autor:</b> <span class="id-chip">' + escHtml(id.nick) + '</span>'
       + ' <button id="id-copy-nick" title="Kopiuj nick do schowka" style="padding:0 5px;font-size:10px">⧉</button></div>'
-      + '<div style="font-size:11px;color:var(--dim)"><b>Identyfikator:</b> ' + escHtml(id.authorId)
+      + '<div style="font-size:11px;color:var(--dim)"><b>Identyfikator:</b> <span class="id-chip">' + escHtml(id.authorId) + '</span>'
       + ' <button id="id-copy-authorid" title="Kopiuj identyfikator do schowka" style="padding:0 5px;font-size:10px">⧉</button></div>'
-      + '<div style="font-size:11px;color:var(--dim);word-break:break-all"><b>Odcisk klucza:</b> ' + escHtml(id.pubkeyHex)
+      + '<div style="font-size:11px;color:var(--dim)"><b>Odcisk klucza:</b> <span class="id-chip" style="word-break:break-all">' + escHtml(id.pubkeyHex) + '</span>'
       + ' <button id="id-copy-pubkey" title="Kopiuj odcisk klucza do schowka" style="padding:0 5px;font-size:10px">⧉</button></div>'
       + '<label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;cursor:pointer;user-select:none">'
       + '<input type="checkbox" id="id-sign-toggle"' + (signOn ? ' checked' : '') + '> Podpisuj pliki moją tożsamością</label>'
-      + '<div style="font-size:10px;color:var(--dim)">Dotyczy map .arkmap i kalek .arkdelta. Wyłącz, aby zapisać plik anonimowo — tożsamość zostaje na maszynie.</div>'
+      + '<div style="font-size:10px;color:var(--dim)">Dotyczy map .arkmap i kalek .arkdelta. Wyłącz, aby zapisywać pliki anonimowo.</div>'
       + '<div id="id-code-out"></div>'
       + '<button id="id-btn-show" style="margin-top:8px;border:1px solid var(--ok);color:var(--ok)">Pokaż kod odzyskiwania</button>'
       + '<button id="id-btn-clear" style="margin-top:6px;margin-left:6px;border:1px solid var(--err);color:var(--err)">Wyczyść klucze lokalnie</button>'
@@ -20817,7 +20823,7 @@ async function _identityUiRefresh(showCode) {
     btnX.onclick = async () => {
       if (btnX.dataset.arm !== '1') { btnX.dataset.arm = '1'; btnX.textContent = 'Na pewno? Kliknij ponownie'; return; }
       await _identityClear();
-      toast('Tożsamość wyczyszczona z tej maszyny — kalka znów będzie anonimowa');
+      toast('Tożsamość wyczyszczona lokalnie — pliki będą anonimowe');
       await _identityUiRefresh(false);
     };
     // F6: uniewaznienie — arm → panel (bez autofocusa) → wpisz kanoniczny nick → aktywny przycisk.
@@ -20839,7 +20845,7 @@ async function _identityUiRefresh(showCode) {
       btnRev.disabled = true; btnRev.textContent = 'Unieważniam…';
       try {
         await _identityRevokeOnline();
-        toast('Tożsamość unieważniona na zawsze — nick nie wróci do puli', false);
+        toast('Tożsamość unieważniona na zawsze', false);
         await _identityUiRefresh(false);
       } catch (e) {
         errEl.textContent = e.message; errEl.style.display = 'block';
@@ -24285,7 +24291,7 @@ function _deltaRenderSig(delta) {
     el.textContent += ' · ⚠ nick widziany tu wcześniej z innym kluczem';
     el.style.color = 'var(--err)';
     el.title = (el.title ? el.title + ' ' : '')
-      + 'Lokalny rejestr zaufania: ten nick był wcześniej widziany z INNYM kluczem na tej maszynie — jedna z tożsamości to podszywka';
+      + 'Lokalny rejestr zaufania: ten nick był wcześniej widziany lokalnie z INNYM kluczem — jedna z tożsamości to podszywka';
   }
 }
 

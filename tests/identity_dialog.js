@@ -258,8 +258,19 @@ console.log('── T6: charset / persistencja selektora ──');
   ok(el('identity-status').textContent === 'pliki będą anonimowe', 'po odrzuceniu tozsamosc nie powstaje');
   // Statyczny pin: nick w stanie aktywnym zawsze przez escHtml (gdyby charset zlagodzono).
   const srcUi = blockSlice('// ── UI: dialog tozsamosci', '// === ARKDELTA START ===');
-  ok(srcUi.includes("<b>Autor:</b> ' + escHtml(id.nick)"),
-     'pin statyczny: nick w dialogu zawsze escapowany');
+  ok(srcUi.includes('<b>Autor:</b> <span class="id-chip">\' + escHtml(id.nick)'),
+     'pin statyczny: nick w dialogu zawsze escapowany (v1.52.2: wartosc w chipie kodu)');
+  // v1.52.2: nowe teksty UI tozsamosci
+  ok(srcUi.includes('Dotyczy map .arkmap i kalek .arkdelta. Wyłącz, aby zapisywać pliki anonimowo.'),
+     'v1.52.2: opis pod checkboxem podpisywania (dokladny tekst)');
+  ok(srcUi.includes('Brak tożsamości zapisanej lokalnie — zapisywane pliki będą anonimowe.'),
+     'v1.52.2: „maszyna" → „lokalnie" w tekscie pustego stanu');
+  ok(srcUi.includes("toast('Tożsamość utworzona — nick zarejestrowany')")
+     && srcUi.includes("toast('Tożsamość wyczyszczona lokalnie — pliki będą anonimowe')")
+     && srcUi.includes("toast('Tożsamość unieważniona na zawsze', false)"),
+     'v1.52.2: toasty create/clear/revoke przeredagowane (bez kalki, bez maszyny, bez puli)');
+  ok(!srcUi.includes('do puli') && !HTML.includes('na tej maszynie') && !HTML.includes('z tej maszyny') && !HTML.includes('na maszynie'),
+     'v1.52.2: zero „puli" (modul tozsamosci) i „maszyny" (UI calego pliku) — komentarze ASCII nietkniete');
   ok(srcUi.includes('\'<div style="color:var(--warn);font-weight:bold;white-space:nowrap">podpis wyłączony</div>\''),
      'v1.52.2: „podpis wyłączony" samodzielna linia (blok + nowrap) — brak lamania frazy na sidebarze');
   // Persistencja selektora: nowa sesja dialogu (formularz po wyczyszczeniu)
