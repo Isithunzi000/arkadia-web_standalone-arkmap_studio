@@ -3458,7 +3458,6 @@
       <div class="dlg-icon">🪪</div>
       <div class="dlg-hdr-text">
         <div class="dlg-title">Tożsamość autora</div>
-        <div class="dlg-sub">Opcjonalny podpis cyfrowy kalki</div>
       </div>
     </div>
     <div class="dlg-body" id="identity-body"></div>
@@ -20609,10 +20608,35 @@ async function _arkmapVerifySignature(arkmap) {
 // Przycisk nad polem wczytywania ("Tożsamość autora…"), status pod spodem.
 // Derywacja PBKDF2 trwa ~1 s — przyciski na ten czas dostaja stan "czekaj".
 function _identityPlSlow(n) { return n === 1 ? 'słowo' : (n >= 2 && n <= 4 ? 'słowa' : 'słów'); }
+// v1.52.1: kopiowanie do schowka — wzorzec wp-route-copy-btn (⧉ → ✓ na 2 s), nigdy nie rzuca.
+function _identityCopyFallback(t) {
+  try {
+    if (typeof document.execCommand !== 'function') return;
+    const ta = document.createElement('textarea');
+    ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  } catch (e) {}
+}
+function _identityWireCopy(btnId, text) {
+  const b = document.getElementById(btnId);
+  if (!b || !text) return;
+  b.onclick = () => {
+    const done = () => { b.textContent = '✓'; setTimeout(() => { b.textContent = '⧉'; }, 2000); };
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText)
+        navigator.clipboard.writeText(text).then(done).catch(() => { _identityCopyFallback(text); done(); });
+      else { _identityCopyFallback(text); done(); }
+    } catch (e) { _identityCopyFallback(text); }
+  };
+}
 function _identityUiCodeBox(code) {
   const nWords = code.slice(code.indexOf(':') + 1).split('-').length - 1;
-  return '<div style="margin:8px 0;padding:8px;border:1px solid var(--ok);border-radius:6px;'
+  return '<div style="display:flex;gap:6px;align-items:flex-start;margin:8px 0">'
+    + '<div style="flex:1;padding:8px;border:1px solid var(--ok);border-radius:6px;'
     + 'font-family:monospace;font-size:12px;word-break:break-all;user-select:all">' + escHtml(code) + '</div>'
+    + '<button id="id-copy-code" title="Kopiuj kod do schowka" style="flex:none;padding:6px 8px">⧉</button></div>'
     + '<div style="font-size:11px;color:var(--dim)">Zapisz ten kod — to ' + nWords + ' ' + _identityPlSlow(nWords)
     + ' i 3 litery kontrolne. '
     + 'Pozwala przenieść tożsamość na inne urządzenie (pole „Importuj tożsamość"). '
@@ -20748,26 +20772,31 @@ async function _identityUiRefresh(showCode) {
   } else {
     const signOn = _identitySignEnabled();
     body.innerHTML =
-      '<div style="font-size:12px;margin-bottom:6px">Tożsamość aktywna.</div>'
-      + '<div style="font-size:12px">Autor: <b>' + escHtml(id.nick) + '</b></div>'
-      + '<div style="font-size:11px;color:var(--dim)">identyfikator: ' + escHtml(id.authorId) + '</div>'
-      + '<div style="font-size:11px;color:var(--dim);word-break:break-all">odcisk klucza: ' + escHtml(id.pubkeyHex) + '</div>'
+      '<div style="font-size:12px;margin-bottom:6px">Tożsamość aktywna</div>'
+      + '<div style="font-size:12px"><b>Autor:</b> ' + escHtml(id.nick)
+      + ' <button id="id-copy-nick" title="Kopiuj nick do schowka" style="padding:0 5px;font-size:10px">⧉</button></div>'
+      + '<div style="font-size:11px;color:var(--dim)"><b>Identyfikator:</b> ' + escHtml(id.authorId)
+      + ' <button id="id-copy-authorid" title="Kopiuj identyfikator do schowka" style="padding:0 5px;font-size:10px">⧉</button></div>'
+      + '<div style="font-size:11px;color:var(--dim);word-break:break-all"><b>Odcisk klucza:</b> ' + escHtml(id.pubkeyHex)
+      + ' <button id="id-copy-pubkey" title="Kopiuj odcisk klucza do schowka" style="padding:0 5px;font-size:10px">⧉</button></div>'
       + '<label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;cursor:pointer;user-select:none">'
       + '<input type="checkbox" id="id-sign-toggle"' + (signOn ? ' checked' : '') + '> Podpisuj pliki moją tożsamością</label>'
       + '<div style="font-size:10px;color:var(--dim)">Dotyczy map .arkmap i kalek .arkdelta. Wyłącz, aby zapisać plik anonimowo — tożsamość zostaje na maszynie.</div>'
       + '<div id="id-code-out"></div>'
-      + '<button id="id-btn-show" style="margin-top:8px">Pokaż kod odzyskiwania</button>'
-      + '<button id="id-btn-clear" class="btn-err" style="margin-top:6px;margin-left:6px">Wyczyść z tej maszyny</button>'
-      // F6: strefa niebezpieczna — uniewaznienie trwale, publiczne, uzbrajane kliknieniem + wpisaniem nicku.
+      + '<button id="id-btn-show" style="margin-top:8px;border:1px solid var(--ok);color:var(--ok)">Pokaż kod odzyskiwania</button>'
+      + '<button id="id-btn-clear" style="margin-top:6px;margin-left:6px;border:1px solid var(--err);color:var(--err)">Wyczyść klucze lokalnie</button>'
+      // F6: uniewaznienie trwale, publiczne, uzbrajane kliknieniem + wpisaniem nicku. v1.52.1: bez napisu "Strefa niebezpieczna" — sam czerwony przycisk.
       + '<hr style="opacity:.3;margin:12px 0">'
-      + '<div style="font-size:10px;color:var(--err);letter-spacing:0.8px;text-transform:uppercase">Strefa niebezpieczna</div>'
-      + '<button id="id-btn-revoke-arm" class="btn-err" style="margin-top:6px">Unieważnij tożsamość…</button>'
+      + '<button id="id-btn-revoke-arm" style="margin-top:6px;background:var(--err);color:#131313;border:1px solid var(--err);font-weight:bold">Unieważnij tożsamość…</button>'
       + '<div id="id-revoke-panel" style="display:none;margin-top:6px">'
       + '<div style="font-size:11px;color:var(--err);line-height:1.5">Unieważnienie jest <b>trwałe i publiczne</b>: nick trafi na listę unieważnionych <b>na zawsze</b> — nikt (Ty też) nie zarejestruje go ponownie, a pliki podpisane tą tożsamością zaczną pokazywać ostrzeżenie. Aby potwierdzić, wpisz swój nick: <b>' + escHtml(id.nick) + '</b></div>'
       + '<input class="ap-input" id="id-revoke-in" type="text" autocomplete="off" placeholder="' + escHtml(id.nick) + '">'
-      + '<button id="id-btn-revoke" class="btn-err" disabled style="margin-top:6px">Unieważnij na zawsze</button>'
+      + '<button id="id-btn-revoke" disabled style="margin-top:6px;background:var(--err);color:#131313;border:1px solid var(--err);font-weight:bold">Unieważnij na zawsze</button>'
       + '<div id="id-revoke-err" style="display:none;font-size:11px;color:var(--err);margin-top:4px"></div>'
       + '</div>';
+    _identityWireCopy('id-copy-nick', id.nick);
+    _identityWireCopy('id-copy-authorid', id.authorId);
+    _identityWireCopy('id-copy-pubkey', id.pubkeyHex);
     const signTg = document.getElementById('id-sign-toggle');
     if (signTg) signTg.onchange = (ev) => {
       try { localStorage.setItem('arkmap-sign-files', ev.target.checked ? '1' : '0'); } catch (e) {}
@@ -20777,7 +20806,10 @@ async function _identityUiRefresh(showCode) {
     };
     document.getElementById('id-btn-show').onclick = async () => {
       const code = await _identityShowCode();
-      if (code) document.getElementById('id-code-out').innerHTML = _identityUiCodeBox(code);
+      if (code) {
+        document.getElementById('id-code-out').innerHTML = _identityUiCodeBox(code);
+        _identityWireCopy('id-copy-code', code);
+      }
     };
     const btnX = document.getElementById('id-btn-clear');
     btnX.onclick = async () => {
@@ -20814,7 +20846,10 @@ async function _identityUiRefresh(showCode) {
     };
     if (showCode) {
       const code = await _identityShowCode();
-      if (code) document.getElementById('id-code-out').innerHTML = _identityUiCodeBox(code);
+      if (code) {
+        document.getElementById('id-code-out').innerHTML = _identityUiCodeBox(code);
+        _identityWireCopy('id-copy-code', code);
+      }
     }
   }
 }

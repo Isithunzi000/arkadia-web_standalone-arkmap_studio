@@ -186,8 +186,11 @@ console.log('── T3: utworz tozsamosc ──');
   const stTxt = el('identity-status').textContent;
   ok(/^🪪 zbyszek · [0-9a-f]{16}$/.test(stTxt), 'status: nick kanoniczny (lowercase) + 16-hex identyfikatora');
   globalThis.__authorId = stTxt.slice(-16);
-  ok(el('identity-body')._html.includes('Autor:') && el('identity-body')._html.includes('odcisk klucza'),
+  ok(el('identity-body')._html.includes('Autor:') && el('identity-body')._html.includes('Odcisk klucza'),
      'dialog: stan aktywny (autor + odcisk klucza)');
+  ok(el('identity-body')._html.includes('id="id-copy-nick"') && el('identity-body')._html.includes('id="id-copy-authorid"')
+     && el('identity-body')._html.includes('id="id-copy-pubkey"'),
+     'dialog: ikonki kopiowania przy autorze, identyfikatorze i odcisku (v1.52.1)');
   const codeHtml = el('id-code-out')._html;
   const m = codeHtml.match(/zbyszek:([a-z]+-){3}[a-z]+-[a-z]{3}/);
   ok(!!m, 'kod odzyskiwania: 4 slowa zgodnie z wyborem segmentu (format nick:4 slowa-LLL)');
@@ -201,6 +204,18 @@ console.log('── T4: pokaz kod / wyczysc ──');
   el('id-code-out')._html = '';
   await el('id-btn-show').onclick();
   ok(el('id-code-out')._html.includes(globalThis.__code), 'pokaz kod: ten sam kod co przy tworzeniu');
+  // v1.52.1: ikonka kopiowania kodu przy polu (⧉ → ✓) — wiring + zawartosc schowka
+  {
+    let rec = null;
+    globalThis.navigator = { clipboard: { writeText: t => { rec = t; return Promise.resolve(); } } };
+    const btnC = el('id-copy-code');
+    ok(btnC && typeof btnC.onclick === 'function', 'ikonka kopiowania kodu podpieta (v1.52.1)');
+    btnC.onclick();
+    await tick();
+    ok(rec === globalThis.__code, 'kopiowanie kodu: do schowka trafia pelny kod (v1.52.1)');
+    ok(btnC.textContent === '✓', 'ikonka potwierdza skopiowanie znakiem ✓ (v1.52.1)');
+    delete globalThis.navigator;
+  }
   // F5: przelacznik podpisywania — persist localStorage, suffix w statusie.
   const tg = el('id-sign-toggle');
   ok(tg !== undefined && typeof tg.onchange === 'function', 'flip switch "Podpisuj pliki moją tożsamością" obecny w stanie aktywnym');
@@ -242,7 +257,7 @@ console.log('── T6: charset / persistencja selektora ──');
   ok(el('identity-status').textContent === 'pliki będą anonimowe', 'po odrzuceniu tozsamosc nie powstaje');
   // Statyczny pin: nick w stanie aktywnym zawsze przez escHtml (gdyby charset zlagodzono).
   const srcUi = blockSlice('// ── UI: dialog tozsamosci', '// === ARKDELTA START ===');
-  ok(srcUi.includes("Autor: <b>' + escHtml(id.nick)"),
+  ok(srcUi.includes("<b>Autor:</b> ' + escHtml(id.nick)"),
      'pin statyczny: nick w dialogu zawsze escapowany');
   // Persistencja selektora: nowa sesja dialogu (formularz po wyczyszczeniu)
   // laduje zapisane "4" z localStorage — utworzona tozsamosc ma 4 slowa.
@@ -261,9 +276,10 @@ console.log('── T7: uniewaznienie tozsamosci ──');
   await tick();
   ok(_regEntries.has('duch') && !_regEntries.get('duch').revoked, 'rejestr: nick zapisany przy tworzeniu (online-only)');
   const bodyHtml = el('identity-body')._html;
-  ok(bodyHtml.includes('Strefa niebezpieczna') && bodyHtml.includes('Unieważnij na zawsze'),
-     'dialog: strefa niebezpieczna z przyciskiem unieważnienia');
-  ok(/id="id-btn-revoke" class="btn-err" disabled/.test(bodyHtml), 'przycisk "Unieważnij na zawsze" startuje wylaczony');
+  ok(!bodyHtml.includes('Strefa niebezpieczna') && bodyHtml.includes('Unieważnij na zawsze'),
+     'dialog: bez napisu "Strefa niebezpieczna" (v1.52.1), przycisk unieważnienia obecny');
+  ok(/id="id-btn-revoke" disabled/.test(bodyHtml), 'przycisk "Unieważnij na zawsze" startuje wylaczony');
+  ok(/id="id-btn-revoke-arm"[^>]*background:var\(--err\)/.test(bodyHtml), 'przycisk "Unieważnij tożsamość" w pelni czerwony (v1.52.1)');
   await el('id-btn-revoke-arm').onclick();
   ok(el('id-revoke-panel').style.display === 'block', 'arm otwiera panel (bez domyslnego fokusu — brak .focus() w kodzie)');
   el('id-revoke-in').value = 'inny';
