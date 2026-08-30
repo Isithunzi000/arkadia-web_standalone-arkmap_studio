@@ -57,12 +57,23 @@ jobs:
             || { echo "::error::brak releases/latest upstream — fail-closed"; exit 1; }
           TAG=$(printf '%s' "$REL" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const t=JSON.parse(s).tag_name; if(typeof t!=='string'||!t) process.exit(1); console.log(t)})")
           test -n "$TAG"
-          REV=$(timeout 90 git ls-remote --tags https://github.com/Delwing/arkadia-mapa.git "refs/tags/$TAG" "refs/tags/$TAG^{}" | tail -1 | cut -f1)
+          # v1.52.3: timeout (exit 124) dostaje jawna adnotacje ::warning — wczesniej run failowal golym kodem 124
+          REV=$(timeout 90 git ls-remote --tags https://github.com/Delwing/arkadia-mapa.git "refs/tags/$TAG" "refs/tags/$TAG^{}" | tail -1 | cut -f1) || rc=$?
+          if [ "${rc:-0}" -eq 124 ]; then
+            echo "::warning::git ls-remote taga upstream przekroczyl 90 s — brama fail-closed"
+            exit 124
+          fi
+          if [ "${rc:-0}" -ne 0 ]; then exit "${rc}"; fi
           test -n "$REV"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "rev=$REV" >> "$GITHUB_OUTPUT"
           OLD=""
-          if timeout 90 git fetch -q --depth=1 origin mapa 2>/dev/null; then
+          # v1.52.3: timeout fetcha cicho wylaczal straznika regresji (OLD="") — teraz przynajmniej ::warning; semantyka bez zmian
+          timeout 90 git fetch -q --depth=1 origin mapa 2>/dev/null || frc=$?
+          if [ "${frc:-0}" -eq 124 ]; then
+            echo "::warning::git fetch origin mapa przekroczyl 90 s — pomijam odczyt publikowanej wersji (straznik regresji nieaktywny w tym runie)"
+          fi
+          if [ "${frc:-0}" -eq 0 ]; then
             OLD=$(git show FETCH_HEAD:index.json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version??'')}catch{console.log('')}})" || true)
           fi
           echo "old=$OLD" >> "$GITHUB_OUTPUT"
@@ -171,7 +182,13 @@ jobs:
           git add -A
           git commit -q -m "sync: map_master3 v${{ steps.gate.outputs.tag }} @${{ steps.gate.outputs.rev }}"
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          timeout 120 git push -q --force origin HEAD:refs/heads/mapa
+          # v1.52.3: timeout pusha (exit 124) z jawna adnotacja — wczesniej publish failowal bez wyjasnienia
+          timeout 120 git push -q --force origin HEAD:refs/heads/mapa || prc=$?
+          if [ "${prc:-0}" -eq 124 ]; then
+            echo "::warning::git push na refs/heads/mapa przekroczyl 120 s — publish przerwany, snapshot NIE opublikowany"
+            exit 124
+          fi
+          if [ "${prc:-0}" -ne 0 ]; then exit "${prc}"; fi
           rm -rf "$PUB"
 
       - name: Podsumowanie

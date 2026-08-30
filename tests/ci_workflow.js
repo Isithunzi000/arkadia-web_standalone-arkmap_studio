@@ -82,6 +82,13 @@ console.log('— sync-map self-check (koperta v2) —');
   const SM = fs.existsSync(SM_PATH) ? fs.readFileSync(SM_PATH, 'utf8') : '';
   ok(SM.includes('m.checksums.alg'), 'self-check: alg z top-level m.checksums.alg (koperta v2)');
   ok(!SM.includes('m.meta.checksums'), 'self-check: zero odniesien do starego ukladu m.meta.checksums');
+  // v1.52.3 (Arc 46): kazdy timeout w sync-map.yml ma jawna adnotacje ::warning (koniec golym exit 124)
+  ok(SM.includes('::warning::git ls-remote taga upstream przekroczyl 90 s'),
+    'sync-map: ::warning przy timeout git ls-remote (brama, fail-closed)');
+  ok(SM.includes('::warning::git fetch origin mapa przekroczyl 90 s'),
+    'sync-map: ::warning przy timeout git fetch (straznik regresji nieaktywny — widoczne)');
+  ok(SM.includes('::warning::git push na refs/heads/mapa przekroczyl 120 s'),
+    'sync-map: ::warning przy timeout git push (publish, fail-closed)');
 }
 
 console.log(`\nci_workflow: ${pass} OK, ${fail} FAIL`);
