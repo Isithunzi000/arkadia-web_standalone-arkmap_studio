@@ -2,6 +2,13 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.52.3 — Podgląd błędów nicku na żywo + diagnostyka timeoutów sync-map (Arc 46)
+
+- **Dialog tożsamości:** błędny nick (niedozwolone znaki, za długi) jest zgłaszany od razu w podpowiedzi pod polem, z rzeczowym komunikatem, co poprawić — wcześniej podpowiedź cicho znikała i użytkownik nie wiedział, dlaczego nic się nie dzieje. Walidacja błędu działa bez sieci i bez opóźnienia; sprawdzanie dostępności (debounce) rusza dopiero dla poprawnego nicku.
+- **Workflow sync-map:** każdy `timeout` (git ls-remote / fetch / push) przy przekroczeniu czasu wypisuje teraz żółtą adnotację `::warning` z wyjaśnieniem — wcześniej run kończył się golym kodem 124 albo cicho pomijał odczyt publikowanej wersji. Logika fail-closed bez zmian.
+- **Serwis rejestru tożsamości (repo `arkadia-arkmap-identity-registry`, deploy Vercel):** uszkodzony wpis w rejestrze zwraca rozróżnialne `422 corrupt_entry` zamiast mylącego `502 registry_read_failed`; błędy walidacji żądania (`invalid_*`) niosą czytelne pole `message`; wyjątki weryfikacji Ed25519 są logowane (diagnostyka dev); limit zapytań udokumentowany jako świadomie best-effort (właściwą bramką jest kryptografia PoP).
+- **Regresja:** nowe piny w `identity_dialog.js` (ścieżka błędu nicku + usunięcie cichej ścieżki), `ci_workflow.js` (trzy `::warning` w sync-map) i `registry_core.js` (T1+ message, T8 corrupt w obu handlerach z fail-stop przed zapisem, T9 logowanie krypto).
+
 ## v1.52.2 — UX tożsamości + „Zapisz jako" zawsze widoczny (Arc 45)
 
 - **Status tożsamości w sidebarze:** „podpis wyłączony" to samodzielna, niełamana linia (blok + nowrap) — wcześniej fraza łamała się w połowie na końcu linii z nickiem.
