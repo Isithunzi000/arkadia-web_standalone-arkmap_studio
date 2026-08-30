@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.52.2 — UX tożsamości + „Zapisz jako" zawsze widoczny (Arc 45)
+
+- **Status tożsamości w sidebarze:** „podpis wyłączony" to samodzielna, niełamana linia (blok + nowrap) — wcześniej fraza łamała się w połowie na końcu linii z nickiem.
+- **Dialog tożsamości szerszy (600 px):** kod odzyskiwania wyświetlany zawsze w jednej linii (nowrap + poziomy scroll przy ekstremalnie długich nickach); wartości Autor / Identyfikator / Odcisk klucza prezentowane jako chipy kodu (tło, ramka, zaokrąglenie — styl inline-code).
+- **Komunikaty tożsamości przeredagowane:** „maszyna" → „lokalnie" (pusty stan, toast czyszczenia, toast i tooltip konfliktu zaufania); toast utworzenia bez mylącej wzmianki o kalce („Tożsamość utworzona — nick zarejestrowany"); toast unieważnienia bez informacji o puli; opis pod przełącznikiem podpisywania uproszczony; opis kodu odzyskiwania koryguje zasadę unikalności nicku (dany nick można zarejestrować tylko raz, niezależnie od liczby słów).
+- **„Zapisz jako…" zawsze widoczny** w sekcji Zapisz (wcześniej tylko w trybie edycji) — aktywny po wczytaniu mapy, jak „Zapisz .arkmap".
+- **Regresja:** nowe piny w `identity_dialog.js` (markup linii warn, dokładne nowe teksty, zero „puli"/„maszyny" w UI) i `save_dialogs.js` (B15/B16 — widoczność „Zapisz jako").
+
 ## v1.52.1 — Fix zawiechy IndexedDB między kartami + UX tożsamości (Arc 44)
 
 - **Fix (DS32-1 ze sweepu Arc 43):** `_identityDb()` obsługuje `onblocked` — stara karta trzymająca bazę tożsamości v1 nie wiesza już operacji tożsamości w nowej karcie; zamiast czekać w nieskończoność aplikacja degraduje tożsamość w tej karcie (graceful, bez utraty danych — wszyscy konsumenci bazy obsługują `null`).
