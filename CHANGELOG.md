@@ -2,6 +2,13 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.52.1 — Fix zawiechy IndexedDB między kartami + UX tożsamości (Arc 44)
+
+- **Fix (DS32-1 ze sweepu Arc 43):** `_identityDb()` obsługuje `onblocked` — stara karta trzymająca bazę tożsamości v1 nie wiesza już operacji tożsamości w nowej karcie; zamiast czekać w nieskończoność aplikacja degraduje tożsamość w tej karcie (graceful, bez utraty danych — wszyscy konsumenci bazy obsługują `null`).
+- **Sidebar:** usunięty mylący nagłówek „Wczytaj" znad przycisku tożsamości; status tożsamości czytelniejszy — nick i identyfikator w zieleni (jak przyciski Wczytaj/Zapisz), „podpis wyłączony" wyeksponowane kolorem ostrzeżenia. Zdefiniowana zmienna `--warn` (wcześniej używana w 3 miejscach bez definicji — latentny brak koloru).
+- **Dialog tożsamości:** bez podtytułu i napisu „Strefa niebezpieczna"; etykiety Autor / Identyfikator / Odcisk klucza pogrubione i z wielkiej litery; ikonki kopiowania do schowka przy nicku, identyfikatorze, odcisku i kodzie odzyskiwania (⧉ → ✓, z fallbackiem dla starszych przeglądarek); „Wyczyść z tej maszyny" → „Wyczyść klucze lokalnie" z czerwoną obwódką; „Unieważnij tożsamość" w pełni czerwony; „Pokaż kod odzyskiwania" z zieloną obwódką; „Tożsamość aktywna" bez kropki.
+- **Regresja:** 53 harnesse node + pełna kampania empiryczna (SMOKE + E0–E28, E15 na realnym zegarze) zielone, bramka ×2.
+
 ## v1.52.0 — Podpisy Ed25519 obu formatów, publiczny rejestr tożsamości z unieważnianiem i lokalny trust store TOFU (Arc 43)
 
 Tożsamość autora (D8) dorasta do pełnego modelu zaufania: podpisy obu formatów plików, publiczny rejestr nicków z trwałym unieważnianiem i lokalny pinning kluczy (TOFU) działający offline. Zmiana łamiąca weryfikację podpisów (świadoma, zero migracji): podpisy zapisane przez v1.51.0 są raportowane jako nieprawidłowe — zapisz kalkę/mapę ponownie, aby ją przepisać.

@@ -454,13 +454,13 @@ console.log('── T9: piny ──');
     && dij.includes('if (wpState.avoidLocked && nbr.locked) continue;'),
     'pin P1: F2.15 — guard locked (ON=paritet Mudlet) PRZED breakiem + przy relaksacji; OFF=permissive; N6: wyjatek startu');
   // piny wersji
-  ok(NEW.includes("const APP_VERSION = 'v1.52.0';"), 'pin: APP_VERSION v1.52.0');
+  ok(NEW.includes("const APP_VERSION = 'v1.52.1';"), 'pin: APP_VERSION v1.52.1');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok(deltaSrc.split('v1.52.0').length - 1 === 8 && deltaSrc.split('v1.51.0').length - 1 === 1, 'pin: delta.js 8x v1.52.0 (piny APP_VERSION po bumpie) + adnotacja formatu v1.51.0');
+  ok(deltaSrc.split('v1.52.1').length - 1 === 8 && deltaSrc.split('v1.51.0').length - 1 === 1, 'pin: delta.js 8x v1.52.1 (piny APP_VERSION po bumpie) + adnotacja formatu v1.51.0');
   const t2 = fs.readFileSync(path.join(ROOT, 'tests', 'tier2_state.js'), 'utf8');
-  ok(t2.includes("wersja: v1.52.0"), 'pin: tier2_state.js v1.52.0');
+  ok(t2.includes("wersja: v1.52.1"), 'pin: tier2_state.js v1.52.1');
   const t3 = fs.readFileSync(path.join(ROOT, 'tests', 'tier3_format.js'), 'utf8');
-  ok(t3.includes("pin: APP_VERSION v1.52.0"), 'pin: tier3_format.js v1.52.0');
+  ok(t3.includes("pin: APP_VERSION v1.52.1"), 'pin: tier3_format.js v1.52.1');
 }
 
 // ═══ T10: bramka — wlasne kalki zawsze z sid (K7 nie zabija wlasnych eksportow) ═══
