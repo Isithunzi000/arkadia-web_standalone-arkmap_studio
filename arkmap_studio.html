@@ -20652,11 +20652,13 @@ function _identityLoadWordCount() {
 }
 // v1.52.1: status jako HTML — nick/identyfikator zielone (--ok, jak przyciski Wczytaj/Zapisz),
 // „podpis wyłączony" wyeksponowane na --warn. Tekst po stripie tagów identyczny jak dawniej (piny).
+// v1.52.2: „podpis wyłączony" jako samodzielna linia (blok + nowrap) — segment na koncu
+// linii z nickiem lamal sie w polowie frazy na waskim sidebarze.
 function _identityStatusHtml(id) {
   if (!id) return 'pliki będą anonimowe';
   return '🪪 <b style="color:var(--ok)">' + escHtml(id.nick) + '</b>'
     + ' · <span style="color:var(--ok)">' + escHtml(id.authorId) + '</span>'
-    + (_identitySignEnabled() ? '' : ' · <b style="color:var(--warn)">podpis wyłączony</b>');
+    + (_identitySignEnabled() ? '' : '<div style="color:var(--warn);font-weight:bold;white-space:nowrap">podpis wyłączony</div>');
 }
 let _identityCryptoCap;  // cache: undefined=niesprawdzone
 function _identityCryptoAvailable() {

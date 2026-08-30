@@ -221,7 +221,8 @@ console.log('── T4: pokaz kod / wyczysc ──');
   ok(tg !== undefined && typeof tg.onchange === 'function', 'flip switch "Podpisuj pliki moją tożsamością" obecny w stanie aktywnym');
   tg.checked = false; tg.onchange({ target: tg });
   ok(_lsData.get('arkmap-sign-files') === '0', 'flip switch: wylaczenie trzymane w localStorage');
-  ok(el('identity-status').textContent.includes('· podpis wyłączony'), 'flip switch: status pokazuje wylaczone podpisywanie');
+  // v1.52.2: segment warn to osobny blok (div) — w textContent skleja sie z identyfikatorem bez separatora
+  ok(el('identity-status').textContent.includes('podpis wyłączony'), 'flip switch: status pokazuje wylaczone podpisywanie');
   tg.checked = true; tg.onchange({ target: tg });
   ok(_lsData.get('arkmap-sign-files') === '1' && !el('identity-status').textContent.includes('podpis wyłączony'),
      'flip switch: ponowne wlaczenie (persist + status)');
@@ -259,6 +260,8 @@ console.log('── T6: charset / persistencja selektora ──');
   const srcUi = blockSlice('// ── UI: dialog tozsamosci', '// === ARKDELTA START ===');
   ok(srcUi.includes("<b>Autor:</b> ' + escHtml(id.nick)"),
      'pin statyczny: nick w dialogu zawsze escapowany');
+  ok(srcUi.includes('\'<div style="color:var(--warn);font-weight:bold;white-space:nowrap">podpis wyłączony</div>\''),
+     'v1.52.2: „podpis wyłączony" samodzielna linia (blok + nowrap) — brak lamania frazy na sidebarze');
   // Persistencja selektora: nowa sesja dialogu (formularz po wyczyszczeniu)
   // laduje zapisane "4" z localStorage — utworzona tozsamosc ma 4 slowa.
   el('id-nick').value = 'ala';
