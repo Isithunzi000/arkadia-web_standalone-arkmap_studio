@@ -20732,7 +20732,10 @@ async function _identityUiRefresh(showCode) {
       availEl.textContent = '';
       if (availTimer) clearTimeout(availTimer);
       const n = _identityCanonNick(nickIn.value);
-      if (!n || _identityValidateNick(n)) return;
+      if (!n) return;
+      // v1.52.3: bledny nick od razu mowi, co poprawic (bez debounce'a i bez sieci); puste pole milczy.
+      const verr = _identityValidateNick(n);
+      if (verr) { availEl.textContent = '✗ ' + verr; availEl.style.color = 'var(--err)'; return; }
       availTimer = setTimeout(async () => {
         const r = await _registryFetchEntry(n);
         if (_identityCanonNick(nickIn.value) !== n) return;  // pole zmienione w trakcie

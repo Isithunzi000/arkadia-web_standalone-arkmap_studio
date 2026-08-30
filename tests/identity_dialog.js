@@ -273,6 +273,11 @@ console.log('── T6: charset / persistencja selektora ──');
      'v1.52.2: zero „puli" (modul tozsamosci) i „maszyny" (UI calego pliku) — komentarze ASCII nietkniete');
   ok(srcUi.includes('\'<div style="color:var(--warn);font-weight:bold;white-space:nowrap">podpis wyłączony</div>\''),
      'v1.52.2: „podpis wyłączony" samodzielna linia (blok + nowrap) — brak lamania frazy na sidebarze');
+  // v1.52.3 (Arc 46): bledny nick pokazuje od razu, co poprawic — koniec cichego czyszczenia podpowiedzi
+  ok(srcUi.includes("if (verr) { availEl.textContent = '✗ ' + verr; availEl.style.color = 'var(--err)'; return; }"),
+     'v1.52.3: listener nicku — blad walidacji wyswietlany na zywo kolorem bledu (bez debounce, bez sieci)');
+  ok(!srcUi.includes('if (!n || _identityValidateNick(n)) return;'),
+     'v1.52.3: cicha sciezka (blad walidacji = pusta podpowiedz) usunieta');
   // Persistencja selektora: nowa sesja dialogu (formularz po wyczyszczeniu)
   // laduje zapisane "4" z localStorage — utworzona tozsamosc ma 4 slowa.
   el('id-nick').value = 'ala';
