@@ -68,10 +68,13 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "rev=$REV" >> "$GITHUB_OUTPUT"
           OLD=""
-          # v1.52.3: timeout fetcha cicho wylaczal straznika regresji (OLD="") — teraz przynajmniej ::warning; semantyka bez zmian
+          # Arc 47: timeout fetcha = brak danych dla straznika regresji -> STOP (fail-closed, jak kazdy
+          # guard w tym workflow). Inne bledy fetcha (rc 128 = brak galezi mapa przy pierwszym runie,
+          # bootstrap — rc potwierdzone empirycznie) nadal fail-open: OLD="" i sync publikuje 1. snapshot.
           timeout 90 git fetch -q --depth=1 origin mapa 2>/dev/null || frc=$?
           if [ "${frc:-0}" -eq 124 ]; then
-            echo "::warning::git fetch origin mapa przekroczyl 90 s — pomijam odczyt publikowanej wersji (straznik regresji nieaktywny w tym runie)"
+            echo "::warning::git fetch origin mapa przekroczyl 90 s — brak odczytu wersji publikowanej, straznik regresji fail-closed"
+            exit 124
           fi
           if [ "${frc:-0}" -eq 0 ]; then
             OLD=$(git show FETCH_HEAD:index.json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version??'')}catch{console.log('')}})" || true)

@@ -85,8 +85,10 @@ console.log('— sync-map self-check (koperta v2) —');
   // v1.52.3 (Arc 46): kazdy timeout w sync-map.yml ma jawna adnotacje ::warning (koniec golym exit 124)
   ok(SM.includes('::warning::git ls-remote taga upstream przekroczyl 90 s'),
     'sync-map: ::warning przy timeout git ls-remote (brama, fail-closed)');
-  ok(SM.includes('::warning::git fetch origin mapa przekroczyl 90 s'),
-    'sync-map: ::warning przy timeout git fetch (straznik regresji nieaktywny — widoczne)');
+  ok(SM.includes('::warning::git fetch origin mapa przekroczyl 90 s — brak odczytu wersji publikowanej, straznik regresji fail-closed'),
+    'sync-map (Arc 47): ::warning przy timeout git fetch + fail-closed');
+  ok(/timeout 90 git fetch[\s\S]{0,400}?exit 124/.test(SM),
+    'sync-map (Arc 47): timeout fetcha ma exit 124 (straznik regresji nie do obejscia; bootstrap rc 128 zostaje fail-open)');
   ok(SM.includes('::warning::git push na refs/heads/mapa przekroczyl 120 s'),
     'sync-map: ::warning przy timeout git push (publish, fail-closed)');
 }
