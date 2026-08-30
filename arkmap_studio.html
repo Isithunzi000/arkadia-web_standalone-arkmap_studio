@@ -10633,15 +10633,20 @@ function _serializeMapForSave() {
 // albo przy wylaczonym przelaczniku bajtowo identyczny z _serializeMapForSave().
 async function _serializeMapForSaveSigned() {
   const clone = _canonicalCloneForSave();
-  // F5: awaria podpisu nigdy nie blokuje zapisu — plik wychodzi anonimowy + ostrzezenie.
-  if (typeof _arkmapApplySignature === 'function') {
-    try { await _arkmapApplySignature(clone); }
-    catch (e) { console.warn('[ArkMap] podpis pominiety:', e); toast('⚠ Nie udało się podpisać pliku — zapis bez podpisu', true); }
-  }
+  // v1.52.4: strip PRZED podpisem — strip po podpisie uniewaznial go, gdy pokoj
+  // w pamieci niosl klucze o wartosciach domyslnych (np. weight:1/name:'' z edycji
+  // lub undo): podpisany ladunek roznil sie od zapisanej tresci. Sumy v4 sa na
+  // strip obojetne (kodowanie pomija wartosci domyslne), wiec kolejnosc je przelicza
+  // bez zmian — _arkmapApplySignature i tak odpala addChecksums na koncu.
   for (const area of (clone.areas || [])) {
     for (const room of (area.rooms || [])) {
       _stripRoomDefaults(room);
     }
+  }
+  // F5: awaria podpisu nigdy nie blokuje zapisu — plik wychodzi anonimowy + ostrzezenie.
+  if (typeof _arkmapApplySignature === 'function') {
+    try { await _arkmapApplySignature(clone); }
+    catch (e) { console.warn('[ArkMap] podpis pominiety:', e); toast('⚠ Nie udało się podpisać pliku — zapis bez podpisu', true); }
   }
   return stableStringify(clone);
 }

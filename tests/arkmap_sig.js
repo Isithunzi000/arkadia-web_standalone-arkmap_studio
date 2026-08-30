@@ -237,6 +237,44 @@ console.log('── T9: P-LOCK-4 (jednolitosc) ──');
   ok(sigBlock.includes('arkmap-v2:') && !sigBlock.includes('arkdelta-v3:'), 'domena arkmap-v2 wylacznie w sciezce .arkmap');
 }
 
+// ── C4 (v1.52.4): strip PRZED podpisem w _serializeMapForSaveSigned ──────────
+// Regresja: strip po podpisie uniewaznial go, gdy pokoj w pamieci niosl klucze
+// o wartosciach domyslnych (weight:1/name:''/symbol:'' z edycji/undo) — podpisany
+// ladunek roznil sie od zapisanej tresci. Wykryte analiza plikow uzytkownika.
+console.log('── C4: strip przed podpisem ──');
+{
+  const serSrc = extract(HTML, 'async function _serializeMapForSaveSigned() {');
+  ok(serSrc.indexOf('_stripRoomDefaults(room)') < serSrc.indexOf('_arkmapApplySignature(clone)'),
+     'C4: kolejnosc zrodlowa — strip PRZED _arkmapApplySignature');
+  await api._identityCreate('Tester', PIN_WORDS);  // T8 czysci tozsamosc — odtworzenie wspoldzielonego rekordu
+
+  const api2 = new Function('state', 'toast',
+    markerBlock('XXH3-64') + '\n' + markerBlock('CANONICAL-V4') + '\n' +
+    extract(HTML, 'function stableStringify(val, indent, _lvl) {') + '\n' +
+    markerBlock('IDENTITY-V1') + '\n' + markerBlock('ARKMAP-SIG') + '\n' +
+    extract(HTML, 'function _stripRoomDefaults(room) {') + '\n' +
+    extract(HTML, 'function _canonicalizeMapForSave(map) {') + '\n' +
+    extract(HTML, 'function _canonicalCloneForSave() {') + '\n' +
+    serSrc + '\n' +
+    ';return { _serializeMapForSaveSigned, _arkmapVerifySignature, verifyChecksums };'
+  )({ map: (() => { const m = freshMap(); const r = m.areas[0].rooms[0];
+                    r.weight = 1; r.name = ''; r.symbol = ''; r.exits = r.exits || {};
+                    return m; })() },
+      () => {});
+  const text = await api2._serializeMapForSaveSigned();
+  const saved = JSON.parse(text);
+  ok(saved.meta.author === 'tester' && /^[0-9a-f]{128}$/.test(saved.checksums.sig || ''),
+     'C4: zapis z podpisem — pola autora i sig obecne (tozsamosc z T2)');
+  ok(saved.areas[0].rooms[0].weight === undefined && saved.areas[0].rooms[0].name === undefined
+     && saved.areas[0].rooms[0].symbol === undefined,
+     'C4: klucze domyslne wyciete z pliku (strip zadzialal)');
+  const v = await api2._arkmapVerifySignature(saved);
+  ok(v.state === 'ok' && v.idOk === true,
+     'C4: REGRESJA — podpis wazny mimo kluczy domyslnych w pamieci (strip przed podpisem)');
+  const chk = api2.verifyChecksums(saved);
+  ok(chk.ok === true && chk.metaOk === true, 'C4: sumy v4 poprawne po zmianie kolejnosci');
+}
+
 console.log('');
 console.log('WYNIK: ' + pass + ' OK, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);
