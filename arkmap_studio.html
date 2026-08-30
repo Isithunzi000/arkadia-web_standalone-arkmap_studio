@@ -1413,6 +1413,10 @@
   }
   #area-panel.visible { display: flex; }
   #app.edit-mode #area-panel { border-color: var(--edit); }
+  /* v1.52.4: wariant tylko-do-odczytu (PPM poza trybem edycji) — ukrywa akcje edycyjne */
+  #area-panel.ro .save-btn, #area-panel.ro #ap-del-area-btn, #area-panel.ro #ap-ud-add,
+  #area-panel.ro .ap-lbl-btn, #area-panel.ro .ap-add-lbl,
+  #area-panel.ro #ap-ud-list .spec-del { display: none; }
   #ap-header { display: flex; align-items: center; gap: 6px; padding: 6px 10px;
     border-bottom: 1px solid var(--border); flex-shrink: 0; }
   #ap-title { font-size: 12px; color: var(--edit); font-weight: bold; flex: 1;
@@ -7422,12 +7426,11 @@ function buildAreaList() {
     const el = document.createElement('div');
     el.className = 'area-item';
     el.dataset.id = area.id;
-    el.title = area.name;
+    el.title = area.name + '\nPPM: szczegóły obszaru';  // v1.52.4: podpowiedz uniwersalna dla obu trybow
     el.innerHTML = `${escHtml(area.name || `Obszar ${area.id}`)} <span>(${area.rooms.length})</span>`;
     el.addEventListener('click', () => selectArea(area.id, true));
     el.addEventListener('contextmenu', (e) => {
-      if (!state.editMode) return;
-      e.preventDefault();
+      e.preventDefault();  // v1.52.4: PPM dziala tez poza edycja (panel w wariancie tylko-do-odczytu)
       selectArea(area.id, false);
       setTimeout(() => openAreaPanel(), 50);
     });
@@ -15228,6 +15231,12 @@ function updateEditUI() {
     loadArkdeltaBtn.disabled = !isEdit;
     loadArkdeltaBtn.title = isEdit ? '' : 'Wejdź w tryb edycji aby wczytać kalkę';
   }
+  // v1.52.4: otwarty panel obszaru musi przelaczyc wariant (edycja <-> tylko-odczyt)
+  const apOpen = document.getElementById('area-panel');
+  if (apOpen && apOpen.classList.contains('visible')) {
+    if (state.areas.get(state.areaId)) openAreaPanel();
+    else closeAreaPanel();
+  }
 }
 
 // ── GITHUB SESSION (STUB — disabled, awaiting Delwing) ────────────────────
@@ -16375,19 +16384,23 @@ function openAreaPanel() {
   const area = state.areas.get(state.areaId);
   if (!area) return;
 
+  // v1.52.4: poza trybem edycji panel otwiera sie w wariancie tylko-do-odczytu (PPM z listy obszarow)
+  const ro = !state.editMode;
+  ap.classList.toggle('ro', ro);
+
   // Pass 40: snapshot przy otwarciu panelu
   state.areaSnapshot = JSON.parse(JSON.stringify(area));
 
   // Populacja formularza
   const titleEl = document.getElementById('ap-title');
-  if (titleEl) titleEl.textContent = '✎ Obszar: ' + (area.name || '#' + area.id);
+  if (titleEl) titleEl.textContent = (ro ? '👁 Obszar: ' : '✎ Obszar: ') + (area.name || '#' + area.id);
 
   const nameIn = document.getElementById('ap-name');
-  if (nameIn) { nameIn.value = area.name || ''; nameIn.classList.remove('invalid'); }
+  if (nameIn) { nameIn.value = area.name || ''; nameIn.classList.remove('invalid'); nameIn.readOnly = ro; }
 
   // DS#2: Notatki obszaru → area.user_data["notes"]
   const notesIn = document.getElementById('ap-notes');
-  if (notesIn) notesIn.value = area.user_data?.notes ?? '';
+  if (notesIn) { notesIn.value = area.user_data?.notes ?? ''; notesIn.readOnly = ro; }
 
   // DS#3: user_data obszaru — dynamiczna lista (pomijamy klucz "notes" — osobne pole)
   refreshAreaUserData(area);
@@ -16421,11 +16434,12 @@ function refreshAreaUserData(area) {
   if (!udList) return;
 
   // Filtruj: "notes" jest obsługiwane przez osobne textarea
+  const ro = !state.editMode;  // v1.52.4: wariant tylko-do-odczytu
   const entries = Object.entries(area.user_data || {}).filter(([k]) => k !== 'notes');
   udList.innerHTML = entries.map(([k, v]) =>
     `<div class="ud-row" style="display:flex;gap:4px">
-      <input class="ap-input ud-key" type="text" value="${escHtml(k)}" style="flex:1">
-      <input class="ap-input ud-val" type="text" value="${escHtml(String(v))}" style="flex:1.5">
+      <input class="ap-input ud-key" type="text" value="${escHtml(k)}" style="flex:1"${ro ? ' readonly' : ''}>
+      <input class="ap-input ud-val" type="text" value="${escHtml(String(v))}" style="flex:1.5"${ro ? ' readonly' : ''}>
       <button class="spec-del" style="font-size: 11px;padding:3px 7px;border-color:var(--err);color:var(--err)">✕</button>
     </div>`
   ).join('');
@@ -19866,7 +19880,7 @@ function refreshLabelList() {
   const labels = area?.labels || [];
 
   if (!labels.length) {
-    container.innerHTML = '<div style="font-size: 10px;color:var(--dim);padding:3px 0">Brak etykiet</div><button style="font-size: 11px;padding:4px 8px;margin-top:3px;color:var(--edit);border:1px dashed var(--edit);border-radius:2px;background:transparent;cursor:pointer;width:100%" onclick="openLabelDialog(true)">⊕ Dodaj etykietę</button>';
+    container.innerHTML = '<div style="font-size: 10px;color:var(--dim);padding:3px 0">Brak etykiet</div><button class="ap-add-lbl" style="font-size: 11px;padding:4px 8px;margin-top:3px;color:var(--edit);border:1px dashed var(--edit);border-radius:2px;background:transparent;cursor:pointer;width:100%" onclick="openLabelDialog(true)">⊕ Dodaj etykietę</button>';
     return;
   }
   container.innerHTML = labels.map(lbl => {
@@ -19888,7 +19902,7 @@ function refreshLabelList() {
           onclick="state.selectedLabel={areaId:${areaId},labelId:${lbl.id}};deleteLabelFromCtx()">✕</button>
       </div>
     </div>`;
-  }).join('') + `<button style="font-size: 11px;padding:4px 8px;margin-top:3px;color:var(--edit);border:1px dashed var(--edit);border-radius:2px;background:transparent;cursor:pointer;width:100%" onclick="openLabelDialog(true)">⊕ Dodaj etykietę</button>`;
+  }).join('') + `<button class="ap-add-lbl" style="font-size: 11px;padding:4px 8px;margin-top:3px;color:var(--edit);border:1px dashed var(--edit);border-radius:2px;background:transparent;cursor:pointer;width:100%" onclick="openLabelDialog(true)">⊕ Dodaj etykietę</button>`;
 }
 
 // ── CHANGELOG POPUP ───────────────────────────────────────────────────────

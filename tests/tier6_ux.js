@@ -429,6 +429,30 @@ console.log('— B24 (Arc 35): stack fontu mono + baza 13px —');
   ok(t.length > 0 && t.length < 200, 'B27d: title LOD krotki (< 200 znakow, jest ' + t.length + ')');
 }
 
+// ── C1 (v1.52.4): PPM na liscie obszarow dziala w obu trybach; wariant RO panelu ──
+{
+  const hStart = HTML.indexOf("el.addEventListener('contextmenu'");
+  const hEnd = HTML.indexOf('});', hStart);
+  const handler = hStart >= 0 ? HTML.slice(hStart, hEnd) : '';
+  ok(handler.includes('e.preventDefault()') && !handler.includes('if (!state.editMode) return'),
+    'C1: PPM na liscie obszarow — preventDefault bez wzgledu na tryb (brak wczesnego return)');
+  const apFn = HTML.slice(HTML.indexOf('function openAreaPanel() {'), HTML.indexOf('function closeAreaPanel()'));
+  ok(apFn.includes("ap.classList.toggle('ro', ro)") && apFn.includes('👁 Obszar: '),
+    'C1: openAreaPanel — wariant tylko-do-odczytu wg state.editMode (klasa ro + tytul)');
+  ok(apFn.includes('nameIn.readOnly = ro') && apFn.includes('notesIn.readOnly = ro'),
+    'C1: pola nazwy i notatek readonly w wariancie RO');
+  ok(HTML.includes('#area-panel.ro .save-btn') && HTML.includes('#area-panel.ro #ap-del-area-btn')
+     && HTML.includes('#area-panel.ro .ap-add-lbl') && HTML.includes('#area-panel.ro #ap-ud-list .spec-del'),
+    'C1: CSS — akcje edycyjne ukryte w wariancie RO');
+  ok((HTML.match(/class="ap-add-lbl"/g) || []).length === 2,
+    'C1: przycisk dodawania etykiety ma klase ap-add-lbl w obu szablonach refreshLabelList');
+  ok(HTML.includes("el.title = area.name + '\\nPPM: szczegóły obszaru'"),
+    'C1: tooltip obszaru — nazwa + uniwersalna podpowiedz PPM');
+  const ueu = HTML.slice(HTML.indexOf('function updateEditUI() {'));
+  ok(ueu.includes("apOpen.classList.contains('visible')") && ueu.includes('openAreaPanel()'),
+    'C1: updateEditUI przelacza otwarty panel obszaru miedzy wariantami');
+}
+
 console.log('');
 console.log(`═══ tier6_ux: ${pass} OK, ${fail} FAIL ═══`);
 process.exit(fail ? 1 : 0);
