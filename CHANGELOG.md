@@ -2,6 +2,10 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.52.5 — Tooltip obszaru bez nazwy (Arc 49)
+
+- **Tooltip obszaru bez nazwy:** obszar bez nazwy ma na liście podpowiedź zaczynającą się od „Obszar bez nazwy" (wcześniej tooltip zaczynał się od pustej linii, bo składał się z samego „PPM: szczegóły obszaru"). Etykieta na liście pozostaje „Obszar N" z identyfikatorem, żeby dało się odróżnić kilka obszarów bez nazwy.
+
 ## v1.52.4 — Karta obszaru poza edycją, zawsze zakładka Podstawowe, odświeżanie statusu podpisu, naprawa podpisów .arkmap (Arc 48)
 
 - **Karta obszaru także poza trybem edycji:** prawy przycisk myszy na obszarze na liście otwiera panel obszaru — poza edycją w wariancie tylko do odczytu (tytuł „👁 Obszar", pola i listy bez możliwości zmian, bez przycisków akcji). W trybie edycji bez zmian. Obszar na liście ma teraz podpowiedź: nazwa + „PPM: szczegóły obszaru" (wcześniej sama nazwa — funkcja była nieodkrywalna). Panel przełącza wariant automatycznie przy wejściu/wyjściu z trybu edycji.

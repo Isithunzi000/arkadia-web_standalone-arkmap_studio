@@ -112,7 +112,7 @@ ok(count("rgba(100,140,180,0.55)") === 0, 'stary styl stubow (niebieski dash) us
   ok(!body.includes('setLineDash'), 'stuby: pelna linia (zero dash)');
   ok(body.includes('0.5 * cpx()'), 'stuby: dlugosc 0.5 jednostki mapy (Delwing 1:1)');
 }
-ok(count("const APP_VERSION = 'v1.52.4';") === 1, 'APP_VERSION v1.52.4');
+ok(count("const APP_VERSION = 'v1.52.5';") === 1, 'APP_VERSION v1.52.5');
 
 // ═══ A4.2 (UX-2): kontrasty tekstow WCAG ≥ 4.5:1 na obu tlach aplikacji ═══
 console.log('— A4.2 (UX-2): kontrasty WCAG vs --bg #0d0f12 i --panel #141720 —');
