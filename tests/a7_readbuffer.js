@@ -1,11 +1,11 @@
 // Harness A7 (krok 16) — ReadBuffer bounds-checki, kontrolowany błąd zamiast RangeError
-// Snapshot różnicowy: 50f37ea (stan sprzed fixa A7). Uruchamianie z katalogu głównego repo.
+// Snapshot różnicowy: 4a38044ae5bac5d127b3363c71913b1836236186 (stan sprzed fixa A7). Uruchamianie z katalogu głównego repo.
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const NEW = fs.readFileSync(path.join(ROOT, 'arkmap_studio.html'), 'utf8');
-const OLD = execSync('git show 50f37ea:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+const OLD = execSync('git show 4a38044ae5bac5d127b3363c71913b1836236186:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
 const FIX = path.join(ROOT, 'map_master3.dat');
 if (!fs.existsSync(FIX)) {
@@ -141,7 +141,7 @@ console.log('── T6: liczniki kotwic ──');
   // na mechanizm A7 (uint32 chronione bounds-checkiem ReadBuffer).
   ok(cnt(NEW, 'audyt A7') === 3, 'audyt A7 ×3 (ReadBuffer + readQPixMap krok 17 + F2.8 _datCounter)');
   ok(/const APP_VERSION = 'v1\.\d+\.\d+';/.test(NEW), 'APP_VERSION obecne');
-  ok(cnt(OLD, '_need(') === 0, 'snapshot 50f37ea nie miał _need');
+  ok(cnt(OLD, '_need(') === 0, 'snapshot 4a38044ae5bac5d127b3363c71913b1836236186 nie miał _need');
 }
 
 console.log(`\n═══ WYNIK: ${pass} OK / ${fail} FAIL ═══`);

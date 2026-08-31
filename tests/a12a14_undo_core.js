@@ -1,12 +1,12 @@
 // Harness A12+A14 (krok 14) — commitAddExit guard przed nadpisaniem + prevExit w entry;
 // undo ADD_ROOM bez destrukcyjnego czyszczenia wyjść
-// Snapshot różnicowy: fb8e013 (stan sprzed fixów A12/A14). Uruchamianie z katalogu głównego repo.
+// Snapshot różnicowy: 9dcc7e1b7395e2c3918c4950519e8c9170f2563e (stan sprzed fixów A12/A14). Uruchamianie z katalogu głównego repo.
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const NEW = fs.readFileSync(path.join(ROOT, 'arkmap_studio.html'), 'utf8');
-const OLD = execSync('git show fb8e013:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+const OLD = execSync('git show 9dcc7e1b7395e2c3918c4950519e8c9170f2563e:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
 function extract(src, anchor) {
   const i = src.indexOf(anchor);
@@ -179,7 +179,7 @@ console.log('── T8: liczniki kotwic ──');
   ok(cnt(NEW, 'audyt A14') === 1, 'komentarz audyt A14 ×1');
   ok(cnt(NEW, 'prevExit') === 4, 'prevExit ×4, jest: ' + cnt(NEW, 'prevExit'));
   ok(cnt(NEW, 'Clean reverse exits from other rooms pointing to this room') === 0, 'stara pętla czyszcząca usunięta');
-  ok(cnt(OLD, 'Clean reverse exits from other rooms pointing to this room') === 1, 'snapshot fb8e013 miał starą pętlę');
+  ok(cnt(OLD, 'Clean reverse exits from other rooms pointing to this room') === 1, 'snapshot 9dcc7e1b7395e2c3918c4950519e8c9170f2563e miał starą pętlę');
 }
 
 console.log(`\n═══ WYNIK: ${pass} OK / ${fail} FAIL ═══`);

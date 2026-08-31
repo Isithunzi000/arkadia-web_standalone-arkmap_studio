@@ -1,11 +1,11 @@
 // Harness A9 (krok 17) — readQPixMap parsuje chunki PNG zamiast skanować IEND
-// Snapshot różnicowy: c84da83 (stan sprzed fixa A9). Uruchamianie z katalogu głównego repo.
+// Snapshot różnicowy: 507ce47367dd523948f66d507f162e61672c159a (stan sprzed fixa A9). Uruchamianie z katalogu głównego repo.
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const NEW = fs.readFileSync(path.join(ROOT, 'arkmap_studio.html'), 'utf8');
-const OLD = execSync('git show c84da83:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+const OLD = execSync('git show 507ce47367dd523948f66d507f162e61672c159a:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 const TINY_PNG = new Uint8Array(fs.readFileSync(path.join(__dirname, 'fixtures', 'tiny.png')));
 
 function extract(src, anchor) {
@@ -125,7 +125,7 @@ console.log('── T6: liczniki kotwic ──');
   ok(cnt(NEW, 'audyt A9') === 1, 'komentarz audyt A9 ×1, jest: ' + cnt(NEW, 'audyt A9'));
   ok(cnt(NEW, 'Szukaj chunku IEND') === 0, 'stare skanowanie usunięte');
   ok(/const APP_VERSION = 'v1\.\d+\.\d+';/.test(NEW), 'APP_VERSION obecne');
-  ok(cnt(OLD, 'Szukaj chunku IEND') === 1, 'snapshot c84da83 miał stare skanowanie');
+  ok(cnt(OLD, 'Szukaj chunku IEND') === 1, 'snapshot 507ce47367dd523948f66d507f162e61672c159a miał stare skanowanie');
   ok(cnt(NEW, 'r._need(len + 4)') === 1, 'guard A7 użyty w pętli chunków');
 }
 

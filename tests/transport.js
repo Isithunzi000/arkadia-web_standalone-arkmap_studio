@@ -1,11 +1,11 @@
 // Harness krok B — transporty (statki/dyliżanse) w planerze: wirtualne krawędzie, kary, hopy
-// Snapshot różnicowy: 254ac05 (stan po kroku A, przed transportami). Uruchamianie z katalogu głównego repo.
+// Snapshot różnicowy: a7b0b1bd898e159750674d45b9dd59ba50f76cf4 (stan po kroku A, przed transportami). Uruchamianie z katalogu głównego repo.
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const NEW = fs.readFileSync(path.join(ROOT, 'arkmap_studio.html'), 'utf8');
-const OLD = execSync('git show 254ac05:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+const OLD = execSync('git show a7b0b1bd898e159750674d45b9dd59ba50f76cf4:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
 const FIX = path.join(ROOT, 'map_master3.dat');
 if (!fs.existsSync(FIX)) {
@@ -196,7 +196,7 @@ console.log('── T4: mapa rzeczywista — Ancelmus: Kraina Zgromadzenia → N
   ok(distGeo > 10, `hop geometrycznie daleki (${Math.round(distGeo)} j.) — render jako przerywana`);
 }
 
-console.log('── T5: regresja — transport off ≡ kod z 254ac05 (mapa rzeczywista) ──');
+console.log('── T5: regresja — transport off ≡ kod z a7b0b1bd898e159750674d45b9dd59ba50f76cf4 (mapa rzeczywista) ──');
 {
   const defs = transportDefs(NEW);
   const fmt = new Function(formatLayer(NEW) + '\n;return { datToArkmap };')();

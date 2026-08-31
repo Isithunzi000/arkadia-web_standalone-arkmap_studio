@@ -1,11 +1,11 @@
 // Harness A13 (krok 15) — commit DELETE_AREA czyści puste kontenery jak redo + removedEmptyContainers w undo
-// Snapshot różnicowy: 45aee0f (stan sprzed fixa A13). Uruchamianie z katalogu głównego repo.
+// Snapshot różnicowy: 8eb49a1748526b73d8b09167f921a844516b1779 (stan sprzed fixa A13). Uruchamianie z katalogu głównego repo.
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const NEW = fs.readFileSync(path.join(ROOT, 'arkmap_studio.html'), 'utf8');
-const OLD = execSync('git show 45aee0f:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+const OLD = execSync('git show 8eb49a1748526b73d8b09167f921a844516b1779:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
 function extract(src, anchor) {
   const i = src.indexOf(anchor);
@@ -188,7 +188,7 @@ console.log('── T5: liczniki kotwic ──');
   ok(/const APP_VERSION = 'v1\.\d+\.\d+';/.test(NEW), 'APP_VERSION obecne');
   ok(cnt(NEW, 'if (r.exits && !Object.keys(r.exits).length) delete r.exits;') === 0, 'stare kasowanie exits bez nagrania usunięte z doFn');
   ok(cnt(NEW, 'if (r.special_exits && !Object.keys(r.special_exits).length) delete r.special_exits;') === 0, 'stare kasowanie special_exits bez nagrania usunięte z doFn');
-  ok(cnt(OLD, 'removedEmptyContainers') === 0, 'snapshot 45aee0f nie miał removedEmptyContainers');
+  ok(cnt(OLD, 'removedEmptyContainers') === 0, 'snapshot 8eb49a1748526b73d8b09167f921a844516b1779 nie miał removedEmptyContainers');
 }
 
 console.log('── T6: smoke regresji dispatcherów (scenariusze A12/A14 na tym samym ekstrakcie) ──');

@@ -1,5 +1,5 @@
 // Harness fali 1 (P1+P2) — cache adjacency planera + admisybilna heurystyka A* cross-area.
-// Snapshot różnicowy: 74f52bd (stan sprzed fali 1). Uruchamianie z katalogu głównego repo.
+// Snapshot różnicowy: bc422338a3b895c3c2dba095faaa677e6f16b801 (stan sprzed fali 1). Uruchamianie z katalogu głównego repo.
 //
 // Kontrakt cache'u: mutacje mapy MUSZĄ podbijać state.editRev (albo podmienić roomById
 // — applyMap tworzy nowy obiekt). Mutacja bez editRev to błąd wywołującego (stale cache).
@@ -8,7 +8,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const NEW = fs.readFileSync(path.join(ROOT, 'arkmap_studio.html'), 'utf8');
-const OLD = execSync('git show 74f52bd:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+const OLD = execSync('git show bc422338a3b895c3c2dba095faaa677e6f16b801:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
 const FIX = path.join(ROOT, 'map_master3.dat');
 if (!fs.existsSync(FIX)) {

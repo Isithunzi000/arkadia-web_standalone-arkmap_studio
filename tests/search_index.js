@@ -1,7 +1,7 @@
 // Harness fali 5 (P5) — indeks tokenowy searcha planera (wpDoSearch).
-// Snapshot roznicowy: 2614e8f (stan sprzed fali 5). Uruchamianie z katalogu glownego repo.
+// Snapshot roznicowy: dd819f5f6ea57532520359daf693e40cded62a7b (stan sprzed fali 5). Uruchamianie z katalogu glownego repo.
 //
-// Zlota asercja: STARY wpDoSearch (pelny skan, ekstrahowany verbatim z 2614e8f)
+// Zlota asercja: STARY wpDoSearch (pelny skan, ekstrahowany verbatim z dd819f5f6ea57532520359daf693e40cded62a7b)
 // vs NOWY (kandydaci z indeksu) — bitowo identyczny innerHTML dropdownu i stan
 // open na baterii zapytan, na proceduralnym stanie stresowym (53976 pokoi)
 // i na mini-mapie brzegowej. Do tego: leniwosc (1 budowa), uniewaznianie
@@ -14,7 +14,7 @@ const { execSync } = require('child_process');
 const { performance } = require('perf_hooks');
 const ROOT = path.join(__dirname, '..');
 const NEW = fs.readFileSync(path.join(ROOT, 'arkmap_studio.html'), 'utf8');
-const OLD = execSync('git show 2614e8f:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+const OLD = execSync('git show dd819f5f6ea57532520359daf693e40cded62a7b:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
 let pass = 0, fail = 0;
 function ok(cond, name) { if (cond) { pass++; console.log('  OK   ' + name); } else { fail++; console.log('  FAIL ' + name); } }

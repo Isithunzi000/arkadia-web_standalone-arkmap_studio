@@ -1,11 +1,11 @@
 // Harness krok A — filtr kierunków planera (kardynalne / +pionowe / wszystkie)
-// Snapshot różnicowy: 80c8c90 (stan sprzed filtra). Uruchamianie z katalogu głównego repo.
+// Snapshot różnicowy: 5aa5dcbc112cb8403d69b5c995db219b3849311b (stan sprzed filtra). Uruchamianie z katalogu głównego repo.
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const NEW = fs.readFileSync(path.join(ROOT, 'arkmap_studio.html'), 'utf8');
-const OLD = execSync('git show 80c8c90:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+const OLD = execSync('git show 5aa5dcbc112cb8403d69b5c995db219b3849311b:arkmap_studio.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
 const FIX = path.join(ROOT, 'map_master3.dat');
 if (!fs.existsSync(FIX)) {
