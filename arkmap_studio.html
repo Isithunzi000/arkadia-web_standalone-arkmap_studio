@@ -1929,7 +1929,7 @@
   <!-- MOBILE: hamburger -->
   <button id="mob-hamburger" title="Menu" aria-label="Menu"><span></span><span></span><span></span></button>
   <!-- MOBILE: import trasy -->
-  <button id="mob-import-btn" title="Wczytaj trasę ARKMAP2">⊙ Trasa</button>
+  <button id="mob-import-btn" title="Wczytaj trasę z kodu arkmap">⊙ Trasa</button>
   <button id="mob-clear-btn" title="Usuń trasę">✕ Usuń trasę</button>
 
   <!-- SIDEBAR -->
@@ -3059,8 +3059,8 @@
           <button id="wp-import-close">✕</button>
         </div>
         <div id="wp-import-body">
-          <div id="wp-import-lbl">Wklej kod trasy (ARKMAP:...)</div>
-          <textarea id="wp-import-textarea" placeholder="ARKMAP:..."></textarea>
+          <div id="wp-import-lbl">Wklej kod trasy (arkmap:...)</div>
+          <textarea id="wp-import-textarea" placeholder="arkmap:..."></textarea>
           <div id="wp-import-warn"></div>
         </div>
         <div id="wp-import-footer">
@@ -12755,11 +12755,14 @@ function wpEncodeRoute() {
   const ids = wpState.waypoints.map(w => w.roomId).filter(id => id !== null);
   if (ids.length < 2) return '';
   if (ids.some(id => !Number.isInteger(id) || id <= 0)) return '';  // audyt T4/W6: fail-closed — nigdy nie produkuj kodu, ktorego wlasny dekoder odrzuci
-  // Format ARKMAP2:<algo><dir><trans>:base64 — algo: d/a, dir: k=cardinal p=vertical w=all, trans: p=off n=normal g=aggressive
+  // Format gen 3: arkmap:<algo><dir><trans>:<ids CSV>:<crc8> — algo: d/a, dir: k=cardinal p=vertical w=all, trans: p=off n=normal g=aggressive
+  // crc8: pierwsze 8 hex xxh3_64 ze zlowerkowanego rdzenia "arkmap:<flagi>:<ids>" — integralnosc wklejek (literowki, uciecia), nie security.
+  // Enkoder zawsze emituje male litery; dekoder jest case-insensitive.
   const algoCode = wpState.algorithm === 'astar' ? 'a' : 'd';
   const dirCode = { cardinal: 'k', vertical: 'p', all: 'w' }[wpState.dirMode] || 'w';
   const transCode = { off: 'p', normal: 'n', aggressive: 'g' }[wpState.transportMode] || 'p';
-  try { return 'ARKMAP2:' + algoCode + dirCode + transCode + ':' + btoa(ids.join(',')); } catch { return ''; }
+  const core = 'arkmap:' + algoCode + dirCode + transCode + ':' + ids.join(',');
+  try { return core + ':' + xxh3_64hex(new TextEncoder().encode(core)).slice(0, 8); } catch { return ''; }
 }
 
 function wpUpdateRouteCode() {
@@ -12796,40 +12799,41 @@ document.getElementById('wp-route-copy-btn').addEventListener('click', () => {
 
 function wpDecodeRoute(code) {
   // Zwraca { valid: [roomId,...], invalidCount, total, algorithm, dirMode, transportMode },
-  // null (kod uszkodzony) albo { error: 'too-many', max, total } (przekroczony limit waypointów).
-  // Format ARKMAP2:<algo><dir><trans>:base64 — ścisła walidacja, bez kompatybilności wstecznej
+  // null (kod strukturalnie uszkodzony), { error: 'crc', expected, actual } (suma kontrolna
+  // sie nie zgadza — kod znieksztalcony w transporcie) albo { error: 'too-many', max, total }.
+  // Format gen 3: arkmap:<algo><dir><trans>:<ids CSV>:<crc8> — wielkosc liter bez znaczenia
+  // (dekoder lowercasuje calosc przed parsowaniem, crc liczone z formy zlowerkowanej).
+  // Starsze generacje (ARKMAP:/ARKMAP2:, payloady base64) sa odrzucane — brak kompatybilnosci.
   // Arc 37 (F-PLANNER-2): WP_MAX musi być WEWNĄTRZ ciała — harness share_link.js tnie
   // ekstrakcję od tej funkcji do wpImportOpen, stała poza ciałem byłaby niewidoczna w pinach.
   const WP_MAX = 200;  // twardy limit waypointów w imporcie (realne trasy: dziesiątki)
   const raw = (code || '').trim();
-  if (!raw.startsWith('ARKMAP2:')) return null;
-  // audyt A22/C1: twardy limit dlugosci kodu — fail-closed. 64k znakow base64 to
-  // ~10k waypointow, rzedy wielkosci ponad realne trasy; ogromna wklejka nie moze
-  // zawiesic zakladki na atob + split + petli.
+  if (!raw) return null;
+  // audyt A22/C1: twardy limit dlugosci kodu — fail-closed (ogromna wklejka nie moze
+  // zawiesic zakladki na parsowaniu).
   if (raw.length > 64000) return null;
-  const rest = raw.slice(8);
-  if (rest.length < 5 || rest[3] !== ':') return null;
-  const flags = rest.slice(0, 3);
-  const b64 = rest.slice(4);
+  const norm = raw.toLowerCase();
+  if (!norm.startsWith('arkmap:')) return null;
+  const fields = norm.slice(7).split(':');
+  if (fields.length !== 3) return null;
+  const flags = fields[0], csv = fields[1], crc = fields[2];
   const algoKey = { d: 'dijkstra', a: 'astar' }[flags[0]];
   const dirKey = { k: 'cardinal', p: 'vertical', w: 'all' }[flags[1]];
   const transKey = { p: 'off', n: 'normal', g: 'aggressive' }[flags[2]];
-  if (!algoKey || !dirKey || !transKey || !b64) return null;
-  let decoded;
-  try { decoded = atob(b64); } catch { return null; }
-  // Każdy token musi być dodatnią liczbą całkowitą — inaczej kod jest uszkodzony
-  const tokens = decoded.split(',');
+  if (flags.length !== 3 || !algoKey || !dirKey || !transKey) return null;
+  if (!/^[0-9a-f]{8}$/.test(crc)) return null;                 // kształt sumy kontrolnej
+  // Każdy token musi być dodatnią liczbą całkowitą w formie kanonicznej — inaczej kod uszkodzony
+  if (!/^[1-9][0-9]*(,[1-9][0-9]*)*$/.test(csv)) return null;
+  const core = 'arkmap:' + flags + ':' + csv;
+  const expected = xxh3_64hex(new TextEncoder().encode(core)).slice(0, 8);
+  if (crc !== expected) return { error: 'crc', expected, actual: crc };
+  const tokens = csv.split(',');
   // Arc 37 (F-PLANNER-2): twardy limit liczby waypointów — check przed pętlą parseInt.
   // Bez limitu trasa ~8 tys. WP mieści się w limicie długości 64k i zamraża zakładkę
-  // w wpRecalcPaths() (synchroniczny findPath per para waypointów).
+  // w wpRecalcPaths() (synchroniczny findPath per para waypointów). Weryfikacja crc jest
+  // celowo PRZED limitem — integralnosc przed semantyka.
   if (tokens.length > WP_MAX) return { error: 'too-many', max: WP_MAX, total: tokens.length };
-  if (!tokens.length) return null;
-  const parts = [];
-  for (const t of tokens) {
-    const n = parseInt(t.trim(), 10);
-    if (isNaN(n) || n <= 0 || String(n) !== t.trim()) return null;
-    parts.push(n);
-  }
+  const parts = tokens.map(t => parseInt(t, 10));
   const valid = [];
   let invalidCount = 0;
   for (const id of parts) {
@@ -12889,12 +12893,13 @@ document.getElementById('wp-import-confirm').addEventListener('click', () => {
 
   // Walidacja — poziom 1 (całkowita porażka)
   if (!code) { toast('✗ Wklej kod trasy przed importem'); return; }
-  if (!code.startsWith('ARKMAP2:')) { toast('✗ Niepoprawny format — oczekiwano kodu ARKMAP2:...'); return; }
+  if (!code.toLowerCase().startsWith('arkmap:')) { toast('✗ Niepoprawny format — oczekiwano kodu arkmap:...'); return; }
 
   const res = wpDecodeRoute(code);
   // Arc 37 (F-PLANNER-2): limit waypointów ma własny komunikat — wartość z wyniku (res.max),
   // żeby limit i komunikat nigdy się nie rozjechały.
   if (res && res.error === 'too-many') { toast('✗ Za dużo waypointów (max ' + res.max + ')'); return; }
+  if (res && res.error === 'crc') { toast('✗ Kod trasy jest uszkodzony (błąd sumy kontrolnej)'); return; }
   if (!res) { toast('✗ Kod trasy jest uszkodzony lub niepoprawny'); return; }
   if (!res.valid.length) { toast('✗ Żaden waypoint nie pasuje do wczytanej mapy'); return; }
 
@@ -15052,7 +15057,7 @@ function _valReportSections(valRes, chkRes, suppMissing) {
 // Rozszerza viewer+mockup3 JS o funkcje specyficzne dla trybu edycji
 // ═══════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v1.52.5';
+const APP_VERSION = 'v1.52.6';
 const BUILD_DATE  = (function(){ const d = new Date(); const p = n => String(n).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); })();
 
 // Populacja wersji z jednego źródła (single source of truth)

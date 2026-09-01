@@ -375,13 +375,16 @@ console.log('── T6: dijkstra — kolizja kluczy, priorytet SE ──');
 // ═══ T7: enkoder tras fail-closed (W6) ═══
 console.log('── T7: wpEncodeRoute/wpDecodeRoute — spojnosc ──');
 {
-  const code = extract(NEW, 'function wpEncodeRoute() {') + '\n' + extract(NEW, 'function wpDecodeRoute(code) {');
+  // gen 3: enkoder/dekoder licza crc przez xxh3_64hex — dociagamy samowystarczalny blok XXH3
+  let xh = blockSlice('====XXH3-64-BEGIN====', '====XXH3-64-END====');
+  xh = xh.slice(xh.indexOf('\n') + 1);   // pierwsza linia wycinka to resztka komentarza markera
+  const code = xh + '\n' + extract(NEW, 'function wpEncodeRoute() {') + '\n' + extract(NEW, 'function wpDecodeRoute(code) {');
   const fn = new Function('wpState', 'state', code + '\n;return { wpEncodeRoute, wpDecodeRoute };');
   const wpState = { waypoints: [{ roomId: 1 }, { roomId: 2 }], algorithm: 'dijkstra', dirMode: 'all', transportMode: 'off' };
   const state = { roomById: { 1: {}, 2: {} } };
   const api = fn(wpState, state);
   const code2 = api.wpEncodeRoute();
-  ok(code2.startsWith('ARKMAP2:'), 'W6: normalna trasa koduje sie');
+  ok(code2.startsWith('arkmap:'), 'W6: normalna trasa koduje sie (gen 3, prefiks arkmap:)');
   const dec = api.wpDecodeRoute(code2);
   ok(dec && JSON.stringify(dec.valid) === JSON.stringify([1, 2]) && dec.invalidCount === 0, 'W6: roundtrip wlasnego kodu');
   wpState.waypoints = [{ roomId: 1 }, { roomId: -2 }];
@@ -454,13 +457,13 @@ console.log('── T9: piny ──');
     && dij.includes('if (wpState.avoidLocked && nbr.locked) continue;'),
     'pin P1: F2.15 — guard locked (ON=paritet Mudlet) PRZED breakiem + przy relaksacji; OFF=permissive; N6: wyjatek startu');
   // piny wersji
-  ok(NEW.includes("const APP_VERSION = 'v1.52.5';"), 'pin: APP_VERSION v1.52.5');
+  ok(NEW.includes("const APP_VERSION = 'v1.52.6';"), 'pin: APP_VERSION v1.52.6');
   const deltaSrc = fs.readFileSync(path.join(ROOT, 'tests', 'delta.js'), 'utf8');
-  ok(deltaSrc.split('v1.52.5').length - 1 === 8 && deltaSrc.split('v1.51.0').length - 1 === 1, 'pin: delta.js 8x v1.52.5 (piny APP_VERSION po bumpie) + adnotacja formatu v1.51.0');
+  ok(deltaSrc.split('v1.52.6').length - 1 === 8 && deltaSrc.split('v1.51.0').length - 1 === 1, 'pin: delta.js 8x v1.52.6 (piny APP_VERSION po bumpie) + adnotacja formatu v1.51.0');
   const t2 = fs.readFileSync(path.join(ROOT, 'tests', 'tier2_state.js'), 'utf8');
-  ok(t2.includes("wersja: v1.52.5"), 'pin: tier2_state.js v1.52.5');
+  ok(t2.includes("wersja: v1.52.6"), 'pin: tier2_state.js v1.52.6');
   const t3 = fs.readFileSync(path.join(ROOT, 'tests', 'tier3_format.js'), 'utf8');
-  ok(t3.includes("pin: APP_VERSION v1.52.5"), 'pin: tier3_format.js v1.52.5');
+  ok(t3.includes("pin: APP_VERSION v1.52.6"), 'pin: tier3_format.js v1.52.6');
 }
 
 // ═══ T10: bramka — wlasne kalki zawsze z sid (K7 nie zabija wlasnych eksportow) ═══

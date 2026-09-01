@@ -320,7 +320,7 @@ console.log('— E: D-C3/D-C4 — cheat sheet i dialog online —');
 }
 
 // ── Pin wersji ──
-ok(HTML.includes("const APP_VERSION = 'v1.52.5';"), 'V1: pin APP_VERSION v1.52.5');
+ok(HTML.includes("const APP_VERSION = 'v1.52.6';"), 'V1: pin APP_VERSION v1.52.6');
 
 // ═══ A3.10 (DI-7): touchstart — reset flag na starcie KAZDEGO gestu ═══
 console.log('— A3.10 (DI-7): touchstart — reset na starcie kazdego gestu —');
@@ -429,7 +429,7 @@ console.log('— B24 (Arc 35): stack fontu mono + baza 13px —');
   ok(t.length > 0 && t.length < 200, 'B27d: title LOD krotki (< 200 znakow, jest ' + t.length + ')');
 }
 
-// ── C1 (v1.52.5): PPM na liscie obszarow dziala w obu trybach; wariant RO panelu ──
+// ── C1 (v1.52.6): PPM na liscie obszarow dziala w obu trybach; wariant RO panelu ──
 {
   const hStart = HTML.indexOf("el.addEventListener('contextmenu'");
   const hEnd = HTML.indexOf('});', hStart);
@@ -453,7 +453,7 @@ console.log('— B24 (Arc 35): stack fontu mono + baza 13px —');
     'C1: updateEditUI przelacza otwarty panel obszaru miedzy wariantami');
 }
 
-// ── C2 (v1.52.5): klik w pokoj zawsze otwiera zakladke Podstawowe ──
+// ── C2 (v1.52.6): klik w pokoj zawsze otwiera zakladke Podstawowe ──
 {
   const sri = HTML.slice(HTML.indexOf('function showRoomInfo(r) {'), HTML.indexOf('function hideRoomPanel') >= 0 ? HTML.indexOf('function hideRoomPanel') : HTML.indexOf('function switchRpTab'));
   ok(sri.includes("const lastTab = 'Podstawowe';"),

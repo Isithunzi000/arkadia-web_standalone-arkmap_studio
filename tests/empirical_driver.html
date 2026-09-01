@@ -3079,8 +3079,8 @@ scenario('E12.import-gate', async () => {
   // kod trasy z [id0, id1]; aktywna trasa = [id2]
   ex('wpState.waypoints = [{ roomId: ' + ids[0] + ', label: "" }, { roomId: ' + ids[1] + ', label: "" }];');
   const code = ev('wpEncodeRoute()').val;
-  A('E12.import.code', typeof code === 'string' && code.indexOf('ARKMAP2:') === 0,
-    'wygenerowany kod ARKMAP2 [debug: ' + (code || '').slice(0, 14) + '...]');
+  A('E12.import.code', typeof code === 'string' && code.indexOf('arkmap:') === 0,
+    'wygenerowany kod arkmap: gen 3 [debug: ' + (code || '').slice(0, 14) + '...]');
   ex('wpState.waypoints = [{ roomId: ' + ids[2] + ', label: "" }, { roomId: null, label: "" }];');
   ex('document.getElementById("wp-import-textarea").value = ' + JSON.stringify(code) + ';');
   ex('document.getElementById("wp-import-confirm").click()');

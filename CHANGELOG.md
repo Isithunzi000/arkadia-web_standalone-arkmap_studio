@@ -2,6 +2,14 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.52.6 — Kod trasy gen 3: `arkmap:<flagi>:<waypointy CSV>:<crc8>` (Arc 50)
+
+- **Nowy format kodu trasy** (planer → pole „Kod trasy", import): `arkmap:<algo><dir><trans>:<ids CSV>:<crc8>`, np. `arkmap:dwp:2188,1998,729:16990e69`. Payload to czysty CSV roomId (base64 odpada), wszystko małymi literami, a dekoder lowercasuje całość przed parsowaniem — wielkość liter nie ma znaczenia.
+- **crc8 integralności:** pierwsze 8 znaków hex xxh3-64 ze zlowerkowanego rdzenia `arkmap:<flagi>:<ids>` — wykrywa literówki, ucięte wklejki i zniekształcone znaki (osobny toast „błąd sumy kontrolnej"). To kontrola przypadkowych uszkodzeń, nie zabezpieczenie.
+- **Zero kompatybilności wstecznej** (świadoma decyzja — brak bazy użytkowników i starych kodów w obiegu): kody `ARKMAP:`/`ARKMAP2:` z base64 są odrzucane.
+- Format zgodny z pakietem npm `arkmap` (`encodeRoute`/`decodeRoute`) — golden pin CRC wspólny dla obu repozytoriów (ta sama wartość w tests/share_link.js i tests/waypoints.test.mjs).
+- Testy: share_link.js przepisany (ekstrakcja dociąga blok XXH3; T1/T2/T2b/T3/T3b/T4/T5/T6 — 75 asercji), tier4 T7 dociąga XXH3 + pin prefiksu, empirical E12, manual (format, import, sekcja mobilna).
+
 ## v1.52.5 — Tooltip obszaru bez nazwy (Arc 49)
 
 - **Tooltip obszaru bez nazwy:** obszar bez nazwy ma na liście podpowiedź zaczynającą się od „Obszar bez nazwy" (wcześniej tooltip zaczynał się od pustej linii, bo składał się z samego „PPM: szczegóły obszaru"). Etykieta na liście pozostaje „Obszar N" z identyfikatorem, żeby dało się odróżnić kilka obszarów bez nazwy.
