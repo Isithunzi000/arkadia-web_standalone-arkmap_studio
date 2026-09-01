@@ -105,6 +105,7 @@
   <li><a href="#rendering">Rendering Behavior</a></li>
   <li><a href="#dat-roundtrip">Mudlet .dat Round-Trip</a></li>
   <li><a href="#arkmap-only">Extensions (.arkmap-only fields)</a></li>
+  <li><a href="#transports">Transport Lines (transports)</a></li>
   <li><a href="#example">Complete Example</a></li>
   <li><a href="#signatures">Optional Signatures</a></li>
   <li><a href="#changelog">Format Changelog</a></li>
@@ -136,17 +137,19 @@
   <span class="k">"meta"</span>:          { ... },         <span class="c">// REQUIRED — metadata object (see §3)</span>
   <span class="k">"colors"</span>:        { ... },         <span class="c">// REQUIRED — color palette object (see §4)</span>
   <span class="k">"areas"</span>:         [ ... ],         <span class="c">// REQUIRED — array of Area objects (see §5)</span>
-  <span class="k">"checksums"</span>:     { ... }          <span class="c">// optional — XXH3-64 checksums, added by ArkMap Studio on save (see §15)</span>
+  <span class="k">"checksums"</span>:     { ... },         <span class="c">// optional — XXH3-64 checksums, added by ArkMap Studio on save (see §15)</span>
+  <span class="k">"transports"</span>:    { ... }          <span class="c">// optional — transport lines, arkmap-transports v1 (see §21)</span>
 }</pre>
 
 <table>
 <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
 <tr><td><code>format</code></td><td>string</td><td class="req">YES</td><td>Must be <code>"arkmap"</code>. Used to identify file type.</td></tr>
-<tr><td><code>format_version</code></td><td>integer</td><td class="req">YES</td><td>Format version. Currently <code>2</code>. Increment on breaking changes. Renamed from <code>version</code> (format version 1) — see <a href="#changelog">§23</a>.</td></tr>
+<tr><td><code>format_version</code></td><td>integer</td><td class="req">YES</td><td>Format version. Currently <code>2</code>. Increment on breaking changes. Renamed from <code>version</code> (format version 1) — see <a href="#changelog">§24</a>.</td></tr>
 <tr><td><code>meta</code></td><td>object</td><td class="req">YES</td><td>Map-level metadata. See <a href="#meta">§3</a>.</td></tr>
 <tr><td><code>colors</code></td><td>object</td><td class="req">YES</td><td>Environment color definitions. See <a href="#colors">§4</a>.</td></tr>
 <tr><td><code>areas</code></td><td>array</td><td class="req">YES</td><td>Array of Area objects. See <a href="#areas">§5</a>.</td></tr>
 <tr><td><code>checksums</code></td><td>object</td><td class="opt">optional</td><td>Hierarchical XXH3-64 checksums. Moved from <code>meta.checksums</code> (format version 1) to the top level in format version 2. See <a href="#checksums">§15</a>.</td></tr>
+<tr><td><code>transports</code></td><td>object</td><td class="opt">optional</td><td>Transport lines (ships, coaches, portals) — a universal, MUD-agnostic <code>arkmap-transports</code> v1 document. Not preserved in <code>.dat</code> export. See <a href="#transports">§21</a>.</td></tr>
 </table>
 
 <div class="note">The envelope keys <code>format</code>, <code>format_version</code>, and <code>checksums</code> live at the top level in both formats (<code>.arkmap</code> and <code>.arkdelta</code>), so a generic dispatcher can identify file type and version without knowing the per-format <code>meta</code> layout. The <code>format_version</code> counters of <code>.arkmap</code> and <code>.arkdelta</code> are independent sequences; equal numbers carry no cross-format meaning.</div>
@@ -175,7 +178,7 @@
 <tr><td><code>room_id_hash</code></td><td>object (string → integer)</td><td class="opt">optional</td><td>Mudlet's <code>mRoomIdHash</code>: contributor name → starting room ID, used by multi-contributor map merging (crowdmap). Preserved through .dat round-trips. Omit if empty. Added in spec v1.1.</td></tr>
 <tr><td><code>user_data</code></td><td><a href="#user-data">UserData</a></td><td class="opt">optional</td><td>Map-level key-value metadata. May contain <code>version</code>, <code>revision</code>, <code>map_sync_version</code> etc.</td></tr>
 <tr><td><code>app_version</code></td><td>string</td><td class="opt">optional</td><td>Version of ArkMap Studio that wrote the file. Informational; ignored by validation. Mirrors the <code>.arkdelta</code> bookkeeping field. Covered by <code>checksums.meta</code> (see <a href="#checksums">§15</a>). Added in spec v2.0.</td></tr>
-<tr><td><code>author</code></td><td>string</td><td class="opt">optional</td><td>Author nickname (for humans). Canonical form: lowercase, characters <code>a-z</code> and <code>0-9</code> only (1–32 characters) — case is insignificant everywhere, including key derivation. Requires a signature — see <a href="#signatures">§22</a>. Additive extension: does not change the format version.</td></tr>
+<tr><td><code>author</code></td><td>string</td><td class="opt">optional</td><td>Author nickname (for humans). Canonical form: lowercase, characters <code>a-z</code> and <code>0-9</code> only (1–32 characters) — case is insignificant everywhere, including key derivation. Requires a signature — see <a href="#signatures">§23</a>. Additive extension: does not change the format version.</td></tr>
 <tr><td><code>author_id</code></td><td>string</td><td class="opt">optional</td><td>Author fingerprint (for machines): the first 16 lowercase hex characters of SHA-256 over the raw bytes of <code>author_pubkey</code>.</td></tr>
 <tr><td><code>author_pubkey</code></td><td>string</td><td class="opt">optional</td><td>Author's Ed25519 public key, 64 lowercase hex characters (32 bytes). Covered by <code>checksums.meta</code> and by the signature, so it cannot be swapped without invalidating both.</td></tr>
 <tr><td><code>created</code></td><td>string</td><td class="opt">optional</td><td>Creation timestamp, ISO 8601. Informational — self-declared by the producer.</td></tr>
@@ -594,7 +597,8 @@
   <span class="k">"meta"</span>:  <span class="s">"f0e1d2c3b4a59687"</span>,
   <span class="k">"areas"</span>: { <span class="s">"7"</span>: <span class="s">"e5f6a7b8c9d0e1f2"</span>, <span class="s">"12"</span>: <span class="s">"c9d0e1f2a3b4c5d6"</span> },
   <span class="k">"rooms"</span>: { <span class="s">"12847"</span>: <span class="s">"1a2b3c4d5e6f7a8b"</span>, <span class="s">"12848"</span>: <span class="s">"5e6f7a8b9c0d1e2f"</span> },
-  <span class="k">"sig"</span>:   <span class="s">"3f4a…"</span>  <span class="c">/* optional — author signature, 128 lowercase hex (see §22) */</span>
+  <span class="k">"transports"</span>: { <span class="k">"hash"</span>: <span class="s">"…"</span>, <span class="k">"lines"</span>: { <span class="s">"Wyzima - Novigrad"</span>: <span class="s">"…"</span> } },  <span class="c">/* optional — transport line sums (see §21) */</span>
+  <span class="k">"sig"</span>:   <span class="s">"3f4a…"</span>  <span class="c">/* optional — author signature, 128 lowercase hex (see §23) */</span>
 }</pre>
 
 <h3>Computation algorithm (v4)</h3>
@@ -613,10 +617,13 @@
 <p><code>"v4"</code> is the only algorithm ArkMap Studio writes (since v1.45.0) and the only one it verifies. The retired generations — <em>legacy v1</em> (no <code>alg</code> field), <code>"v2"</code> (<code>"a2:"</code>/<code>"f2:"</code> prefixed rollups) and <code>"v3"</code> (canonical binary, v1.44.x) — are no longer produced or verified; the formulas are frozen history.</p>
 <p>Verifiers MUST dispatch on <code>alg</code>: <code>"v4"</code> → v4 formulas; any other value (including absent) → report an algorithm mismatch (loud, never a silent skip — a silently skipped stale file would be indistinguishable from a file without checksums). Re-saving the file upgrades its checksums to v4.</p>
 
+<h3>Transport checksums (<code>checksums.transports</code>)</h3>
+<p>When the map embeds a <a href="#transports">transport document</a> (<code>map.transports</code>), saving additionally signs it into <code>checksums.transports</code> = <code>{ hash, lines }</code>: <code>hash</code> covers the whole document, <code>lines</code> holds one sum per line keyed by line name — so verification pinpoints exactly which line was modified (<code>badLines</code>), added unsigned (<code>missingLines</code>) or removed leaving an orphaned sum (<code>extraLines</code>). Unlike room/area/meta sums, transport sums use the <strong>canonical JSON encoding</strong> (deterministic <code>stableStringify</code> — keys sorted at every level, absent keys omitted), hashed as XXH3-64 of its UTF-8 bytes; the canonical document sorts <code>lines</code> by <code>name</code> (array order is not semantic) while preserving leg order (leg order <em>is</em> semantic). Transport integrity is an <strong>auxiliary, informational signal</strong> (same class as <code>metaOk</code>): it never affects <code>file</code> identity and is reported separately from map-data sums. Re-saving after removing <code>transports</code> clears the orphaned sums.</p>
+
 <h3>Verification</h3>
 <p>On load, recompute from bottom up — using the algorithm recorded in <code>alg</code> (see <em>Algorithm versioning</em> above) — and compare. Mismatches indicate the file was modified externally (hand-edited JSON, merge conflict resolution, etc.). Mismatches are warnings, not fatal errors. Verification never throws on malformed data (it reports a verification error and defers to structural validation), and it also reports dictionary inconsistencies: rooms or areas missing their checksum entry, and orphaned checksum entries without a matching object. Dictionary-inconsistency reporting applies to the <code>areas</code> and <code>rooms</code> dictionaries only; unrecognized top-level keys inside the <code>checksums</code> object itself (e.g. keys introduced by a newer spec) are ignored, not reported — verifiers must remain forward-compatible with the envelope.</p>
 
-<div class="note"><strong>Scope (v4):</strong> room hashes cover room data (including the upstream <code>hash</code>); area hashes additionally cover the area's own in-scope attributes (id, name, user_data, labels with full color channels, and the optional <code>grid_mode</code>, <code>is_zone</code>, <code>zone_area_ref</code> and <code>pos</code> fields — inside the scope since v4); the file hash additionally covers the <code>colors</code> tables; the meta hash covers the entire <code>meta</code> object. The <code>file</code> key is still a rollup (hash of area hashes + colors), not a hash of the entire document byte stream; v4 dropped the redundant global room rollup (rooms are already rolled up through their areas).</div>
+<div class="note"><strong>Scope (v4):</strong> room hashes cover room data (including the upstream <code>hash</code>); area hashes additionally cover the area's own in-scope attributes (id, name, user_data, labels with full color channels, and the optional <code>grid_mode</code>, <code>is_zone</code>, <code>zone_area_ref</code> and <code>pos</code> fields — inside the scope since v4); the file hash additionally covers the <code>colors</code> tables; the meta hash covers the entire <code>meta</code> object. Transport line sums (<code>checksums.transports</code>) are signed and verified separately (canonical JSON encoding — see <a href="#transports">§21</a>). The <code>file</code> key is still a rollup (hash of area hashes + colors), not a hash of the entire document byte stream; v4 dropped the redundant global room rollup (rooms are already rolled up through their areas).</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="serialization">16. Deterministic Serialization</h2>
@@ -652,7 +659,7 @@
   <li><code>format_version</code> must be <code>2</code></li>
   <li><code>meta</code>, <code>colors</code>, <code>areas</code> must be present</li>
   <li><code>checksums</code>, if present, must be an object; <code>meta.checksums</code> is not a recognized location (format version 1 layout — rejected by rule 2)</li>
-  <li>Unknown keys anywhere in the document (top level, <code>meta</code>, areas, rooms, labels, <code>colors</code>) must not cause rejection — readers preserve them verbatim and writers re-emit them (see <a href="#overview">§1</a>); only the rules in this list may reject or warn. Unknown <em>top-level</em> keys are additionally reported at load (an informational note listing them) and are covered by the optional signature (<a href="#signatures">§22</a>)</li>
+  <li>Unknown keys anywhere in the document (top level, <code>meta</code>, areas, rooms, labels, <code>colors</code>) must not cause rejection — readers preserve them verbatim and writers re-emit them (see <a href="#overview">§1</a>); only the rules in this list may reject or warn. Unknown <em>top-level</em> keys are additionally reported at load (an informational note listing them) and are covered by the optional signature (<a href="#signatures">§23</a>)</li>
   <li><code>meta.room_id_hash</code>, if present, must be an object mapping contributor names (strings) to starting room IDs (integers)</li>
   <li>All area IDs must be unique</li>
   <li>All room IDs must be globally unique (across all areas)</li>
@@ -748,6 +755,7 @@
 <tr><td><code>notes</code></td><td>Room object</td><td>Free-form text notes for a room.</td></tr>
 <tr><td><code>tags</code></td><td>Room object</td><td>Array of string tags for filtering/categorization.</td></tr>
 <tr><td><code>checksums</code></td><td>top-level object</td><td>XXH3-64 integrity checksums (auto-generated by ArkMap Studio on save; top-level envelope key since format version 2 — see <a href="#checksums">§15</a>).</td></tr>
+<tr><td><code>transports</code></td><td>top-level object</td><td>Transport lines document (<code>arkmap-transports</code> v1) — universal routing data, signed per line via <code>checksums.transports</code>. See <a href="#transports">§21</a>.</td></tr>
 <tr><td><code>app_version</code></td><td>meta object</td><td>Version of ArkMap Studio that wrote the file (informational).</td></tr>
 <tr><td><code>accepted_dir_issues</code></td><td>meta object</td><td>Direction-validator acceptances, written only when the validator's acceptance store is "file" (see <a href="#user-data">§14</a>).</td></tr>
 </table>
@@ -755,7 +763,48 @@
 <p>Implementations that only handle .dat conversion can safely ignore these fields. When reading a .arkmap file for .dat export, these fields should be silently dropped.</p>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="example">21. Complete Example</h2>
+<h2 id="transports">21. Transport Lines (<code>transports</code>)</h2>
+
+<p>A map may embed a <strong>transport document</strong> describing named transport lines — ships, coaches, portals, anything that moves the player between non-adjacent rooms. The format is <strong>universal</strong>: it describes routing data for any map of any MUD; game-specific content is just data on top of the same schema. The document may also live as a standalone sidecar JSON (same schema) for tools that keep routing data out of the map file.</p>
+
+<pre>{
+  <span class="k">"format"</span>:  <span class="s">"arkmap-transports"</span>,   <span class="c">// REQUIRED — magic string</span>
+  <span class="k">"version"</span>: <span class="n">1</span>,                    <span class="c">// REQUIRED — schema version</span>
+  <span class="k">"lines"</span>: [
+    {
+      <span class="k">"name"</span>:  <span class="s">"Wyzima - Novigrad ferry"</span>,  <span class="c">// REQUIRED, unique — lines are keyed by name</span>
+      <span class="k">"board"</span>: [<span class="s">"wsiadz na statek"</span>, <span class="s">"wejdz na statek"</span>],  <span class="c">// REQUIRED — boarding commands (aliases)</span>
+      <span class="k">"exit"</span>:  <span class="s">"zejdz ze statku"</span>,          <span class="c">// REQUIRED — disembark command</span>
+      <span class="k">"legs"</span>: [                                <span class="c">// REQUIRED, ordered — the ride sequence</span>
+        { <span class="k">"from"</span>: <span class="n">729</span>, <span class="k">"to"</span>: <span class="n">3760</span>, <span class="k">"time"</span>: <span class="n">23</span>, <span class="k">"label"</span>: <span class="s">"Bialy Most"</span> },
+        { <span class="k">"from"</span>: <span class="n">3760</span>, <span class="k">"to"</span>: <span class="n">729</span>, <span class="k">"time"</span>: <span class="n">18</span>, <span class="k">"label"</span>: <span class="s">"Wyzima"</span> }
+      ]
+    }
+  ]
+}</pre>
+
+<table>
+<tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>name</code></td><td>string</td><td class="req">YES</td><td>Unique line name (duplicate names are a validation error — lines are keyed by name).</td></tr>
+<tr><td><code>board</code></td><td>array of strings</td><td class="req">YES</td><td>Commands that board the line; the first is canonical, the rest are aliases.</td></tr>
+<tr><td><code>exit</code></td><td>string</td><td class="req">YES</td><td>Command that disembarks.</td></tr>
+<tr><td><code>legs[].from / to</code></td><td>positive integer</td><td class="req">YES</td><td>Room ids of the boarding / arrival stops.</td></tr>
+<tr><td><code>legs[].time</code></td><td>number (seconds)</td><td class="opt">optional</td><td>Measured travel time; when absent, routing cost assumes 60 s (<code>TRANSPORT_DEFAULT_TIME</code>).</td></tr>
+<tr><td><code>legs[].label</code></td><td>string</td><td class="opt">optional</td><td>Human-readable stop name.</td></tr>
+</table>
+
+<h3>Semantics</h3>
+<ul>
+  <li><strong>Leg order is semantic</strong> — it defines the ride (a line may chain stops A→B→C). <strong>Line order in the array is not semantic</strong> — canonical form sorts lines by <code>name</code>.</li>
+  <li><strong>Routing cost</strong> of a hop: <code>Σ leg times · ratio + boarding penalty</code>, one penalty per ride, so a direct crossing beats transfers. Reference cost model: <em>normal</em> ratio 0.5 / penalty 30, <em>aggressive</em> ratio 0.1 / penalty 10.</li>
+  <li><strong>Foreign maps:</strong> legs referencing rooms absent from the loaded map terminate the chain — a line segment is usable only where the map actually covers it.</li>
+  <li><strong>Validation:</strong> the core <code>.arkmap</code> validation (§17) does not inspect <code>transports</code> (unknown top-level keys are preserved untouched); the document is validated separately against the <code>arkmap-transports</code> v1 schema (<code>validateTransports</code> in the <code>arkmap</code> npm package).</li>
+  <li><strong>Integrity:</strong> per-line checksums in <code>checksums.transports</code> — see <a href="#checksums">§15</a>.</li>
+  <li><strong>Round-trip:</strong> <code>transports</code> has no <code>.dat</code> counterpart and is dropped on <code>.dat</code> export (see §20).</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="example">22. Complete Example</h2>
 
 <p>A minimal but valid .arkmap file with one area containing two rooms:</p>
 
@@ -827,7 +876,7 @@
 <div class="note">Note that top-level keys are sorted alphabetically (<code>areas</code>, <code>checksums</code>, <code>colors</code>, <code>format</code>, <code>format_version</code>, <code>meta</code>). Within each room, keys are also sorted. This is the deterministic serialization format. The checksum values above are the real v4 hashes of the example content — cross-verified against two independent implementations (the ArkMap Studio encoder and the reference Python oracle) and pinned by the test suite (tests/g6_crosscheck.js), so the example can never drift from the specification text.</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="signatures">22. Optional Signatures</h2>
+<h2 id="signatures">23. Optional Signatures</h2>
 
 <p>A map file exists in exactly one of two states: <strong>anonymous</strong> (no author fields, no signature) or <strong>signed</strong> (author fields plus a valid signature). There is no third state — see the anomaly rule below. The scheme mirrors the <code>.arkdelta</code> signature (§9 of the <code>.arkdelta</code> spec): the same field names, the same key type, the same payload construction — only the domain prefix differs (<code>arkmap-v2:</code> versus <code>arkdelta-v3:</code>).</p>
 
@@ -852,7 +901,7 @@
 <div class="warn"><strong>What a signature proves:</strong> continuity of identity — the same key holder produced the file; with the public registry (above) it can additionally be checked for nick ownership and revocation. It does not prove real-world identity (registration is uncurated; interfaces should always show nick <em>and</em> fingerprint, never the nick alone) and it does not vouch for content. Key generation and storage are implementation-defined (ArkMap Studio derives the key deterministically via PBKDF2-SHA256 from a user-held recovery code of 3–6 words — default 3 — from a frozen 2048-word list, salted with the canonical nick; see the user manual).</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<h2 id="changelog">23. Format Changelog</h2>
+<h2 id="changelog">24. Format Changelog</h2>
 
 <table>
 <tr><th>Version</th><th>Date</th><th>Changes</th></tr>
@@ -865,7 +914,8 @@
 <tr><td><code>1</code></td><td>2026</td><td>Normative correction (ArkMap Studio v1.44.1): the v3 area encoding gained <code>user_data</code> (UTF-8 byte-ordered keys, key+value strings), restoring the v2 area scope. Files written by v1.44.0 (v3 without area <code>user_data</code> in scope) recompute under the corrected encoding — no v3 files existed outside the project mirror at the time of the correction (§15).</td></tr>
 <tr><td><code>1</code></td><td>2026</td><td>Additive normative (no format change; ArkMap Studio v1.45.0): checksum engine v4 — <code>meta.checksums</code> records <code>"alg": "v4"</code> (domain prefixes <code>r4</code>/<code>a4</code>/<code>f4</code>; label colors with all channels incl. alpha; area <code>grid_mode</code>/<code>is_zone</code>/<code>zone_area_ref</code>/<code>pos</code> in scope; room <code>hash</code> in scope; redundant global room rollup dropped). v3 retired — any non-v4 <code>alg</code> is a loudly reported mismatch, never a silent skip; verification never throws and reports missing/orphaned entries (§15).</td></tr>
 <tr><td><code>2</code></td><td>2026</td><td><strong>Breaking</strong> (ArkMap Studio v1.51.0): unified envelope with <code>.arkdelta</code> — <code>version</code> renamed to <code>format_version</code> (now <code>2</code>); <code>checksums</code> moved from <code>meta.checksums</code> to the top level; new <code>checksums.meta</code> entry (meta integrity, domain prefix <code>m4</code> — <code>checksums.file</code> remains the meta-independent identity hash); optional <code>meta.app_version</code>; <code>meta.accepted_dir_issues</code> parsing pinned (split on first two colons) and serialization pinned (sorted lexicographically); Unicode hashing pinned (raw UTF-8 bytes, producers SHOULD emit NFC); preserve-unknown-keys rule stated normatively (§17). Version 1 files are refused as an unsupported format version — there is no migration path.</td></tr>
-<tr><td><code>2</code></td><td>2026</td><td>Additive (no format change; ArkMap Studio v1.52.0): optional author signatures — <code>meta.author</code>/<code>author_id</code>/<code>author_pubkey</code>/<code>created</code> and <code>checksums.sig</code> (Ed25519 over <code>"arkmap-v2:"</code> + the canonical serialization of the whole object minus <code>checksums.sig</code>), mirroring the <code>.arkdelta</code> §9 scheme; unknown top-level keys are reported at load (§17); nick canonical form pinned (lowercase <code>a-z</code>/<code>0-9</code>); public identity registry (nick bound to one key, owner-initiated permanent revocation) (§22).</td></tr>
+<tr><td><code>2</code></td><td>2026</td><td>Additive (no format change; ArkMap Studio v1.52.0): optional author signatures — <code>meta.author</code>/<code>author_id</code>/<code>author_pubkey</code>/<code>created</code> and <code>checksums.sig</code> (Ed25519 over <code>"arkmap-v2:"</code> + the canonical serialization of the whole object minus <code>checksums.sig</code>), mirroring the <code>.arkdelta</code> §9 scheme; unknown top-level keys are reported at load (§17); nick canonical form pinned (lowercase <code>a-z</code>/<code>0-9</code>); public identity registry (nick bound to one key, owner-initiated permanent revocation) (§23).</td></tr>
+<tr><td><code>2</code></td><td>2026</td><td>Additive (no format change): optional top-level <code>transports</code> field — a universal, MUD-agnostic <code>arkmap-transports</code> v1 document (named transport lines with boarding/disembark commands and timed legs) — and its per-line integrity sums <code>checksums.transports</code> (<code>{ hash, lines }</code>, canonical JSON encoding, informational class like <code>meta</code>; §15, §21). Reference implementation: <code>arkmap</code> npm package (<code>validateTransports</code> / <code>addTransportChecksums</code> / <code>verifyTransportChecksums</code> / <code>buildTransportEdges</code>).</td></tr>
 </table>
 
 <hr>
