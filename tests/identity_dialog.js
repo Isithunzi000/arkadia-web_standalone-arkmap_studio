@@ -207,14 +207,22 @@ console.log('── T4: pokaz kod / wyczysc ──');
   // v1.52.1: ikonka kopiowania kodu przy polu (⧉ → ✓) — wiring + zawartosc schowka
   {
     let rec = null;
-    globalThis.navigator = { clipboard: { writeText: t => { rec = t; return Promise.resolve(); } } };
+    // Node >=21: globalThis.navigator istnieje jako getter-only — przypisanie
+    // przechodzi bez efektu (sloppy) i schowek pozostaje prawdziwy Navigator.
+    // Podmiana przez defineProperty + przywrocenie oryginalnego deskryptora.
+    const navDesc = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { clipboard: { writeText: t => { rec = t; return Promise.resolve(); } } },
+      configurable: true, writable: true,
+    });
     const btnC = el('id-copy-code');
     ok(btnC && typeof btnC.onclick === 'function', 'ikonka kopiowania kodu podpieta (v1.52.1)');
     btnC.onclick();
     await tick();
     ok(rec === globalThis.__code, 'kopiowanie kodu: do schowka trafia pelny kod (v1.52.1)');
     ok(btnC.textContent === '✓', 'ikonka potwierdza skopiowanie znakiem ✓ (v1.52.1)');
-    delete globalThis.navigator;
+    if (navDesc) Object.defineProperty(globalThis, 'navigator', navDesc);
+    else delete globalThis.navigator;
   }
   // F5: przelacznik podpisywania — persist localStorage, suffix w statusie.
   const tg = el('id-sign-toggle');
