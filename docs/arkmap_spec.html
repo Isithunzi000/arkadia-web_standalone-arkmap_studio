@@ -420,7 +420,7 @@
 <p><strong>Example:</strong> Room A (id=100) has custom line <code>e → Room B (id=101)</code>. Room B should have an empty custom line: <code>"w": { "points": [], "color": [255,0,0] }</code> to hide the default westward line.</p>
 
 <h4>Validation rule</h4>
-<p>Custom line keys must reference existing exits or special exits. The key must appear in either <code>exits</code> or <code>special_exits</code> of the same room.</p>
+<p>Custom line keys should reference existing exits or special exits. A key absent from both <code>exits</code> and <code>special_exits</code> of the same room is a <strong>warning, not a rejection</strong>: Mudlet stores <code>customLines</code> independently of exits, and direction binds (<code>user_data.dir_bind</code>, e.g. <code>"west=sciezka"</code>) legitimately produce lines keyed by the bound direction even though no standard exit exists for it (observed upstream in map release 0.252.0). Implementations must preserve such entries through all conversions.</p>
 
 <h4>Orphan style/arrow entries</h4>
 <p>Only custom line entries with a <code>points</code> array (including empty arrays, i.e. suppressors) are represented in .arkmap. Style/arrow/color entries for directions without a points entry — possible in .dat, where these are separate maps — are dropped on import (see <a href="#dat-roundtrip">§19</a>).</p>
@@ -670,7 +670,7 @@
   <li>Exit weight keys must reference existing exits or special exits</li>
   <li>Special exit lock commands must reference existing special exits</li>
   <li>Door values must be one of: <code>"open"</code>, <code>"closed"</code>, <code>"locked"</code></li>
-  <li>Custom line keys must reference existing exits or special exits</li>
+  <li>Custom line keys should reference existing exits or special exits (a key in neither is a warning, not an error — see <a href="#custom-lines">§10</a>; Mudlet <code>dir_bind</code> produces such lines legitimately)</li>
   <li>Custom line style must be one of: <code>"solid"</code>, <code>"dash"</code>, <code>"dot"</code>, <code>"dash_dot"</code>, <code>"dash_dot_dot"</code></li>
   <li>Custom line points must be arrays of <code>[number, number]</code> pairs (empty array = empty custom line)</li>
   <li>Color arrays must have 3 or 4 integer elements, each 0–255</li>

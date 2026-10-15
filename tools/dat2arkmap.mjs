@@ -82,9 +82,9 @@ if (version !== null || revision !== null) {
 
 // ── Walidacja fail-closed ───────────────────────────────────────────────────
 const v = api.validate(state.map);
-for (const w of v.warnings) console.error('ostrzeżenie: ' + (w.message ?? w));
+for (const w of v.warnings) console.error('ostrzeżenie: ' + (w.path !== undefined ? w.path + ': ' + w.msg : (w.message ?? w)));
 if (!v.ok) {
-  for (const e of v.errors) console.error('błąd: ' + (e.message ?? e));
+  for (const e of v.errors) console.error('błąd: ' + (e.path !== undefined ? e.path + ': ' + e.msg : (e.message ?? e)));
   fail(`walidacja: ${v.errors.length} błędów — plik wyjściowy nie zapisany`);
 }
 

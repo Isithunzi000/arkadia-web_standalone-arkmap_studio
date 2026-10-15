@@ -4629,9 +4629,12 @@ function validateRoom(room, path, errors, warnings = []) {
       errors.push(err(`${path}.custom_lines.${d}.color`, 'must be [r,g,b] 0-255'));
     if (cl.style !== undefined && LINE_INT[cl.style] === undefined)
       errors.push(err(`${path}.custom_lines.${d}.style`, 'invalid style'));
-    // SPEC rule 7: key must be in exits or special_exits (can be special exit command)
+    // SPEC rule 7: key should be in exits or special_exits. Mudlet przechowuje
+    // custom_lines niezaleznie od exits — dir_bind (user_data, upstream 0.252.0)
+    // generuje linie pod kierunkiem po bindzie, ktorego exit nie istnieje.
+    // To ostrzezenie, nie blad: twarde odrzucanie blokuje import/sync-map.
     if (exits[d] === undefined && specialExits[d] === undefined)
-      errors.push(err(`${path}.custom_lines.${d}`, 'key not in exits or special_exits'));
+      warnings.push(err(`${path}.custom_lines.${d}`, 'key not in exits or special_exits'));
   }
 
   if (room.weight !== undefined && (!Number.isInteger(room.weight) || room.weight < 1))
