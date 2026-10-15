@@ -2,6 +2,12 @@
 
 Dziennik zmian projektu: fixy z audytu (A1–A22), nowe funkcje, automatyka repo. Najnowsze wpisy na górze.
 
+## v1.52.7 — Custom line pod kierunkiem bez wyjścia = ostrzeżenie, nie błąd (Arc 51)
+
+- **Walidator:** `custom_lines` pod kluczem nieobecnym w `exits`/`special_exits` daje ostrzeżenie zamiast błędu odrzucającego plik. Mudlet przechowuje custom lines niezależnie od wyjść, a direction bind (`user_data.dir_bind`, np. `"west=sciezka"`) generuje linię pod kierunkiem po bindzie, którego standardowe wyjście nie istnieje — po raz pierwszy w mapie upstream 0.252.0 (pokój 20430, „Północna Redania"), co blokowało konwersję sync-map twardym FAIL (`błąd: [object Object]`). Reguła w specyfikacji (§10, §17) zaktualizowana: „should", nie „must"; dane nadal są zachowywane 1:1 przez wszystkie konwersje.
+- **Konwerter (`tools/dat2arkmap.mjs`):** komunikaty walidacji wypisują teraz pełną ścieżkę i treść (`e.path + ': ' + e.msg`) zamiast bezużytecznego `[object Object]` — obiekty błędów walidatora nie niosą pola `message`.
+- **Regresja:** nowy harness `tests/validate_cl_key.js` (9 asercji: suppressor i linia z punktami pod brakującym kluczem → ostrzeżenie; niepoprawne `points` nadal błędem; istniejące klucze bez nowych ostrzeżeń).
+
 ## v1.52.6 — Kod trasy gen 3: `arkmap:<flagi>:<waypointy CSV>:<crc8>` (Arc 50)
 
 - **Nowy format kodu trasy** (planer → pole „Kod trasy", import): `arkmap:<algo><dir><trans>:<ids CSV>:<crc8>`, np. `arkmap:dwp:2188,1998,729:16990e69`. Payload to czysty CSV roomId (base64 odpada), wszystko małymi literami, a dekoder lowercasuje całość przed parsowaniem — wielkość liter nie ma znaczenia.
